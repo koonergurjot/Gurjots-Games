@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { injectBackButton } from '../shared/ui.js';
+import { injectBackButton, recordLastPlayed } from '../shared/ui.js';
 
 describe('injectBackButton', () => {
   beforeEach(() => {
@@ -40,5 +40,28 @@ describe('injectBackButton', () => {
 
     const styles = document.head.querySelectorAll('style[data-back-to-hub]');
     expect(styles.length).toBe(1);
+  });
+});
+
+describe('recordLastPlayed', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('prepends id, removes duplicates, and truncates to 10 items', () => {
+    localStorage.setItem('lastPlayed', JSON.stringify(['a', 'b', 'c']));
+    recordLastPlayed('b');
+    recordLastPlayed('d');
+
+    const result = JSON.parse(localStorage.getItem('lastPlayed'));
+    expect(result).toEqual(['d', 'b', 'a', 'c']);
+
+    const many = Array.from({ length: 10 }, (_, i) => `g${i}`);
+    localStorage.setItem('lastPlayed', JSON.stringify(many));
+    recordLastPlayed('new');
+
+    const truncated = JSON.parse(localStorage.getItem('lastPlayed'));
+    expect(truncated.length).toBe(10);
+    expect(truncated[0]).toBe('new');
   });
 });

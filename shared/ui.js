@@ -42,3 +42,23 @@ export function injectBackButton(relativePathToHub = '../../') {
     head.appendChild(styleEl);
   }
 }
+
+export function recordLastPlayed(id) {
+  let list = [];
+  try {
+    const raw = localStorage.getItem('lastPlayed');
+    if (raw) {
+      list = JSON.parse(raw);
+    }
+  } catch {
+    list = [];
+  }
+
+  list = list.filter((entry) => entry !== id);
+  list.unshift(id);
+  if (list.length > 10) {
+    list = list.slice(0, 10);
+  }
+
+  localStorage.setItem('lastPlayed', JSON.stringify(list));
+}

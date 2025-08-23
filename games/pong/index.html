@@ -121,8 +121,9 @@
     requestAnimationFrame(loop);
   </script>
   <script type="module">
-    import { injectBackButton } from "../../shared/ui.js";
+    import { injectBackButton, recordLastPlayed } from "../../shared/ui.js";
     injectBackButton();
+    recordLastPlayed('pong');
   </script>
 </body>
 </html>

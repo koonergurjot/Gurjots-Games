@@ -1,3 +1,7 @@
+import { recordLastPlayed } from '../../shared/ui.js';
+
+recordLastPlayed('platformer');
+
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
 const W = cvs.width, H = cvs.height;
