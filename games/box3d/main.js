@@ -1,6 +1,5 @@
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js';
-import { Sky } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js';
 import { EffectComposer } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -27,10 +26,6 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
 scene.fog = new THREE.FogExp2(0x0e0f12, 0.04);
 
-const sky = new Sky();
-sky.scale.setScalar(1000);
-scene.add(sky);
-
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 const controls = new PointerLockControls(camera, document.body);
 const player = controls.getObject();
@@ -39,7 +34,7 @@ scene.add(player);
 
 document.body.addEventListener('click', () => controls.lock());
 
-const hemi = new THREE.HemisphereLight(0xbcc7ff, 0x20242c, 0.6);
+const hemi = new THREE.HemisphereLight(0xbcc7ff, 0x20242c, 0.8);
 scene.add(hemi);
 
 const dir = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -49,7 +44,6 @@ dir.shadow.mapSize.set(2048, 2048);
 dir.shadow.bias = -0.0005;
 dir.shadow.normalBias = 0.05;
 scene.add(dir);
-sky.material.uniforms.sunPosition.value.copy(dir.position);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(100, 100),
