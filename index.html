@@ -26,6 +26,11 @@
     .brand span{color:var(--accent)}
     .hint{color:var(--muted); font-size:13px}
     main{max-width:1100px; width:100%; margin:24px auto; padding:0 16px 36px}
+    .controls{display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:24px}
+    .controls input[type="search"]{flex:1; min-width:160px; padding:8px 10px; border-radius:8px; border:1px solid #27314b; background:#0e1422; color:var(--text);}
+    .controls .filter-buttons{display:flex; gap:8px}
+    .controls .filter-buttons button{padding:8px 12px; border-radius:8px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff; cursor:pointer; font-weight:600;}
+    .controls .filter-buttons button.active{background:#1b2233; border-color:#2a334a}
     .grid{
       display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap:16px;
@@ -53,6 +58,10 @@
     <div class="hint">Click a game to play • Add more by copying a folder in <code>/games</code></div>
   </header>
   <main>
+    <div class="controls">
+      <input id="search" type="search" placeholder="Search games..." aria-label="Search games" />
+      <div class="filter-buttons"></div>
+    </div>
     <section class="grid">
       <a class="card" href="./games/box3d/" aria-label="Play 3D Box Playground">
         <div class="badge">3D</div>
@@ -69,5 +78,60 @@
     </section>
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
+  <script>
+    const searchInput = document.getElementById('search');
+    const cards = Array.from(document.querySelectorAll('.grid .card'));
+    const filterWrap = document.querySelector('.filter-buttons');
+
+    const badges = [...new Set(cards.map(c => c.querySelector('.badge').textContent.trim()))];
+    const state = { query: '', badge: 'all', ...JSON.parse(localStorage.getItem('hubFilters')||'{}') };
+
+    function buildButtons(){
+      const allBtn = document.createElement('button');
+      allBtn.textContent = 'All';
+      allBtn.dataset.badge = 'all';
+      filterWrap.appendChild(allBtn);
+      badges.forEach(b => {
+        const btn = document.createElement('button');
+        btn.textContent = b;
+        btn.dataset.badge = b.toLowerCase();
+        filterWrap.appendChild(btn);
+      });
+      [...filterWrap.children].forEach(btn => {
+        if(btn.dataset.badge === state.badge) btn.classList.add('active');
+      });
+    }
+
+    function applyFilters(){
+      const q = state.query.toLowerCase();
+      const badge = state.badge;
+      cards.forEach(card => {
+        const title = card.querySelector('h3').textContent.toLowerCase();
+        const cardBadge = card.querySelector('.badge').textContent.toLowerCase();
+        const show = title.includes(q) && (badge === 'all' || cardBadge === badge);
+        card.style.display = show ? '' : 'none';
+      });
+    }
+
+    function save(){ localStorage.setItem('hubFilters', JSON.stringify(state)); }
+
+    searchInput.addEventListener('input', e => {
+      state.query = e.target.value;
+      save();
+      applyFilters();
+    });
+
+    filterWrap.addEventListener('click', e => {
+      if(e.target.tagName !== 'BUTTON') return;
+      state.badge = e.target.dataset.badge;
+      [...filterWrap.children].forEach(btn => btn.classList.toggle('active', btn === e.target));
+      save();
+      applyFilters();
+    });
+
+    buildButtons();
+    searchInput.value = state.query;
+    applyFilters();
+  </script>
 </body>
 </html>
