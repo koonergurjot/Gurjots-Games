@@ -2,6 +2,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js';
 import { EffectComposer } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
+import { OutlinePass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/OutlinePass.js';
 import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders/FXAAShader.js';
@@ -51,6 +52,14 @@ fxaaPass.material.uniforms['resolution'].value.set(
   1 / window.innerHeight
 );
 composer.addPass(fxaaPass);
+
+const outline = new OutlinePass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  scene,
+  camera
+);
+outline.renderToScreen = true;
+composer.addPass(outline);
 
 document.body.addEventListener('click', () => controls.lock());
 
@@ -157,6 +166,7 @@ addEventListener('resize', () => {
     1 / innerWidth,
     1 / innerHeight
   );
+  outline.setSize(innerWidth, innerHeight);
 });
 
 const forward = new THREE.Vector3();
