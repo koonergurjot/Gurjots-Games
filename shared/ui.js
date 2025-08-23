@@ -1,20 +1,26 @@
 export function injectBackButton(relativePathToHub = '../../') {
-  let link = document.querySelector('.back-to-hub');
+  const link = document.querySelector('.back-to-hub');
+  const style = document.head.querySelector('style[data-back-to-hub]');
 
-  if (!link) {
-    link = document.createElement('a');
-    link.className = 'back-to-hub';
-    link.textContent = '← Back to Hub';
-    document.body.appendChild(link);
+  if (link && style) {
+    link.href = relativePathToHub;
+    return;
   }
 
-  link.href = relativePathToHub;
+  let backLink = link;
+  if (!backLink) {
+    backLink = document.createElement('a');
+    backLink.className = 'back-to-hub';
+    backLink.textContent = '← Back to Hub';
+    document.body.appendChild(backLink);
+  }
 
-  // Inject styles once
-  if (!document.head.querySelector('style[data-back-to-hub]')) {
-    const style = document.createElement('style');
-    style.dataset.backToHub = 'true';
-    style.textContent = `
+  backLink.href = relativePathToHub;
+
+  if (!style) {
+    const styleTag = document.createElement('style');
+    styleTag.dataset.backToHub = 'true';
+    styleTag.textContent = `
       .back-to-hub {
         position: fixed;
         left: 12px;
@@ -28,6 +34,6 @@ export function injectBackButton(relativePathToHub = '../../') {
         text-decoration: none;
       }
     `;
-    document.head.appendChild(style);
+    document.head.appendChild(styleTag);
   }
 }
