@@ -71,7 +71,7 @@
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
   <script>
     // Load game definitions and render cards dynamically
-    fetch('games.json')
+    fetch('./games.json')
       .then(r => {
         if (!r.ok) throw new Error('Network response was not ok');
         return r.json();
