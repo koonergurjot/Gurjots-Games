@@ -1,4 +1,4 @@
-import { injectBackButton } from '../../shared/ui.js';
+import { injectBackButton, recordLastPlayed } from '../../shared/ui.js';
 
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
@@ -8,6 +8,7 @@ const scoreEl = document.getElementById('score');
 const bestEl  = document.getElementById('best');
 
 injectBackButton();
+recordLastPlayed('shooter');
 
 const state = {
   running: true,

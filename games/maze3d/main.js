@@ -1,3 +1,7 @@
+import { recordLastPlayed } from '../../shared/ui.js';
+
+recordLastPlayed('maze3d');
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
 
