@@ -7,6 +7,7 @@ A tiny Miniclip-style hub with multiple games. Static files only — perfect for
 / (hub index.html)
 /games/box3d/   → Three.js starter (WASD + jump, Orbit camera, touch D-pad)
 /games/pong/    → Simple Pong (canvas 2D)
+/games/runner/   → Endless Runner (canvas 2D)
 ```
 
 ## Run locally
