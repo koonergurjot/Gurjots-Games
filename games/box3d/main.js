@@ -4,6 +4,7 @@ import { RGBELoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton } from '../../shared/ui.js';
 
+// Render game with HDR environment and physically-based materials
 registerSW();
 injectBackButton();
 
