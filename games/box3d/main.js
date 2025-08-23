@@ -61,6 +61,34 @@ addEventListener('keydown', (e) => keys.set(e.code, true));
 addEventListener('keyup', (e) => keys.set(e.code, false));
 addEventListener('keydown', (e) => { if (e.code === 'KeyR'){ player.position.set(0,1,0); velocity.set(0,0,0);} });
 
+const joy = { x:0, y:0 };
+const joyEl = document.getElementById('joystick');
+if (joyEl){
+  const stick = document.getElementById('stick');
+  const max = joyEl.clientWidth/2 - stick.clientWidth/2;
+  function setStick(dx,dy){
+    const clampedX = Math.max(-max, Math.min(max, dx));
+    const clampedY = Math.max(-max, Math.min(max, dy));
+    joy.x = clampedX / max;
+    joy.y = clampedY / max;
+    stick.style.transform = `translate(${clampedX}px, ${clampedY}px)`;
+  }
+  function eventPos(e){
+    const rect = joyEl.getBoundingClientRect();
+    const t = e.touches[0];
+    return [t.clientX - (rect.left + rect.width/2), t.clientY - (rect.top + rect.height/2)];
+  }
+  joyEl.addEventListener('touchstart', (e)=>{ setStick(...eventPos(e)); e.preventDefault(); });
+  joyEl.addEventListener('touchmove', (e)=>{ setStick(...eventPos(e)); e.preventDefault(); });
+  ['touchend','touchcancel'].forEach(ev=>joyEl.addEventListener(ev, ()=>setStick(0,0)));
+}
+
+const jumpBtn = document.getElementById('jumpBtn');
+if (jumpBtn){
+  jumpBtn.addEventListener('touchstart', e=>{ e.preventDefault(); keys.set('Space', true); });
+  ['touchend','touchcancel'].forEach(ev=>jumpBtn.addEventListener(ev, ()=>keys.set('Space', false)));
+}
+
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -69,8 +97,8 @@ addEventListener('resize', () => {
 
 const clock = new THREE.Clock();
 function update(dt){
-  const ax = (keys.get('KeyD') ? 1 : 0) - (keys.get('KeyA') ? 1 : 0);
-  const az = (keys.get('KeyS') ? 1 : 0) - (keys.get('KeyW') ? 1 : 0);
+  const ax = (keys.get('KeyD') ? 1 : 0) - (keys.get('KeyA') ? 1 : 0) + joy.x;
+  const az = (keys.get('KeyS') ? 1 : 0) - (keys.get('KeyW') ? 1 : 0) + joy.y;
   velocity.x += ax * ACCEL * dt;
   velocity.z += az * ACCEL * dt;
 
