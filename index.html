@@ -58,9 +58,11 @@
       .then(r => r.json())
       .then(games => {
         const grid = document.querySelector('.grid');
-        if (!grid) return;
+        const main = document.querySelector('main');
+        if (!grid || !main) return;
         grid.innerHTML = '';
-        for (const g of games) {
+
+        const buildCard = (g) => {
           const a = document.createElement('a');
           a.className = 'card';
           a.href = g.path;
@@ -78,7 +80,43 @@
           play.textContent = 'Play →';
 
           a.append(h3, p, play);
-          grid.appendChild(a);
+          return a;
+        };
+
+        const favIds = new Set(JSON.parse(localStorage.getItem('favorites') || '[]'));
+        const rawLast = JSON.parse(localStorage.getItem('lastPlayed') || '[]');
+        const seen = new Set();
+        const recentIds = [];
+        for (let i = rawLast.length - 1; i >= 0 && recentIds.length < 10; i--) {
+          const id = rawLast[i];
+          if (!seen.has(id)) {
+            seen.add(id);
+            recentIds.push(id);
+          }
+        }
+
+        const makeSection = (title, list) => {
+          if (!list.length) return;
+          const section = document.createElement('section');
+          const h2 = document.createElement('h2');
+          h2.textContent = title;
+          const subGrid = document.createElement('div');
+          subGrid.className = 'grid';
+          for (const g of list) subGrid.appendChild(buildCard(g));
+          section.append(h2, subGrid);
+          main.insertBefore(section, grid);
+        };
+
+        const favoriteGames = games.filter(g => favIds.has(g.id));
+        makeSection('Favorites', favoriteGames);
+
+        const recentGames = recentIds
+          .map(id => games.find(g => g.id === id))
+          .filter(Boolean);
+        makeSection('Recently Played', recentGames);
+
+        for (const g of games) {
+          grid.appendChild(buildCard(g));
         }
       })
       .catch(err => {
