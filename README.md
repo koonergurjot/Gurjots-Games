@@ -16,6 +16,26 @@ A tiny Miniclip-style hub with multiple games. Static files only — perfect for
 ## Add a new game
 1. Copy one of the folders in `/games/` and rename it, e.g. `/games/maze/`
 2. Update its HTML/JS. The hub automatically links via your new folder if you add a tile in the root `index.html`.
+3. Add an entry to `games.json` with these required fields:
+   - `id` – unique slug used for the game's folder.
+   - `name` – title displayed on the hub.
+   - `description` – short blurb shown on the game card.
+   - `badge` – small label like `2D` or `3D`.
+   - `path` – relative path to the game's directory.
+   - `hasScore` – `true` if the game reports a score.
+
+   Example:
+
+   ```json
+   {
+     "id": "maze",
+     "name": "Maze Runner",
+     "description": "Find the exit while avoiding traps.",
+     "badge": "2D",
+     "path": "./games/maze/",
+     "hasScore": true
+   }
+   ```
 
 ## Deploy to GitHub Pages
 This repo includes a Pages workflow. After pushing to the `main` branch, your site will auto-deploy.
