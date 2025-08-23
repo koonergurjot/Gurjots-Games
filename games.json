@@ -14,5 +14,13 @@
     "badge": "2D",
     "path": "./games/pong/",
     "hasScore": true
+  },
+  {
+    "id": "runner",
+    "name": "Endless Runner",
+    "description": "Space to jump • Dodge obstacles • Compete for a high score.",
+    "badge": "2D",
+    "path": "./games/runner/",
+    "hasScore": true
   }
 ]
