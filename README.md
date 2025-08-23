@@ -1,4 +1,4 @@
-# Arcade Hub Starter
+# Gurjot's Games
 
 A tiny Miniclip-style hub with multiple games. Static files only — perfect for GitHub Pages.
 
