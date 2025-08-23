@@ -1,5 +1,6 @@
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js';
+import { Sky } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js';
 import { EffectComposer } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -13,13 +14,22 @@ registerSW();
 injectBackButton();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
+scene.fog = new THREE.FogExp2(0x0e0f12, 0.04);
+
+const sky = new Sky();
+sky.scale.setScalar(1000);
+scene.add(sky);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 const controls = new PointerLockControls(camera, document.body);
@@ -35,8 +45,11 @@ scene.add(hemi);
 const dir = new THREE.DirectionalLight(0xffffff, 1.0);
 dir.position.set(10, 12, 6);
 dir.castShadow = true;
-dir.shadow.mapSize.set(1024, 1024);
+dir.shadow.mapSize.set(2048, 2048);
+dir.shadow.bias = -0.0005;
+dir.shadow.normalBias = 0.05;
 scene.add(dir);
+sky.material.uniforms.sunPosition.value.copy(dir.position);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(100, 100),
@@ -147,6 +160,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
   composer.setSize(innerWidth, innerHeight);
   fxaa.material.uniforms.resolution.value.set(1 / innerWidth, 1 / innerHeight);
   outline.setSize(innerWidth, innerHeight);
