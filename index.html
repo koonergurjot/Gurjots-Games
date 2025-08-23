@@ -37,24 +37,21 @@
         for (const g of games) {
           const a = document.createElement('a');
           a.className = 'card';
-          a.href = `./games/${g.slug}/`;
-          a.setAttribute('aria-label', `Play ${g.title}`);
-
-          const badge = document.createElement('div');
-          badge.className = 'badge';
-          badge.textContent = g.badge;
+          a.href = g.path;
+          a.dataset.badge = g.badge;
+          a.setAttribute('aria-label', `Play ${g.name}`);
 
           const h3 = document.createElement('h3');
-          h3.textContent = g.title;
+          h3.textContent = g.name;
 
           const p = document.createElement('p');
-          p.textContent = g.blurb;
+          p.textContent = g.description;
 
           const play = document.createElement('div');
           play.className = 'play';
           play.textContent = 'Play →';
 
-          a.append(badge, h3, p, play);
+          a.append(h3, p, play);
           grid.appendChild(a);
         }
       })

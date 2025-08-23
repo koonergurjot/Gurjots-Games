@@ -1,14 +1,18 @@
 [
   {
-    "title": "3D Box Playground",
-    "slug": "box3d",
+    "id": "box3d",
+    "name": "3D Box Playground",
+    "description": "WASD + Space to jump. Orbit the camera with your mouse.",
     "badge": "3D",
-    "blurb": "WASD + Space to jump. Orbit the camera with your mouse."
+    "path": "./games/box3d/",
+    "hasScore": false
   },
   {
-    "title": "Pong Classic",
-    "slug": "pong",
+    "id": "pong",
+    "name": "Pong Classic",
+    "description": "Arrow keys or touch to move. Keep the ball in play, beat the AI.",
     "badge": "2D",
-    "blurb": "Arrow keys to move. Keep the ball in play, beat the AI."
+    "path": "./games/pong/",
+    "hasScore": true
   }
 ]
