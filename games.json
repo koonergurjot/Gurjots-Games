@@ -1,58 +1,65 @@
 [
   {
-    "id": "box3d",
-    "name": "3D Box Playground",
-    "description": "WASD + Space to jump. Orbit the camera with your mouse.",
+    "slug": "box3d",
+    "title": "3D Box Playground",
     "badge": "3D",
-    "path": "./games/box3d/",
-    "hasScore": false
+    "blurb": "WASD + Space to jump. Orbit the camera with your mouse.",
+    "tags": ["Sandbox", "3D"],
+    "thumb": "./games/box3d/thumb.png",
+    "path": "./games/box3d/"
   },
   {
-    "id": "pong",
-    "name": "Pong Classic",
-    "description": "Arrow keys or touch to move. Keep the ball in play, beat the AI.",
+    "slug": "pong",
+    "title": "Pong Classic",
     "badge": "2D",
-    "path": "./games/pong/",
-    "hasScore": true
+    "blurb": "Arrow keys or touch to move. Keep the ball in play, beat the AI.",
+    "tags": ["Arcade", "1-Player"],
+    "thumb": "./games/pong/thumb.png",
+    "path": "./games/pong/"
   },
   {
-    "id": "runner",
-    "name": "Endless Runner",
-    "description": "Space to jump • Dodge obstacles • Compete for a high score.",
+    "slug": "runner",
+    "title": "Endless Runner",
     "badge": "2D",
-    "path": "./games/runner/",
-    "hasScore": true
+    "blurb": "Space to jump • Dodge obstacles • Compete for a high score.",
+    "tags": ["Arcade", "Endless"],
+    "thumb": "./games/runner/thumb.png",
+    "path": "./games/runner/"
   },
   {
-    "id": "asteroids",
-    "name": "Asteroids",
-    "description": "Rotate, thrust, and shoot to clear the field.",
+    "slug": "asteroids",
+    "title": "Asteroids",
     "badge": "2D",
-    "path": "./games/asteroids/",
-    "hasScore": true
+    "blurb": "Rotate, thrust, and shoot to clear the field.",
+    "tags": ["Arcade", "Shooter"],
+    "thumb": "./games/asteroids/thumb.png",
+    "path": "./games/asteroids/?new=true"
   },
   {
-    "id": "shooter",
-    "name": "Space Shooter",
-    "description": "WASD to move, mouse to aim. Survive waves of enemies.",
+    "slug": "shooter",
+    "title": "Space Shooter",
     "badge": "2D",
-    "path": "./games/shooter/",
-    "hasScore": true
+    "blurb": "WASD to move, mouse to aim. Survive waves of enemies.",
+    "tags": ["Action", "Shooter"],
+    "thumb": "./games/shooter/thumb.png",
+    "path": "./games/shooter/?new=true"
   },
   {
-    "id": "platformer",
-    "name": "Retro Platformer",
-    "description": "Run and jump through classic levels to reach the goal.",
+    "slug": "platformer",
+    "title": "Retro Platformer",
     "badge": "2D",
-    "path": "./games/platformer/",
-    "hasScore": true
+    "blurb": "Run and jump through classic levels to reach the goal.",
+    "tags": ["Arcade", "Platformer"],
+    "thumb": "./games/platformer/thumb.png",
+    "path": "./games/platformer/?new=true"
   },
   {
-    "id": "maze3d",
-    "name": "3D Maze Explorer",
-    "description": "Navigate a 3D labyrinth and find the exit.",
+    "slug": "maze3d",
+    "title": "3D Maze Explorer",
     "badge": "3D",
-    "path": "./games/maze3d/",
-    "hasScore": true
+    "blurb": "Navigate a 3D labyrinth and find the exit.",
+    "tags": ["Puzzle", "3D"],
+    "thumb": "./games/maze3d/thumb.png",
+    "path": "./games/maze3d/?new=true"
   }
 ]
