@@ -54,6 +54,20 @@
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
   <script>
+    let savedFilters = [];
+    try {
+      const raw = localStorage.getItem('hub:filters');
+      if (raw) {
+        savedFilters = JSON.parse(raw);
+        if (!Array.isArray(savedFilters)) {
+          savedFilters = [];
+        }
+      }
+    } catch {
+      savedFilters = [];
+      localStorage.removeItem('hub:filters');
+    }
+
     fetch('games.json')
       .then(r => r.json())
       .then(games => {
@@ -61,6 +75,9 @@
         if (!grid) return;
         grid.innerHTML = '';
         for (const g of games) {
+          if (savedFilters.length && !g.tags?.some(t => savedFilters.includes(t))) {
+            continue;
+          }
           const a = document.createElement('a');
           a.className = 'card';
 
