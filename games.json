@@ -41,8 +41,8 @@
   },
   {
     "id": "platformer",
-    "name": "Mini Platformer",
-    "description": "Collect coins and reach the goal. Arrows to move and jump.",
+    "name": "Retro Platformer",
+    "description": "Run and jump through classic levels to reach the goal.",
     "badge": "2D",
     "path": "./games/platformer/",
     "hasScore": true
