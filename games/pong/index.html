@@ -7,19 +7,21 @@
   <style>
     html, body{height:100%; margin:0; background:#0e0f12; color:#e6e6e6; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
     .wrap{display:grid; place-items:center; height:100%; padding:16px}
-    canvas{background:#0a0d13; border:1px solid #1f2431; border-radius:12px; box-shadow:0 6px 22px rgba(0,0,0,.35)}
+    canvas{background:#0a0d13; border:1px solid #1f2431; border-radius:12px; box-shadow:0 6px 22px rgba(0,0,0,.35); touch-action:none}
     .hud{position:fixed; top:12px; left:12px; background:#1b1e24c0; border:1px solid #27314b; border-radius:10px; padding:8px 10px; font-size:14px}
-    .back{position: fixed; left: 12px; bottom: 12px; color:#cfe6ff; background:#0e1422; border:1px solid #27314b; padding:8px 10px; border-radius:10px; font-weight:700; text-decoration:none}
     kbd{padding:1px 6px; border-radius:6px; border:1px solid #2f3542; background:#111319; color:#d3d7de; font-weight:600; font-size:12px;}
   </style>
 </head>
 <body>
-  <div class="hud">Move: <kbd>←</kbd><kbd>→</kbd> • Pause: <kbd>P</kbd></div>
-  <a class="back" href="../../">← Back to Hub</a>
+  <div class="hud">Move: <kbd>←</kbd><kbd>→</kbd> • Pause: <kbd>P</kbd> • High: <span id="hi"></span></div>
   <div class="wrap">
     <canvas id="game" width="720" height="420" aria-label="Pong game"></canvas>
   </div>
-  <script>
+  <script type="module">
+    import {injectBackButton, registerSW} from '../../shared/ui.js';
+    registerSW();
+    injectBackButton();
+
     const cvs = document.getElementById('game');
     const ctx = cvs.getContext('2d');
 
@@ -30,9 +32,31 @@
     const ball = { x: W/2, y: H/2, r: 8, vx: 260, vy: 260 };
     let paused = false;
 
+    let high = parseInt(localStorage.getItem('highscore_pong') || '0');
+    const hiSpan = document.getElementById('hi');
+    hiSpan.textContent = high;
+
     const keys = new Map();
     addEventListener('keydown', e => { keys.set(e.code, true); if(e.code==='KeyP') paused = !paused; });
     addEventListener('keyup', e => keys.set(e.code, false));
+
+    function updateHigh(){
+      if(player.score > high){
+        high = player.score;
+        localStorage.setItem('highscore_pong', high);
+        hiSpan.textContent = high;
+      }
+    }
+
+    let pointer = false;
+    function move(e){
+      const rect = cvs.getBoundingClientRect();
+      player.x = e.clientX - rect.left - paddleW/2;
+      player.x = Math.max(0, Math.min(W - paddleW, player.x));
+    }
+    cvs.addEventListener('pointerdown', e => { pointer = true; move(e); });
+    cvs.addEventListener('pointermove', e => { if(pointer) move(e); });
+    addEventListener('pointerup', () => pointer = false);
 
     let last = 0;
     function loop(ts){
@@ -44,34 +68,26 @@
     }
 
     function update(dt){
-      // input
       const dir = (keys.get('ArrowRight')?1:0) - (keys.get('ArrowLeft')?1:0);
       player.vx = dir * player.speed;
       player.x += player.vx * dt;
-
-      // constrain
       player.x = Math.max(0, Math.min(W - paddleW, player.x));
 
-      // AI follows ball with dampened speed
       const target = ball.x - paddleW/2;
       const dx = target - ai.x;
       ai.vx = Math.max(-ai.speed, Math.min(ai.speed, dx * 5));
       ai.x += ai.vx * dt;
       ai.x = Math.max(0, Math.min(W - paddleW, ai.x));
 
-      // ball movement
       ball.x += ball.vx * dt;
       ball.y += ball.vy * dt;
 
-      // walls
       if (ball.x < ball.r) { ball.x = ball.r; ball.vx *= -1; }
       if (ball.x > W - ball.r) { ball.x = W - ball.r; ball.vx *= -1; }
 
-      // paddle collisions
       if (ball.y + ball.r >= player.y && ball.y - ball.r <= player.y + paddleH && ball.x > player.x && ball.x < player.x + paddleW) {
         ball.y = player.y - ball.r;
         ball.vy = -Math.abs(ball.vy);
-        // add spin based on where it hits the paddle
         const hit = (ball.x - (player.x + paddleW/2)) / (paddleW/2);
         ball.vx += hit * 180;
       }
@@ -82,38 +98,28 @@
         ball.vx += hit * 140;
       }
 
-      // scoring
-      if (ball.y < -20) { player.score++; resetBall(-1); }
+      if (ball.y < -20) { player.score++; updateHigh(); resetBall(-1); }
       if (ball.y > H + 20) { ai.score++; resetBall(1); }
     }
 
     function resetBall(dir){
       ball.x = W/2; ball.y = H/2;
-      const angle = (Math.random()*0.6 - 0.3); // -0.3..0.3 rad
+      const angle = (Math.random()*0.6 - 0.3);
       const speed = 360;
       ball.vx = Math.cos(angle) * speed;
       ball.vy = Math.sin(angle) * speed * dir;
     }
 
     function draw(){
-      // clear
       ctx.clearRect(0,0,W,H);
-
-      // midline
       ctx.fillStyle = '#1e2636';
       for(let y=0; y<H; y+=18){ ctx.fillRect(W/2 - 2, y, 4, 10); }
-
-      // paddles
       ctx.fillStyle = '#e6eef9';
       ctx.fillRect(player.x, player.y, paddleW, paddleH);
       ctx.fillRect(ai.x, ai.y, paddleW, paddleH);
-
-      // ball
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
       ctx.fill();
-
-      // scores
       ctx.font = 'bold 32px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
       ctx.textAlign = 'center'; ctx.fillStyle = '#cfe6ff';
       ctx.fillText(player.score, W/2 + 60, H/2 + 36);

@@ -13,9 +13,15 @@
       box-shadow: 0 2px 10px rgba(0,0,0,0.3);
     }
     kbd { padding:1px 6px; border-radius:6px; border:1px solid #2f3542; background:#111319; color:#d3d7de; font-weight:600; font-size:12px; }
-    a { color: #8cc8ff; text-decoration: none; }
-    .back { position: fixed; left: 12px; bottom: 12px; color:#cfe6ff; background:#0e1422; border:1px solid #27314b; padding:8px 10px; border-radius:10px; font-weight:700; }
     canvas{display:block}
+    #touch .pad{position:fixed; bottom:20px; left:20px; display:grid; grid-template-columns:repeat(3,60px); grid-template-rows:repeat(3,60px); gap:8px;}
+    #touch .pad button, #touch .jump{width:60px; height:60px; border-radius:12px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff; font-size:20px;}
+    #touch .pad .up{grid-column:2; grid-row:1;}
+    #touch .pad .left{grid-column:1; grid-row:2;}
+    #touch .pad .down{grid-column:2; grid-row:2;}
+    #touch .pad .right{grid-column:3; grid-row:2;}
+    #touch .jump{position:fixed; bottom:20px; right:20px; width:80px; height:80px; border-radius:50%; font-size:18px;}
+    @media (pointer:fine){#touch{display:none;}}
   </style>
 </head>
 <body>
@@ -24,7 +30,15 @@
     <div>Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> • Jump: <kbd>Space</kbd> • Reset: <kbd>R</kbd></div>
     <div>Mouse orbit + wheel zoom.</div>
   </div>
-  <a class="back" href="../../">← Back to Hub</a>
+  <div id="touch">
+    <div class="pad">
+      <button class="up" data-k="KeyW">▲</button>
+      <button class="left" data-k="KeyA">◀</button>
+      <button class="down" data-k="KeyS">▼</button>
+      <button class="right" data-k="KeyD">▶</button>
+    </div>
+    <button class="jump" data-k="Space">⤒</button>
+  </div>
   <script type="module" src="./main.js"></script>
 </body>
 </html>

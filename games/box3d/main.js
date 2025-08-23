@@ -1,5 +1,8 @@
+import {injectBackButton, registerSW} from '../../shared/ui.js';
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+registerSW();
+injectBackButton();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -60,6 +63,14 @@ const keys = new Map();
 addEventListener('keydown', (e) => keys.set(e.code, true));
 addEventListener('keyup', (e) => keys.set(e.code, false));
 addEventListener('keydown', (e) => { if (e.code === 'KeyR'){ player.position.set(0,1,0); velocity.set(0,0,0);} });
+document.querySelectorAll('[data-k]').forEach(btn=>{
+  const code = btn.dataset.k;
+  const start = e=>{e.preventDefault(); keys.set(code,true);};
+  const end=()=>keys.set(code,false);
+  btn.addEventListener('pointerdown',start);
+  btn.addEventListener('pointerup',end);
+  btn.addEventListener('pointerleave',end);
+});
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
