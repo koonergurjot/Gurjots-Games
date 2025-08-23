@@ -72,6 +72,22 @@ addEventListener('keydown', (e) => {
   }
 });
 
+// Touch buttons map to key presses for mobile play
+const touch = document.getElementById('touch');
+if (touch) {
+  for (const btn of touch.querySelectorAll('button[data-k]')) {
+    const code = btn.dataset.k;
+    const press = (e) => { e.preventDefault(); keys.set(code, true); };
+    const release = (e) => { e.preventDefault(); keys.set(code, false); };
+    btn.addEventListener('touchstart', press);
+    btn.addEventListener('touchend', release);
+    btn.addEventListener('touchcancel', release);
+    btn.addEventListener('mousedown', press);
+    btn.addEventListener('mouseup', release);
+    btn.addEventListener('mouseleave', release);
+  }
+}
+
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
