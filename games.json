@@ -22,5 +22,13 @@
     "badge": "2D",
     "path": "./games/runner/",
     "hasScore": true
+  },
+  {
+    "id": "maze3d",
+    "name": "3D Maze",
+    "description": "Find the exit as fast as you can.",
+    "badge": "3D",
+    "path": "./games/maze3d/",
+    "hasScore": false
   }
 ]
