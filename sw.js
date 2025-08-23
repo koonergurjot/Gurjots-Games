@@ -1,7 +1,6 @@
 const CACHE = 'static';
 const ASSETS = [
   'index.html',
-  'main.js',
   'styles.css',
   'games/box3d/index.html',
   'games/pong/index.html',
