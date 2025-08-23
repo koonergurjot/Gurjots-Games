@@ -22,5 +22,13 @@
     "badge": "2D",
     "path": "./games/runner/",
     "hasScore": true
+  },
+  {
+    "id": "shooter",
+    "name": "Top-Down Shooter",
+    "description": "WASD to move, Space to shoot. Survive homing enemies.",
+    "badge": "2D",
+    "path": "./games/shooter/",
+    "hasScore": true
   }
 ]
