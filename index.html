@@ -55,13 +55,13 @@
   </header>
   <main>
     <section class="grid">
-      <a class="card" href="./games/box3d/" aria-label="Play 3D Box Playground">
+      <a class="card" href="./games/box3d/" data-slug="box3d" aria-label="Play 3D Box Playground">
         <div class="badge">3D</div>
         <h3>3D Box Playground</h3>
         <p>WASD + Space to jump. Orbit the camera with your mouse.</p>
         <div class="play">Play →</div>
       </a>
-      <a class="card" href="./games/pong/" aria-label="Play Pong Classic">
+      <a class="card" href="./games/pong/" data-slug="pong" aria-label="Play Pong Classic">
         <div class="badge">2D</div>
         <h3>Pong Classic</h3>
         <p>Arrow keys to move. Keep the ball in play, beat the AI.</p>
@@ -72,7 +72,7 @@
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
   <script>
     document.querySelectorAll('a.card').forEach(card => {
-      const slug = card.getAttribute('href').replace(/\/$/, '').split('/').filter(Boolean).pop();
+      const slug = card.dataset.slug;
       const score = localStorage.getItem(`highscore:${slug}`);
       if (score !== null) {
         const best = document.createElement('div');
