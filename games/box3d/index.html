@@ -14,7 +14,6 @@
     }
     kbd { padding:1px 6px; border-radius:6px; border:1px solid #2f3542; background:#111319; color:#d3d7de; font-weight:600; font-size:12px; }
     a { color: #8cc8ff; text-decoration: none; }
-    .back { position: fixed; left: 12px; bottom: 12px; color:#cfe6ff; background:#0e1422; border:1px solid #27314b; padding:8px 10px; border-radius:10px; font-weight:700; }
     canvas{display:block}
   </style>
 </head>
@@ -24,7 +23,10 @@
     <div>Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> • Jump: <kbd>Space</kbd> • Reset: <kbd>R</kbd></div>
     <div>Mouse orbit + wheel zoom.</div>
   </div>
-  <a class="back" href="../../">← Back to Hub</a>
   <script type="module" src="./main.js"></script>
+  <script type="module">
+    import { injectBackButton } from '../../shared/ui.js';
+    injectBackButton();
+  </script>
 </body>
 </html>
