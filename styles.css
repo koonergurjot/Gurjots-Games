@@ -4,6 +4,7 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%}
+a{color:#8cc8ff; text-decoration:none;}
 body{
   margin:0; background:radial-gradient(1200px 600px at 10% -10%, #172033, transparent), var(--bg);
   color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
