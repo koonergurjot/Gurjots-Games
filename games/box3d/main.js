@@ -56,6 +56,8 @@ const MAX_SPEED = 10;
 
 const velocity = new THREE.Vector3();
 let onGround = true;
+const HS_KEY = 'highscore:box3d';
+let highScore = Number(localStorage.getItem(HS_KEY) || 0);
 const keys = new Map();
 addEventListener('keydown', (e) => keys.set(e.code, true));
 addEventListener('keyup', (e) => keys.set(e.code, false));
@@ -86,6 +88,12 @@ function update(dt){
   if (player.position.y <= floorY){ player.position.y = floorY; velocity.y = 0; onGround = true; }
 
   if (onGround){ velocity.x *= 0.88; velocity.z *= 0.88; }
+
+  const dist = Math.hypot(player.position.x, player.position.z);
+  if (dist > highScore) {
+    highScore = dist;
+    localStorage.setItem(HS_KEY, Math.floor(highScore));
+  }
 
   const idealOffset = new THREE.Vector3(8,6,8).add(player.position);
   camera.position.lerp(idealOffset, 0.08);

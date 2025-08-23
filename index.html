@@ -38,16 +38,17 @@
     }
     a.card:hover{ transform: translateY(-2px); border-color:#2a334a; box-shadow: 0 6px 22px rgba(0,0,0,.35); }
     .badge{position:absolute; top:12px; right:12px; font-size:11px; padding:4px 8px; border-radius:999px; background:#0e1422; border:1px solid #27314b; color:#c3d7ff}
-    .card h3{margin:0 0 8px 0; font-size:18px}
-    .card p{margin:0; color:var(--muted); font-size:14px; line-height:1.35}
-    .play{
-      position:absolute; bottom:12px; right:12px; font-weight:700; font-size:13px; padding:8px 10px;
-      border-radius:10px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff;
-    }
-    footer{margin-top:auto; padding:16px; text-align:center; color:#7f8b99; font-size:12px; border-top:1px solid #1e2431}
-  </style>
-</head>
-<body>
+      .card h3{margin:0 0 8px 0; font-size:18px}
+      .card p{margin:0; color:var(--muted); font-size:14px; line-height:1.35}
+      .play{
+        position:absolute; bottom:12px; right:12px; font-weight:700; font-size:13px; padding:8px 10px;
+        border-radius:10px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff;
+      }
+      .best{position:absolute; bottom:12px; left:12px; font-size:13px; color:var(--muted);}
+      footer{margin-top:auto; padding:16px; text-align:center; color:#7f8b99; font-size:12px; border-top:1px solid #1e2431}
+    </style>
+  </head>
+  <body>
   <header>
     <div class="brand">🎮 <span>Arcade</span> Hub</div>
     <div class="hint">Click a game to play • Add more by copying a folder in <code>/games</code></div>
@@ -69,5 +70,17 @@
     </section>
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
+  <script>
+    document.querySelectorAll('a.card').forEach(card => {
+      const slug = card.getAttribute('href').replace(/\/$/, '').split('/').filter(Boolean).pop();
+      const score = localStorage.getItem(`highscore:${slug}`);
+      if (score !== null) {
+        const best = document.createElement('div');
+        best.className = 'best';
+        best.textContent = `Best: ${score}`;
+        card.appendChild(best);
+      }
+    });
+  </script>
 </body>
 </html>

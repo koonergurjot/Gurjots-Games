@@ -25,10 +25,12 @@
 
     const W = cvs.width, H = cvs.height;
     const paddleW = 100, paddleH = 14, margin = 28;
-    const player = { x: (W-paddleW)/2, y: H - margin - paddleH, vx: 0, speed: 520, score: 0 };
-    const ai = { x: (W-paddleW)/2, y: margin, vx: 0, speed: 360, score: 0 };
-    const ball = { x: W/2, y: H/2, r: 8, vx: 260, vy: 260 };
-    let paused = false;
+      const player = { x: (W-paddleW)/2, y: H - margin - paddleH, vx: 0, speed: 520, score: 0 };
+      const ai = { x: (W-paddleW)/2, y: margin, vx: 0, speed: 360, score: 0 };
+      const ball = { x: W/2, y: H/2, r: 8, vx: 260, vy: 260 };
+      const HS_KEY = 'highscore:pong';
+      let highScore = Number(localStorage.getItem(HS_KEY) || 0);
+      let paused = false;
 
     const keys = new Map();
     addEventListener('keydown', e => { keys.set(e.code, true); if(e.code==='KeyP') paused = !paused; });
@@ -83,7 +85,14 @@
       }
 
       // scoring
-      if (ball.y < -20) { player.score++; resetBall(-1); }
+      if (ball.y < -20) {
+        player.score++;
+        if (player.score > highScore) {
+          highScore = player.score;
+          localStorage.setItem(HS_KEY, highScore);
+        }
+        resetBall(-1);
+      }
       if (ball.y > H + 20) { ai.score++; resetBall(1); }
     }
 
