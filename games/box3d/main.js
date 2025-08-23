@@ -13,24 +13,24 @@ injectBackButton();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
 
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1000);
 const controls = new PointerLockControls(camera, document.body);
 const player = controls.getObject();
 player.position.set(0, 1, 5);
 scene.add(player);
 
 const composer = new EffectComposer(renderer);
-composer.setSize(window.innerWidth, window.innerHeight);
+composer.setSize(innerWidth, innerHeight);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.9, 0.6, 0.85);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.9, 0.6, 0.85);
 composer.addPass(bloomPass);
 const fxaaPass = new ShaderPass(FXAAShader);
 const pixelRatio = renderer.getPixelRatio();
