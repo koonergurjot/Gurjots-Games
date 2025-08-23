@@ -7,13 +7,18 @@ registerSW();
 injectBackButton();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
+scene.fog = new THREE.FogExp2(0x0e0f12, 0.04);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 const controls = new PointerLockControls(camera, document.body);
@@ -23,18 +28,20 @@ scene.add(player);
 
 document.body.addEventListener('click', () => controls.lock());
 
-const hemi = new THREE.HemisphereLight(0xbcc7ff, 0x20242c, 0.6);
+const hemi = new THREE.HemisphereLight(0xbcc7ff, 0x20242c, 0.8);
 scene.add(hemi);
 
 const dir = new THREE.DirectionalLight(0xffffff, 1.0);
 dir.position.set(10, 12, 6);
 dir.castShadow = true;
-dir.shadow.mapSize.set(1024, 1024);
+dir.shadow.mapSize.set(2048, 2048);
+dir.shadow.bias = -0.0005;
+dir.shadow.normalBias = 0.05;
 scene.add(dir);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(100, 100),
-  new THREE.MeshStandardMaterial({ color: 0x2a2f3a })
+  new THREE.MeshStandardMaterial({ color: 0x1f2530, roughness: 0.95, metalness: 0.05 })
 );
 ground.rotation.x = -Math.PI * 0.5;
 ground.receiveShadow = true;
@@ -97,6 +104,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 });
 
 const forward = new THREE.Vector3();
