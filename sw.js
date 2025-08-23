@@ -5,6 +5,7 @@ const ASSETS = [
   'styles.css',
   'games/box3d/index.html',
   'games/pong/index.html',
+  'games/runner/index.html',
 ];
 
 self.addEventListener('install', (e) => {
