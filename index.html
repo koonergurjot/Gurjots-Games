@@ -5,25 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Arcade Hub</title>
   <meta name="description" content="A tiny arcade hub with multiple games. Click a tile to play." />
+  <script>
+    const theme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.dataset.theme = theme;
+  </script>
   <style>
     :root{
-      --bg:#0b0d11; --card:#131722; --card2:#181c27; --text:#e8ecf1; --muted:#9aa7b2; --accent:#8cc8ff;
-      --ring:rgba(140,200,255,.35);
+      --bg:#0b0d11; --bg-grad:#172033; --card:#131722; --card2:#181c27; --text:#e8ecf1; --muted:#9aa7b2; --accent:#8cc8ff;
+      --ring:rgba(140,200,255,.35); --border:#1e2431; --card-border:#222838; --card-border-hover:#2a334a;
+      --surface:#0e1422; --surface-border:#27314b;
+    }
+    [data-theme="light"]{
+      --bg:#f5f7fa; --bg-grad:#e2e8f0; --card:#ffffff; --card2:#f1f5f9; --text:#1a1d24; --muted:#475569; --accent:#1476ff;
+      --ring:rgba(20,118,255,.35); --border:#e2e8f0; --card-border:#e2e8f0; --card-border-hover:#cbd5e1;
+      --surface:#f8fafc; --surface-border:#e2e8f0;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{
-      margin:0; background:radial-gradient(1200px 600px at 10% -10%, #172033, transparent), var(--bg);
+      margin:0; background:radial-gradient(1200px 600px at 10% -10%, var(--bg-grad), transparent), var(--bg);
       color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       display:flex; flex-direction:column;
     }
     header{
       display:flex; align-items:center; justify-content:space-between;
-      padding:18px 22px; border-bottom:1px solid #1e2431;
+      padding:18px 22px; border-bottom:1px solid var(--border);
       backdrop-filter: blur(6px);
     }
-    .brand{font-weight:800; letter-spacing:.4px; font-size:18px;}
+    .brand{display:flex; align-items:center; font-weight:800; letter-spacing:.4px; font-size:18px;}
     .brand span{color:var(--accent)}
+    .logo{width:28px; height:28px; margin-right:8px;}
+    .actions{display:flex; align-items:center; gap:16px;}
+    .theme-toggle{
+      width:32px; height:32px; border-radius:8px; border:1px solid var(--surface-border);
+      background:var(--surface); color:var(--text); display:flex; align-items:center; justify-content:center;
+      cursor:pointer;
+    }
     .hint{color:var(--muted); font-size:13px}
     main{max-width:1100px; width:100%; margin:24px auto; padding:0 16px 36px}
     .grid{
@@ -32,25 +49,28 @@
     }
     a.card{
       position:relative; text-decoration:none; color:inherit; display:block; background:linear-gradient(180deg,var(--card),var(--card2));
-      border:1px solid #222838; border-radius:16px; padding:16px; min-height:160px; overflow:hidden;
+      border:1px solid var(--card-border); border-radius:16px; padding:16px; min-height:160px; overflow:hidden;
       transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
       box-shadow: 0 2px 14px rgba(0,0,0,.25);
     }
-    a.card:hover{ transform: translateY(-2px); border-color:#2a334a; box-shadow: 0 6px 22px rgba(0,0,0,.35); }
-    .badge{position:absolute; top:12px; right:12px; font-size:11px; padding:4px 8px; border-radius:999px; background:#0e1422; border:1px solid #27314b; color:#c3d7ff}
+    a.card:hover{ transform: translateY(-2px); border-color:var(--card-border-hover); box-shadow: 0 6px 22px rgba(0,0,0,.35); }
+    .badge{position:absolute; top:12px; right:12px; font-size:11px; padding:4px 8px; border-radius:999px; background:var(--surface); border:1px solid var(--surface-border); color:var(--accent)}
     .card h3{margin:0 0 8px 0; font-size:18px}
     .card p{margin:0; color:var(--muted); font-size:14px; line-height:1.35}
     .play{
       position:absolute; bottom:12px; right:12px; font-weight:700; font-size:13px; padding:8px 10px;
-      border-radius:10px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff;
+      border-radius:10px; border:1px solid var(--surface-border); background:var(--surface); color:var(--text);
     }
-    footer{margin-top:auto; padding:16px; text-align:center; color:#7f8b99; font-size:12px; border-top:1px solid #1e2431}
+    footer{margin-top:auto; padding:16px; text-align:center; color:#7f8b99; font-size:12px; border-top:1px solid var(--border)}
   </style>
 </head>
 <body>
   <header>
-    <div class="brand">🎮 <span>Arcade</span> Hub</div>
-    <div class="hint">Click a game to play • Add more by copying a folder in <code>/games</code></div>
+    <div class="brand"><img src="./assets/logo.svg" alt="Arcade Hub logo" class="logo"/> <span>Arcade</span> Hub</div>
+    <div class="actions">
+      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme"></button>
+      <div class="hint">Click a game to play • Add more by copying a folder in <code>/games</code></div>
+    </div>
   </header>
   <main>
     <section class="grid">
@@ -69,5 +89,17 @@
     </section>
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
+  <script>
+    const root = document.documentElement;
+    const toggle = document.getElementById('theme-toggle');
+    const current = root.dataset.theme;
+    toggle.textContent = current === 'dark' ? '☀️' : '🌙';
+    toggle.addEventListener('click', () => {
+      const newTheme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = newTheme;
+      localStorage.setItem('theme', newTheme);
+      toggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+    });
+  </script>
 </body>
 </html>
