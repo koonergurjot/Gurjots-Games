@@ -22,5 +22,13 @@
     "badge": "2D",
     "path": "./games/runner/",
     "hasScore": true
+  },
+  {
+    "id": "asteroids",
+    "name": "Asteroids",
+    "description": "Rotate, thrust and fire to destroy rocks. Survive and set a high score.",
+    "badge": "2D",
+    "path": "./games/asteroids/",
+    "hasScore": true
   }
 ]
