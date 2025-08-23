@@ -19,20 +19,26 @@ header{
 .brand span{color:var(--accent)}
 .hint{color:var(--muted); font-size:13px}
 main{max-width:1100px; width:100%; margin:24px auto; padding:0 16px 36px}
+.filters{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:24px}
+.filter-chip{background:#0e1422; border:1px solid #27314b; color:#c3d7ff; font-size:13px; padding:6px 10px; border-radius:999px; cursor:pointer}
+.filter-chip.active{background:#18213a; border-color:var(--accent); color:var(--accent)}
 .grid{
   display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap:16px;
 }
 a.card{
   position:relative; text-decoration:none; color:inherit; display:block; background:linear-gradient(180deg,var(--card),var(--card2));
-  border:1px solid #222838; border-radius:16px; padding:16px; min-height:160px; overflow:hidden;
+  border:1px solid #222838; border-radius:16px; padding:16px 16px 60px; min-height:160px; overflow:hidden;
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
   box-shadow: 0 2px 14px rgba(0,0,0,.25);
 }
 a.card:hover{ transform: translateY(-2px); border-color:#2a334a; box-shadow: 0 6px 22px rgba(0,0,0,.35); }
-a.card::after{position:absolute; top:12px; right:12px; font-size:11px; padding:4px 8px; border-radius:999px; background:#0e1422; border:1px solid #27314b; color:#c3d7ff; content:attr(data-badge);}
+.thumb{width:100%; height:120px; border-radius:8px; background:#1e2431 center/cover no-repeat; margin-bottom:12px}
 .card h3{margin:0 0 8px 0; font-size:18px}
+.tags{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px}
+.tag{background:#0e1422; border:1px solid #27314b; color:#c3d7ff; font-size:11px; padding:2px 6px; border-radius:8px}
 .card p{margin:0; color:var(--muted); font-size:14px; line-height:1.35}
+.best{margin-top:8px; font-size:13px; color:var(--accent)}
 .play{
   position:absolute; bottom:12px; right:12px; font-weight:700; font-size:13px; padding:8px 10px;
   border-radius:10px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff;

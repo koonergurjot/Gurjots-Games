@@ -13,73 +13,107 @@
     <div class="hint">Click a game to play • Add more by copying a folder in <code>/games</code></div>
   </header>
   <main>
-    <section class="grid">
-      <a class="card" href="./games/box3d/" aria-label="Play 3D Box Playground" data-badge="3D">
-        <h3>3D Box Playground</h3>
-        <p>WASD + Space to jump. Orbit the camera with your mouse.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/pong/" aria-label="Play Pong Classic" data-badge="2D">
-        <h3>Pong Classic</h3>
-        <p>Arrow keys to move. Keep the ball in play, beat the AI.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/runner/" aria-label="Play Endless Runner">
-        <div class="badge">2D</div>
-        <h3>Endless Runner</h3>
-        <p>Space to jump • Dodge obstacles • Compete for a high score.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/asteroids/" aria-label="Play Asteroids" data-badge="2D">
-        <h3>Asteroids</h3>
-        <p>Rotate, thrust, and shoot to clear the field.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/shooter/" aria-label="Play Space Shooter" data-badge="2D">
-        <h3>Space Shooter</h3>
-        <p>WASD to move, mouse to aim. Survive waves of enemies.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/platformer/" aria-label="Play Retro Platformer" data-badge="2D">
-        <h3>Retro Platformer</h3>
-        <p>Run and jump through classic levels to reach the goal.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/maze3d/" aria-label="Play 3D Maze Explorer" data-badge="3D">
-        <h3>3D Maze Explorer</h3>
-        <p>Navigate a 3D labyrinth and find the exit.</p>
-        <div class="play">Play →</div>
-      </a>
-      </section>
+    <div class="filters"></div>
+    <section class="grid"></section>
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
   <script>
+    const savedFilters = JSON.parse(localStorage.getItem('hub:filters') || '[]');
+
     fetch('games.json')
       .then(r => r.json())
       .then(games => {
         const grid = document.querySelector('.grid');
-        if (!grid) return;
+        const filterBar = document.querySelector('.filters');
+        if (!grid || !filterBar) return;
         grid.innerHTML = '';
+
+        // Collect unique tags
+        const tagSet = new Set();
+        for (const g of games) {
+          const tags = g.tags || (g.badge ? [g.badge] : []);
+          tags.forEach(t => tagSet.add(t));
+        }
+
+        // Render filter chips
+        for (const tag of Array.from(tagSet).sort()) {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'filter-chip';
+          chip.textContent = tag;
+          chip.dataset.tag = tag;
+          if (savedFilters.includes(tag)) chip.classList.add('active');
+          chip.addEventListener('click', () => {
+            chip.classList.toggle('active');
+            updateFilters();
+          });
+          filterBar.appendChild(chip);
+        }
+
+        // Render game cards
         for (const g of games) {
           const a = document.createElement('a');
           a.className = 'card';
           a.href = g.path;
-          a.dataset.badge = g.badge;
           a.setAttribute('aria-label', `Play ${g.name}`);
+
+          const tags = g.tags || (g.badge ? [g.badge] : []);
+          a.dataset.tags = tags.join(',');
+
+          const thumb = document.createElement('div');
+          thumb.className = 'thumb';
+          if (g.thumb) thumb.style.backgroundImage = `url(${g.thumb})`;
+          a.appendChild(thumb);
 
           const h3 = document.createElement('h3');
           h3.textContent = g.name;
+          a.appendChild(h3);
+
+          if (tags.length) {
+            const tagWrap = document.createElement('div');
+            tagWrap.className = 'tags';
+            for (const t of tags) {
+              const span = document.createElement('span');
+              span.className = 'tag';
+              span.textContent = t;
+              tagWrap.appendChild(span);
+            }
+            a.appendChild(tagWrap);
+          }
 
           const p = document.createElement('p');
           p.textContent = g.description;
+          a.appendChild(p);
+
+          const best = localStorage.getItem(`highscore:${g.id}`) ??
+                       localStorage.getItem(`besttime:${g.id}`);
+          if (best) {
+            const bestDiv = document.createElement('div');
+            bestDiv.className = 'best';
+            bestDiv.textContent = `Best: ${best}`;
+            a.appendChild(bestDiv);
+          }
 
           const play = document.createElement('div');
           play.className = 'play';
           play.textContent = 'Play →';
+          a.appendChild(play);
 
-          a.append(h3, p, play);
           grid.appendChild(a);
         }
+
+        function updateFilters() {
+          const active = Array.from(filterBar.querySelectorAll('.filter-chip.active'))
+            .map(el => el.dataset.tag);
+          localStorage.setItem('hub:filters', JSON.stringify(active));
+          for (const card of grid.querySelectorAll('.card')) {
+            const cardTags = card.dataset.tags ? card.dataset.tags.split(',') : [];
+            const match = active.length === 0 || active.some(t => cardTags.includes(t));
+            card.style.display = match ? '' : 'none';
+          }
+        }
+
+        updateFilters();
       })
       .catch(err => {
         console.warn('Failed to load games.json', err);
