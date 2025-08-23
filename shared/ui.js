@@ -1,6 +1,6 @@
 export function injectBackButton(relativePathToHub = '../../') {
   let link = document.querySelector('.back-to-hub');
-  let style = document.querySelector('style[data-back-to-hub]');
+  let style = document.head.querySelector('style[data-back-to-hub]');
 
   if (link) {
     link.href = relativePathToHub;
