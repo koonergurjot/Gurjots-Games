@@ -53,6 +53,10 @@
       </section>
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
+  <script type="module">
+    import { registerSW } from './shared/sw.js';
+    registerSW();
+  </script>
   <script>
     fetch('games.json')
       .then(r => r.json())

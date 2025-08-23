@@ -1,18 +1,27 @@
 const CACHE = 'static';
-const ASSETS = [
-  'index.html',
-  'main.js',
-  'styles.css',
-  'games/box3d/index.html',
-  'games/pong/index.html',
-  'games/runner/index.html',
-];
+
+async function getAssets() {
+  const assets = ['index.html', 'styles.css', 'games.json'];
+  try {
+    const res = await fetch('games.json');
+    const games = await res.json();
+    for (const g of games) {
+      let path = g.path.replace(/^\.\//, '');
+      if (!path.endsWith('/')) path += '/';
+      assets.push(`${path}index.html`);
+    }
+  } catch (err) {
+    console.warn('Failed to load games.json', err);
+  }
+  return assets;
+}
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE);
-      await cache.addAll(ASSETS);
+      const assets = await getAssets();
+      await cache.addAll(assets);
       await self.skipWaiting();
     })(),
   );
