@@ -57,9 +57,48 @@ const MAX_SPEED = 10;
 const velocity = new THREE.Vector3();
 let onGround = true;
 const keys = new Map();
-addEventListener('keydown', (e) => keys.set(e.code, true));
-addEventListener('keyup', (e) => keys.set(e.code, false));
-addEventListener('keydown', (e) => { if (e.code === 'KeyR'){ player.position.set(0,1,0); velocity.set(0,0,0);} });
+let paused = false;
+
+const pauseOverlay = document.getElementById('pause');
+const resumeBtn = document.getElementById('resumeBtn');
+const restartBtn = document.getElementById('restartBtn');
+const controlsBtn = document.getElementById('controlsBtn');
+const exitBtn = document.getElementById('exitBtn');
+const controlsText = document.getElementById('controlsText');
+const info = document.getElementById('info');
+
+function reset(){
+  player.position.set(0,1,0);
+  velocity.set(0,0,0);
+}
+
+function setPaused(v){
+  paused = v;
+  pauseOverlay.hidden = !v;
+  if(info) info.style.display = v ? 'none' : '';
+  if(v){ resumeBtn.focus(); }
+}
+
+addEventListener('keydown', (e) => {
+  if(paused) return;
+  keys.set(e.code, true);
+});
+addEventListener('keyup', (e) => {
+  if(paused) return;
+  keys.set(e.code, false);
+});
+addEventListener('keydown', (e) => {
+  if(paused) return;
+  if (e.code === 'KeyR'){ reset(); }
+});
+addEventListener('keydown', (e) => {
+  if (e.code === 'Escape'){ setPaused(!paused); }
+});
+
+resumeBtn.addEventListener('click', () => setPaused(false));
+restartBtn.addEventListener('click', () => { reset(); setPaused(false); });
+controlsBtn.addEventListener('click', () => { controlsText.hidden = !controlsText.hidden; });
+exitBtn.addEventListener('click', () => { window.location.href = '../../'; });
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -95,7 +134,7 @@ function update(dt){
 
 function animate(){
   const dt = Math.min(clock.getDelta(), 0.05);
-  update(dt);
+  if(!paused) update(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }

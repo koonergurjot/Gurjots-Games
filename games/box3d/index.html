@@ -16,15 +16,36 @@
     a { color: #8cc8ff; text-decoration: none; }
     .back { position: fixed; left: 12px; bottom: 12px; color:#cfe6ff; background:#0e1422; border:1px solid #27314b; padding:8px 10px; border-radius:10px; font-weight:700; }
     canvas{display:block}
-  </style>
-</head>
-<body>
+    #pause {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background:#1b1e24; padding:20px; border-radius:12px;
+      display:flex; flex-direction:column; gap:12px; box-shadow:0 4px 20px rgba(0,0,0,0.5);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    #pause button {
+      padding:10px 16px; border:none; border-radius:8px; background:#27314b;
+      color:#cfe6ff; font-weight:700; cursor:pointer;
+    }
+    #pause button:focus { outline:2px solid #8cc8ff; outline-offset:2px; }
+    #controlsText { font-size:14px; color:#e6e6e6; line-height:1.4; }
+    </style>
+  </head>
+  <body>
   <div id="info">
     <div><strong>3D Box Playground</strong></div>
     <div>Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> • Jump: <kbd>Space</kbd> • Reset: <kbd>R</kbd></div>
     <div>Mouse orbit + wheel zoom.</div>
   </div>
   <a class="back" href="../../">← Back to Hub</a>
+  <div id="pause" hidden>
+    <button id="resumeBtn">Resume</button>
+    <button id="restartBtn">Restart</button>
+    <button id="controlsBtn">Controls</button>
+    <button id="exitBtn">Exit to Hub</button>
+    <div id="controlsText" hidden>
+      Move: W/A/S/D<br/>Jump: Space<br/>Reset: R
+    </div>
+  </div>
   <script type="module" src="./main.js"></script>
-</body>
+  </body>
 </html>
