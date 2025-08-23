@@ -22,5 +22,37 @@
     "badge": "2D",
     "path": "./games/runner/",
     "hasScore": true
+  },
+  {
+    "id": "asteroids",
+    "name": "Asteroids",
+    "description": "Rotate, thrust, and shoot to clear the field.",
+    "badge": "2D",
+    "path": "./games/asteroids/",
+    "hasScore": true
+  },
+  {
+    "id": "shooter",
+    "name": "Space Shooter",
+    "description": "WASD to move, mouse to aim. Survive waves of enemies.",
+    "badge": "2D",
+    "path": "./games/shooter/",
+    "hasScore": true
+  },
+  {
+    "id": "platformer",
+    "name": "Retro Platformer",
+    "description": "Run and jump through classic levels to reach the goal.",
+    "badge": "2D",
+    "path": "./games/platformer/",
+    "hasScore": true
+  },
+  {
+    "id": "maze3d",
+    "name": "3D Maze Explorer",
+    "description": "Navigate a 3D labyrinth and find the exit.",
+    "badge": "3D",
+    "path": "./games/maze3d/",
+    "hasScore": true
   }
 ]
