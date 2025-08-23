@@ -1,9 +1,10 @@
 const CACHE = 'static';
 
 async function getAssets() {
-  const assets = ['index.html', 'styles.css', 'games.json'];
+  const assets = ['index.html', 'styles.css'];
   try {
     const res = await fetch('games.json');
+    assets.push('games.json');
     const games = await res.json();
     for (const g of games) {
       let path = g.path.replace(/^\.\//, '');
