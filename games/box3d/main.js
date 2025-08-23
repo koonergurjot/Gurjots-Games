@@ -5,7 +5,6 @@ import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postpro
 import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders/FXAAShader.js';
-import { Sky } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js';
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton } from '../../shared/ui.js';
 
@@ -15,16 +14,11 @@ injectBackButton();
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
-renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
-scene.fog = new THREE.FogExp2(0x0e0f12, 0.04);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 const controls = new PointerLockControls(camera, document.body);
@@ -36,7 +30,12 @@ const composer = new EffectComposer(renderer);
 composer.setSize(window.innerWidth, window.innerHeight);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.9, 0.6, 0.85);
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.9,
+  0.6,
+  0.85
+);
 composer.addPass(bloomPass);
 const fxaaPass = new ShaderPass(FXAAShader);
 const pixelRatio = renderer.getPixelRatio();
@@ -48,41 +47,18 @@ composer.addPass(fxaaPass);
 
 document.body.addEventListener('click', () => controls.lock());
 
-const hemi = new THREE.HemisphereLight(0xbcc7ff, 0x20242c, 0.8);
+const hemi = new THREE.HemisphereLight(0xbcc7ff, 0x20242c, 0.6);
 scene.add(hemi);
 
 const dir = new THREE.DirectionalLight(0xffffff, 1.0);
 dir.position.set(10, 12, 6);
 dir.castShadow = true;
-dir.shadow.mapSize.set(2048, 2048);
-dir.shadow.bias = -0.0005;
-dir.shadow.normalBias = 0.05;
+dir.shadow.mapSize.set(1024, 1024);
 scene.add(dir);
-
-const sky = new Sky();
-sky.scale.setScalar(450000);
-scene.add(sky);
-const sun = new THREE.Vector3();
-const skyUniforms = sky.material.uniforms;
-skyUniforms['turbidity'].value = 10;
-skyUniforms['rayleigh'].value = 2;
-skyUniforms['mieCoefficient'].value = 0.005;
-skyUniforms['mieDirectionalG'].value = 0.8;
-const tod = document.getElementById('tod');
-function updateSun(){
-  const t = parseFloat(tod.value);
-  const phi = THREE.MathUtils.degToRad(90 - t * 180);
-  sun.setFromSphericalCoords(1, phi, 0);
-  sky.material.uniforms['sunPosition'].value.copy(sun);
-  dir.position.copy(sun).multiplyScalar(15);
-  scene.fog.density = 0.04 + (1 - sun.y) * 0.008;
-}
-tod.addEventListener('input', updateSun);
-updateSun();
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(100, 100),
-  new THREE.MeshStandardMaterial({ color: 0x1f2530, roughness: 0.95, metalness: 0.05 })
+  new THREE.MeshStandardMaterial({ color: 0x2a2f3a })
 );
 ground.rotation.x = -Math.PI * 0.5;
 ground.receiveShadow = true;
