@@ -1,5 +1,6 @@
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js';
+import { Sky } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js';
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton } from '../../shared/ui.js';
 
@@ -38,6 +39,27 @@ dir.shadow.mapSize.set(2048, 2048);
 dir.shadow.bias = -0.0005;
 dir.shadow.normalBias = 0.05;
 scene.add(dir);
+
+const sky = new Sky();
+sky.scale.setScalar(450000);
+scene.add(sky);
+const sun = new THREE.Vector3();
+const skyUniforms = sky.material.uniforms;
+skyUniforms['turbidity'].value = 10;
+skyUniforms['rayleigh'].value = 2;
+skyUniforms['mieCoefficient'].value = 0.005;
+skyUniforms['mieDirectionalG'].value = 0.8;
+const tod = document.getElementById('tod');
+function updateSun(){
+  const t = parseFloat(tod.value);
+  const phi = THREE.MathUtils.degToRad(90 - t * 180);
+  sun.setFromSphericalCoords(1, phi, 0);
+  sky.material.uniforms['sunPosition'].value.copy(sun);
+  dir.position.copy(sun).multiplyScalar(15);
+  scene.fog.density = 0.04 + (1 - sun.y) * 0.008;
+}
+tod.addEventListener('input', updateSun);
+updateSun();
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(100, 100),
