@@ -30,11 +30,15 @@ describe('injectBackButton', () => {
     expect(link.getAttribute('href')).toBe('../');
   });
 
-  it('does not append duplicate styles on subsequent calls', () => {
+  it('updates existing link without duplicating elements on subsequent calls', () => {
     injectBackButton();
-    injectBackButton();
+    injectBackButton('../');
 
-    const styles = document.head.querySelectorAll('style');
+    const links = document.querySelectorAll('a.back-to-hub');
+    expect(links.length).toBe(1);
+    expect(links[0].getAttribute('href')).toBe('../');
+
+    const styles = document.head.querySelectorAll('style[data-back-to-hub]');
     expect(styles.length).toBe(1);
   });
 });
