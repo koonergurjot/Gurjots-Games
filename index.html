@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Arcade Hub</title>
   <meta name="description" content="A tiny arcade hub with multiple games. Click a tile to play." />
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('game');
+    if (slug) {
+      const target = `./games/${encodeURIComponent(slug)}/`;
+      window.location.replace(target);
+    }
+  </script>
   <style>
     :root{
       --bg:#0b0d11; --card:#131722; --card2:#181c27; --text:#e8ecf1; --muted:#9aa7b2; --accent:#8cc8ff;
