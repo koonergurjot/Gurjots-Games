@@ -85,10 +85,6 @@
           h3.textContent = g.title;
           a.appendChild(h3);
 
-          const p = document.createElement('p');
-          p.textContent = g.blurb;
-          a.appendChild(p);
-
           const tagWrap = document.createElement('div');
           tagWrap.className = 'tags';
           g.tags?.forEach(t => {
@@ -97,6 +93,10 @@
             tagWrap.appendChild(span);
           });
           a.appendChild(tagWrap);
+
+          const p = document.createElement('p');
+          p.textContent = g.blurb;
+          a.appendChild(p);
 
           const score = localStorage.getItem('highscore:' + g.slug);
           const time = localStorage.getItem('besttime:' + g.slug);
