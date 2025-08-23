@@ -15,7 +15,7 @@ document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
-scene.fog = new THREE.FogExp2(0x0e0f12, 0.002);
+scene.fog = new THREE.FogExp2(0x0e0f12, 0.04);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 const controls = new PointerLockControls(camera, document.body);
@@ -50,7 +50,7 @@ function updateSun(){
   sun.setFromSphericalCoords(1, phi, 0);
   sky.material.uniforms['sunPosition'].value.copy(sun);
   dir.position.copy(sun).multiplyScalar(15);
-  scene.fog.density = 0.002 + (1 - sun.y) * 0.008;
+  scene.fog.density = 0.04 + (1 - sun.y) * 0.008;
 }
 tod.addEventListener('input', updateSun);
 updateSun();
