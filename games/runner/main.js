@@ -8,7 +8,7 @@ const state = {
   running: true,
   time: 0,
   score: 0,
-  hiscore: Number(localStorage.getItem('highscore:runner') || 0),
+  highScore: Number(localStorage.getItem('highScore:runner') || 0),
   speed: 300, // px/s, increases over time
 };
 
@@ -94,11 +94,11 @@ function update(dt){
 
 function gameOver(){
   state.running = false;
-  state.hiscore = Math.max(state.hiscore, state.score);
-  localStorage.setItem('highscore:runner', String(state.hiscore));
+  state.highScore = Math.max(state.highScore, state.score);
+  localStorage.setItem('highScore:runner', String(state.highScore));
   const over = document.getElementById('overlay');
   over.querySelector('#over-title').textContent = 'Game Over';
-  over.querySelector('#over-info').textContent  = `Score: ${state.score} • Best: ${state.hiscore}`;
+  over.querySelector('#over-info').textContent  = `Score: ${state.score} • Best: ${state.highScore}`;
   over.classList.add('show');
 }
 
@@ -133,7 +133,7 @@ function draw(){
   ctx.font = 'bold 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
   ctx.fillStyle = '#cfe6ff'; ctx.textAlign = 'left';
   ctx.fillText('Score: ' + state.score, 16, 32);
-  ctx.fillText('Best: ' + state.hiscore, 16, 58);
+  ctx.fillText('Best: ' + state.highScore, 16, 58);
 }
 
 function drawHills(color, factor, height){
