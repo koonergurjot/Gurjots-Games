@@ -63,21 +63,62 @@
         for (const g of games) {
           const a = document.createElement('a');
           a.className = 'card';
-          a.href = g.path;
+
+          const url = new URL(g.path, location.href);
+          const isNew = url.searchParams.get('new') === 'true';
+          url.search = '';
+          a.href = url.toString();
           a.dataset.badge = g.badge;
-          a.setAttribute('aria-label', `Play ${g.name}`);
+          a.setAttribute('aria-label', `Play ${g.title}`);
+
+          if (g.thumb) {
+            const img = document.createElement('img');
+            img.className = 'thumb';
+            img.src = g.thumb;
+            img.alt = g.title;
+            img.loading = 'lazy';
+            img.onerror = () => img.remove();
+            a.appendChild(img);
+          }
 
           const h3 = document.createElement('h3');
-          h3.textContent = g.name;
+          h3.textContent = g.title;
+          a.appendChild(h3);
 
           const p = document.createElement('p');
-          p.textContent = g.description;
+          p.textContent = g.blurb;
+          a.appendChild(p);
+
+          const tagWrap = document.createElement('div');
+          tagWrap.className = 'tags';
+          g.tags?.forEach(t => {
+            const span = document.createElement('span');
+            span.textContent = t;
+            tagWrap.appendChild(span);
+          });
+          a.appendChild(tagWrap);
+
+          const score = localStorage.getItem('highscore:' + g.slug);
+          const time = localStorage.getItem('besttime:' + g.slug);
+          if (score || time) {
+            const best = document.createElement('div');
+            best.className = 'best';
+            best.textContent = 'Best: ' + (score ?? `${time}s`);
+            a.appendChild(best);
+          }
+
+          if (isNew) {
+            const ribbon = document.createElement('div');
+            ribbon.className = 'ribbon';
+            ribbon.textContent = 'NEW';
+            a.appendChild(ribbon);
+          }
 
           const play = document.createElement('div');
           play.className = 'play';
           play.textContent = 'Play →';
+          a.appendChild(play);
 
-          a.append(h3, p, play);
           grid.appendChild(a);
         }
       })
