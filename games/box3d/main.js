@@ -10,6 +10,9 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
 
+const scoreEl = document.getElementById('score');
+let score = 0;
+
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(8, 6, 8);
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -49,6 +52,24 @@ box.position.set(4, 0.75, -3);
 box.castShadow = true;
 scene.add(box);
 
+const orbGeo = new THREE.SphereGeometry(0.5, 16, 16);
+const orbMat = new THREE.MeshStandardMaterial({ color: 0xffc400, emissive: 0xffaa00, emissiveIntensity: 1 });
+const orbPositions = [
+  [2, 0.5, 2],
+  [-3, 0.5, 1],
+  [4, 0.5, -4],
+  [-4, 0.5, -3],
+  [0, 0.5, 4]
+];
+const orbs = orbPositions.map(p => {
+  const m = new THREE.Mesh(orbGeo, orbMat.clone());
+  m.position.set(p[0], p[1], p[2]);
+  m.castShadow = true;
+  scene.add(m);
+  return { mesh: m, respawn: 0 };
+});
+const effects = [];
+
 const GRAVITY = -20;
 const ACCEL = 28;
 const JUMP_SPEED = 8.5;
@@ -86,6 +107,39 @@ function update(dt){
   if (player.position.y <= floorY){ player.position.y = floorY; velocity.y = 0; onGround = true; }
 
   if (onGround){ velocity.x *= 0.88; velocity.z *= 0.88; }
+
+  const t = clock.getElapsedTime();
+  for (const orb of orbs){
+    if (orb.mesh.visible){
+      orb.mesh.rotation.y += dt * 2;
+      if (player.position.distanceTo(orb.mesh.position) < 1.2){
+        score += 10;
+        scoreEl.textContent = `Score: ${score}`;
+        const glow = new THREE.Mesh(
+          new THREE.SphereGeometry(0.6, 16, 16),
+          new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.8 })
+        );
+        glow.position.copy(orb.mesh.position);
+        effects.push({ mesh: glow, time: 0 });
+        scene.add(glow);
+        orb.mesh.visible = false;
+        orb.respawn = t + 10;
+      }
+    } else if (t >= orb.respawn){
+      orb.mesh.visible = true;
+    }
+  }
+
+  for (let i = effects.length - 1; i >= 0; i--){
+    const e = effects[i];
+    e.time += dt;
+    e.mesh.scale.setScalar(1 + e.time * 4);
+    e.mesh.material.opacity = Math.max(0, 0.8 - e.time * 2);
+    if (e.time > 0.4){
+      scene.remove(e.mesh);
+      effects.splice(i,1);
+    }
+  }
 
   const idealOffset = new THREE.Vector3(8,6,8).add(player.position);
   camera.position.lerp(idealOffset, 0.08);
