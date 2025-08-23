@@ -71,15 +71,17 @@
           a.dataset.badge = g.badge;
           a.setAttribute('aria-label', `Play ${g.title}`);
 
+          const thumb = document.createElement('div');
+          thumb.className = 'thumb';
           if (g.thumb) {
             const img = document.createElement('img');
-            img.className = 'thumb';
             img.src = g.thumb;
-            img.alt = g.title;
+            img.alt = g.name;
             img.loading = 'lazy';
             img.onerror = () => img.remove();
-            a.appendChild(img);
+            thumb.appendChild(img);
           }
+          a.appendChild(thumb);
 
           const h3 = document.createElement('h3');
           h3.textContent = g.title;
