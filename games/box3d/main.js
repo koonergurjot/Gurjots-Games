@@ -49,10 +49,42 @@ box.position.set(4, 0.75, -3);
 box.castShadow = true;
 scene.add(box);
 
+const enemies = [];
+const enemyGeo = new THREE.BoxGeometry(1,1,1);
+const enemyMat = new THREE.MeshStandardMaterial({ color: 0xff5555 });
+for (let i = 0; i < 3; i++) {
+  const e = new THREE.Mesh(enemyGeo, enemyMat);
+  e.castShadow = true;
+  e.position.set(Math.random()*20-10, 0.5, Math.random()*20-10);
+  scene.add(e);
+  enemies.push(e);
+}
+
 const GRAVITY = -20;
 const ACCEL = 28;
 const JUMP_SPEED = 8.5;
 const MAX_SPEED = 10;
+
+const ENEMY_SPEED = 2;
+let health = 3;
+let invincibleTime = 0;
+let gameOver = false;
+
+const healthEl = document.getElementById('health');
+const gameOverEl = document.getElementById('gameOver');
+const restartBtn = document.getElementById('restart');
+restartBtn.addEventListener('click', restart);
+
+function restart(){
+  health = 3;
+  healthEl.textContent = `Health: ${health}`;
+  player.position.set(0,1,0);
+  velocity.set(0,0,0);
+  invincibleTime = 0;
+  gameOver = false;
+  gameOverEl.style.display = 'none';
+  enemies.forEach(e => e.position.set(Math.random()*20-10, 0.5, Math.random()*20-10));
+}
 
 const velocity = new THREE.Vector3();
 let onGround = true;
@@ -69,6 +101,8 @@ addEventListener('resize', () => {
 
 const clock = new THREE.Clock();
 function update(dt){
+  if (gameOver) return;
+  if (invincibleTime > 0) invincibleTime -= dt;
   const ax = (keys.get('KeyD') ? 1 : 0) - (keys.get('KeyA') ? 1 : 0);
   const az = (keys.get('KeyS') ? 1 : 0) - (keys.get('KeyW') ? 1 : 0);
   velocity.x += ax * ACCEL * dt;
@@ -86,6 +120,29 @@ function update(dt){
   if (player.position.y <= floorY){ player.position.y = floorY; velocity.y = 0; onGround = true; }
 
   if (onGround){ velocity.x *= 0.88; velocity.z *= 0.88; }
+
+  enemies.forEach(enemy => {
+    const dir = player.position.clone().sub(enemy.position);
+    dir.y = 0;
+    const dist = dir.length();
+    if (dist > 0.1){
+      const moveDir = dir.normalize();
+      enemy.position.addScaledVector(moveDir, ENEMY_SPEED * dt);
+      enemy.position.y = 0.5;
+      if (dist < 1.4 && invincibleTime <= 0){
+        health -= 1;
+        healthEl.textContent = `Health: ${health}`;
+        invincibleTime = 1.0;
+        velocity.addScaledVector(moveDir, 6);
+        velocity.y = 3;
+        onGround = false;
+        if (health <= 0){
+          gameOver = true;
+          gameOverEl.style.display = 'flex';
+        }
+      }
+    }
+  });
 
   const idealOffset = new THREE.Vector3(8,6,8).add(player.position);
   camera.position.lerp(idealOffset, 0.08);

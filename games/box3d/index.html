@@ -16,6 +16,18 @@
     a { color: #8cc8ff; text-decoration: none; }
     .back { position: fixed; left: 12px; bottom: 12px; color:#cfe6ff; background:#0e1422; border:1px solid #27314b; padding:8px 10px; border-radius:10px; font-weight:700; }
     canvas{display:block}
+
+    #gameOver {
+      position:fixed; inset:0; background:rgba(0,0,0,0.8);
+      display:none; align-items:center; justify-content:center; flex-direction:column;
+      font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color:#fff; font-size:32px;
+    }
+    #gameOver button{
+      margin-top:16px; padding:8px 12px; font-size:16px;
+      border-radius:8px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff;
+      cursor:pointer;
+    }
   </style>
 </head>
 <body>
@@ -23,8 +35,13 @@
     <div><strong>3D Box Playground</strong></div>
     <div>Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> • Jump: <kbd>Space</kbd> • Reset: <kbd>R</kbd></div>
     <div>Mouse orbit + wheel zoom.</div>
+    <div id="health">Health: 3</div>
   </div>
   <a class="back" href="../../">← Back to Hub</a>
+  <div id="gameOver">
+    <div>Game Over</div>
+    <button id="restart">Restart</button>
+  </div>
   <script type="module" src="./main.js"></script>
 </body>
 </html>
