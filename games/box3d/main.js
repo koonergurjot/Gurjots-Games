@@ -57,7 +57,7 @@ scene.add(dir);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(100, 100),
-  new THREE.MeshPhysicalMaterial({ color: 0x2a2f3a, roughness: 0.8, metalness: 0.2 })
+  new THREE.MeshPhysicalMaterial({ color: 0x1f2530, roughness: 0.95, metalness: 0.05 })
 );
 ground.rotation.x = -Math.PI * 0.5;
 ground.receiveShadow = true;
