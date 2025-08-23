@@ -1,3 +1,5 @@
+import { injectBackButton } from '../../shared/ui.js';
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
 
@@ -20,6 +22,8 @@ const startBtn = document.getElementById('startBtn');
 const restartBtn = document.getElementById('restartBtn');
 const timeEl = document.getElementById('time');
 const bestEl = document.getElementById('best');
+
+injectBackButton();
 
 let running = false;
 let paused = true;

@@ -1,6 +1,10 @@
+import { injectBackButton } from '../../shared/ui.js';
+
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
 const W = cvs.width, H = cvs.height;
+
+injectBackButton();
 const TILE = 50;
 
 // level definition: 40x9 tiles

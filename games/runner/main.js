@@ -1,5 +1,9 @@
+import { injectBackButton } from '../../shared/ui.js';
+
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
+
+injectBackButton();
 
 const W = cvs.width, H = cvs.height;
 const GROUND_Y = H - 64;
