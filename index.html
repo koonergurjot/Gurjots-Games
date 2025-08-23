@@ -11,6 +11,7 @@
   <header>
     <div class="brand">🎮 Gurjot's Games</div>
     <div class="hint">Click a game to play • Add more by copying a folder in <code>/games</code></div>
+    <span id="padHint" class="pad-hint" hidden>🎮</span>
   </header>
   <main>
     <section class="grid">
@@ -53,7 +54,12 @@
       </section>
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
-  <script>
+  <script type="module">
+    import { enableGamepadHint } from './shared/controls.js';
+
+    const padIcon = document.getElementById('padHint');
+    enableGamepadHint(padIcon);
+
     fetch('games.json')
       .then(r => r.json())
       .then(games => {
