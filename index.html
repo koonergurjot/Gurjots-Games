@@ -69,5 +69,40 @@
     </section>
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
+  <script>
+    fetch('games.json')
+      .then(r => r.json())
+      .then(games => {
+        const grid = document.querySelector('.grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        for (const g of games) {
+          const a = document.createElement('a');
+          a.className = 'card';
+          a.href = `./games/${g.slug}/`;
+          a.setAttribute('aria-label', `Play ${g.title}`);
+
+          const badge = document.createElement('div');
+          badge.className = 'badge';
+          badge.textContent = g.badge;
+
+          const h3 = document.createElement('h3');
+          h3.textContent = g.title;
+
+          const p = document.createElement('p');
+          p.textContent = g.blurb;
+
+          const play = document.createElement('div');
+          play.className = 'play';
+          play.textContent = 'Play →';
+
+          a.append(badge, h3, p, play);
+          grid.appendChild(a);
+        }
+      })
+      .catch(err => {
+        console.warn('Failed to load games.json', err);
+      });
+  </script>
 </body>
 </html>
