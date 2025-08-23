@@ -58,6 +58,9 @@ const velocity = new THREE.Vector3();
 let onGround = true;
 const HS_KEY = 'highscore:box3d';
 let highScore = Number(localStorage.getItem(HS_KEY) || 0);
+let pickup = null;
+let score = 0;
+const scoreEl = document.getElementById('score');
 const keys = new Map();
 addEventListener('keydown', (e) => keys.set(e.code, true));
 addEventListener('keyup', (e) => keys.set(e.code, false));
@@ -89,6 +92,13 @@ function update(dt){
 
   if (onGround){ velocity.x *= 0.88; velocity.z *= 0.88; }
 
+  if (pickup && player.position.distanceTo(pickup.position) < 1){
+    score++;
+    if (scoreEl) scoreEl.textContent = score;
+    scene.remove(pickup);
+    pickup = null;
+  }
+
   const dist = Math.hypot(player.position.x, player.position.z);
   if (dist > highScore) {
     highScore = dist;
@@ -104,6 +114,7 @@ function update(dt){
 function animate(){
   const dt = Math.min(clock.getDelta(), 0.05);
   update(dt);
+  if (pickup){ pickup.rotation.y += dt * 2; }
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
