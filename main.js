@@ -74,6 +74,40 @@ box.position.set(4, 0.75, -3);
 box.castShadow = true;
 scene.add(box);
 
+// ----- Particles -----
+const PARTICLE_COUNT = 800;
+const particleGeo = new THREE.BufferGeometry();
+const particlePositions = new Float32Array(PARTICLE_COUNT * 3);
+const particleBase = new Float32Array(PARTICLE_COUNT);
+const particlePhase = new Float32Array(PARTICLE_COUNT);
+
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  const x = THREE.MathUtils.randFloatSpread(50);
+  const y = Math.random() * 6 + 2; // y: 2-8
+  const z = THREE.MathUtils.randFloatSpread(50);
+  particlePositions[i * 3] = x;
+  particlePositions[i * 3 + 1] = y;
+  particlePositions[i * 3 + 2] = z;
+  particleBase[i] = y;
+  particlePhase[i] = Math.random() * Math.PI * 2;
+}
+
+particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+particleGeo.setAttribute('baseY', new THREE.BufferAttribute(particleBase, 1));
+particleGeo.setAttribute('phase', new THREE.BufferAttribute(particlePhase, 1));
+
+const particleMat = new THREE.PointsMaterial({
+  size: 0.04,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  sizeAttenuation: true,
+  depthWrite: false,
+});
+
+const particles = new THREE.Points(particleGeo, particleMat);
+particles.frustumCulled = false;
+scene.add(particles);
+
 // ----- Simple Physics State -----
 const GRAVITY = -20;
 const ACCEL = 28;
@@ -158,6 +192,13 @@ function update(dt) {
 function animate() {
   const dt = Math.min(clock.getDelta(), 0.05); // prevent big steps on tab refocus
   update(dt);
+  const elapsed = clock.elapsedTime;
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particlePositions[i * 3 + 1] =
+      particleBase[i] + Math.sin(elapsed * 0.6 + particlePhase[i]) * 0.25;
+  }
+  particleGeo.attributes.position.needsUpdate = true;
+
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
