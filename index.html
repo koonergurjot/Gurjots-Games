@@ -44,6 +44,10 @@
       position:absolute; bottom:12px; right:12px; font-weight:700; font-size:13px; padding:8px 10px;
       border-radius:10px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff;
     }
+    .best{
+      position:absolute; bottom:12px; left:12px; font-weight:700; font-size:13px; padding:8px 10px;
+      border-radius:10px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff;
+    }
     footer{margin-top:auto; padding:16px; text-align:center; color:#7f8b99; font-size:12px; border-top:1px solid #1e2431}
   </style>
 </head>
@@ -69,5 +73,20 @@
     </section>
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
+  <script>
+    document.querySelectorAll('.card').forEach(card => {
+      const href = card.getAttribute('href') || '';
+      const match = href.match(/\/(?:.*\/)?([^\/]+)\/?$/);
+      if (!match) return;
+      const slug = match[1];
+      const high = localStorage.getItem(`highscore:${slug}`);
+      if (high !== null) {
+        const label = document.createElement('div');
+        label.className = 'best';
+        label.textContent = `Best: ${high}`;
+        card.appendChild(label);
+      }
+    });
+  </script>
 </body>
 </html>
