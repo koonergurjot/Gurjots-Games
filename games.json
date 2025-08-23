@@ -34,7 +34,7 @@
   {
     "id": "shooter",
     "name": "Space Shooter",
-    "description": "WASD to move, Space to shoot. Survive homing enemies.",
+    "description": "WASD to move, mouse to aim. Survive waves of enemies.",
     "badge": "2D",
     "path": "./games/shooter/",
     "hasScore": true
