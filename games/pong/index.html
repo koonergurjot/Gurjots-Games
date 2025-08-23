@@ -17,7 +17,10 @@
   <div class="wrap">
     <canvas id="game" width="720" height="420" aria-label="Pong game"></canvas>
   </div>
-  <script>
+  <script type="module">
+    import { virtualButtons } from "../../shared/controls.js";
+    import { injectBackButton } from "../../shared/ui.js";
+
     const cvs = document.getElementById('game');
     const ctx = cvs.getContext('2d');
 
@@ -32,6 +35,11 @@
     addEventListener('keydown', e => { keys.set(e.code, true); if(e.code==='KeyP') paused = !paused; });
     addEventListener('keyup', e => keys.set(e.code, false));
 
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (isTouch) {
+      virtualButtons({ left: true, right: true });
+    }
+
     let last = 0;
     function loop(ts){
       const dt = Math.min((ts - last)/1000, 0.033);
@@ -43,7 +51,8 @@
 
     function update(dt){
       // input
-      const dir = (keys.get('ArrowRight')?1:0) - (keys.get('ArrowLeft')?1:0);
+      const buttons = virtualButtons.read();
+      const dir = ((keys.get('ArrowRight') || buttons.right)?1:0) - ((keys.get('ArrowLeft') || buttons.left)?1:0);
       player.vx = dir * player.speed;
       player.x += player.vx * dt;
 
@@ -119,9 +128,6 @@
     }
 
     requestAnimationFrame(loop);
-  </script>
-  <script type="module">
-    import { injectBackButton } from "../../shared/ui.js";
     injectBackButton();
   </script>
 </body>
