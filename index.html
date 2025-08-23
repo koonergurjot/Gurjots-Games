@@ -1,33 +1,73 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Barebones 3D Starter</title>
-    <style>
-      html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #0e0f12; }
-      #info {
-        position: fixed; left: 12px; top: 12px; padding: 10px 12px;
-        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-        font-size: 14px; line-height: 1.35; color: #e6e6e6; background: #1b1e24c0; border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-      }
-      kbd {
-        display: inline-block; padding: 1px 6px; border-radius: 6px; border: 1px solid #2f3542;
-        background: #111319; color: #d3d7de; font-weight: 600; font-size: 12px;
-      }
-      a { color: #8cc8ff; text-decoration: none; }
-      canvas { display: block; }
-    </style>
-  </head>
-  <body>
-    <div id="info">
-      <div><strong>Barebones 3D Starter</strong></div>
-      <div>Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> &nbsp; Jump: <kbd>Space</kbd></div>
-      <div>Orbit camera with mouse (drag), zoom with wheel.</div>
-      <div>Reset: <kbd>R</kbd></div>
-      <div style="margin-top:6px; opacity:.8">Built with <a href="https://threejs.org" target="_blank" rel="noreferrer">Three.js</a></div>
-    </div>
-    <script type="module" src="./main.js"></script>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arcade Hub</title>
+  <meta name="description" content="A tiny arcade hub with multiple games. Click a tile to play." />
+  <style>
+    :root{
+      --bg:#0b0d11; --card:#131722; --card2:#181c27; --text:#e8ecf1; --muted:#9aa7b2; --accent:#8cc8ff;
+      --ring:rgba(140,200,255,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:radial-gradient(1200px 600px at 10% -10%, #172033, transparent), var(--bg);
+      color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      display:flex; flex-direction:column;
+    }
+    header{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:18px 22px; border-bottom:1px solid #1e2431;
+      backdrop-filter: blur(6px);
+    }
+    .brand{font-weight:800; letter-spacing:.4px; font-size:18px;}
+    .brand span{color:var(--accent)}
+    .hint{color:var(--muted); font-size:13px}
+    main{max-width:1100px; width:100%; margin:24px auto; padding:0 16px 36px}
+    .grid{
+      display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap:16px;
+    }
+    a.card{
+      position:relative; text-decoration:none; color:inherit; display:block; background:linear-gradient(180deg,var(--card),var(--card2));
+      border:1px solid #222838; border-radius:16px; padding:16px; min-height:160px; overflow:hidden;
+      transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+      box-shadow: 0 2px 14px rgba(0,0,0,.25);
+    }
+    a.card:hover{ transform: translateY(-2px); border-color:#2a334a; box-shadow: 0 6px 22px rgba(0,0,0,.35); }
+    .badge{position:absolute; top:12px; right:12px; font-size:11px; padding:4px 8px; border-radius:999px; background:#0e1422; border:1px solid #27314b; color:#c3d7ff}
+    .card h3{margin:0 0 8px 0; font-size:18px}
+    .card p{margin:0; color:var(--muted); font-size:14px; line-height:1.35}
+    .play{
+      position:absolute; bottom:12px; right:12px; font-weight:700; font-size:13px; padding:8px 10px;
+      border-radius:10px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff;
+    }
+    footer{margin-top:auto; padding:16px; text-align:center; color:#7f8b99; font-size:12px; border-top:1px solid #1e2431}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">🎮 <span>Arcade</span> Hub</div>
+    <div class="hint">Click a game to play • Add more by copying a folder in <code>/games</code></div>
+  </header>
+  <main>
+    <section class="grid">
+      <a class="card" href="./games/box3d/" aria-label="Play 3D Box Playground">
+        <div class="badge">3D</div>
+        <h3>3D Box Playground</h3>
+        <p>WASD + Space to jump. Orbit the camera with your mouse.</p>
+        <div class="play">Play →</div>
+      </a>
+      <a class="card" href="./games/pong/" aria-label="Play Pong Classic">
+        <div class="badge">2D</div>
+        <h3>Pong Classic</h3>
+        <p>Arrow keys to move. Keep the ball in play, beat the AI.</p>
+        <div class="play">Play →</div>
+      </a>
+    </section>
+  </main>
+  <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
+</body>
 </html>
