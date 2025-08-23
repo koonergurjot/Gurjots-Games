@@ -22,5 +22,13 @@
     "badge": "2D",
     "path": "./games/runner/",
     "hasScore": true
+  },
+  {
+    "id": "platformer",
+    "name": "Mini Platformer",
+    "description": "Collect coins and reach the goal. Arrows to move and jump.",
+    "badge": "2D",
+    "path": "./games/platformer/",
+    "hasScore": true
   }
 ]
