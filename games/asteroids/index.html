@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Asteroids</title>
+  <style>
+    html, body{height:100%; margin:0; background:#0e0f12; color:#e6e6e6; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
+    .wrap{display:grid; place-items:center; height:100%; padding:16px}
+    canvas{background:#0a0d13; border:1px solid #1f2431; border-radius:12px; box-shadow:0 6px 22px rgba(0,0,0,.35)}
+    .hud{position:fixed; top:12px; left:12px; background:#1b1e24c0; border:1px solid #27314b; border-radius:10px; padding:8px 10px; font-size:14px}
+    .back{position:fixed; left:12px; bottom:12px; color:#cfe6ff; background:#0e1422; border:1px solid #27314b; padding:8px 10px; border-radius:10px; font-weight:700; text-decoration:none}
+    kbd{padding:1px 6px; border-radius:6px; border:1px solid #2f3542; background:#111319; color:#d3d7de; font-weight:600; font-size:12px;}
+    .overlay{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.35); font-weight:800; letter-spacing:.4px; text-align:center;}
+    .overlay.show{display:grid}
+    .panel{background:#111522; border:1px solid #27314b; padding:18px 22px; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.5)}
+    .panel h2{margin:0 0 6px 0}
+    .btn{display:inline-block; padding:8px 12px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff; border-radius:10px; text-decoration:none; cursor:pointer; font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="hud">Rotate: <kbd>←</kbd><kbd>→</kbd> • Thrust: <kbd>↑</kbd> • Fire: <kbd>Space</kbd> • Pause: <kbd>P</kbd> • Restart: <kbd>R</kbd></div>
+  <a class="back" href="../../">← Back to Hub</a>
+  <div class="wrap">
+    <canvas id="game" width="800" height="600" aria-label="Asteroids game"></canvas>
+  </div>
+  <div id="overlay" class="overlay"><div class="panel">
+    <h2 id="over-title">Game Over</h2>
+    <div id="over-info" style="margin-bottom:10px"></div>
+    <div class="btn" id="restartBtn">Restart</div>
+  </div></div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
