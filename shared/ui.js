@@ -1,26 +1,30 @@
 export function injectBackButton(relativePathToHub = '../../') {
-  const link = document.querySelector('.back-to-hub');
-  const style = document.head.querySelector('style[data-back-to-hub]');
+  const head = document.head;
+  let link = head.querySelector('.back-to-hub');
+  const style = head.querySelector('style[data-back-to-hub]');
+
+  if (!link) {
+    link = document.body.querySelector('.back-to-hub');
+  }
 
   if (link && style) {
     link.href = relativePathToHub;
     return;
   }
 
-  let backLink = link;
-  if (!backLink) {
-    backLink = document.createElement('a');
-    backLink.className = 'back-to-hub';
-    backLink.textContent = '← Back to Hub';
-    document.body.appendChild(backLink);
+  if (!link) {
+    link = document.createElement('a');
+    link.className = 'back-to-hub';
+    link.textContent = '← Back to Hub';
+    document.body.appendChild(link);
   }
 
-  backLink.href = relativePathToHub;
+  link.href = relativePathToHub;
 
   if (!style) {
-    const styleTag = document.createElement('style');
-    styleTag.dataset.backToHub = 'true';
-    styleTag.textContent = `
+    const styleEl = document.createElement('style');
+    styleEl.dataset.backToHub = 'true';
+    styleEl.textContent = `
       .back-to-hub {
         position: fixed;
         left: 12px;
@@ -34,6 +38,6 @@ export function injectBackButton(relativePathToHub = '../../') {
         text-decoration: none;
       }
     `;
-    document.head.appendChild(styleTag);
+    head.appendChild(styleEl);
   }
 }
