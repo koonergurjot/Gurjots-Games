@@ -30,9 +30,14 @@ a.card{
   box-shadow: 0 2px 14px rgba(0,0,0,.25);
 }
 a.card:hover{ transform: translateY(-2px); border-color:#2a334a; box-shadow: 0 6px 22px rgba(0,0,0,.35); }
-a.card::after{position:absolute; top:12px; right:12px; font-size:11px; padding:4px 8px; border-radius:999px; background:#0e1422; border:1px solid #27314b; color:#c3d7ff; content:attr(data-badge);}
+a.card::after{position:absolute; top:12px; right:12px; font-size:11px; padding:4px 8px; border-radius:999px; background:#0e1422; border:1px solid #27314b; color:#c3d7ff; content:attr(data-badge); z-index:2;}
 .card h3{margin:0 0 8px 0; font-size:18px}
 .card p{margin:0; color:var(--muted); font-size:14px; line-height:1.35}
+.card img.thumb{width:100%; border-radius:12px; display:block; margin-bottom:8px;}
+.card .tags{display:flex; flex-wrap:wrap; gap:4px; margin:8px 0;}
+.card .tags span{background:#0e1422; border:1px solid #27314b; color:#c3d7ff; padding:2px 6px; border-radius:8px; font-size:11px;}
+.card .best{position:absolute; bottom:42px; right:12px; font-size:12px; color:#c3d7ff;}
+.card .ribbon{position:absolute; top:8px; left:-4px; background:#e74c3c; color:#fff; padding:4px 8px; font-size:11px; transform:rotate(-45deg);}
 .play{
   position:absolute; bottom:12px; right:12px; font-weight:700; font-size:13px; padding:8px 10px;
   border-radius:10px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff;
