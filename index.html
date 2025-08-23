@@ -69,5 +69,28 @@
     </section>
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
+  <script>
+    // Load game definitions and render cards dynamically
+    fetch('games.json')
+      .then(r => {
+        if (!r.ok) throw new Error('Network response was not ok');
+        return r.json();
+      })
+      .then(games => {
+        const grid = document.querySelector('.grid');
+        grid.innerHTML = games.map(game => `
+          <a class="card" href="./games/${game.slug}/" aria-label="Play ${game.title}">
+            <div class="badge">${game.badge}</div>
+            <h3>${game.title}</h3>
+            <p>${game.blurb}</p>
+            <div class="play">Play →</div>
+          </a>
+        `).join('');
+      })
+      .catch(err => {
+        console.warn('Failed to load games.json', err);
+        // Fallback: keep existing static cards
+      });
+  </script>
 </body>
 </html>

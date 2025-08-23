@@ -1,0 +1,14 @@
+[
+  {
+    "title": "3D Box Playground",
+    "slug": "box3d",
+    "badge": "3D",
+    "blurb": "WASD + Space to jump. Orbit the camera with your mouse."
+  },
+  {
+    "title": "Pong Classic",
+    "slug": "pong",
+    "badge": "2D",
+    "blurb": "Arrow keys to move. Keep the ball in play, beat the AI."
+  }
+]
