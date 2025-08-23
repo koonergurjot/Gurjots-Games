@@ -13,7 +13,9 @@
     <div class="hint">Click a game to play • Add more by copying a folder in <code>/games</code></div>
   </header>
   <main>
-    <section class="grid">
+    <section class="grid favorites"></section>
+    <section class="grid recents"></section>
+    <section class="grid all">
       <a class="card" href="./games/box3d/" aria-label="Play 3D Box Playground" data-badge="3D">
         <h3>3D Box Playground</h3>
         <p>WASD + Space to jump. Orbit the camera with your mouse.</p>
@@ -54,13 +56,19 @@
   </main>
   <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
   <script>
+    function uniqueCap(arr) {
+      return [...new Set(arr)].slice(0, 10);
+    }
+
     fetch('games.json')
       .then(r => r.json())
       .then(games => {
-        const grid = document.querySelector('.grid');
-        if (!grid) return;
-        grid.innerHTML = '';
-        for (const g of games) {
+        const allGrid = document.querySelector('.grid.all');
+        const favGrid = document.querySelector('.grid.favorites');
+        const recentGrid = document.querySelector('.grid.recents');
+        const byId = new Map(games.map(g => [g.id, g]));
+
+        function buildCard(g) {
           const a = document.createElement('a');
           a.className = 'card';
           a.href = g.path;
@@ -78,8 +86,32 @@
           play.textContent = 'Play →';
 
           a.append(h3, p, play);
-          grid.appendChild(a);
+          return a;
         }
+
+        function buildFromIds(ids, container) {
+          if (!container) return;
+          container.innerHTML = '';
+          for (const id of ids) {
+            const g = byId.get(id);
+            if (g) container.appendChild(buildCard(g));
+          }
+        }
+
+        const favIds = uniqueCap(JSON.parse(localStorage.getItem('favorites') || '[]'));
+        const recentIds = uniqueCap(JSON.parse(localStorage.getItem('lastPlayed') || '[]'));
+        buildFromIds(favIds, favGrid);
+        buildFromIds(recentIds, recentGrid);
+
+        if (allGrid) {
+          allGrid.innerHTML = '';
+          for (const g of games) {
+            allGrid.appendChild(buildCard(g));
+          }
+        }
+
+        localStorage.setItem('favorites', JSON.stringify(favIds));
+        localStorage.setItem('lastPlayed', JSON.stringify(recentIds));
       })
       .catch(err => {
         console.warn('Failed to load games.json', err);
