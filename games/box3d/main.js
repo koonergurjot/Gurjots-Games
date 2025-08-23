@@ -1,5 +1,10 @@
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js';
+import { EffectComposer } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders/FXAAShader.js';
 import { Sky } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js';
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton } from '../../shared/ui.js';
@@ -26,6 +31,25 @@ const controls = new PointerLockControls(camera, document.body);
 const player = controls.getObject();
 player.position.set(0, 1, 5);
 scene.add(player);
+
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.3,
+  0.4,
+  0.85
+);
+composer.addPass(bloomPass);
+
+const fxaaPass = new ShaderPass(FXAAShader);
+fxaaPass.material.uniforms['resolution'].value.set(
+  1 / window.innerWidth,
+  1 / window.innerHeight
+);
+composer.addPass(fxaaPass);
 
 document.body.addEventListener('click', () => controls.lock());
 
@@ -127,6 +151,11 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+  composer.setSize(innerWidth, innerHeight);
+  fxaaPass.material.uniforms['resolution'].value.set(
+    1 / innerWidth,
+    1 / innerHeight
+  );
 });
 
 const forward = new THREE.Vector3();
@@ -178,7 +207,7 @@ function update(dt){
 function animate(){
   const dt = Math.min(clock.getDelta(), 0.05);
   update(dt);
-  renderer.render(scene, camera);
+  composer.render();
   requestAnimationFrame(animate);
 }
 animate();
