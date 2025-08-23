@@ -8,6 +8,8 @@ import { FXAAShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton } from '../../shared/ui.js';
 
+// Scene setup with bloom and FXAA post-processing
+
 registerSW();
 injectBackButton();
 
