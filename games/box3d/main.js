@@ -1,5 +1,6 @@
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js';
+import { RGBELoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/RGBELoader.js';
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton } from '../../shared/ui.js';
 
@@ -10,16 +11,36 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputEncoding = THREE.sRGBEncoding;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+new RGBELoader()
+  .setDataType(THREE.FloatType)
+  .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
+    const envMap = pmrem.fromEquirectangular(texture).texture;
+    scene.environment = envMap;
+    texture.dispose();
+    pmrem.dispose();
+  });
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 const controls = new PointerLockControls(camera, document.body);
 const player = controls.getObject();
 player.position.set(0, 1, 5);
 scene.add(player);
+
+const playerMesh = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.35, 1.0, 4, 8),
+  new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0.1 })
+);
+playerMesh.castShadow = true;
+playerMesh.position.y = -1;
+player.add(playerMesh);
 
 document.body.addEventListener('click', () => controls.lock());
 
@@ -34,7 +55,7 @@ scene.add(dir);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(100, 100),
-  new THREE.MeshStandardMaterial({ color: 0x2a2f3a })
+  new THREE.MeshPhysicalMaterial({ color: 0x2a2f3a, roughness: 0.8, metalness: 0.2 })
 );
 ground.rotation.x = -Math.PI * 0.5;
 ground.receiveShadow = true;
@@ -42,7 +63,7 @@ scene.add(ground);
 
 const box = new THREE.Mesh(
   new THREE.BoxGeometry(1.5, 1.5, 1.5),
-  new THREE.MeshStandardMaterial({ color: 0x6aa9ff })
+  new THREE.MeshPhysicalMaterial({ color: 0x6aa9ff, roughness: 0.15, metalness: 0.9, clearcoat: 1, clearcoatRoughness: 0.05 })
 );
 box.position.set(4, 0.75, -3);
 box.castShadow = true;
@@ -50,7 +71,7 @@ scene.add(box);
 
 let pickup = new THREE.Mesh(
   new THREE.SphereGeometry(0.3, 16, 16),
-  new THREE.MeshStandardMaterial({ color: 0xffdd00, emissive: 0xffaa00, emissiveIntensity: 1.5 })
+  new THREE.MeshPhysicalMaterial({ color: 0xffdd00, emissive: 0xffaa00, emissiveIntensity: 1.5, roughness: 0.25, metalness: 0.8 })
 );
 pickup.position.set(-3, 0.3, 4);
 pickup.castShadow = true;
