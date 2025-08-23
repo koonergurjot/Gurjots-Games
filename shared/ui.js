@@ -1,9 +1,31 @@
 export function injectBackButton(relativePathToHub = '../../') {
+  const head = document.head;
+  let link = head.querySelector('.back-to-hub');
+  const style = head.querySelector('style[data-back-to-hub]');
+
+  // If both link and style already exist, just update the link's href
+  if (!link) {
+    link = document.body.querySelector('.back-to-hub');
+  }
+  if (link && style) {
+    link.href = relativePathToHub;
+    return;
+  }
+
+  // Create the link if it doesn't exist
+  if (!link) {
+    link = document.createElement('a');
+    link.className = 'back-to-hub';
+    link.textContent = '← Back to Hub';
+    document.body.appendChild(link);
+  }
+  link.href = relativePathToHub;
+
   // Inject styles once
-  if (!document.head.querySelector('style[data-back-to-hub]')) {
-    const style = document.createElement('style');
-    style.dataset.backToHub = 'true';
-    style.textContent = `
+  if (!style) {
+    const styleEl = document.createElement('style');
+    styleEl.dataset.backToHub = 'true';
+    styleEl.textContent = `
       .back-to-hub {
         position: fixed;
         left: 12px;
@@ -17,12 +39,6 @@ export function injectBackButton(relativePathToHub = '../../') {
         text-decoration: none;
       }
     `;
-    document.head.appendChild(style);
+    head.appendChild(styleEl);
   }
-
-  const link = document.createElement('a');
-  link.href = relativePathToHub;
-  link.className = 'back-to-hub';
-  link.textContent = '← Back to Hub';
-  document.body.appendChild(link);
 }
