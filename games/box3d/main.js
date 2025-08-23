@@ -14,7 +14,7 @@ injectBackButton();
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-renderer.setSize(innerWidth, innerHeight);
+renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -26,21 +26,24 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
 scene.fog = new THREE.FogExp2(0x0e0f12, 0.04);
 
-const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 const controls = new PointerLockControls(camera, document.body);
 const player = controls.getObject();
 player.position.set(0, 1, 5);
 scene.add(player);
 
 const composer = new EffectComposer(renderer);
-composer.setSize(innerWidth, innerHeight);
+composer.setSize(window.innerWidth, window.innerHeight);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.9, 0.6, 0.85);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.9, 0.6, 0.85);
 composer.addPass(bloomPass);
 const fxaaPass = new ShaderPass(FXAAShader);
 const pixelRatio = renderer.getPixelRatio();
-fxaaPass.material.uniforms.resolution.value.set(1 / (innerWidth * pixelRatio), 1 / (innerHeight * pixelRatio));
+fxaaPass.material.uniforms.resolution.value.set(
+  1 / (window.innerWidth * pixelRatio),
+  1 / (window.innerHeight * pixelRatio)
+);
 composer.addPass(fxaaPass);
 
 document.body.addEventListener('click', () => controls.lock());
@@ -144,13 +147,16 @@ if (touch) {
 }
 
 addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-  renderer.setSize(innerWidth, innerHeight);
-  composer.setSize(innerWidth, innerHeight);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
   const pixelRatio = renderer.getPixelRatio();
-  fxaaPass.material.uniforms.resolution.value.set(1 / (innerWidth * pixelRatio), 1 / (innerHeight * pixelRatio));
+  fxaaPass.material.uniforms.resolution.value.set(
+    1 / (window.innerWidth * pixelRatio),
+    1 / (window.innerHeight * pixelRatio)
+  );
 });
 
 const forward = new THREE.Vector3();
