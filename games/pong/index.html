@@ -11,15 +11,90 @@
     .hud{position:fixed; top:12px; left:12px; background:#1b1e24c0; border:1px solid #27314b; border-radius:10px; padding:8px 10px; font-size:14px}
     .back{position: fixed; left: 12px; bottom: 12px; color:#cfe6ff; background:#0e1422; border:1px solid #27314b; padding:8px 10px; border-radius:10px; font-weight:700; text-decoration:none}
     kbd{padding:1px 6px; border-radius:6px; border:1px solid #2f3542; background:#111319; color:#d3d7de; font-weight:600; font-size:12px;}
+    .controls-btn{position:fixed; top:12px; right:12px; color:#cfe6ff; background:#0e1422; border:1px solid #27314b; padding:8px 10px; border-radius:10px; font-weight:700}
+    .modal{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center}
+    .modal.show{display:flex}
+    .modal .panel{background:#1b1e24c0; border:1px solid #27314b; border-radius:10px; padding:20px; color:#e6e6e6; font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; min-width:260px}
+    .modal .row{display:flex; align-items:center; margin-bottom:8px}
+    .modal .row span{flex:1}
+    .modal .row button{padding:4px 8px; border:1px solid #2f3542; background:#111319; color:#d3d7de; border-radius:6px; min-width:60px}
   </style>
 </head>
 <body>
-  <div class="hud">Move: <kbd>←</kbd><kbd>→</kbd> • Pause: <kbd>P</kbd></div>
+  <div class="hud" id="hud"></div>
+  <button id="controls-btn" class="controls-btn">Controls</button>
+  <div id="controls-modal" class="modal">
+    <div class="panel">
+      <h2>Controls</h2>
+      <div id="controls-list"></div>
+      <button id="controls-close" class="controls-btn" style="position:static; margin-top:10px">Done</button>
+    </div>
+  </div>
   <a class="back" href="../../">← Back to Hub</a>
   <div class="wrap">
     <canvas id="game" width="720" height="420" aria-label="Pong game"></canvas>
   </div>
   <script>
+    const slug = 'pong';
+    const defaultBindings = { left:'ArrowLeft', right:'ArrowRight', pause:'KeyP' };
+    let bindings = JSON.parse(localStorage.getItem('controls-'+slug)) || { ...defaultBindings };
+
+    const hud = document.getElementById('hud');
+    const modal = document.getElementById('controls-modal');
+    const list = document.getElementById('controls-list');
+    const btnOpen = document.getElementById('controls-btn');
+    const btnClose = document.getElementById('controls-close');
+    let capturing = false;
+
+    function codeLabel(code){
+      if(code.startsWith('Key')) return code.slice(3);
+      if(code.startsWith('Digit')) return code.slice(5);
+      const special = { ArrowLeft:'←', ArrowRight:'→', ArrowUp:'↑', ArrowDown:'↓', Space:'Space' };
+      return special[code] || code;
+    }
+
+    function updateHUD(){
+      hud.innerHTML = `Move: <kbd>${codeLabel(bindings.left)}</kbd><kbd>${codeLabel(bindings.right)}</kbd> • Pause: <kbd>${codeLabel(bindings.pause)}</kbd>`;
+    }
+
+    function saveBindings(){
+      localStorage.setItem('controls-'+slug, JSON.stringify(bindings));
+      updateHUD();
+    }
+
+    function buildList(){
+      list.innerHTML='';
+      const items = [ ['left','Move Left'], ['right','Move Right'], ['pause','Pause'] ];
+      for(const [action,label] of items){
+        const row = document.createElement('div');
+        row.className='row';
+        const span = document.createElement('span');
+        span.textContent = label;
+        const b = document.createElement('button');
+        b.textContent = codeLabel(bindings[action]);
+        b.onclick = () => {
+          if(capturing) return;
+          capturing = true;
+          b.textContent = '...';
+          const handler = (e) => {
+            e.preventDefault();
+            bindings[action] = e.code;
+            capturing = false;
+            saveBindings();
+            buildList();
+          };
+          window.addEventListener('keydown', handler, { once:true });
+        };
+        row.append(span, b);
+        list.appendChild(row);
+      }
+    }
+
+    btnOpen.onclick = () => { buildList(); modal.classList.add('show'); };
+    btnClose.onclick = () => modal.classList.remove('show');
+
+    updateHUD();
+
     const cvs = document.getElementById('game');
     const ctx = cvs.getContext('2d');
 
@@ -31,8 +106,8 @@
     let paused = false;
 
     const keys = new Map();
-    addEventListener('keydown', e => { keys.set(e.code, true); if(e.code==='KeyP') paused = !paused; });
-    addEventListener('keyup', e => keys.set(e.code, false));
+    addEventListener('keydown', e => { if(capturing) return; keys.set(e.code, true); if(e.code===bindings.pause) paused = !paused; });
+    addEventListener('keyup', e => { if(capturing) return; keys.set(e.code, false); });
 
     let last = 0;
     function loop(ts){
@@ -44,34 +119,27 @@
     }
 
     function update(dt){
-      // input
-      const dir = (keys.get('ArrowRight')?1:0) - (keys.get('ArrowLeft')?1:0);
+      const dir = (keys.get(bindings.right)?1:0) - (keys.get(bindings.left)?1:0);
       player.vx = dir * player.speed;
       player.x += player.vx * dt;
 
-      // constrain
       player.x = Math.max(0, Math.min(W - paddleW, player.x));
 
-      // AI follows ball with dampened speed
       const target = ball.x - paddleW/2;
       const dx = target - ai.x;
       ai.vx = Math.max(-ai.speed, Math.min(ai.speed, dx * 5));
       ai.x += ai.vx * dt;
       ai.x = Math.max(0, Math.min(W - paddleW, ai.x));
 
-      // ball movement
       ball.x += ball.vx * dt;
       ball.y += ball.vy * dt;
 
-      // walls
       if (ball.x < ball.r) { ball.x = ball.r; ball.vx *= -1; }
       if (ball.x > W - ball.r) { ball.x = W - ball.r; ball.vx *= -1; }
 
-      // paddle collisions
       if (ball.y + ball.r >= player.y && ball.y - ball.r <= player.y + paddleH && ball.x > player.x && ball.x < player.x + paddleW) {
         ball.y = player.y - ball.r;
         ball.vy = -Math.abs(ball.vy);
-        // add spin based on where it hits the paddle
         const hit = (ball.x - (player.x + paddleW/2)) / (paddleW/2);
         ball.vx += hit * 180;
       }
@@ -82,38 +150,32 @@
         ball.vx += hit * 140;
       }
 
-      // scoring
       if (ball.y < -20) { player.score++; resetBall(-1); }
       if (ball.y > H + 20) { ai.score++; resetBall(1); }
     }
 
     function resetBall(dir){
       ball.x = W/2; ball.y = H/2;
-      const angle = (Math.random()*0.6 - 0.3); // -0.3..0.3 rad
+      const angle = (Math.random()*0.6 - 0.3);
       const speed = 360;
       ball.vx = Math.cos(angle) * speed;
       ball.vy = Math.sin(angle) * speed * dir;
     }
 
     function draw(){
-      // clear
       ctx.clearRect(0,0,W,H);
 
-      // midline
       ctx.fillStyle = '#1e2636';
       for(let y=0; y<H; y+=18){ ctx.fillRect(W/2 - 2, y, 4, 10); }
 
-      // paddles
       ctx.fillStyle = '#e6eef9';
       ctx.fillRect(player.x, player.y, paddleW, paddleH);
       ctx.fillRect(ai.x, ai.y, paddleW, paddleH);
 
-      // ball
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
       ctx.fill();
 
-      // scores
       ctx.font = 'bold 32px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
       ctx.textAlign = 'center'; ctx.fillStyle = '#cfe6ff';
       ctx.fillText(player.score, W/2 + 60, H/2 + 36);

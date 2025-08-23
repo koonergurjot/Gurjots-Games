@@ -13,6 +13,9 @@ A tiny Miniclip-style hub with multiple games. Static files only — perfect for
 - VS Code: use **Live Server** on `index.html`, or
 - Python: `python -m http.server 5173` then open http://localhost:5173
 
+## Controls
+Each game includes a **Controls** button for remapping keys. Custom bindings are stored in localStorage per game.
+
 ## Add a new game
 1. Copy one of the folders in `/games/` and rename it, e.g. `/games/maze/`
 2. Update its HTML/JS. The hub automatically links via your new folder if you add a tile in the root `index.html`.
