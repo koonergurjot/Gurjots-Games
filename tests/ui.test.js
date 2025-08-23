@@ -21,4 +21,20 @@ describe('injectBackButton', () => {
     expect(style).toBeTruthy();
     expect(style.textContent).toContain('.back-to-hub');
   });
+
+  it('uses custom href when provided', () => {
+    injectBackButton('../');
+
+    const link = document.querySelector('a.back-to-hub');
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('href')).toBe('../');
+  });
+
+  it('does not append duplicate styles on subsequent calls', () => {
+    injectBackButton();
+    injectBackButton();
+
+    const styles = document.head.querySelectorAll('style');
+    expect(styles.length).toBe(1);
+  });
 });
