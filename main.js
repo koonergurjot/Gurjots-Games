@@ -4,6 +4,7 @@
 
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import { Reflector } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Reflector.js';
 
 // ----- Renderer -----
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -41,6 +42,19 @@ const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.rotation.x = -Math.PI * 0.5;
 ground.receiveShadow = true;
 scene.add(ground);
+
+// ----- Polished Floor Patch -----
+const patchGeo = new THREE.CircleGeometry(2, 32);
+const patch = new Reflector(patchGeo, {
+  color: 0x111111,
+  textureWidth: 256,
+  textureHeight: 256
+});
+patch.material.transparent = true;
+patch.material.opacity = 0.25;
+patch.rotation.x = -Math.PI * 0.5;
+patch.position.set(0, 0.002, 0);
+scene.add(patch);
 
 // ----- Player (simple physics body) -----
 const player = new THREE.Mesh(
