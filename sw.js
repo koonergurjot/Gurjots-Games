@@ -2,6 +2,7 @@ const CACHE = 'static';
 const ASSETS = [
   'index.html',
   'styles.css',
+  'games.json',
   'games/box3d/index.html',
   'games/pong/index.html',
   'games/runner/index.html',
@@ -32,6 +33,14 @@ self.addEventListener('fetch', (e) => {
         }
         path = path.replace(/^\//, '');
         const cached = await cache.match(path);
+        return cached || fetch(e.request);
+      })(),
+    );
+  } else if (new URL(e.request.url).origin === location.origin) {
+    e.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE);
+        const cached = await cache.match(e.request);
         return cached || fetch(e.request);
       })(),
     );
