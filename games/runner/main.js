@@ -1,3 +1,5 @@
+import { virtualButtons } from '../../shared/controls.js';
+
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
 
@@ -19,6 +21,9 @@ const jumpV = -750;
 let obstacles = [];
 let spawnTimer = 0;
 
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+if (isTouch) virtualButtons({ jump: true });
+
 const keys = new Map();
 addEventListener('keydown', e => {
   keys.set(e.code, true);
@@ -27,9 +32,6 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR') restart();
 });
 addEventListener('keyup', e => keys.set(e.code, false));
-
-// mobile/touch support
-addEventListener('pointerdown', () => { if (state.running) jump(); else restart(); });
 document.getElementById('restartBtn').addEventListener('click', () => restart());
 
 function jump(){
@@ -61,6 +63,11 @@ function update(dt){
   state.time += dt;
   state.score = Math.floor(state.time * 10);
   state.speed = 300 + state.time * 25; // ramp up
+
+  const pressed = virtualButtons.read();
+  if (pressed.jump) {
+    if (state.running) jump(); else restart();
+  }
 
   // spawn obstacles
   spawnTimer -= dt;
