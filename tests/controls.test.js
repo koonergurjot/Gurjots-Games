@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { enableGamepadHint } from '../shared/controls.js';
+import { enableGamepadHint, virtualButtons } from '../shared/controls.js';
 
 describe('enableGamepadHint', () => {
   let el;
@@ -27,5 +27,21 @@ describe('enableGamepadHint', () => {
     mockPads = [];
     window.dispatchEvent(new Event('gamepaddisconnected'));
     expect(el.hidden).toBe(true);
+  });
+});
+
+describe('virtualButtons', () => {
+  it('reflects button states via read()', () => {
+    const codes = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space'];
+    const { element, read } = virtualButtons(codes);
+    document.body.appendChild(element);
+
+    for (const code of codes) {
+      const button = element.querySelector(`button[data-k="${code}"]`);
+      button.dispatchEvent(new Event('touchstart', { bubbles: true }));
+      expect(read().get(code)).toBe(true);
+      button.dispatchEvent(new Event('touchend', { bubbles: true }));
+      expect(read().get(code)).toBe(false);
+    }
   });
 });
