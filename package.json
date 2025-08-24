@@ -6,7 +6,8 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "vitest": "^1.6.0",
-    "jsdom": "^24.0.0"
+    "jsdom": "^24.0.0",
+    "service-worker-mock": "^2.0.5",
+    "vitest": "^1.6.0"
   }
 }
