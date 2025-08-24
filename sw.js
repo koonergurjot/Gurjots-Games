@@ -1,4 +1,4 @@
-const CACHE = 'static';
+const CACHE = 'static-v2';
 const ASSETS = [
   'index.html',
   'styles.css',
@@ -18,7 +18,15 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(self.clients.claim());
+  e.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)),
+      );
+      await self.clients.claim();
+    })(),
+  );
 });
 
 self.addEventListener('fetch', (e) => {
