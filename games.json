@@ -1,65 +1,92 @@
-[
-  {
-    "slug": "box3d",
-    "title": "3D Box Playground",
-    "badge": "3D",
-    "blurb": "WASD + Space to jump. Orbit the camera with your mouse.",
-    "tags": ["Sandbox", "3D"],
-    "thumb": "./games/box3d/thumb.png",
-    "path": "./games/box3d/"
-  },
-  {
-    "slug": "pong",
-    "title": "Pong Classic",
-    "badge": "2D",
-    "blurb": "Arrow keys or touch to move. Keep the ball in play, beat the AI.",
-    "tags": ["Arcade", "1-Player"],
-    "thumb": "./games/pong/thumb.png",
-    "path": "./games/pong/"
-  },
-  {
-    "slug": "runner",
-    "title": "Endless Runner",
-    "badge": "2D",
-    "blurb": "Space to jump • Dodge obstacles • Compete for a high score.",
-    "tags": ["Arcade", "Endless"],
-    "thumb": "./games/runner/thumb.png",
-    "path": "./games/runner/"
-  },
-  {
-    "slug": "asteroids",
-    "title": "Asteroids",
-    "badge": "2D",
-    "blurb": "Rotate, thrust, and shoot to clear the field.",
-    "tags": ["Arcade", "Shooter"],
-    "thumb": "./games/asteroids/thumb.png",
-    "path": "./games/asteroids/?new=true"
-  },
-  {
-    "slug": "shooter",
-    "title": "Space Shooter",
-    "badge": "2D",
-    "blurb": "WASD to move, mouse to aim. Survive waves of enemies.",
-    "tags": ["Action", "Shooter"],
-    "thumb": "./games/shooter/thumb.png",
-    "path": "./games/shooter/?new=true"
-  },
-  {
-    "slug": "platformer",
-    "title": "Retro Platformer",
-    "badge": "2D",
-    "blurb": "Run and jump through classic levels to reach the goal.",
-    "tags": ["Arcade", "Platformer"],
-    "thumb": "./games/platformer/thumb.png",
-    "path": "./games/platformer/?new=true"
-  },
-  {
-    "slug": "maze3d",
-    "title": "3D Maze Explorer",
-    "badge": "3D",
-    "blurb": "Navigate a 3D labyrinth and find the exit.",
-    "tags": ["Puzzle", "3D"],
-    "thumb": "./games/maze3d/thumb.png",
-    "path": "./games/maze3d/?new=true"
-  }
-]
+{
+  "games": [
+    {
+      "slug": "box3d",
+      "title": "3D Box Playground",
+      "path": "./games/box3d/",
+      "thumb": "./games/box3d/thumb.png",
+      "tags": [
+        "3D",
+        "First-Person"
+      ],
+      "blurb": "Walk, jump, collect pickups.",
+      "badge": "Three.js"
+    },
+    {
+      "slug": "pong",
+      "title": "Pong Classic",
+      "path": "./games/pong/",
+      "thumb": "./games/pong/thumb.png",
+      "tags": [
+        "Arcade",
+        "Paddle"
+      ],
+      "blurb": "Classic single-player Pong.",
+      "badge": "Canvas 2D"
+    },
+    {
+      "slug": "runner",
+      "title": "Endless Runner",
+      "path": "./games/runner/",
+      "thumb": "./games/runner/thumb.png",
+      "tags": [
+        "Runner",
+        "Arcade"
+      ],
+      "blurb": "Jump to avoid obstacles.",
+      "badge": "Canvas 2D",
+      "isNew": true
+    },
+    {
+      "slug": "asteroids",
+      "title": "Asteroids",
+      "path": "./games/asteroids/",
+      "thumb": "./games/asteroids/thumb.png",
+      "tags": [
+        "Arcade",
+        "Shooter"
+      ],
+      "blurb": "Rotate, thrust, and shoot.",
+      "badge": "Canvas 2D",
+      "isNew": true
+    },
+    {
+      "slug": "shooter",
+      "title": "Top-Down Shooter",
+      "path": "./games/shooter/",
+      "thumb": "./games/shooter/thumb.png",
+      "tags": [
+        "Shooter",
+        "Action"
+      ],
+      "blurb": "Survive waves and score.",
+      "badge": "Canvas 2D"
+    },
+    {
+      "slug": "platformer",
+      "title": "Retro Platformer",
+      "path": "./games/platformer/",
+      "thumb": "./games/platformer/thumb.png",
+      "tags": [
+        "Platformer",
+        "Retro"
+      ],
+      "blurb": "Collect items and reach the goal.",
+      "badge": "Canvas 2D",
+      "isNew": true
+    },
+    {
+      "slug": "maze3d",
+      "title": "3D Maze Explorer",
+      "path": "./games/maze3d/",
+      "thumb": "./games/maze3d/thumb.png",
+      "tags": [
+        "3D",
+        "Maze"
+      ],
+      "blurb": "Find the exit quickly.",
+      "badge": "Three.js",
+      "isNew": true
+    }
+  ]
+}

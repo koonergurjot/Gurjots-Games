@@ -1,33 +1,23 @@
 
-# Phase 3 — Visual/UX Polish Pack
+# Arcade Fix Pack
 
-This pack adds:
-- **Theme Packs / Skins**: Retro CRT, Neon Cyberpunk, Minimal White with dynamic fonts, cards, and backgrounds. Includes basic unlocks.
-- **Arcade Cabinet Mode**: Fullscreen kiosk mode that auto-rotates through games every 60s.
-- **Stats Dashboard**: Shows play time by game, plays by day, and tokens earned using local Chart.js.
+This pack merges the Phase‑3 header (themes + Stats/Cabinet links) with the **real game grid**,
+cleans `games.json` (removes `?new=true`, adds `isNew` flags), adds a **single SW register** at the hub,
+and provides an easy way to patch games with a **boot script** (back button + last played).
+Also includes **placeholder thumbnails** for each game.
 
-## Install (safe, incremental)
-1) Copy **styles.themes.css** into your repo and **import it after** styles.css in pages that use themes.
-2) Add **shared/themes.js** and **shared/metrics.js** to your `shared/` folder.
-3) Replace or merge **index.html** additions (header buttons + theme chooser).
-4) Add the new pages **cabinet.html** and **stats.html** to your root.
-5) Commit & deploy. Hard refresh (Ctrl/Cmd+Shift+R).
+## How to use
+1) Backup your repo (or work in a branch).
+2) Copy **index.html** and **games.json** from this pack to your repo root (overwrite existing).
+3) Copy **shared/game-boot.js** into your repo.
+4) In each game's `index.html`, add this right before `</body>` (adjust path depth if needed):
+   ```html
+   <script type="module" src="../../shared/game-boot.js" data-slug="SLUG_HERE"></script>
+   ```
+   This auto-injects the back button and records last played.
+5) Put the provided placeholder thumbs in each game folder (they're at `games/<slug>/thumb.png` here).
+6) Commit → deploy → hard refresh (Ctrl/Cmd+Shift+R).
 
-## Game integration (optional but recommended)
-To track session time and scores precisely from each game:
-```html
-<script type="module">
-  import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
-  // when game loads
-  startSessionTimer('SLUG_HERE');
-  // when user exits / game over
-  endSessionTimer('SLUG_HERE'); // this accumulates time for Stats
-</script>
-```
-If you already call `saveScore`, stats will also aggregate tokens and score trends if desired.
-
-## Unlocks (basic)
-- **Neon Cyberpunk** unlocks after **5 total plays**.
-- **Retro CRT** unlocks after **10 total plays**.
-- **Minimal White** is available by default.
-You can tweak thresholds in `shared/themes.js`.
+Notes:
+- The hub now ignores any `?new=true` in paths and uses `isNew` from the JSON to show ribbons.
+- If you want to keep your existing SW, no change is required; we only register it globally from the hub.
