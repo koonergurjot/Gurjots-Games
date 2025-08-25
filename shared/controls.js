@@ -1,29 +1,22 @@
-export function enableGamepadHint(hint){
-  const show = () => { hint.style.display = ''; };
-  const hide = () => { hint.style.display = 'none'; };
-  window.addEventListener('gamepadconnected', show);
-  window.addEventListener('gamepaddisconnected', hide);
-}
-
-export function virtualButtons(codes){
-  const state = new Map(codes.map(code => [code, false]));
-  const element = document.createElement('div');
-  for (const code of codes){
-    const btn = document.createElement('button');
-    btn.dataset.k = code;
-    const press = (e) => { e.preventDefault(); state.set(code, true); };
-    const release = (e) => { e.preventDefault(); state.set(code, false); };
-    btn.addEventListener('touchstart', press);
-    btn.addEventListener('touchend', release);
-    btn.addEventListener('touchcancel', release);
-    btn.addEventListener('mousedown', press);
-    btn.addEventListener('mouseup', release);
-    btn.addEventListener('mouseleave', release);
-    element.appendChild(btn);
+// === Gamepad polling ===
+export function createGamepad(fn) {
+  let raf = null;
+  function loop() {
+    const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+    if (pads[0]) fn(pads[0]);
+    raf = requestAnimationFrame(loop);
   }
-  return { element, read: () => state };
+  const start = () => { if (!raf) loop(); };
+  const stop = () => { if (raf) cancelAnimationFrame(raf); raf = null; };
+  window.addEventListener('gamepadconnected', start);
+  window.addEventListener('gamepaddisconnected', stop);
+  start();
+  return { start, stop };
 }
 
-export function applyToon(outline, toon){
-  outline.enabled = toon;
+export function standardAxesToDir(pad, dead = 0.2) {
+  const [lx = 0, ly = 0] = pad.axes || [];
+  const dx = Math.abs(lx) > dead ? lx : 0;
+  const dy = Math.abs(ly) > dead ? ly : 0;
+  return { dx, dy };
 }

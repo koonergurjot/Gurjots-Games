@@ -1,64 +1,47 @@
-export function injectBackButton(relativePathToHub = '../../') {
-  const head = document.head;
-  let link = head.querySelector('.back-to-hub');
-  const style = head.querySelector('style[data-back-to-hub]');
-
-  // If both link and style already exist, just update the link's href
-  if (!link) {
-    link = document.body.querySelector('.back-to-hub');
-  }
-  if (link && style) {
-    link.href = relativePathToHub;
-    return;
-  }
-
-  // Create the link if it doesn't exist
-  if (!link) {
-    link = document.createElement('a');
-    link.className = 'back-to-hub';
-    link.textContent = '← Back to Hub';
-    document.body.appendChild(link);
-  }
-  link.href = relativePathToHub;
-
-  // Inject styles once
-  if (!style) {
-    const styleEl = document.createElement('style');
-    styleEl.dataset.backToHub = 'true';
-    styleEl.textContent = `
-      .back-to-hub {
-        position: fixed;
-        left: 12px;
-        bottom: 12px;
-        color: #cfe6ff;
-        background: #0e1422;
-        border: 1px solid #27314b;
-        padding: 8px 10px;
-        border-radius: 10px;
-        font-weight: 700;
-        text-decoration: none;
-      }
-    `;
-    head.appendChild(styleEl);
-  }
-}
-
-export function recordLastPlayed(id) {
-  let list = [];
+// === Recently Played helpers ===
+export function getLastPlayed(limit = 10) {
   try {
     const raw = localStorage.getItem('lastPlayed');
-    if (raw) {
-      list = JSON.parse(raw);
-    }
-  } catch {
-    list = [];
-  }
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.slice(0, limit) : [];
+  } catch { return []; }
+}
 
-  list = list.filter((entry) => entry !== id);
-  list.unshift(id);
-  if (list.length > 10) {
-    list = list.slice(0, 10);
-  }
+// === Best Score helpers ===
+export function saveBestScore(slug, score) {
+  try {
+    const key = `bestScore:${slug}`;
+    const prev = Number(localStorage.getItem(key) || '-Infinity');
+    if (Number(score) > prev) localStorage.setItem(key, String(score));
+  } catch {}
+}
 
-  localStorage.setItem('lastPlayed', JSON.stringify(list));
+export function getBestScore(slug) {
+  try { return Number(localStorage.getItem(`bestScore:${slug}`) || ''); }
+  catch { return null; }
+}
+
+// === Pause / Restart overlay ===
+export function attachPauseOverlay({ onResume, onRestart }) {
+  const overlay = document.createElement('div');
+  overlay.className = 'pause-overlay hidden';
+  overlay.innerHTML = `
+    <div class="panel">
+      <h3>Paused</h3>
+      <button id="resumeBtn">Resume</button>
+      <button id="restartBtn">Restart</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const show = () => overlay.classList.remove('hidden');
+  const hide = () => overlay.classList.add('hidden');
+  overlay.querySelector('#resumeBtn').onclick = () => { hide(); onResume?.(); };
+  overlay.querySelector('#restartBtn').onclick = () => { hide(); onRestart?.(); };
+  return { show, hide };
+}
+
+// === Fullscreen helper ===
+export function toggleFullscreen(el = document.documentElement) {
+  if (!document.fullscreenElement) return el.requestFullscreen?.();
+  return document.exitFullscreen?.();
 }

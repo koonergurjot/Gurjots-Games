@@ -1,149 +1,72 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gurjot's Games</title>
-  <meta name="description" content="A tiny arcade hub with multiple games. Click a tile to play." />
-  <link rel="stylesheet" href="styles.css" />
+  <title>Arcade Hub</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <header>
-    <div class="brand">🎮 Gurjot's Games</div>
-    <div class="hint">Click a game to play • Add more by copying a folder in <code>/games</code></div>
-  </header>
-  <main>
-    <section class="grid">
-      <a class="card" href="./games/box3d/" aria-label="Play 3D Box Playground" data-badge="3D">
-        <h3>3D Box Playground</h3>
-        <p>WASD + Space to jump. Orbit the camera with your mouse.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/pong/" aria-label="Play Pong Classic" data-badge="2D">
-        <h3>Pong Classic</h3>
-        <p>Arrow keys to move. Keep the ball in play, beat the AI.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/runner/" aria-label="Play Endless Runner">
-        <div class="badge">2D</div>
-        <h3>Endless Runner</h3>
-        <p>Space to jump • Dodge obstacles • Compete for a high score.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/asteroids/" aria-label="Play Asteroids" data-badge="2D">
-        <h3>Asteroids</h3>
-        <p>Rotate, thrust, and shoot to clear the field.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/shooter/" aria-label="Play Space Shooter" data-badge="2D">
-        <h3>Space Shooter</h3>
-        <p>WASD to move, mouse to aim. Survive waves of enemies.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/platformer/" aria-label="Play Retro Platformer" data-badge="2D">
-        <h3>Retro Platformer</h3>
-        <p>Run and jump through classic levels to reach the goal.</p>
-        <div class="play">Play →</div>
-      </a>
-      <a class="card" href="./games/maze3d/" aria-label="Play 3D Maze Explorer" data-badge="3D">
-        <h3>3D Maze Explorer</h3>
-        <p>Navigate a 3D labyrinth and find the exit.</p>
-        <div class="play">Play →</div>
-      </a>
-      </section>
-  </main>
-  <footer>Static, framework-free. Host anywhere (GitHub Pages ready).</footer>
-  <script>
-    let savedFilters = [];
-    try {
-      const raw = localStorage.getItem('hub:filters');
-      if (raw) {
-        savedFilters = JSON.parse(raw);
-        if (!Array.isArray(savedFilters)) {
-          savedFilters = [];
-        }
-      }
-    } catch {
-      savedFilters = [];
-      localStorage.removeItem('hub:filters');
+  <header><h1>Arcade Hub</h1></header>
+
+  <section id="recently-played" class="row" hidden>
+    <h2>Recently Played</h2>
+    <div class="cards" id="recently-cards"></div>
+  </section>
+
+  <section class="row">
+    <h2>All Games</h2>
+    <div class="cards" id="all-cards"></div>
+  </section>
+
+  <script type="module">
+    import { getLastPlayed, getBestScore } from './shared/ui.js';
+
+    const params = new URLSearchParams(location.search);
+    const showNew = params.get('new') === 'true';
+
+    const data = await fetch('./games.json').then(r => r.json());
+    const games = Array.isArray(data.games) ? data.games : data;
+
+    const allRoot = document.getElementById('all-cards');
+    const recRoot = document.getElementById('recently-cards');
+
+    function card(g) {
+      const best = getBestScore(g.slug);
+      const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
+      const newRibbon = showNew && /\?new=true$/.test(g.path || '') ? '<span class="ribbon">NEW</span>' : '';
+      return `
+      <a class="card" href="${g.path || `./games/${g.slug}/`}">
+        ${newRibbon}
+        <img src="${g.thumb || ''}" alt="${g.title} thumbnail" loading="lazy"/>
+        <div class="meta">
+          <div class="title">${g.title} <span class="badge">${g.badge || ''}</span> ${bestBadge}</div>
+          <div class="tags">${(g.tags||[]).map(t => `<span>${t}</span>`).join('')}</div>
+          <p>${g.blurb || ''}</p>
+        </div>
+      </a>`;
     }
 
-    fetch('games.json')
-      .then(r => r.json())
-      .then(games => {
-        const grid = document.querySelector('.grid');
-        if (!grid) return;
-        grid.innerHTML = '';
-        for (const g of games) {
-          if (savedFilters.length && !g.tags?.some(t => savedFilters.includes(t))) {
-            continue;
-          }
-          const a = document.createElement('a');
-          a.className = 'card';
+    allRoot.innerHTML = games.map(card).join('');
 
-          const url = new URL(g.path, location.href);
-          const isNew = url.searchParams.get('new') === 'true';
-          url.search = '';
-          a.href = url.toString();
-          a.dataset.badge = g.badge;
-          a.setAttribute('aria-label', `Play ${g.title}`);
+    const recent = getLastPlayed(10).map(slug => games.find(g => g.slug === slug)).filter(Boolean);
+    if (recent.length) {
+      document.getElementById('recently-played').hidden = false;
+      recRoot.innerHTML = recent.map(card).join('');
+    }
+  </script>
 
-          const thumb = document.createElement('div');
-          thumb.className = 'thumb';
-          if (g.thumb) {
-            const img = document.createElement('img');
-            img.src = g.thumb;
-            img.alt = g.name;
-            img.loading = 'lazy';
-            img.onerror = () => img.remove();
-            thumb.appendChild(img);
-          }
-          a.appendChild(thumb);
-
-          const h3 = document.createElement('h3');
-          h3.textContent = g.title;
-          a.appendChild(h3);
-
-          const tagWrap = document.createElement('div');
-          tagWrap.className = 'tags';
-          g.tags?.forEach(t => {
-            const span = document.createElement('span');
-            span.textContent = t;
-            tagWrap.appendChild(span);
-          });
-          a.appendChild(tagWrap);
-
-          const p = document.createElement('p');
-          p.textContent = g.blurb;
-          a.appendChild(p);
-
-          const score = localStorage.getItem('highscore:' + g.slug);
-          const time = localStorage.getItem('besttime:' + g.slug);
-          if (score || time) {
-            const best = document.createElement('div');
-            best.className = 'best';
-            best.textContent = 'Best: ' + (score ?? `${time}s`);
-            a.appendChild(best);
-          }
-
-          if (isNew) {
-            const ribbon = document.createElement('div');
-            ribbon.className = 'ribbon';
-            ribbon.textContent = 'NEW';
-            a.appendChild(ribbon);
-          }
-
-          const play = document.createElement('div');
-          play.className = 'play';
-          play.textContent = 'Play →';
-          a.appendChild(play);
-
-          grid.appendChild(a);
-        }
-      })
-      .catch(err => {
-        console.warn('Failed to load games.json', err);
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(console.error);
+      navigator.serviceWorker.getRegistrations?.().then(regs => {
+        regs.forEach(r => {
+          if (r.active && r.active.scriptURL.includes('/shared/sw.js')) r.unregister();
+        });
       });
+    });
+  }
   </script>
 </body>
 </html>
