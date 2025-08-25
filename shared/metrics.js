@@ -11,9 +11,12 @@ export function startSessionTimer(slug){
 }
 
 export function endSessionTimer(slug){
-  if (!session || session.slug !== slug) return;
+  if (!session) return;
+  // Allow ending the current session without explicitly passing the slug.
+  if (slug && session.slug !== slug) return;
+
   const ms = performance.now() - session.start;
-  const key = `time:${slug}`;
+  const key = `time:${session.slug}`;
   const prev = Number(localStorage.getItem(key) || 0);
   localStorage.setItem(key, String(prev + Math.round(ms)));
 
