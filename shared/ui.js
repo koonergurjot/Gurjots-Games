@@ -1,13 +1,22 @@
 // Shared UI helpers — fresh build
 
-export function injectBackButton(href = '/') {
-  if (document.querySelector('.back-to-hub')) return;
-  const a = document.createElement('a');
-  a.className = 'back-to-hub';
-  a.href = href;
-  a.textContent = '← Back to Hub';
-  Object.assign(a.style, { position:'fixed', top:'10px', left:'10px', padding:'6px 10px', background:'#111', color:'#fff', borderRadius:'8px', textDecoration:'none', zIndex:1000, border:'1px solid #2a2a36' });
-  document.body.appendChild(a);
+export function injectBackButton(href = '../../') {
+  let link = document.querySelector('a.back-to-hub');
+  if (!link) {
+    link = document.createElement('a');
+    link.className = 'back-to-hub';
+    link.textContent = '← Back to Hub';
+    document.body.appendChild(link);
+  }
+  link.setAttribute('href', href);
+
+  let style = document.head.querySelector('style[data-back-to-hub]');
+  if (!style) {
+    style = document.createElement('style');
+    style.dataset.backToHub = '';
+    style.textContent = `.back-to-hub{position:fixed;top:10px;left:10px;padding:6px 10px;background:#111;color:#fff;border-radius:8px;text-decoration:none;z-index:1000;border:1px solid #2a2a36}`;
+    document.head.appendChild(style);
+  }
 }
 
 export function recordLastPlayed(slug) {

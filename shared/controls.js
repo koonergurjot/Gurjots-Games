@@ -33,3 +33,40 @@ export function standardAxesToDir(pad, dead = 0.2) {
   const dy = Math.abs(ly) > dead ? ly : 0;
   return { dx, dy };
 }
+
+// Show or hide a hint element when a gamepad connects or disconnects
+export function enableGamepadHint(el) {
+  const show = () => { el.style.display = ''; };
+  const hide = () => { el.style.display = 'none'; };
+  window.addEventListener('gamepadconnected', show);
+  window.addEventListener('gamepaddisconnected', hide);
+  return {
+    destroy() {
+      window.removeEventListener('gamepadconnected', show);
+      window.removeEventListener('gamepaddisconnected', hide);
+    }
+  };
+}
+
+// Create touch buttons that map to keyboard codes
+export function virtualButtons(codes) {
+  const state = new Map(codes.map(c => [c, false]));
+  const container = document.createElement('div');
+  for (const code of codes) {
+    const btn = document.createElement('button');
+    btn.dataset.k = code;
+    btn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      state.set(code, true);
+    });
+    btn.addEventListener('touchend', e => {
+      e.preventDefault();
+      state.set(code, false);
+    });
+    container.appendChild(btn);
+  }
+  return {
+    element: container,
+    read: () => new Map(state)
+  };
+}
