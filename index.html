@@ -51,7 +51,9 @@
 
     function card(g) {
       const best = getBestScore(g.slug);
-      const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
+      const bestBadge = best == null || Number.isNaN(best)
+        ? ''
+        : `<span class="badge best">Best: ${best}</span>`;
       const isNew = showNew && /\?new=true$/.test(g.path || '');
       return `
       <a class="card" href="${g.path || `./games/${g.slug}/`}">
