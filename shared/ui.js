@@ -71,8 +71,13 @@ export function saveBestScore(slug, score) {
 }
 
 export function getBestScore(slug) {
-  try { return Number(localStorage.getItem(`bestScore:${slug}`) || ''); }
-  catch { return null; }
+  try {
+    const raw = localStorage.getItem(`bestScore:${slug}`);
+    const num = Number(raw);
+    return raw !== null && Number.isFinite(num) ? num : null;
+  } catch {
+    return null;
+  }
 }
 
 export function attachPauseOverlay({ onResume, onRestart }) {
