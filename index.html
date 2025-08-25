@@ -88,13 +88,14 @@
 
     await loadCatalog();
 
-    // Register a single worker at /sw.js; clean any legacy ones
+    // Register a single worker at ./sw.js; clean any legacy ones
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(console.error);
+        const swUrl = new URL('./sw.js', location.href).href;
+        navigator.serviceWorker.register('./sw.js').catch(console.error);
         navigator.serviceWorker.getRegistrations?.().then(regs => {
           regs.forEach(r => {
-            if (r.active && !r.active.scriptURL.endsWith('/sw.js')) r.unregister();
+            if (r.active && r.active.scriptURL !== swUrl) r.unregister();
           });
         });
       });
