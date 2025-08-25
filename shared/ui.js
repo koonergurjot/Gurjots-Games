@@ -21,25 +21,36 @@ export function toggleTheme() {
 
 applyTheme();
 
-export function injectBackButton(href = '/') {
-  if (document.querySelector('.back-to-hub')) return;
-  const a = document.createElement('a');
-  a.className = 'back-to-hub';
+export function injectBackButton(href = '../../') {
+  // ensure styles are injected once
+  if (!document.head.querySelector('style[data-back-to-hub]')) {
+    const style = document.createElement('style');
+    style.setAttribute('data-back-to-hub', '');
+    style.textContent = `
+      .back-to-hub {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        padding: 6px 10px;
+        background: var(--button-bg);
+        color: var(--fg);
+        border-radius: 8px;
+        text-decoration: none;
+        z-index: 1000;
+        border: 1px solid var(--button-border);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  let a = document.querySelector('.back-to-hub');
+  if (!a) {
+    a = document.createElement('a');
+    a.className = 'back-to-hub';
+    a.textContent = '← Back to Hub';
+    document.body.appendChild(a);
+  }
   a.href = href;
-  a.textContent = '← Back to Hub';
-  Object.assign(a.style, {
-    position:'fixed',
-    top:'10px',
-    left:'10px',
-    padding:'6px 10px',
-    background:'var(--button-bg)',
-    color:'var(--fg)',
-    borderRadius:'8px',
-    textDecoration:'none',
-    zIndex:1000,
-    border:'1px solid var(--button-border)'
-  });
-  document.body.appendChild(a);
 }
 
 export function recordLastPlayed(slug) {
