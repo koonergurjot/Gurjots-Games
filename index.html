@@ -23,6 +23,16 @@
 
     <section id="all" class="row">
       <h2>All Games</h2>
+      <div class="controls">
+        <label for="sortSelect">Sort:
+          <select id="sortSelect">
+            <option value="alpha">Alphabetical</option>
+            <option value="recent">Recently Added</option>
+            <option value="played">Most Played</option>
+          </select>
+        </label>
+        <div id="tagFilters" class="filters"></div>
+      </div>
       <div class="cards" id="all-cards"></div>
       <p id="emptyState" class="muted" hidden>Couldn't load <code>games.json</code> or no games found. Add games under <code>/games/</code> and list them in <code>games.json</code>.</p>
     </section>
@@ -31,13 +41,17 @@
   <footer class="site-footer"><small>Static arcade starter • Works on GitHub Pages & offline</small></footer>
 
   <script type="module">
-    import { getLastPlayed, getBestScore, toggleFullscreen } from './shared/ui.js';
+    import { getLastPlayed, getBestScore, toggleFullscreen, getPlayCount } from './shared/ui.js';
 
     const params = new URLSearchParams(location.search);
     const showNew = params.get('new') === 'true';
     const allRoot = document.getElementById('all-cards');
     const recRoot = document.getElementById('recently-cards');
     const emptyState = document.getElementById('emptyState');
+    const sortSelect = document.getElementById('sortSelect');
+    const tagRoot = document.getElementById('tagFilters');
+    let allGames = [];
+    let indexMap = new Map();
 
     document.getElementById('refreshBtn').onclick = () => location.reload();
     document.getElementById('fullscreenBtn').onclick = () => toggleFullscreen();
@@ -54,8 +68,22 @@
           <div class="title">${g.title || g.slug || 'Untitled'} ${g.badge ? `<span class="badge">${g.badge}</span>` : ''} ${bestBadge}</div>
           <div class="tags">${(g.tags||[]).map(t => `<span>${t}</span>`).join('')}</div>
           <p>${g.blurb || ''}</p>
-        </div>
+      </div>
       </a>`;
+    }
+
+    function render() {
+      const activeTags = Array.from(tagRoot.querySelectorAll('input:checked')).map(i => i.value);
+      let games = allGames.filter(g => activeTags.every(t => (g.tags||[]).includes(t)));
+      const sort = sortSelect.value;
+      if (sort === 'alpha') {
+        games = games.slice().sort((a,b)=> (a.title||a.slug).localeCompare(b.title||b.slug));
+      } else if (sort === 'recent') {
+        games = games.slice().sort((a,b)=> indexMap.get(b.slug) - indexMap.get(a.slug));
+      } else if (sort === 'played') {
+        games = games.slice().sort((a,b)=> getPlayCount(b.slug) - getPlayCount(a.slug));
+      }
+      allRoot.innerHTML = games.map(card).join('');
     }
 
     async function loadCatalog() {
@@ -65,7 +93,13 @@
         const data = await res.json();
         const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
         if (!games.length) emptyState.hidden = false;
-        allRoot.innerHTML = games.map(card).join('');
+        allGames = games;
+        indexMap = new Map(games.map((g,i)=>[g.slug,i]));
+        const tags = Array.from(new Set(games.flatMap(g => g.tags || []))).sort();
+        tagRoot.innerHTML = tags.map(t => `<label><input type="checkbox" value="${t}"> ${t}</label>`).join('');
+        tagRoot.querySelectorAll('input').forEach(i => i.onchange = render);
+        sortSelect.onchange = render;
+        render();
 
         const recentSlugs = getLastPlayed(10);
         const recent = recentSlugs.map(s => games.find(g => g.slug === s)).filter(Boolean);

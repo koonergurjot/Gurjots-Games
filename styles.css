@@ -18,6 +18,11 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 .badge{display:inline-block;padding:2px 6px;border:1px solid currentColor;border-radius:999px;font-size:12px;opacity:.8}
 .badge.best{margin-left:6px}
 
+.controls{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px;align-items:center}
+.controls select{background:#1f1f2a;border:1px solid #2a2a36;color:#eaeaf2;padding:6px 10px;border-radius:8px}
+.filters label{display:inline-flex;align-items:center;margin-right:6px;margin-top:4px;border:1px solid #2a2a36;border-radius:999px;padding:2px 6px;font-size:12px;cursor:pointer}
+.filters input{margin-right:4px}
+
 /* Pause overlay */
 .pause-overlay{position:fixed;inset:0;backdrop-filter:blur(4px);background:rgba(0,0,0,.35);display:grid;place-items:center;z-index:999}
 .pause-overlay.hidden{display:none}

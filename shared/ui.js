@@ -19,6 +19,11 @@ export function recordLastPlayed(slug) {
   } catch {
     localStorage.setItem('lastPlayed', JSON.stringify([slug]));
   }
+  try {
+    const key = `plays:${slug}`;
+    const prev = Number(localStorage.getItem(key) || '0');
+    localStorage.setItem(key, String(prev + 1));
+  } catch {}
 }
 
 export function getLastPlayed(limit = 10) {
@@ -41,6 +46,11 @@ export function saveBestScore(slug, score) {
 export function getBestScore(slug) {
   try { return Number(localStorage.getItem(`bestScore:${slug}`) || ''); }
   catch { return null; }
+}
+
+export function getPlayCount(slug) {
+  try { return Number(localStorage.getItem(`plays:${slug}`) || '0'); }
+  catch { return 0; }
 }
 
 export function attachPauseOverlay({ onResume, onRestart }) {

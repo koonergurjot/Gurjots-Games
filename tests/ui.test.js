@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { injectBackButton, recordLastPlayed } from '../shared/ui.js';
+import { injectBackButton, recordLastPlayed, getPlayCount } from '../shared/ui.js';
 
 describe('injectBackButton', () => {
   beforeEach(() => {
@@ -63,5 +63,11 @@ describe('recordLastPlayed', () => {
     const truncated = JSON.parse(localStorage.getItem('lastPlayed'));
     expect(truncated.length).toBe(10);
     expect(truncated[0]).toBe('new');
+  });
+
+  it('increments play count for the slug', () => {
+    recordLastPlayed('x');
+    recordLastPlayed('x');
+    expect(getPlayCount('x')).toBe(2);
   });
 });
