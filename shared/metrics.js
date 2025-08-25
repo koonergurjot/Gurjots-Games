@@ -6,7 +6,7 @@ function today(){ return new Date().toISOString().slice(0,10); }
 let session = null;
 
 export function startSessionTimer(slug){
-  endSessionTimer(slug); // end any prior without losing data
+  endSessionTimer(session?.slug); // end any prior without losing data
   session = { slug, start: performance.now() };
 }
 

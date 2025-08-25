@@ -1,4 +1,5 @@
 /* @vitest-environment jsdom */
+import { describe, it, expect, beforeEach } from 'vitest';
 import { saveBestScore, getBestScore } from '../shared/ui.js';
 
 describe('best score', () => {
