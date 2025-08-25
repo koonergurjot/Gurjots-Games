@@ -64,4 +64,11 @@ describe('recordLastPlayed', () => {
     expect(truncated.length).toBe(10);
     expect(truncated[0]).toBe('new');
   });
+
+  it('handles non-array stored value gracefully', () => {
+    localStorage.setItem('lastPlayed', '"oops"');
+    recordLastPlayed('x');
+    const result = JSON.parse(localStorage.getItem('lastPlayed'));
+    expect(result).toEqual(['x']);
+  });
 });

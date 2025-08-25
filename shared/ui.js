@@ -56,7 +56,8 @@ export function injectBackButton(href = '../../') {
 export function recordLastPlayed(slug) {
   try {
     const raw = localStorage.getItem('lastPlayed');
-    const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+    const parsed = JSON.parse(raw);
+    const arr = Array.isArray(parsed) ? parsed : [];
     const next = [slug, ...arr.filter(s => s !== slug)].slice(0, 10);
     localStorage.setItem('lastPlayed', JSON.stringify(next));
   } catch {
