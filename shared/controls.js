@@ -1,4 +1,17 @@
-// === Gamepad polling ===
+// Basic controls helpers — fresh build
+
+export function keyState() {
+  const keys = new Set();
+  const down = e => keys.add(e.key.toLowerCase());
+  const up = e => keys.delete(e.key.toLowerCase());
+  window.addEventListener('keydown', down);
+  window.addEventListener('keyup', up);
+  return { has: k => keys.has(k.toLowerCase()), destroy: () => {
+    window.removeEventListener('keydown', down);
+    window.removeEventListener('keyup', up);
+  }};
+}
+
 export function createGamepad(fn) {
   let raf = null;
   function loop() {

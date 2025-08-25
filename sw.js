@@ -1,63 +1,43 @@
-// sw.js (root) — v3
-const CACHE_VERSION = 'v3';
-const RUNTIME = `runtime-${CACHE_VERSION}`;
+// sw.js — simple versioned worker
+const CACHE_VERSION = 'fresh-v1';
 const PRECACHE = `precache-${CACHE_VERSION}`;
+const RUNTIME = `runtime-${CACHE_VERSION}`;
 
-const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/games.json',
-  '/games/pong/index.html',
-  '/games/runner/index.html',
-  '/games/asteroids/index.html',
-];
+const PRECACHE_URLS = ['/', '/index.html', '/styles.css', '/games.json'];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(PRECACHE);
-    await cache.addAll(PRECACHE_URLS);
+    await cache.addAll(PRECACHE_URLS.filter(Boolean));
     self.skipWaiting();
   })());
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
-    const names = await caches.keys();
-    await Promise.all(
-      names.filter(n => ![PRECACHE, RUNTIME].includes(n)).map(n => caches.delete(n))
-    );
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => ![PRECACHE, RUNTIME].includes(k)).map(k => caches.delete(k)));
     clients.claim();
   })());
 });
 
 self.addEventListener('fetch', event => {
-  const { request } = event;
-  const url = new URL(request.url);
-  const isSameOrigin = url.origin === self.location.origin;
+  const req = event.request;
+  const url = new URL(req.url);
+  const same = url.origin === self.location.origin;
 
-  if (request.mode === 'navigate') {
-    event.respondWith((async () => {
-      try {
-        const fresh = await fetch(request);
-        const cache = await caches.open(RUNTIME);
-        cache.put('/index.html', fresh.clone());
-        return fresh;
-      } catch {
-        const cache = await caches.open(PRECACHE);
-        return (await cache.match('/index.html')) || Response.error();
-      }
-    })());
+  if (req.mode === 'navigate') {
+    event.respondWith(networkFirst('/index.html'));
     return;
   }
 
-  if (isSameOrigin && (request.destination === 'script' || request.destination === 'style' || request.destination === 'image')) {
-    event.respondWith(cacheFirst(request));
+  if (same && (url.pathname.endsWith('.json'))) {
+    event.respondWith(networkFirst(req));
     return;
   }
 
-  if (isSameOrigin && (url.pathname.endsWith('/games.json') || url.pathname.endsWith('.json'))) {
-    event.respondWith(networkFirst(request));
+  if (same && (req.destination === 'style' || req.destination === 'script' || req.destination === 'image')) {
+    event.respondWith(cacheFirst(req));
     return;
   }
 });
@@ -79,6 +59,8 @@ async function networkFirst(request) {
     return resp;
   } catch {
     const cached = await cache.match(request);
-    return cached || Response.error();
+    if (cached) return cached;
+    if (typeof request === 'string') return caches.match(request);
+    return Response.error();
   }
 }

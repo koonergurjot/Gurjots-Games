@@ -1,47 +1,28 @@
-# Gurjot's Games
+# Arcade Fresh Starter
 
-A tiny Miniclip-style hub with multiple games. Static files only — perfect for GitHub Pages.
+A minimal, **known-good** rebuild of your static arcade hub. Drop these files into your repo root to replace broken pieces without touching your existing `games/` or `games.json`.
 
-## Structure
-```
-/ (hub index.html)
-/games/box3d/   → Three.js starter (WASD + jump, Orbit camera, touch D-pad)
-/games/pong/    → Simple Pong (canvas 2D)
-/games/runner/   → Endless Runner (canvas 2D)
-/games/asteroids/   → Asteroids clone (canvas 2D)
-/games/shooter/   → Top-down shooter (canvas 2D)
-/games/platformer/   → Side-scrolling platformer (canvas 2D)
-/games/maze3d/   → First-person 3D maze (Three.js)
-```
+## What's included
+- `index.html` – clean hub that builds cards from `games.json` (if present) and fails gracefully.
+- `styles.css` – minimal styling for cards, ribbons, badges, overlays.
+- `sw.js` – simple, versioned service worker (no game hardcoding).
+- `shared/ui.js` – injectBackButton, record/get last played, best score helpers, pause overlay, fullscreen.
+- `shared/controls.js` – keyboard helpers + optional gamepad polling.
+- `.github/workflows/pages.yml` – GitHub Pages deploy workflow.
+- `tests/*` – small Vitest tests for new helpers.
 
-## Run locally
-- VS Code: use **Live Server** on `index.html`, or
-- Python: `python -m http.server 5173` then open http://localhost:5173
+## Safe install
+1) Backup your current root files just in case.
+2) Copy these files into your repo **root**, preserving folders.
+3) **Delete** any old `shared/sw.js` (legacy/duplicate).  
+4) Commit to `main`. Enable Pages: Settings → Pages → Source: **GitHub Actions**.
+5) Hard refresh (Ctrl/Cmd+Shift+R). If you had older service workers, you might need an extra refresh.
 
-## Add a new game
-1. Copy one of the folders in `/games/` and rename it, e.g. `/games/maze/`
-2. Update its HTML/JS. The hub automatically links via your new folder if you add a tile in the root `index.html`.
-3. Add an entry to `games.json` with these required fields:
-   - `id` – unique slug used for the game's folder.
-   - `name` – title displayed on the hub.
-   - `description` – short blurb shown on the game card.
-   - `badge` – small label like `2D` or `3D`.
-   - `path` – relative path to the game's directory.
-   - `hasScore` – `true` if the game reports a score.
+## Local dev
+- Serve statically: `python -m http.server 5173`
+- Open: `http://localhost:5173`
+- Tests: `npm i && npm test`
 
-   Example:
-
-   ```json
-   {
-     "id": "maze",
-     "name": "Maze Runner",
-     "description": "Find the exit while avoiding traps.",
-     "badge": "2D",
-     "path": "./games/maze/",
-     "hasScore": true
-   }
-   ```
-
-## Deploy to GitHub Pages
-This repo includes a Pages workflow. After pushing to the `main` branch, your site will auto-deploy.
-Enable Pages: **Settings → Pages → Build and deployment → GitHub Actions**.
+## Notes
+- If `games.json` isn't found, the hub shows a friendly empty state instead of crashing.
+- SW strategy is network-first for JSON/navigation and cache-first for static assets.

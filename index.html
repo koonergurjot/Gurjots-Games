@@ -7,66 +7,91 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <header><h1>Arcade Hub</h1></header>
+  <header class="site-header">
+    <h1>Arcade Hub</h1>
+    <div class="actions">
+      <button id="refreshBtn" title="Refresh catalog">↻</button>
+      <button id="fullscreenBtn" title="Toggle fullscreen">⛶</button>
+    </div>
+  </header>
 
-  <section id="recently-played" class="row" hidden>
-    <h2>Recently Played</h2>
-    <div class="cards" id="recently-cards"></div>
-  </section>
+  <main>
+    <section id="recently" class="row" hidden>
+      <h2>Recently Played</h2>
+      <div class="cards" id="recently-cards"></div>
+    </section>
 
-  <section class="row">
-    <h2>All Games</h2>
-    <div class="cards" id="all-cards"></div>
-  </section>
+    <section id="all" class="row">
+      <h2>All Games</h2>
+      <div class="cards" id="all-cards"></div>
+      <p id="emptyState" class="muted" hidden>Couldn't load <code>games.json</code> or no games found. Add games under <code>/games/</code> and list them in <code>games.json</code>.</p>
+    </section>
+  </main>
+
+  <footer class="site-footer"><small>Static arcade starter • Works on GitHub Pages & offline</small></footer>
 
   <script type="module">
-    import { getLastPlayed, getBestScore } from './shared/ui.js';
+    import { getLastPlayed, getBestScore, toggleFullscreen } from './shared/ui.js';
 
     const params = new URLSearchParams(location.search);
     const showNew = params.get('new') === 'true';
-
-    const data = await fetch('./games.json').then(r => r.json());
-    const games = Array.isArray(data.games) ? data.games : data;
-
     const allRoot = document.getElementById('all-cards');
     const recRoot = document.getElementById('recently-cards');
+    const emptyState = document.getElementById('emptyState');
+
+    document.getElementById('refreshBtn').onclick = () => location.reload();
+    document.getElementById('fullscreenBtn').onclick = () => toggleFullscreen();
 
     function card(g) {
       const best = getBestScore(g.slug);
       const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
-      const newRibbon = showNew && /\?new=true$/.test(g.path || '') ? '<span class="ribbon">NEW</span>' : '';
+      const isNew = showNew && /\?new=true$/.test(g.path || '');
       return `
       <a class="card" href="${g.path || `./games/${g.slug}/`}">
-        ${newRibbon}
-        <img src="${g.thumb || ''}" alt="${g.title} thumbnail" loading="lazy"/>
+        ${isNew ? '<span class="ribbon">NEW</span>' : ''}
+        ${g.thumb ? `<img src="${g.thumb}" alt="${g.title} thumbnail" loading="lazy"/>` : ''}
         <div class="meta">
-          <div class="title">${g.title} <span class="badge">${g.badge || ''}</span> ${bestBadge}</div>
+          <div class="title">${g.title || g.slug || 'Untitled'} ${g.badge ? `<span class="badge">${g.badge}</span>` : ''} ${bestBadge}</div>
           <div class="tags">${(g.tags||[]).map(t => `<span>${t}</span>`).join('')}</div>
           <p>${g.blurb || ''}</p>
         </div>
       </a>`;
     }
 
-    allRoot.innerHTML = games.map(card).join('');
+    async function loadCatalog() {
+      try {
+        const res = await fetch('./games.json', { cache: 'no-store' });
+        if (!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
+        const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
+        if (!games.length) emptyState.hidden = false;
+        allRoot.innerHTML = games.map(card).join('');
 
-    const recent = getLastPlayed(10).map(slug => games.find(g => g.slug === slug)).filter(Boolean);
-    if (recent.length) {
-      document.getElementById('recently-played').hidden = false;
-      recRoot.innerHTML = recent.map(card).join('');
+        const recentSlugs = getLastPlayed(10);
+        const recent = recentSlugs.map(s => games.find(g => g.slug === s)).filter(Boolean);
+        if (recent.length) {
+          document.getElementById('recently').hidden = false;
+          recRoot.innerHTML = recent.map(card).join('');
+        }
+      } catch (e) {
+        console.warn('Failed to load games.json:', e);
+        emptyState.hidden = false;
+      }
     }
-  </script>
 
-  <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(console.error);
-      navigator.serviceWorker.getRegistrations?.().then(regs => {
-        regs.forEach(r => {
-          if (r.active && r.active.scriptURL.includes('/shared/sw.js')) r.unregister();
+    await loadCatalog();
+
+    // Register a single worker at /sw.js; clean any legacy ones
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(console.error);
+        navigator.serviceWorker.getRegistrations?.().then(regs => {
+          regs.forEach(r => {
+            if (r.active && !r.active.scriptURL.endsWith('/sw.js')) r.unregister();
+          });
         });
       });
-    });
-  }
+    }
   </script>
 </body>
 </html>

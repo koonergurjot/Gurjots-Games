@@ -1,4 +1,26 @@
-// === Recently Played helpers ===
+// Shared UI helpers — fresh build
+
+export function injectBackButton(href = '/') {
+  if (document.querySelector('.back-to-hub')) return;
+  const a = document.createElement('a');
+  a.className = 'back-to-hub';
+  a.href = href;
+  a.textContent = '← Back to Hub';
+  Object.assign(a.style, { position:'fixed', top:'10px', left:'10px', padding:'6px 10px', background:'#111', color:'#fff', borderRadius:'8px', textDecoration:'none', zIndex:1000, border:'1px solid #2a2a36' });
+  document.body.appendChild(a);
+}
+
+export function recordLastPlayed(slug) {
+  try {
+    const raw = localStorage.getItem('lastPlayed');
+    const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+    const next = [slug, ...arr.filter(s => s !== slug)].slice(0, 10);
+    localStorage.setItem('lastPlayed', JSON.stringify(next));
+  } catch {
+    localStorage.setItem('lastPlayed', JSON.stringify([slug]));
+  }
+}
+
 export function getLastPlayed(limit = 10) {
   try {
     const raw = localStorage.getItem('lastPlayed');
@@ -8,7 +30,6 @@ export function getLastPlayed(limit = 10) {
   } catch { return []; }
 }
 
-// === Best Score helpers ===
 export function saveBestScore(slug, score) {
   try {
     const key = `bestScore:${slug}`;
@@ -22,7 +43,6 @@ export function getBestScore(slug) {
   catch { return null; }
 }
 
-// === Pause / Restart overlay ===
 export function attachPauseOverlay({ onResume, onRestart }) {
   const overlay = document.createElement('div');
   overlay.className = 'pause-overlay hidden';
@@ -40,7 +60,6 @@ export function attachPauseOverlay({ onResume, onRestart }) {
   return { show, hide };
 }
 
-// === Fullscreen helper ===
 export function toggleFullscreen(el = document.documentElement) {
   if (!document.fullscreenElement) return el.requestFullscreen?.();
   return document.exitFullscreen?.();
