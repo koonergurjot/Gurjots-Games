@@ -64,4 +64,10 @@ describe('recordLastPlayed', () => {
     expect(truncated.length).toBe(10);
     expect(truncated[0]).toBe('new');
   });
+
+  it('increments play counts for each launch', () => {
+    recordLastPlayed('pong');
+    recordLastPlayed('pong');
+    expect(localStorage.getItem('plays:pong')).toBe('2');
+  });
 });

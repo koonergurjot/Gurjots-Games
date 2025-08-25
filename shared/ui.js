@@ -53,7 +53,16 @@ export function injectBackButton(href = '../../') {
   a.href = href;
 }
 
+export function incrementPlay(slug) {
+  try {
+    const key = `plays:${slug}`;
+    const prev = Number(localStorage.getItem(key) || 0);
+    localStorage.setItem(key, String(prev + 1));
+  } catch {}
+}
+
 export function recordLastPlayed(slug) {
+  incrementPlay(slug);
   try {
     const raw = localStorage.getItem('lastPlayed');
     const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
