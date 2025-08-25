@@ -30,6 +30,23 @@ export function getLastPlayed(limit = 10) {
   } catch { return []; }
 }
 
+export function getFavorites() {
+  try {
+    const raw = localStorage.getItem('favorites');
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+export function toggleFavorite(slug) {
+  const favs = new Set(getFavorites());
+  if (favs.has(slug)) favs.delete(slug);
+  else favs.add(slug);
+  localStorage.setItem('favorites', JSON.stringify(Array.from(favs)));
+  return Array.from(favs);
+}
+
 export function saveBestScore(slug, score) {
   try {
     const key = `bestScore:${slug}`;

@@ -17,6 +17,7 @@ main{max-width:1100px;margin:0 auto;padding:16px}
 .ribbon{position:absolute;top:8px;left:-6px;transform:rotate(-15deg);background:#e63946;color:#fff;padding:2px 8px;font-size:12px;border-radius:4px}
 .badge{display:inline-block;padding:2px 6px;border:1px solid currentColor;border-radius:999px;font-size:12px;opacity:.8}
 .badge.best{margin-left:6px}
+.fav-btn{position:absolute;top:8px;right:8px;background:none;border:none;font-size:24px;cursor:pointer}
 
 /* Pause overlay */
 .pause-overlay{position:fixed;inset:0;backdrop-filter:blur(4px);background:rgba(0,0,0,.35);display:grid;place-items:center;z-index:999}

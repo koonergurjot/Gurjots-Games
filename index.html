@@ -21,6 +21,11 @@
       <div class="cards" id="recently-cards"></div>
     </section>
 
+    <section id="favorites" class="row" hidden>
+      <h2>Favorites</h2>
+      <div class="cards" id="favorites-cards"></div>
+    </section>
+
     <section id="all" class="row">
       <h2>All Games</h2>
       <div class="cards" id="all-cards"></div>
@@ -31,13 +36,17 @@
   <footer class="site-footer"><small>Static arcade starter • Works on GitHub Pages & offline</small></footer>
 
   <script type="module">
-    import { getLastPlayed, getBestScore, toggleFullscreen } from './shared/ui.js';
+    import { getLastPlayed, getBestScore, toggleFullscreen, getFavorites, toggleFavorite } from './shared/ui.js';
 
     const params = new URLSearchParams(location.search);
     const showNew = params.get('new') === 'true';
     const allRoot = document.getElementById('all-cards');
     const recRoot = document.getElementById('recently-cards');
+    const favRoot = document.getElementById('favorites-cards');
+    const favSection = document.getElementById('favorites');
     const emptyState = document.getElementById('emptyState');
+    let games = [];
+    const favorites = new Set(getFavorites());
 
     document.getElementById('refreshBtn').onclick = () => location.reload();
     document.getElementById('fullscreenBtn').onclick = () => toggleFullscreen();
@@ -46,10 +55,12 @@
       const best = getBestScore(g.slug);
       const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
       const isNew = showNew && /\?new=true$/.test(g.path || '');
+      const isFav = favorites.has(g.slug);
       return `
-      <a class="card" href="${g.path || `./games/${g.slug}/`}">
+      <a class="card" href="${g.path || `./games/${g.slug}/`}" data-slug="${g.slug}">
         ${isNew ? '<span class="ribbon">NEW</span>' : ''}
         ${g.thumb ? `<img src="${g.thumb}" alt="${g.title} thumbnail" loading="lazy"/>` : ''}
+        <button class="fav-btn" data-slug="${g.slug}" aria-label="Toggle favorite">${isFav ? '⭐' : '☆'}</button>
         <div class="meta">
           <div class="title">${g.title || g.slug || 'Untitled'} ${g.badge ? `<span class="badge">${g.badge}</span>` : ''} ${bestBadge}</div>
           <div class="tags">${(g.tags||[]).map(t => `<span>${t}</span>`).join('')}</div>
@@ -58,12 +69,31 @@
       </a>`;
     }
 
+    function updateStars() {
+      document.querySelectorAll('.fav-btn').forEach(btn => {
+        const slug = btn.dataset.slug;
+        btn.textContent = favorites.has(slug) ? '⭐' : '☆';
+      });
+    }
+
+    function renderFavorites() {
+      const favSlugs = Array.from(favorites);
+      const favGames = favSlugs.map(s => games.find(g => g.slug === s)).filter(Boolean);
+      if (favGames.length) {
+        favSection.hidden = false;
+        favRoot.innerHTML = favGames.map(card).join('');
+      } else {
+        favSection.hidden = true;
+        favRoot.innerHTML = '';
+      }
+    }
+
     async function loadCatalog() {
       try {
         const res = await fetch('./games.json', { cache: 'no-store' });
         if (!res.ok) throw new Error(res.statusText);
         const data = await res.json();
-        const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
+        games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
         if (!games.length) emptyState.hidden = false;
         allRoot.innerHTML = games.map(card).join('');
 
@@ -73,11 +103,26 @@
           document.getElementById('recently').hidden = false;
           recRoot.innerHTML = recent.map(card).join('');
         }
+
+        renderFavorites();
+        updateStars();
       } catch (e) {
         console.warn('Failed to load games.json:', e);
         emptyState.hidden = false;
       }
     }
+
+    document.body.addEventListener('click', e => {
+      const btn = e.target.closest('.fav-btn');
+      if (!btn) return;
+      e.preventDefault();
+      const slug = btn.dataset.slug;
+      const arr = toggleFavorite(slug);
+      favorites.clear();
+      arr.forEach(s => favorites.add(s));
+      renderFavorites();
+      updateStars();
+    });
 
     await loadCatalog();
 
