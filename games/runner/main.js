@@ -1,152 +1,129 @@
-import { recordLastPlayed } from '../../shared/ui.js';
+import { keyState } from '../../shared/controls.js';
+import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
+import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 
-recordLastPlayed('runner');
-
-const cvs = document.getElementById('game');
-const ctx = cvs.getContext('2d');
-
-const W = cvs.width, H = cvs.height;
-const GROUND_Y = H - 64;
-
-const state = {
-  running: true,
-  time: 0,
-  score: 0,
-  highScore: Number(localStorage.getItem('highScore:runner') || 0),
-  speed: 300, // px/s, increases over time
-};
-
-const player = { x: 100, y: GROUND_Y - 40, w: 34, h: 40, vy: 0, onGround: true };
-const gravity = 1800;
-const jumpV = -750;
-
-let obstacles = [];
-let spawnTimer = 0;
-
-const keys = new Map();
-addEventListener('keydown', e => {
-  keys.set(e.code, true);
-  if (e.code === 'Space') jump();
-  if (e.code === 'KeyP') state.running = !state.running;
-  if (e.code === 'KeyR') restart();
-});
-addEventListener('keyup', e => keys.set(e.code, false));
-
-// mobile/touch support
-addEventListener('pointerdown', () => { if (state.running) jump(); else restart(); });
-document.getElementById('restartBtn').addEventListener('click', () => restart());
-
-function jump(){
-  if (player.onGround){
-    player.vy = jumpV;
-    player.onGround = false;
-  }
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio||1);
+function resize(){
+  canvas.width = innerWidth * DPR;
+  canvas.height = innerHeight * DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
 }
+addEventListener('resize', resize); resize();
 
-function restart(){
-  state.running = true;
-  document.getElementById('overlay').classList.remove('show');
-  state.time = 0; state.score = 0; state.speed = 300;
-  player.x = 100; player.y = GROUND_Y - player.h; player.vy = 0; player.onGround = true;
-  obstacles = []; spawnTimer = 0;
-}
+// Game constants
+const GROUND = 60;
+let speed = 5;
+const gravity = 0.8;
+const jumpVel = 14;
+const slideDur = 20;
 
-let last = 0;
-requestAnimationFrame(loop);
-function loop(ts){
-  const dt = Math.min((ts - last)/1000, 0.05);
-  last = ts;
-  if (state.running) update(dt);
-  draw();
-  requestAnimationFrame(loop);
-}
+// State
+let player = {x:80,y:0,w:30,h:50,vy:0,sliding:0};
+let score = 0;
+let obstacles=[]; let coins=[];
+let tick=0;
+let running=true;
+let diff='med';
+const keys=keyState();
 
-function update(dt){
-  state.time += dt;
-  state.score = Math.floor(state.time * 10);
-  state.speed = 300 + state.time * 25; // ramp up
+// UI
+const scoreEl=document.getElementById('score');
+const diffSel=document.getElementById('diffSel');
+diffSel.onchange=()=>{diff=diffSel.value;};
+document.getElementById('pauseBtn').onclick=()=>pause();
+document.getElementById('restartBtn').onclick=()=>restart();
+const overlay=attachPauseOverlay({onResume:()=>running=true,onRestart:()=>restart()});
 
-  // spawn obstacles
-  spawnTimer -= dt;
-  if (spawnTimer <= 0){
-    spawnTimer = 0.9 + Math.random() * 0.8; // every 0.9–1.7s
-    const h = 24 + Math.floor(Math.random()*30);
-    const w = 20 + Math.floor(Math.random()*28);
-    obstacles.push({ x: W + 20, y: GROUND_Y - h, w, h });
-  }
+// Touch controls
+const touchL=document.createElement('div');touchL.className='zone left';
+const touchR=document.createElement('div');touchR.className='zone right';
+document.body.appendChild(Object.assign(document.createElement('div'),{className:'touch'})).append(touchL,touchR);
+touchL.addEventListener('click',()=>slide()); touchR.addEventListener('click',()=>jump());
 
-  // physics
-  player.vy += gravity * dt;
-  player.y  += player.vy * dt;
-  if (player.y >= GROUND_Y - player.h){
-    player.y = GROUND_Y - player.h;
-    player.vy = 0;
-    player.onGround = true;
-  }
-
-  // move obstacles & cull
-  obstacles.forEach(o => o.x -= state.speed * dt);
-  obstacles = obstacles.filter(o => o.x + o.w > -30);
-
-  // collisions
-  for (const o of obstacles){
-    if (!(player.x + player.w < o.x || player.x > o.x + o.w || player.y + player.h < o.y || player.y > o.y + o.h)){
-      return gameOver();
+// Functions
+function jump(){ if(player.y<=0&&player.sliding<=0){ player.vy=-jumpVel; } }
+function slide(){ if(player.y<=0&&player.sliding<=0){ player.sliding=slideDur; } }
+function spawn(){
+  if(tick%Math.floor(120/speed)===0){
+    if(Math.random()<0.6){ // obstacle
+      obstacles.push({x:innerWidth+40,y:innerHeight-GROUND-30,w:30,h:30});
+    } else { // coin
+      coins.push({x:innerWidth+40,y:innerHeight-GROUND-80,w:20,h:20});
     }
   }
 }
-
-function gameOver(){
-  state.running = false;
-  state.highScore = Math.max(state.highScore, state.score);
-  localStorage.setItem('highScore:runner', String(state.highScore));
-  const over = document.getElementById('overlay');
-  over.querySelector('#over-title').textContent = 'Game Over';
-  over.querySelector('#over-info').textContent  = `Score: ${state.score} • Best: ${state.highScore}`;
-  over.classList.add('show');
+function restart(){
+  player={x:80,y:0,w:30,h:50,vy:0,sliding:0};
+  score=0;obstacles=[];coins=[];tick=0;running=true;
+  speed=diff==='easy'?4:diff==='med'?5:6.5;
 }
 
-function draw(){
-  // clear + sky
-  ctx.clearRect(0,0,W,H);
-  const g = ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#0f1422'); g.addColorStop(1,'#0a0d13');
-  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
-
-  // parallax hills
-  drawHills('#12192a', 0.2, 120);
-  drawHills('#0f1728', 0.35, 180);
-
-  // ground
-  ctx.fillStyle = '#101520'; ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
-  ctx.strokeStyle = '#1e2433'; ctx.lineWidth = 2; ctx.beginPath();
-  for(let x=0; x<W; x+=18){ ctx.moveTo(x, GROUND_Y + 0.5); ctx.lineTo(x+8, GROUND_Y + 0.5); }
-  ctx.stroke();
-
-  // player
-  ctx.fillStyle = '#e6eef9';
-  ctx.fillRect(player.x, Math.round(player.y), player.w, player.h);
-  ctx.fillStyle = '#0a0d13'; // tiny eye
-  ctx.fillRect(player.x + player.w - 10, Math.round(player.y + 10), 4, 4);
-
-  // obstacles
-  ctx.fillStyle = '#8cc8ff';
-  for (const o of obstacles) ctx.fillRect(Math.round(o.x), o.y, o.w, o.h);
-
-  // HUD
-  ctx.font = 'bold 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
-  ctx.fillStyle = '#cfe6ff'; ctx.textAlign = 'left';
-  ctx.fillText('Score: ' + state.score, 16, 32);
-  ctx.fillText('Best: ' + state.highScore, 16, 58);
-}
-
-function drawHills(color, factor, height){
-  ctx.fillStyle = color;
-  const t = (state.time * state.speed * factor) % (W*2);
-  ctx.beginPath(); ctx.moveTo(-t, GROUND_Y);
-  for(let x=-t; x<=W*2; x+=80){
-    const y = GROUND_Y - height + Math.sin((x + t) * 0.01) * 10;
-    ctx.quadraticCurveTo(x + 40, y - 30, x + 80, y);
+// Game loop
+let last=performance.now();
+function loop(t){
+  requestAnimationFrame(loop);
+  const dt=(t-last)/16; last=t;
+  if(running){
+    update(dt); render();
   }
-  ctx.lineTo(W, GROUND_Y); ctx.lineTo(0, GROUND_Y); ctx.closePath(); ctx.fill();
 }
+requestAnimationFrame(loop);
+
+function update(dt){
+  tick++;
+  // difficulty scaling
+  speed += 0.0005;
+  // Player physics
+  player.vy+=gravity;
+  player.y+=player.vy;
+  if(player.y>0){player.y=0;player.vy=0;}
+  if(player.sliding>0) player.sliding--;
+  // Keys
+  if(keys.has('arrowup')||keys.has(' ')) jump();
+  if(keys.has('arrowdown')) slide();
+  // Spawn obstacles/coins
+  spawn();
+  obstacles.forEach(o=>o.x-=speed); coins.forEach(c=>c.x-=speed);
+  obstacles=obstacles.filter(o=>o.x>-60); coins=coins.filter(c=>c.x>-60);
+  // Collisions
+  for(const o of obstacles){
+    if(player.x<o.x+o.w&&player.x+player.w>o.x&&player.y+player.h>o.y&&player.y<o.y+o.h){
+      running=false;
+      saveBestScore('runner',Math.floor(score));
+      endSessionTimer('runner');
+    }
+  }
+  for(const c of coins){
+    if(player.x< c.x+c.w&&player.x+player.w>c.x&&player.y+player.h>c.y&&player.y<c.y+c.h){
+      score+=10;
+      c.x=-999;
+    }
+  }
+  score+=speed*0.1;
+  scoreEl.textContent=Math.floor(score);
+}
+
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // Ground
+  ctx.fillStyle='#333'; ctx.fillRect(0,innerHeight-GROUND,innerWidth,GROUND);
+  // Player
+  ctx.fillStyle='#6ee7b7';
+  const h=player.sliding>0?25:player.h;
+  ctx.fillRect(player.x,innerHeight-GROUND-h-player.y,h===25?50:player.w,h);
+  // Obstacles
+  ctx.fillStyle='#e11d48';
+  for(const o of obstacles){ctx.fillRect(o.x,o.y,o.w,o.h);}
+  // Coins
+  ctx.fillStyle='gold';
+  for(const c of coins){ctx.beginPath();ctx.arc(c.x,c.y,10,0,Math.PI*2);ctx.fill();}
+  // Score text already in HUD
+}
+
+function pause(){running=false;overlay.show();}
+
+// Session timing
+startSessionTimer('runner');
+window.addEventListener('beforeunload',()=>endSessionTimer('runner'));

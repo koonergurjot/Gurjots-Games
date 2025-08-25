@@ -1,34 +1,39 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Endless Runner</title>
+  <title>Runner Pro</title>
   <style>
-    html, body{height:100%; margin:0; background:#0e0f12; color:#e6e6e6; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
-    .wrap{display:grid; place-items:center; height:100%; padding:16px}
-    canvas{background:#0a0d13; border:1px solid #1f2431; border-radius:12px; box-shadow:0 6px 22px rgba(0,0,0,.35)}
-    .hud{position:fixed; top:12px; left:12px; background:#1b1e24c0; border:1px solid #27314b; border-radius:10px; padding:8px 10px; font-size:14px}
-    .back{position: fixed; left: 12px; bottom: 12px; color:#cfe6ff; background:#0e1422; border:1px solid #27314b; padding:8px 10px; border-radius:10px; font-weight:700; text-decoration:none}
-    kbd{padding:1px 6px; border-radius:6px; border:1px solid #2f3542; background:#111319; color:#d3d7de; font-weight:600; font-size:12px;}
-    .overlay{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.35); font-weight:800; letter-spacing:.4px; text-align:center;}
-    .overlay.show{display:grid}
-    .panel{background:#111522; border:1px solid #27314b; padding:18px 22px; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,.5)}
-    .panel h2{margin:0 0 6px 0}
-    .btn{display:inline-block; padding:8px 12px; border:1px solid #27314b; background:#0e1422; color:#cfe6ff; border-radius:10px; text-decoration:none; cursor:pointer; font-weight:700}
+    :root{--fg:#eaeaf2;--bg:#0b0b0f;--accent:#6ee7b7}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
+    canvas{width:100%;height:100%;display:block;background:linear-gradient(#222,#111)}
+    .hud{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:12px;padding:6px 12px;background:rgba(0,0,0,0.35);border-radius:12px;align-items:center}
+    .hud span{font-weight:700}
+    .hud select,.hud button{background:rgba(255,255,255,0.08);color:var(--fg);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:4px 8px}
+    footer{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:12px;opacity:0.7}
+    .touch{position:absolute;inset:0;pointer-events:none}
+    .touch .zone{position:absolute;width:50%;height:100%;top:0;pointer-events:auto}
+    .touch .left{left:0}.touch .right{right:0}
   </style>
 </head>
 <body>
-  <div class="hud">Jump: <kbd>Space</kbd> or tap • Pause: <kbd>P</kbd> • Restart: <kbd>R</kbd></div>
-  <a class="back" href="../../">← Back to Hub</a>
-  <div class="wrap">
-    <canvas id="game" width="800" height="450" aria-label="Endless Runner game"></canvas>
+  <canvas id="game"></canvas>
+  <div class="hud">
+    <span id="score">0</span> m
+    <button id="pauseBtn">⏸️</button>
+    <button id="restartBtn">⟲</button>
+    <label>Difficulty:
+      <select id="diffSel">
+        <option value="easy">Easy</option>
+        <option value="med" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+    </label>
   </div>
-  <div id="overlay" class="overlay"><div class="panel">
-    <h2 id="over-title">Game Over</h2>
-    <div id="over-info" style="margin-bottom:10px"></div>
-    <div class="btn" id="restartBtn">Restart</div>
-  </div></div>
+  <footer>Controls — ↑/Space: Jump • ↓: Slide • Mobile: Tap Left=Slide, Right=Jump</footer>
+
   <script type="module" src="./main.js"></script>
+  <script type="module" src="../../shared/game-boot.js" data-slug="runner"></script>
 </body>
 </html>
