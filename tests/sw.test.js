@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import makeServiceWorkerEnv from 'service-worker-mock';
 
-const CURRENT_CACHE = 'static-v2';
+const CACHE_VERSION = 'fresh-v1';
+const PRECACHE = `precache-${CACHE_VERSION}`;
+const RUNTIME = `runtime-${CACHE_VERSION}`;
 
 describe('service worker cache management', () => {
   beforeEach(() => {
@@ -13,10 +15,12 @@ describe('service worker cache management', () => {
 
   it('removes outdated caches on activate', async () => {
     // populate with old caches
-    await caches.open('static');
-    await caches.open('old-cache');
-    // open current cache
-    await caches.open(CURRENT_CACHE);
+    await caches.open('precache-old');
+    await caches.open('runtime-old');
+    await caches.open('unused-cache');
+    // open current caches
+    await caches.open(PRECACHE);
+    await caches.open(RUNTIME);
 
     // import service worker to register listeners
     await import('../sw.js?cache-bust=' + Date.now());
@@ -25,6 +29,6 @@ describe('service worker cache management', () => {
     await self.trigger('activate');
 
     const keys = await caches.keys();
-    expect(keys).toEqual([CURRENT_CACHE]);
+    expect(keys.sort()).toEqual([PRECACHE, RUNTIME].sort());
   });
 });
