@@ -1,12 +1,44 @@
 // Shared UI helpers — fresh build
 
+export function applyTheme(theme) {
+  let t = theme;
+  if (!t) {
+    try { t = localStorage.getItem('theme') || 'dark'; }
+    catch { t = 'dark'; }
+  }
+  if (typeof document !== 'undefined') {
+    document.documentElement.dataset.theme = t;
+  }
+  return t;
+}
+
+export function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  try { localStorage.setItem('theme', next); } catch {}
+  return next;
+}
+
+applyTheme();
+
 export function injectBackButton(href = '/') {
   if (document.querySelector('.back-to-hub')) return;
   const a = document.createElement('a');
   a.className = 'back-to-hub';
   a.href = href;
   a.textContent = '← Back to Hub';
-  Object.assign(a.style, { position:'fixed', top:'10px', left:'10px', padding:'6px 10px', background:'#111', color:'#fff', borderRadius:'8px', textDecoration:'none', zIndex:1000, border:'1px solid #2a2a36' });
+  Object.assign(a.style, {
+    position:'fixed',
+    top:'10px',
+    left:'10px',
+    padding:'6px 10px',
+    background:'var(--button-bg)',
+    color:'var(--fg)',
+    borderRadius:'8px',
+    textDecoration:'none',
+    zIndex:1000,
+    border:'1px solid var(--button-border)'
+  });
   document.body.appendChild(a);
 }
 
