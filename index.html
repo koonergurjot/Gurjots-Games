@@ -3,40 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gurjot's Games</title>
+  <title>Arcade Hub</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./styles.themes.css" />
-  <style>
-    .header-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px}
-    .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 16px}
-    .controls input[type="search"]{flex:1 1 220px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
-    .controls select{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--fg)}
-    .chips{display:flex;gap:8px;flex-wrap:wrap}
-    .chip{padding:6px 10px;border:1px solid var(--border);border-radius:999px;cursor:pointer;background:var(--chip);opacity:.9}
-    .chip.active{outline:2px solid var(--accent)}
-  </style>
 </head>
 <body>
-  <header class="site-header header-bar">
-    <h1 style="margin:0">Gurjot's Games</h1>
+  <header class="site-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px">
+    <h1 style="margin:0">Arcade Hub</h1>
     <nav style="display:flex;gap:8px;align-items:center">
-      <a class="btn" href="./stats.html" title="Stats Dashboard">📈 Stats</a>
-      <a class="btn" href="./cabinet.html" title="Cabinet Mode">🕹️ Cabinet</a>
+      <a class="btn" href="./stats.html">📈 Stats</a>
+      <a class="btn" href="./cabinet.html">🕹️ Cabinet</a>
       <div id="themeChips" style="display:flex;gap:8px"></div>
     </nav>
   </header>
 
   <main style="max-width:1100px;margin:0 auto;padding:16px">
-    <section class="controls">
-      <input id="search" type="search" placeholder="Search games..." autocomplete="off"/>
-      <select id="sort">
-        <option value="alpha">Sort: A–Z</option>
-        <option value="recent">Sort: Recently Played</option>
-        <option value="played">Sort: Most Clicked</option>
-      </select>
-      <div id="chips" class="chips"></div>
-    </section>
-
     <section id="recently" class="row" hidden>
       <h2>Recently Played</h2>
       <div class="cards" id="recently-cards"></div>
@@ -45,23 +26,22 @@
     <section id="all" class="row">
       <h2>All Games</h2>
       <div class="cards" id="all-cards"></div>
-      <p id="emptyState" class="muted" hidden>Couldn't load <code>games.json</code> or no games found. Add games under <code>/games/</code> and list them in <code>games.json</code>.</p>
+      <p id="emptyState" class="muted" hidden>Couldn't load <code>games.json</code> or it's empty.</p>
     </section>
   </main>
 
-  <footer class="site-footer"><small>Gurjot's Games • Works on GitHub Pages & offline</small></footer>
+  <footer class="site-footer"><small>Hub • Data from games.json • Offline via sw.js</small></footer>
 
   <script type="module">
     import { getLastPlayed, getBestScore } from './shared/ui.js';
     import { getUnlocks, currentTheme, applyTheme } from './shared/themes.js';
 
-    // Apply saved theme and render theme chips
     applyTheme(currentTheme());
     function themeChip(name, unlocked, active){
       const label = name==='neon' ? 'Neon' : name==='retro' ? 'Retro' : 'Minimal';
-      const cls = \`theme-chip \${active ? 'active' : ''} \${unlocked ? '' : 'locked'}\`;
+      const cls = `theme-chip ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`;
       const lock = unlocked ? '' : '🔒';
-      return \`<button class="\${cls}" data-skin="\${name}" title="\${unlocked?'':'Unlock by playing more'}">\${lock} \${label}</button>\`;
+      return `<button class="${cls}" data-skin="${name}" title="${unlocked?'':'Unlock by playing more'}">${lock} ${label}</button>`;
     }
     const chipsEl = document.getElementById('themeChips');
     function renderThemeChips(){
@@ -80,12 +60,9 @@
     }
     renderThemeChips();
 
-    const search = document.getElementById('search');
-    const sortSel = document.getElementById('sort');
-    const tagChips = document.getElementById('chips');
     const allRoot = document.getElementById('all-cards');
     const recRoot = document.getElementById('recently-cards');
-    const emptyState = document.getElementById('emptyState');
+    const empty = document.getElementById('emptyState');
 
     function card(g) {
       const best = getBestScore(g.slug);
@@ -102,74 +79,27 @@
       </a>`;
     }
 
-    function uniqueTags(games){
-      const set = new Set();
-      games.forEach(g => (g.tags||[]).forEach(t => set.add(t)));
-      return Array.from(set).sort();
-    }
-
-    function applyFilters(games){
-      const q = search.value.trim().toLowerCase();
-      const activeTags = Array.from(tagChips.querySelectorAll('.chip.active')).map(c => c.dataset.tag);
-      let list = games.filter(g => {
-        const hay = (g.title||'') + ' ' + (g.blurb||'') + ' ' + (g.tags||[]).join(' ');
-        const matchQ = !q || hay.toLowerCase().includes(q);
-        const matchTags = !activeTags.length || (g.tags||[]).some(t => activeTags.includes(t));
-        return matchQ && matchTags;
-      });
-      const mode = sortSel.value;
-      if (mode === 'alpha') list.sort((a,b)=> (a.title||a.slug).localeCompare(b.title||b.slug));
-      if (mode === 'recent') {
-        const order = getLastPlayed(200);
-        const idx = s => { const i = order.indexOf(s.slug); return i === -1 ? 9999 : i; };
-        list.sort((a,b)=> idx(a) - idx(b));
-      }
-      if (mode === 'played') list.sort((a,b)=> (Number(localStorage.getItem(\`plays:\${b.slug}\`)||0) - Number(localStorage.getItem(\`plays:\${a.slug}\`)||0)));
-      return list;
-    }
-
-    function renderAll(games){
-      const list = applyFilters(games);
-      allRoot.innerHTML = list.map(card).join('');
-    }
-
     function renderRows(games){
       const recentSlugs = getLastPlayed(12);
       const recent = recentSlugs.map(s => games.find(g => g.slug === s)).filter(Boolean);
-      const recSec = document.getElementById('recently');
-      recSec.hidden = recent.length === 0;
+      const sec = document.getElementById('recently');
+      sec.hidden = recent.length === 0;
       recRoot.innerHTML = recent.map(card).join('');
     }
 
-    async function loadGames() {
-      try {
-        const res = await fetch('./games.json', { cache: 'no-store' });
-        const data = await res.json();
-        return Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
-      } catch { return []; }
+    try {
+      const res = await fetch('./games.json', { cache: 'no-store' });
+      const data = await res.json();
+      const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
+      if (!games.length) empty.hidden = true === false; // reveal
+      allRoot.innerHTML = games.map(card).join('');
+      renderRows(games);
+    } catch (e) {
+      empty.hidden = false;
     }
-
-    const games = await loadGames();
-    if (!games.length) emptyState.hidden = false;
-    // tags
-    const tags = uniqueTags(games);
-    tagChips.innerHTML = tags.map(t => `<button class="chip" data-tag="${t}">${t}</button>`).join('');
-    tagChips.addEventListener('click', (e) => {
-      const b = e.target.closest('.chip');
-      if (!b) return;
-      b.classList.toggle('active');
-      renderAll(games);
-    });
-    // search/sort
-    search.addEventListener('input', ()=> renderAll(games));
-    sortSel.addEventListener('change', ()=> renderAll(games));
-
-    renderRows(games);
-    renderAll(games);
   </script>
 
   <script>
-  // Register SW once at root
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(console.error);
