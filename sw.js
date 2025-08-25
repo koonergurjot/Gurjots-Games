@@ -1,14 +1,11 @@
-// sw.js — simple versioned worker
-const CACHE_VERSION = 'fresh-v1';
-const PRECACHE = `precache-${CACHE_VERSION}`;
-const RUNTIME = `runtime-${CACHE_VERSION}`;
-
-const PRECACHE_URLS = ['/', '/index.html', '/styles.css', '/games.json'];
+// sw.js — simple static cache
+const CURRENT_CACHE = 'static-v2';
+const ASSETS = ['/', '/index.html', '/styles.css', '/games.json'];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
-    const cache = await caches.open(PRECACHE);
-    await cache.addAll(PRECACHE_URLS.filter(Boolean));
+    const cache = await caches.open(CURRENT_CACHE);
+    await cache.addAll(ASSETS);
     self.skipWaiting();
   })());
 });
@@ -16,51 +13,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(k => ![PRECACHE, RUNTIME].includes(k)).map(k => caches.delete(k)));
-    clients.claim();
+    await Promise.all(keys.filter(k => k !== CURRENT_CACHE).map(k => caches.delete(k)));
+    self.clients.claim();
   })());
 });
-
-self.addEventListener('fetch', event => {
-  const req = event.request;
-  const url = new URL(req.url);
-  const same = url.origin === self.location.origin;
-
-  if (req.mode === 'navigate') {
-    event.respondWith(networkFirst('/index.html'));
-    return;
-  }
-
-  if (same && (url.pathname.endsWith('.json'))) {
-    event.respondWith(networkFirst(req));
-    return;
-  }
-
-  if (same && (req.destination === 'style' || req.destination === 'script' || req.destination === 'image')) {
-    event.respondWith(cacheFirst(req));
-    return;
-  }
-});
-
-async function cacheFirst(request) {
-  const cache = await caches.open(RUNTIME);
-  const cached = await cache.match(request);
-  if (cached) return cached;
-  const resp = await fetch(request);
-  cache.put(request, resp.clone());
-  return resp;
-}
-
-async function networkFirst(request) {
-  const cache = await caches.open(RUNTIME);
-  try {
-    const resp = await fetch(request);
-    cache.put(request, resp.clone());
-    return resp;
-  } catch {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    if (typeof request === 'string') return caches.match(request);
-    return Response.error();
-  }
-}
