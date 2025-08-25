@@ -33,3 +33,31 @@ export function standardAxesToDir(pad, dead = 0.2) {
   const dy = Math.abs(ly) > dead ? ly : 0;
   return { dx, dy };
 }
+
+export function enableGamepadHint(el) {
+  const show = () => { el.style.display = ''; };
+  const hide = () => { el.style.display = 'none'; };
+  window.addEventListener('gamepadconnected', show);
+  window.addEventListener('gamepaddisconnected', hide);
+}
+
+export function virtualButtons(codes = []) {
+  const state = new Map(codes.map(c => [c, false]));
+  const element = document.createElement('div');
+  element.className = 'virtual-buttons';
+  for (const code of codes) {
+    const btn = document.createElement('button');
+    btn.dataset.k = code;
+    btn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      state.set(code, true);
+    });
+    btn.addEventListener('touchend', e => {
+      e.preventDefault();
+      state.set(code, false);
+    });
+    element.appendChild(btn);
+  }
+  const read = () => new Map(state);
+  return { element, read };
+}
