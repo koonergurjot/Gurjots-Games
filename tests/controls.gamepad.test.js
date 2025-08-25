@@ -1,3 +1,4 @@
+import { test, expect } from 'vitest';
 import { standardAxesToDir } from '../shared/controls.js';
 
 test('deadzone', () => {
