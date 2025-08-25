@@ -3,105 +3,52 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Arcade Hub</title>
+  <title>Arcade Hub — Phase 3 UX</title>
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.themes.css" />
 </head>
 <body>
-  <header class="site-header">
-    <h1>Arcade Hub</h1>
-    <div class="actions">
-      <button id="refreshBtn" title="Refresh catalog">↻</button>
-      <button id="fullscreenBtn" title="Toggle fullscreen">⛶</button>
-      <button id="themeBtn" title="Toggle theme">🌙</button>
-    </div>
+  <header class="site-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px">
+    <h1 style="margin:0">Arcade Hub</h1>
+    <nav style="display:flex;gap:8px;align-items:center">
+      <a class="btn" href="./stats.html" title="Stats Dashboard">📈 Stats</a>
+      <a class="btn" href="./cabinet.html" title="Cabinet Mode">🕹️ Cabinet</a>
+      <div id="themeChips" style="display:flex;gap:8px"></div>
+    </nav>
   </header>
 
-  <main>
-    <section id="recently" class="row" hidden>
-      <h2>Recently Played</h2>
-      <div class="cards" id="recently-cards"></div>
-    </section>
-
-    <section id="all" class="row">
-      <h2>All Games</h2>
-      <div class="cards" id="all-cards"></div>
-      <p id="emptyState" class="muted" hidden>Couldn't load <code>games.json</code> or no games found. Add games under <code>/games/</code> and list them in <code>games.json</code>.</p>
-    </section>
+  <main style="max-width:1100px;margin:0 auto;padding:16px">
+    <p class="muted">This index is just a demo header showing theme chips. Integrate the same header into your real hub index.</p>
   </main>
 
-  <footer class="site-footer"><small>Static arcade starter • Works on GitHub Pages & offline</small></footer>
-
   <script type="module">
-    import { getLastPlayed, getBestScore, toggleFullscreen, toggleTheme } from './shared/ui.js';
+    import { getUnlocks, currentTheme, applyTheme } from './shared/themes.js';
+    // apply saved theme right away
+    applyTheme(currentTheme());
 
-    const params = new URLSearchParams(location.search);
-    const showNew = params.get('new') === 'true';
-    const allRoot = document.getElementById('all-cards');
-    const recRoot = document.getElementById('recently-cards');
-    const emptyState = document.getElementById('emptyState');
-
-    document.getElementById('refreshBtn').onclick = () => location.reload();
-    document.getElementById('fullscreenBtn').onclick = () => toggleFullscreen();
-    const themeBtn = document.getElementById('themeBtn');
-    themeBtn.textContent = document.documentElement.dataset.theme === 'light' ? '☀️' : '🌙';
-    themeBtn.onclick = () => {
-      const mode = toggleTheme();
-      themeBtn.textContent = mode === 'light' ? '☀️' : '🌙';
-    };
-
-    function card(g) {
-      const best = getBestScore(g.slug);
-      const bestBadge = best == null || Number.isNaN(best)
-        ? ''
-        : `<span class="badge best">Best: ${best}</span>`;
-      const isNew = showNew && /\?new=true$/.test(g.path || '');
-      return `
-      <a class="card" href="${g.path || `./games/${g.slug}/`}">
-        ${isNew ? '<span class="ribbon">NEW</span>' : ''}
-        ${g.thumb ? `<img src="${g.thumb}" alt="${g.title} thumbnail" loading="lazy"/>` : ''}
-        <div class="meta">
-          <div class="title">${g.title || g.slug || 'Untitled'} ${g.badge ? `<span class="badge">${g.badge}</span>` : ''} ${bestBadge}</div>
-          <div class="tags">${(g.tags||[]).map(t => `<span>${t}</span>`).join('')}</div>
-          <p>${g.blurb || ''}</p>
-        </div>
-      </a>`;
+    function themeChip(name, unlocked, active){
+      const label = name==='neon' ? 'Neon' : name==='retro' ? 'Retro' : 'Minimal';
+      const cls = `theme-chip ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`;
+      const lock = unlocked ? '' : '🔒';
+      return `<button class="${cls}" data-skin="${name}" title="${unlocked?'':'Unlock by playing more'}">${lock} ${label}</button>`;
     }
 
-    async function loadCatalog() {
-      try {
-        const res = await fetch('./games.json', { cache: 'no-store' });
-        if (!res.ok) throw new Error(res.statusText);
-        const data = await res.json();
-        const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
-        if (!games.length) emptyState.hidden = false;
-        allRoot.innerHTML = games.map(card).join('');
-
-        const recentSlugs = getLastPlayed(10);
-        const recent = recentSlugs.map(s => games.find(g => g.slug === s)).filter(Boolean);
-        if (recent.length) {
-          document.getElementById('recently').hidden = false;
-          recRoot.innerHTML = recent.map(card).join('');
-        }
-      } catch (e) {
-        console.warn('Failed to load games.json:', e);
-        emptyState.hidden = false;
-      }
-    }
-
-    await loadCatalog();
-
-    // Register a single worker at ./sw.js; clean any legacy ones
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        const swUrl = new URL('./sw.js', location.href).href;
-        navigator.serviceWorker.register('./sw.js').catch(console.error);
-        navigator.serviceWorker.getRegistrations?.().then(regs => {
-          regs.forEach(r => {
-            if (r.active && r.active.scriptURL !== swUrl) r.unregister();
-          });
-        });
+    const chips = document.getElementById('themeChips');
+    function renderChips(){
+      const u = getUnlocks();
+      const cur = currentTheme();
+      chips.innerHTML = ['minimal','neon','retro'].map(name => themeChip(name, !!u[name], cur===name)).join('');
+      chips.querySelectorAll('button').forEach(b => {
+        b.onclick = () => {
+          const skin = b.dataset.skin;
+          const unlocked = getUnlocks()[skin];
+          if (!unlocked) return alert('Locked. Play more games to unlock!');
+          applyTheme(skin);
+          renderChips();
+        };
       });
     }
+    renderChips();
   </script>
 </body>
 </html>

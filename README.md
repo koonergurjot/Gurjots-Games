@@ -1,28 +1,33 @@
-# Arcade Fresh Starter
 
-A minimal, **known-good** rebuild of your static arcade hub. Drop these files into your repo root to replace broken pieces without touching your existing `games/` or `games.json`.
+# Phase 3 — Visual/UX Polish Pack
 
-## What's included
-- `index.html` – clean hub that builds cards from `games.json` (if present) and fails gracefully.
-- `styles.css` – minimal styling for cards, ribbons, badges, overlays.
-- `sw.js` – simple, versioned service worker (no game hardcoding).
-- `shared/ui.js` – injectBackButton, record/get last played, best score helpers, pause overlay, fullscreen.
-- `shared/controls.js` – keyboard helpers + optional gamepad polling.
-- `.github/workflows/pages.yml` – GitHub Pages deploy workflow.
-- `tests/*` – small Vitest tests for new helpers.
+This pack adds:
+- **Theme Packs / Skins**: Retro CRT, Neon Cyberpunk, Minimal White with dynamic fonts, cards, and backgrounds. Includes basic unlocks.
+- **Arcade Cabinet Mode**: Fullscreen kiosk mode that auto-rotates through games every 60s.
+- **Stats Dashboard**: Shows play time by game, plays by day, and tokens earned using local Chart.js.
 
-## Safe install
-1) Backup your current root files just in case.
-2) Copy these files into your repo **root**, preserving folders.
-3) **Delete** any old `shared/sw.js` (legacy/duplicate).  
-4) Commit to `main`. Enable Pages: Settings → Pages → Source: **GitHub Actions**.
-5) Hard refresh (Ctrl/Cmd+Shift+R). If you had older service workers, you might need an extra refresh.
+## Install (safe, incremental)
+1) Copy **styles.themes.css** into your repo and **import it after** styles.css in pages that use themes.
+2) Add **shared/themes.js** and **shared/metrics.js** to your `shared/` folder.
+3) Replace or merge **index.html** additions (header buttons + theme chooser).
+4) Add the new pages **cabinet.html** and **stats.html** to your root.
+5) Commit & deploy. Hard refresh (Ctrl/Cmd+Shift+R).
 
-## Local dev
-- Serve statically: `python -m http.server 5173`
-- Open: `http://localhost:5173`
-- Tests: `npm i && npm test`
+## Game integration (optional but recommended)
+To track session time and scores precisely from each game:
+```html
+<script type="module">
+  import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
+  // when game loads
+  startSessionTimer('SLUG_HERE');
+  // when user exits / game over
+  endSessionTimer('SLUG_HERE'); // this accumulates time for Stats
+</script>
+```
+If you already call `saveScore`, stats will also aggregate tokens and score trends if desired.
 
-## Notes
-- If `games.json` isn't found, the hub shows a friendly empty state instead of crashing.
-- SW strategy is network-first for JSON/navigation and cache-first for static assets.
+## Unlocks (basic)
+- **Neon Cyberpunk** unlocks after **5 total plays**.
+- **Retro CRT** unlocks after **10 total plays**.
+- **Minimal White** is available by default.
+You can tweak thresholds in `shared/themes.js`.
