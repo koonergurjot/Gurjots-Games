@@ -10,6 +10,7 @@
   <header class="site-header">
     <h1>Arcade Hub</h1>
     <div class="actions">
+      <input id="searchInput" type="search" placeholder="Search games" aria-label="Search games" />
       <button id="refreshBtn" title="Refresh catalog">↻</button>
       <button id="fullscreenBtn" title="Toggle fullscreen">⛶</button>
     </div>
@@ -38,6 +39,8 @@
     const allRoot = document.getElementById('all-cards');
     const recRoot = document.getElementById('recently-cards');
     const emptyState = document.getElementById('emptyState');
+    const searchInput = document.getElementById('searchInput');
+    let allGames = [];
 
     document.getElementById('refreshBtn').onclick = () => location.reload();
     document.getElementById('fullscreenBtn').onclick = () => toggleFullscreen();
@@ -63,12 +66,12 @@
         const res = await fetch('./games.json', { cache: 'no-store' });
         if (!res.ok) throw new Error(res.statusText);
         const data = await res.json();
-        const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
-        if (!games.length) emptyState.hidden = false;
-        allRoot.innerHTML = games.map(card).join('');
+        allGames = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
+        if (!allGames.length) emptyState.hidden = false;
+        allRoot.innerHTML = allGames.map(card).join('');
 
         const recentSlugs = getLastPlayed(10);
-        const recent = recentSlugs.map(s => games.find(g => g.slug === s)).filter(Boolean);
+        const recent = recentSlugs.map(s => allGames.find(g => g.slug === s)).filter(Boolean);
         if (recent.length) {
           document.getElementById('recently').hidden = false;
           recRoot.innerHTML = recent.map(card).join('');
@@ -78,6 +81,17 @@
         emptyState.hidden = false;
       }
     }
+
+    function filterGames(term) {
+      const q = term.toLowerCase();
+      const filtered = allGames.filter(g =>
+        (g.title || g.slug || '').toLowerCase().includes(q) ||
+        (g.tags || []).some(t => t.toLowerCase().includes(q))
+      );
+      allRoot.innerHTML = filtered.map(card).join('');
+    }
+
+    searchInput.addEventListener('input', e => filterGames(e.target.value));
 
     await loadCatalog();
 
