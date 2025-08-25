@@ -24,7 +24,12 @@ export function createGamepad(fn) {
   window.addEventListener('gamepadconnected', start);
   window.addEventListener('gamepaddisconnected', stop);
   start();
-  return { start, stop };
+  const destroy = () => {
+    stop();
+    window.removeEventListener('gamepadconnected', start);
+    window.removeEventListener('gamepaddisconnected', stop);
+  };
+  return { start, stop, destroy };
 }
 
 export function standardAxesToDir(pad, dead = 0.2) {
