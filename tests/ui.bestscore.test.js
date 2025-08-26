@@ -16,4 +16,9 @@ describe('best score', () => {
     saveBestScore('pong', 12);
     expect(getBestScore('pong')).toBe(12);
   });
+  it('handles non-finite stored values', () => {
+    localStorage.setItem('bestScore:pong', 'not-a-number');
+    saveBestScore('pong', 7);
+    expect(getBestScore('pong')).toBe(7);
+  });
 });
