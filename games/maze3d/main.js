@@ -1,4 +1,4 @@
-import { recordLastPlayed } from '../../shared/ui.js';
+import { recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 
 recordLastPlayed('maze3d');
@@ -23,6 +23,7 @@ const overlay = document.getElementById('overlay');
 const message = document.getElementById('message');
 const startBtn = document.getElementById('startBtn');
 const restartBtn = document.getElementById('restartBtn');
+const shareBtn = document.getElementById('shareBtn');
 const timeEl = document.getElementById('time');
 const bestEl = document.getElementById('best');
 
@@ -138,6 +139,7 @@ function restart() {
   message.textContent = 'Click Start to play.';
   startBtn.textContent = 'Start';
   restartBtn.style.display = 'none';
+  shareBtn.style.display = 'none';
   overlay.classList.remove('hidden');
 }
 
@@ -168,6 +170,8 @@ function finish(time) {
   message.textContent = `Finished in ${time.toFixed(2)}s`;
   startBtn.textContent = 'Start';
   restartBtn.style.display = 'inline-block';
+  shareBtn.style.display = 'inline-block';
+  shareBtn.onclick = () => shareScore('maze3d', time.toFixed(2));
   overlay.classList.remove('hidden');
   startTime = 0;
   emitEvent({ type: 'game_over', slug: 'maze3d', value: time });

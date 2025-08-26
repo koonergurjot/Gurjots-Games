@@ -7,7 +7,7 @@ import { ShaderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postpro
 import { FXAAShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders/FXAAShader.js';
 import { Sky } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js';
 import { registerSW } from '../../shared/sw.js';
-import { injectBackButton, recordLastPlayed } from '../../shared/ui.js';
+import { injectBackButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 
 registerSW();
@@ -115,6 +115,7 @@ scene.add(pickup);
 
 const scoreEl = document.getElementById('score');
 let score = 0;
+const shareBtn = document.getElementById('shareBtn');
 
 const GRAVITY = -20;
 const ACCEL = 28;
@@ -199,6 +200,8 @@ function update(dt){
     if (pickup && player.position.distanceTo(pickup.position) < 1){
       score++;
       scoreEl.textContent = score;
+      shareBtn.style.display = 'inline-block';
+      shareBtn.onclick = () => shareScore('box3d', score);
       scene.remove(pickup);
       pickup = null;
     }

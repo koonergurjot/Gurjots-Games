@@ -1,5 +1,5 @@
 import { createGamepad, keyState } from '../../shared/controls.js';
-import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
+import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 
@@ -32,6 +32,7 @@ let serveLock = true; // require key to serve
 let statusEl = document.getElementById('status');
 let lScoreEl = document.getElementById('lScore');
 let rScoreEl = document.getElementById('rScore');
+const shareBtn = document.getElementById('shareBtn');
 
 // Inputs
 const keys = keyState();
@@ -109,6 +110,7 @@ function restart(){
   ball = resetBall(1);
   serveLock = true; running = true; status('Press Space/Enter to serve');
   emitEvent({ type: 'play', slug: 'pong' });
+  shareBtn.hidden = true;
 }
 
 // AI behavior
@@ -216,6 +218,8 @@ function score(side){
     saveBestScore('pong', right.score);
     endSessionTimer('pong');
     emitEvent({ type: 'game_over', slug: 'pong', value: { left: left.score, right: right.score } });
+    shareBtn.hidden = false;
+    shareBtn.onclick = () => shareScore('pong', right.score);
   }
 }
 

@@ -1,4 +1,4 @@
-import { recordLastPlayed } from '../../shared/ui.js';
+import { recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 
 recordLastPlayed('platformer');
@@ -46,6 +46,7 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => keys.set(e.code, false));
 addEventListener('pointerdown', () => { if (state.running) jump(); else restart(); });
 document.getElementById('restartBtn').addEventListener('click', () => restart());
+const shareBtn = document.getElementById('shareBtn');
 
 function jump(){
   if (player.onGround){
@@ -167,6 +168,7 @@ function gameOver(win){
   over.querySelector('#over-title').textContent = win ? 'You Win!' : 'Game Over';
   over.querySelector('#over-info').textContent = `Score: ${state.score} • Best: ${state.hiscore}`;
   over.classList.add('show');
+  shareBtn.onclick = () => shareScore('platformer', state.score);
   emitEvent({ type: 'game_over', slug: 'platformer', value: state.score });
 }
 
