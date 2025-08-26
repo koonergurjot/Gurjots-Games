@@ -8,7 +8,10 @@ const THRESHOLDS = { neon: 5, retro: 10, minimal: 0 };
 export function totalPlays(){
   let sum = 0;
   for (const k of Object.keys(localStorage)) {
-    if (k.startsWith('plays:')) sum += Number(localStorage.getItem(k) || 0);
+    if (k.startsWith('plays:')) {
+      const n = Number(localStorage.getItem(k));
+      sum += Number.isFinite(n) ? n : 0;
+    }
   }
   return sum;
 }
