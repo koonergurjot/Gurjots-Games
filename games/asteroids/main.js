@@ -1,4 +1,4 @@
-import { keyState } from '../../shared/controls.js';
+import { keyState, getKey } from '../../shared/controls.js';
 import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
@@ -137,8 +137,9 @@ function updateHUD(){
 }
 
 addEventListener('keydown', (e)=>{
-  if (e.key === ' ') fire();
-  if (e.key.toLowerCase() === 'p') pause();
+  const k = e.key.toLowerCase();
+  if (k === getKey('fire')) fire();
+  if (k === getKey('pause')) pause();
 });
 
 // Init
@@ -158,9 +159,9 @@ requestAnimationFrame(loop);
 
 function update(dt){
   // Ship movement
-  if (keys.has('arrowleft')) ship.angle -= 0.07;
-  if (keys.has('arrowright')) ship.angle += 0.07;
-  if (keys.has('arrowup')) {
+  if (keys.has('left')) ship.angle -= 0.07;
+  if (keys.has('right')) ship.angle += 0.07;
+  if (keys.has('up')) {
     ship.vx += Math.cos(ship.angle) * ship.thrust;
     ship.vy += Math.sin(ship.angle) * ship.thrust;
     particles.push({ x: ship.x - Math.cos(ship.angle)*12, y: ship.y - Math.sin(ship.angle)*12, vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5, life: 18, col: '#6ee7b7' });
@@ -269,7 +270,7 @@ function render(){
   drawShip(ship.x, ship.y, ship.angle, ship.inv>0);
 
   // thrust glow
-  if (keys.has('arrowup')){
+  if (keys.has('up')){
     ctx.globalAlpha = 0.25;
     ctx.beginPath(); ctx.arc(ship.x - Math.cos(ship.angle)*16, ship.y - Math.sin(ship.angle)*16, 10, 0, Math.PI*2); ctx.fill();
     ctx.globalAlpha = 1;

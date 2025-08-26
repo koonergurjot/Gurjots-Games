@@ -1,4 +1,43 @@
-// Basic controls helpers — fresh build
+// Basic controls helpers — now with user mappings
+
+const DEFAULT_MAPPING = {
+  left: 'arrowleft',
+  right: 'arrowright',
+  up: 'arrowup',
+  down: 'arrowdown',
+  jump: ' ',
+  fire: ' ',
+  pause: 'p',
+  restart: 'r',
+  p1up: 'w',
+  p1down: 's',
+  p2up: 'arrowup',
+  p2down: 'arrowdown',
+  serve: ' '
+};
+
+export function loadMappings() {
+  try {
+    return { ...DEFAULT_MAPPING, ...(JSON.parse(localStorage.getItem('controls')) || {}) };
+  } catch {
+    return { ...DEFAULT_MAPPING };
+  }
+}
+
+let mapping = loadMappings();
+
+export function getKey(action) {
+  return (mapping[action] || action || '').toLowerCase();
+}
+
+export function saveMappings(newMap) {
+  mapping = { ...mapping, ...newMap };
+  localStorage.setItem('controls', JSON.stringify(mapping));
+}
+
+export function reloadMappings() {
+  mapping = loadMappings();
+}
 
 export function keyState() {
   const keys = new Set();
@@ -6,10 +45,15 @@ export function keyState() {
   const up = e => keys.delete(e.key.toLowerCase());
   window.addEventListener('keydown', down);
   window.addEventListener('keyup', up);
-  return { has: k => keys.has(k.toLowerCase()), destroy: () => {
-    window.removeEventListener('keydown', down);
-    window.removeEventListener('keyup', up);
-  }};
+  return {
+    has: a => keys.has(getKey(a)),
+    press: a => keys.add(getKey(a)),
+    release: a => keys.delete(getKey(a)),
+    destroy: () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+    }
+  };
 }
 
 export function createGamepad(fn) {

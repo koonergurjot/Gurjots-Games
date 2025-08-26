@@ -1,5 +1,6 @@
 import { recordLastPlayed } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
+import { keyState, getKey } from '../../shared/controls.js';
 
 recordLastPlayed('platformer');
 emitEvent({ type: 'play', slug: 'platformer' });
@@ -36,14 +37,13 @@ const gravity = 2000;
 const jumpV = -900;
 let camX = 0;
 
-const keys = new Map();
+const keys = keyState();
 addEventListener('keydown', e => {
-  keys.set(e.code, true);
-  if (e.code === 'ArrowUp' || e.code === 'Space') jump();
-  if (e.code === 'KeyP') state.running = !state.running;
-  if (e.code === 'KeyR') restart();
+  const k = e.key.toLowerCase();
+  if (k === getKey('jump')) jump();
+  if (k === getKey('pause')) state.running = !state.running;
+  if (k === getKey('restart')) restart();
 });
-addEventListener('keyup', e => keys.set(e.code, false));
 addEventListener('pointerdown', () => { if (state.running) jump(); else restart(); });
 document.getElementById('restartBtn').addEventListener('click', () => restart());
 
@@ -76,8 +76,8 @@ function loop(ts){
 
 function update(dt){
   player.vx = 0;
-  if (keys.get('ArrowLeft'))  player.vx = -moveSpeed;
-  if (keys.get('ArrowRight')) player.vx =  moveSpeed;
+  if (keys.has('left'))  player.vx = -moveSpeed;
+  if (keys.has('right')) player.vx =  moveSpeed;
 
   // horizontal movement
   player.x += player.vx * dt;

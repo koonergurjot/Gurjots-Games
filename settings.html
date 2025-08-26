@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Settings</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin:20px; background:#0e0f12; color:#e6e6e6; }
+    fieldset { margin-bottom:20px; border:1px solid #27314b; border-radius:10px; padding:10px 14px; }
+    legend { padding:0 6px; }
+    label { display:block; margin:8px 0; }
+    input[type=text] { width:120px; }
+    button { padding:6px 12px; border:1px solid #27314b; border-radius:8px; background:#0e1422; color:#cfe6ff; font-weight:600; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <h1>Settings</h1>
+  <form id="settings">
+    <fieldset>
+      <legend>Key Bindings</legend>
+      <label>Move Left <input type="text" name="left" /></label>
+      <label>Move Right <input type="text" name="right" /></label>
+      <label>Move Up <input type="text" name="up" /></label>
+      <label>Move Down <input type="text" name="down" /></label>
+      <label>Jump <input type="text" name="jump" /></label>
+      <label>Fire <input type="text" name="fire" /></label>
+      <label>Pause <input type="text" name="pause" /></label>
+      <label>Restart <input type="text" name="restart" /></label>
+      <label>P1 Up <input type="text" name="p1up" /></label>
+      <label>P1 Down <input type="text" name="p1down" /></label>
+      <label>P2 Up <input type="text" name="p2up" /></label>
+      <label>P2 Down <input type="text" name="p2down" /></label>
+      <label>Serve <input type="text" name="serve" /></label>
+    </fieldset>
+    <fieldset>
+      <legend>Accessibility</legend>
+      <label>Control Sensitivity <input type="range" name="sensitivity" min="1" max="10" value="5" /></label>
+      <label><input type="checkbox" name="reducedMotion" /> Reduced Motion</label>
+    </fieldset>
+    <button type="submit">Save</button>
+  </form>
+  <script type="module">
+    import { loadMappings, saveMappings, reloadMappings } from './shared/controls.js';
+
+    const actions = ['left','right','up','down','jump','fire','pause','restart','p1up','p1down','p2up','p2down','serve'];
+    const form = document.getElementById('settings');
+    const mapping = loadMappings();
+    for (const act of actions) {
+      const input = form.elements[act];
+      input.value = mapping[act] || '';
+      input.addEventListener('keydown', e => {
+        e.preventDefault();
+        input.value = e.key;
+      });
+    }
+    const opts = JSON.parse(localStorage.getItem('accessibility') || '{}');
+    form.sensitivity.value = opts.sensitivity ?? 5;
+    form.reducedMotion.checked = !!opts.reducedMotion;
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const map = {};
+      for (const act of actions) map[act] = form.elements[act].value;
+      saveMappings(map);
+      const acc = { sensitivity: form.sensitivity.value, reducedMotion: form.reducedMotion.checked };
+      localStorage.setItem('accessibility', JSON.stringify(acc));
+      reloadMappings();
+      alert('Settings saved');
+    });
+  </script>
+</body>
+</html>

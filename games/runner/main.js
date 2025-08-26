@@ -83,8 +83,8 @@ function update(dt){
   if(player.y>0){player.y=0;player.vy=0;}
   if(player.sliding>0) player.sliding--;
   // Keys
-  if(keys.has('arrowup')||keys.has(' ')) jump();
-  if(keys.has('arrowdown')) slide();
+  if(keys.has('jump')) jump();
+  if(keys.has('down')) slide();
   // Spawn obstacles/coins
   spawn();
   obstacles.forEach(o=>o.x-=speed); coins.forEach(c=>c.x-=speed);

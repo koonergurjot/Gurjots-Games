@@ -1,4 +1,4 @@
-import { createGamepad, keyState } from '../../shared/controls.js';
+import { createGamepad, keyState, getKey } from '../../shared/controls.js';
 import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
@@ -74,8 +74,8 @@ const overlay = attachPauseOverlay({ onResume: ()=> running=true, onRestart: ()=
 // Keyboard binds
 window.addEventListener('keydown', (e)=>{
   const k = e.key.toLowerCase();
-  if (k === 'p') { pause(); }
-  if (k === ' ' || k === 'enter') { serveLock = false; status(''); }
+  if (k === getKey('pause')) { pause(); }
+  if (k === getKey('serve') || k === 'enter') { serveLock = false; status(''); }
 });
 
 // Audio (synthesized with WebAudio)
@@ -139,13 +139,13 @@ function tick(dt){
   if (!running) return;
   // Move paddles
   if (mode==='p2'){
-    if (keys.has('w')) left.y -= PADDLE.speed;
-    if (keys.has('s')) left.y += PADDLE.speed;
+    if (keys.has('p1up')) left.y -= PADDLE.speed;
+    if (keys.has('p1down')) left.y += PADDLE.speed;
   } else {
     updateAI();
   }
-  if (keys.has('arrowup')) right.y -= PADDLE.speed;
-  if (keys.has('arrowdown')) right.y += PADDLE.speed;
+  if (keys.has('p2up')) right.y -= PADDLE.speed;
+  if (keys.has('p2down')) right.y += PADDLE.speed;
 
   left.y = clamp(left.y, 0, FIELD.h - PADDLE.h);
   right.y = clamp(right.y, 0, FIELD.h - PADDLE.h);

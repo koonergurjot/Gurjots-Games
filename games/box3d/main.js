@@ -9,6 +9,7 @@ import { Sky } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton, recordLastPlayed } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
+import { keyState, getKey } from '../../shared/controls.js';
 
 registerSW();
 injectBackButton();
@@ -123,11 +124,9 @@ const MAX_SPEED = 10;
 
 const velocity = new THREE.Vector3();
 let onGround = true;
-const keys = new Map();
-addEventListener('keydown', (e) => keys.set(e.code, true));
-addEventListener('keyup', (e) => keys.set(e.code, false));
+const keys = keyState();
 addEventListener('keydown', (e) => {
-  if (e.code === 'KeyR'){
+  if (e.key.toLowerCase() === getKey('restart')){
     player.position.set(0,1,5);
     velocity.set(0,0,0);
   }
@@ -136,10 +135,10 @@ addEventListener('keydown', (e) => {
 // Touch buttons map to key presses for mobile play
 const touch = document.getElementById('touch');
 if (touch) {
-  for (const btn of touch.querySelectorAll('button[data-k]')) {
-    const code = btn.dataset.k;
-    const press = (e) => { e.preventDefault(); keys.set(code, true); };
-    const release = (e) => { e.preventDefault(); keys.set(code, false); };
+  for (const btn of touch.querySelectorAll('button[data-a]')) {
+    const action = btn.dataset.a;
+    const press = (e) => { e.preventDefault(); keys.press(action); };
+    const release = (e) => { e.preventDefault(); keys.release(action); };
     btn.addEventListener('touchstart', press);
     btn.addEventListener('touchend', release);
     btn.addEventListener('touchcancel', release);
@@ -169,8 +168,8 @@ const up = new THREE.Vector3(0,1,0);
 const clock = new THREE.Clock();
 function update(dt){
   if (controls.isLocked){
-    const moveX = (keys.get('KeyD') ? 1 : 0) - (keys.get('KeyA') ? 1 : 0);
-    const moveZ = (keys.get('KeyS') ? 1 : 0) - (keys.get('KeyW') ? 1 : 0);
+    const moveX = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
+    const moveZ = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0);
 
     camera.getWorldDirection(forward);
     forward.y = 0;
@@ -186,7 +185,7 @@ function update(dt){
     const speed = Math.hypot(velocity.x, velocity.z);
     if (speed > MAX_SPEED){ const s = MAX_SPEED / speed; velocity.x *= s; velocity.z *= s; }
 
-    if (onGround && keys.get('Space')) { velocity.y = JUMP_SPEED; onGround = false; }
+    if (onGround && keys.has('jump')) { velocity.y = JUMP_SPEED; onGround = false; }
     else { velocity.y += GRAVITY * dt; }
 
     player.position.addScaledVector(velocity, dt);

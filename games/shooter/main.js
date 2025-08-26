@@ -1,5 +1,6 @@
 import { injectBackButton, recordLastPlayed } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
+import { keyState, getKey } from '../../shared/controls.js';
 
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
@@ -28,8 +29,8 @@ class Player {
     this.speed = 300;
   }
   update(dt, keys){
-    const dirX = (keys.get('KeyD')?1:0) - (keys.get('KeyA')?1:0);
-    const dirY = (keys.get('KeyS')?1:0) - (keys.get('KeyW')?1:0);
+    const dirX = (keys.has('right')?1:0) - (keys.has('left')?1:0);
+    const dirY = (keys.has('down')?1:0) - (keys.has('up')?1:0);
     this.x += dirX * this.speed * dt;
     this.y += dirY * this.speed * dt;
     this.x = Math.max(this.r, Math.min(W - this.r, this.x));
@@ -91,14 +92,13 @@ let bullets = [];
 let enemies = [];
 let spawnTimer = 0;
 
-const keys = new Map();
+const keys = keyState();
 addEventListener('keydown', e => {
-  keys.set(e.code, true);
-  if(e.code === 'Space') fire();
-  if(e.code === 'KeyP') state.running = !state.running;
-  if(e.code === 'KeyR') restart();
+  const k = e.key.toLowerCase();
+  if(k === getKey('fire')) fire();
+  if(k === getKey('pause')) state.running = !state.running;
+  if(k === getKey('restart')) restart();
 });
-addEventListener('keyup', e => keys.set(e.code, false));
 
 document.getElementById('restartBtn').addEventListener('click', () => restart());
 

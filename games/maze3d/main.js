@@ -1,5 +1,6 @@
 import { recordLastPlayed } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
+import { keyState, getKey } from '../../shared/controls.js';
 
 recordLastPlayed('maze3d');
 
@@ -32,13 +33,12 @@ let startTime = 0;
 let best = Number(localStorage.getItem('besttime:maze3d') || 0);
 if (best) bestEl.textContent = best.toFixed(2);
 
-const keys = {};
+const keys = keyState();
 document.addEventListener('keydown', (e) => {
-  keys[e.code] = true;
-  if (e.code === 'KeyP') togglePause();
-  if (e.code === 'KeyR') restart();
+  const k = e.key.toLowerCase();
+  if (k === getKey('pause')) togglePause();
+  if (k === getKey('restart')) restart();
 });
-document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
 startBtn.addEventListener('click', () => start());
 restartBtn.addEventListener('click', () => restart());
@@ -176,10 +176,10 @@ function finish(time) {
 function update(dt) {
   const speed = 5;
   const prev = controls.getObject().position.clone();
-  if (keys['KeyW']) controls.moveForward(speed * dt);
-  if (keys['KeyS']) controls.moveForward(-speed * dt);
-  if (keys['KeyA']) controls.moveRight(-speed * dt);
-  if (keys['KeyD']) controls.moveRight(speed * dt);
+  if (keys.has('up')) controls.moveForward(speed * dt);
+  if (keys.has('down')) controls.moveForward(-speed * dt);
+  if (keys.has('left')) controls.moveRight(-speed * dt);
+  if (keys.has('right')) controls.moveRight(speed * dt);
 
   const pos = controls.getObject().position;
   pos.y = 1.5;

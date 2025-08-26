@@ -7,7 +7,9 @@ const RUNTIME = `runtime-${CACHE_VERSION}`;
 
 describe('service worker cache management', () => {
   beforeEach(() => {
-    Object.assign(global, makeServiceWorkerEnv());
+    const env = makeServiceWorkerEnv();
+    delete env.navigator;
+    Object.assign(global, env);
     self.clients = {
       claim: () => Promise.resolve(),
     };
