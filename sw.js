@@ -27,7 +27,10 @@ self.addEventListener('fetch', event => {
   const same = url.origin === self.location.origin;
 
   if (req.mode === 'navigate') {
-    event.respondWith(networkFirst('/index.html'));
+    event.respondWith((async () => {
+      const resp = await networkFirst(req);
+      return resp.type === 'error' ? networkFirst('/index.html') : resp;
+    })());
     return;
   }
 
