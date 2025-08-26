@@ -1,6 +1,7 @@
 import { keyState } from '../../shared/controls.js';
 import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
+import { emitEvent } from '../../shared/achievements.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -125,12 +126,14 @@ function restart(){
   bullets.length=0; rocks.length=0; particles.length=0;
   spawnWave(4);
   updateHUD();
+  emitEvent({ type: 'play', slug: 'asteroids' });
 }
 
 function updateHUD(){
   HUD.score.textContent = score;
   HUD.lives.textContent = lives;
   HUD.wave.textContent = wave;
+  emitEvent({ type: 'score', slug: 'asteroids', value: score });
 }
 
 addEventListener('keydown', (e)=>{
@@ -211,6 +214,7 @@ function update(dt){
         running=false;
         saveBestScore('asteroids', score);
         endSessionTimer('asteroids');
+        emitEvent({ type: 'game_over', slug: 'asteroids', value: score });
       }
     }
   }

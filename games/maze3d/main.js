@@ -1,4 +1,5 @@
 import { recordLastPlayed } from '../../shared/ui.js';
+import { emitEvent } from '../../shared/achievements.js';
 
 recordLastPlayed('maze3d');
 
@@ -121,6 +122,7 @@ function start() {
   if (!running) {
     running = true;
     startTime = performance.now();
+    emitEvent({ type: 'play', slug: 'maze3d' });
   }
   paused = false;
   overlay.classList.add('hidden');
@@ -168,6 +170,7 @@ function finish(time) {
   restartBtn.style.display = 'inline-block';
   overlay.classList.remove('hidden');
   startTime = 0;
+  emitEvent({ type: 'game_over', slug: 'maze3d', value: time });
 }
 
 function update(dt) {

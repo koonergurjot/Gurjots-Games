@@ -1,6 +1,8 @@
 import { recordLastPlayed } from '../../shared/ui.js';
+import { emitEvent } from '../../shared/achievements.js';
 
 recordLastPlayed('platformer');
+emitEvent({ type: 'play', slug: 'platformer' });
 
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
@@ -59,6 +61,7 @@ function restart(){
   map = levelData.map(r => r.split(''));
   player.x = 100; player.y = 0; player.vx = 0; player.vy = 0; player.onGround = false;
   camX = 0;
+  emitEvent({ type: 'play', slug: 'platformer' });
 }
 
 let last = 0;
@@ -148,6 +151,7 @@ function checkCollectibles(){
       if (t === '2'){
         setTile(x, y, '0');
         state.score += 1;
+        emitEvent({ type: 'score', slug: 'platformer', value: state.score });
       } else if (t === '3'){
         gameOver(true);
       }
@@ -163,6 +167,7 @@ function gameOver(win){
   over.querySelector('#over-title').textContent = win ? 'You Win!' : 'Game Over';
   over.querySelector('#over-info').textContent = `Score: ${state.score} • Best: ${state.hiscore}`;
   over.classList.add('show');
+  emitEvent({ type: 'game_over', slug: 'platformer', value: state.score });
 }
 
 function getTile(x, y){

@@ -1,6 +1,7 @@
 import { createGamepad, keyState } from '../../shared/controls.js';
 import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
+import { emitEvent } from '../../shared/achievements.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -107,6 +108,7 @@ function restart(){
   left.y = right.y = (FIELD.h-PADDLE.h)/2;
   ball = resetBall(1);
   serveLock = true; running = true; status('Press Space/Enter to serve');
+  emitEvent({ type: 'play', slug: 'pong' });
 }
 
 // AI behavior
@@ -203,6 +205,7 @@ function score(side){
   serveLock = true;
   ball = resetBall(side==='L' ? 1 : -1);
   status('Press Space/Enter to serve');
+  emitEvent({ type: 'score', slug: 'pong', value: right.score });
 
   // End/win
   if (left.score >= WIN_SCORE || right.score >= WIN_SCORE){
@@ -212,6 +215,7 @@ function score(side){
     // Persist best score (use Right player points as "your" score in single mode)
     saveBestScore('pong', right.score);
     endSessionTimer('pong');
+    emitEvent({ type: 'game_over', slug: 'pong', value: { left: left.score, right: right.score } });
   }
 }
 
@@ -249,4 +253,5 @@ function render(){
 
 // Session timing
 startSessionTimer('pong');
+emitEvent({ type: 'play', slug: 'pong' });
 window.addEventListener('beforeunload', ()=> endSessionTimer('pong'));
