@@ -9,6 +9,7 @@ let food = spawnFood();
 let speedMs = 120;
 let score = 0;
 let dead = false;
+let paused = false;
 
 function spawnFood() {
   while (true) {
@@ -19,6 +20,7 @@ function spawnFood() {
 
 function tick() {
   if (dead) return;
+  if (paused) { setTimeout(tick, speedMs); return; }
   const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
   lastDir = {...dir};
 
@@ -72,7 +74,15 @@ function draw() {
   ctx.font = 'bold 20px Inter, system-ui, sans-serif';
   ctx.fillText(`Score: ${score}`, 16, 28);
 
-  if (dead) {
+  if (paused) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle = '#e6e7ea';
+    ctx.font = 'bold 42px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Paused', c.width/2, c.height/2);
+    ctx.textAlign = 'left';
+  } else if (dead) {
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0,0,c.width,c.height);
     ctx.fillStyle = '#e6e7ea';
@@ -91,6 +101,11 @@ document.addEventListener('keydown', e => {
     snake = [{x:5,y:16},{x:4,y:16},{x:3,y:16}];
     food = spawnFood(); speedMs = 120; score = 0; dead = false;
     draw(); setTimeout(tick, speedMs); return;
+  }
+  if (k === 'p') {
+    paused = !paused;
+    draw();
+    return;
   }
   const map = { 'arrowup':{x:0,y:-1}, 'w':{x:0,y:-1},
                 'arrowdown':{x:0,y:1}, 's':{x:0,y:1},
