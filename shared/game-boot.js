@@ -4,7 +4,10 @@ import { injectBackButton, recordLastPlayed } from './ui.js';
 import { recordPlay } from './quests.js';
 
 const currentScript = document.currentScript;
-const slug = currentScript?.dataset?.slug || (new URL(location.href)).pathname.split('/').filter(Boolean).slice(-1)[0] || 'unknown';
+const pathSegments = (new URL(location.href)).pathname.split('/').filter(Boolean);
+if (pathSegments[pathSegments.length - 1] === 'index.html') pathSegments.pop();
+const urlSlug = pathSegments.slice(-1)[0];
+const slug = currentScript?.dataset?.slug || urlSlug || 'unknown';
 
 injectBackButton('/');
 recordLastPlayed(slug);
