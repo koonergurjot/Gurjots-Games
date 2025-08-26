@@ -1,6 +1,6 @@
 import { createGamepad, keyState } from '../../shared/controls.js';
 import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
-import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
+import { endPlaySession } from '../../shared/xp.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -211,7 +211,7 @@ function score(side){
     status(`${winner} wins! Press Restart.`);
     // Persist best score (use Right player points as "your" score in single mode)
     saveBestScore('pong', right.score);
-    endSessionTimer('pong');
+    endPlaySession('pong');
   }
 }
 
@@ -247,6 +247,4 @@ function render(){
   }
 }
 
-// Session timing
-startSessionTimer('pong');
-window.addEventListener('beforeunload', ()=> endSessionTimer('pong'));
+// Session timing handled globally in game-boot.js

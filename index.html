@@ -13,6 +13,7 @@
     <nav style="display:flex;gap:8px;align-items:center">
       <a class="btn" href="./stats.html">📈 Stats</a>
       <a class="btn" href="./cabinet.html">🕹️ Cabinet</a>
+      <div id="xpWidget" class="xp-widget"></div>
       <div id="themeChips" style="display:flex;gap:8px"></div>
     </nav>
   </header>
@@ -35,6 +36,7 @@
   <script type="module">
     import { getLastPlayed, getBestScore } from './shared/ui.js';
     import { getUnlocks, currentTheme, applyTheme } from './shared/themes.js';
+    import { getXP, levelFromXP, xpForLevel } from './shared/xp.js';
 
     applyTheme(currentTheme());
     function themeChip(name, unlocked, active){
@@ -59,6 +61,18 @@
       });
     }
     renderThemeChips();
+
+    const xpEl = document.getElementById('xpWidget');
+    function renderXP(){
+      const xp = getXP();
+      const lvl = levelFromXP(xp);
+      const prev = xpForLevel(lvl);
+      const next = xpForLevel(lvl + 1);
+      const progress = (xp - prev) / (next - prev || 1);
+      const pct = Math.floor(progress * 100);
+      xpEl.innerHTML = `<span>Lv ${lvl}</span><div class="xp-bar"><div class="xp-bar-fill" style="width:${pct}%"></div></div><span class="muted" style="font-size:12px">${next - xp} XP</span>`;
+    }
+    renderXP();
 
     const allRoot = document.getElementById('all-cards');
     const recRoot = document.getElementById('recently-cards');

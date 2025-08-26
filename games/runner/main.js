@@ -1,6 +1,6 @@
 import { keyState } from '../../shared/controls.js';
 import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
-import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
+import { endPlaySession } from '../../shared/xp.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -92,7 +92,7 @@ function update(dt){
     if(player.x<o.x+o.w&&player.x+player.w>o.x&&player.y+player.h>o.y&&player.y<o.y+o.h){
       running=false;
       saveBestScore('runner',Math.floor(score));
-      endSessionTimer('runner');
+      endPlaySession('runner');
     }
   }
   for(const c of coins){
@@ -124,6 +124,4 @@ function render(){
 
 function pause(){running=false;overlay.show();}
 
-// Session timing
-startSessionTimer('runner');
-window.addEventListener('beforeunload',()=>endSessionTimer('runner'));
+// Session timing handled globally in game-boot.js

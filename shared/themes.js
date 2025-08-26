@@ -1,5 +1,6 @@
 
 // Theme pack manager (local-only unlocks)
+import { awardAchievementXP } from './xp.js';
 const THEME_KEY = 'skin:current';
 const UNLOCKS_KEY = 'skin:unlocks';
 // thresholds by total plays
@@ -16,12 +17,14 @@ export function totalPlays(){
 export function getUnlocks(){
   let u = {};
   try { u = JSON.parse(localStorage.getItem(UNLOCKS_KEY) || '{}'); } catch {}
+  const before = { ...u };
   // recompute from threshold + total plays
   const t = totalPlays();
   u.minimal = true;
   u.neon = u.neon || t >= THRESHOLDS.neon;
   u.retro = u.retro || t >= THRESHOLDS.retro;
   localStorage.setItem(UNLOCKS_KEY, JSON.stringify(u));
+  if ((!before.neon && u.neon) || (!before.retro && u.retro)) awardAchievementXP();
   return u;
 }
 

@@ -1,6 +1,6 @@
 import { keyState } from '../../shared/controls.js';
 import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
-import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
+import { endPlaySession } from '../../shared/xp.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -210,7 +210,7 @@ function update(dt){
       if (lives<=0){
         running=false;
         saveBestScore('asteroids', score);
-        endSessionTimer('asteroids');
+        endPlaySession('asteroids');
       }
     }
   }
@@ -283,6 +283,4 @@ function render(){
   ctx.globalAlpha = 1;
 }
 
-// Session timing
-startSessionTimer('asteroids');
-window.addEventListener('beforeunload', ()=> endSessionTimer('asteroids'));
+// Session timing handled globally in game-boot.js
