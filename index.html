@@ -24,6 +24,11 @@
       <div class="cards" id="recently-cards"></div>
     </section>
 
+    <div id="filterBar" style="display:flex;flex-direction:column;gap:8px;margin:24px 0">
+      <input type="search" id="searchInput" placeholder="Search games..." />
+      <div id="tagFilters" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+    </div>
+
     <section id="all" class="row">
       <h2>All Games</h2>
       <div class="cards" id="all-cards"></div>
@@ -34,7 +39,7 @@
   <footer class="site-footer"><small>Hub • Data from games.json • Offline via sw.js</small></footer>
 
   <script type="module">
-    import { getLastPlayed, getBestScore } from './shared/ui.js';
+    import { getLastPlayed, getBestScore, filterGames } from './shared/ui.js';
     import { getUnlocks, currentTheme, applyTheme } from './shared/themes.js';
 
     applyTheme(currentTheme());
@@ -67,6 +72,9 @@
     const allRoot = document.getElementById('all-cards');
     const recRoot = document.getElementById('recently-cards');
     const empty = document.getElementById('emptyState');
+    const searchInput = document.getElementById('searchInput');
+    const tagsRoot = document.getElementById('tagFilters');
+    let games = [];
 
     function card(g) {
       const best = getBestScore(g.slug);
@@ -83,6 +91,10 @@
       </a>`;
     }
 
+    function renderGames(list) {
+      allRoot.innerHTML = list.map(card).join('');
+    }
+
     function renderRows(games) {
       const recentSlugs = getLastPlayed(12);
       const recent = recentSlugs.map(s => games.find(g => g.slug === s)).filter(Boolean);
@@ -91,13 +103,32 @@
       recRoot.innerHTML = recent.map(card).join('');
     }
 
+    function applyFilter() {
+      const query = searchInput.value;
+      const selected = [...tagsRoot.querySelectorAll('button.active')].map(b => b.dataset.tag);
+      renderGames(filterGames(games, query, selected));
+    }
+
+    function setupFilters() {
+      const tags = [...new Set(games.flatMap(g => g.tags || []))].sort();
+      tagsRoot.innerHTML = tags.map(t => `<button data-tag="${t}">${t}</button>`).join('');
+      tagsRoot.querySelectorAll('button').forEach(btn => {
+        btn.onclick = () => {
+          btn.classList.toggle('active');
+          applyFilter();
+        };
+      });
+      searchInput.addEventListener('input', applyFilter);
+    }
+
     try {
       const res = await fetch('./games.json', { cache: 'no-store' });
       const data = await res.json();
-      const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
+      games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
       if (!games.length) empty.hidden = false; // reveal
-      allRoot.innerHTML = games.map(card).join('');
+      renderGames(games);
       renderRows(games);
+      setupFilters();
     } catch {
       empty.hidden = false;
     }

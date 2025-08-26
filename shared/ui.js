@@ -133,3 +133,15 @@ export function toggleFullscreen(el = document.documentElement) {
   if (!document.fullscreenElement) return el.requestFullscreen?.();
   return document.exitFullscreen?.();
 }
+
+export function filterGames(games, query = '', tags = []) {
+  const q = query.trim().toLowerCase();
+  const tagSet = tags.map(t => t.toLowerCase());
+  return games.filter(g => {
+    const title = (g.title || g.slug || '').toLowerCase();
+    const gameTags = (g.tags || []).map(t => t.toLowerCase());
+    const matchQuery = !q || title.includes(q) || gameTags.some(t => t.includes(q));
+    const matchTags = !tagSet.length || tagSet.every(t => gameTags.includes(t));
+    return matchQuery && matchTags;
+  });
+}
