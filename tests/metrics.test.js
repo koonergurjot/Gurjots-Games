@@ -26,4 +26,15 @@ describe('metrics session timing', () => {
     expect(localStorage.getItem('time:first')).toBe('500');
     expect(localStorage.getItem('time:second')).toBe('300');
   });
+
+  it('ends the current session when slug is omitted', () => {
+    let now = 0;
+    performance.now = () => now;
+
+    startSessionTimer('only');
+    now = 250;
+    endSessionTimer();
+
+    expect(localStorage.getItem('time:only')).toBe('250');
+  });
 });
