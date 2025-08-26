@@ -132,8 +132,11 @@
       renderGames(games);
       renderRows(games);
       setupFilters();
-    } catch {
+    } catch (err) {
+      console.error('Failed to load games.json', err);
       empty.hidden = false;
+      empty.classList.remove('muted');
+      empty.textContent = 'Game list failed to load. Are you running a local server?';
     }
   </script>
 
