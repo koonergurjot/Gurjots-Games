@@ -92,6 +92,25 @@ export function getBestScore(slug) {
   }
 }
 
+// Retrieve a sorted array of local leaderboard entries
+// Each entry is { name: string, score: number }
+// Data is stored in localStorage under `leaderboard:${slug}`
+export function getLocalLeaderboard(slug, limit = 10) {
+  try {
+    const raw = localStorage.getItem(`leaderboard:${slug}`);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(e => e && typeof e.name === 'string' && Number.isFinite(Number(e.score)))
+      .map(e => ({ name: e.name, score: Number(e.score) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
 export function attachPauseOverlay({ onResume, onRestart }) {
   const overlay = document.createElement('div');
   overlay.className = 'pause-overlay hidden';

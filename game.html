@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Game</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.themes.css" />
+  <style>
+    #hero { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; }
+    #hero img { width:300px; max-width:100%; border-radius:12px; border:1px solid var(--border); }
+    #hero .info { flex:1 1 250px; }
+    #hero .actions { margin-top:12px; }
+    #leaderboard ol { padding-left:20px; }
+    @media (max-width:600px){ #hero { flex-direction:column; align-items:center; } #hero .info { text-align:center; } }
+  </style>
+</head>
+<body>
+  <header class="site-header" style="display:flex;align-items:center;gap:12px">
+    <a class="btn" href="./index.html">← Back</a>
+    <h1 id="pageTitle" style="margin:0;font-size:1.5rem">Game</h1>
+  </header>
+
+  <main style="max-width:1100px;margin:0 auto;padding:16px">
+    <section id="hero"></section>
+    <section id="details" class="row">
+      <h2>Description</h2>
+      <p id="blurb"></p>
+      <h3>Instructions</h3>
+      <pre id="instructions" class="muted" style="white-space:pre-wrap"></pre>
+      <h3>Controls</h3>
+      <p id="controls" class="muted"></p>
+    </section>
+    <section id="leaderboardSection" class="row">
+      <h2>Local Leaderboard</h2>
+      <div id="leaderboard"></div>
+    </section>
+    <section id="relatedSection" class="row">
+      <h2>Related Games</h2>
+      <div class="cards" id="relatedCards"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><small>Game details • Data from games.json</small></footer>
+
+  <script type="module">
+    import { applyTheme, getBestScore, getLocalLeaderboard } from './shared/ui.js';
+    applyTheme();
+
+    const params = new URLSearchParams(location.search);
+    const slug = params.get('slug');
+    const heroEl = document.getElementById('hero');
+    const pageTitle = document.getElementById('pageTitle');
+    if (!slug) {
+      heroEl.innerHTML = '<p class="muted">Missing slug.</p>';
+      document.getElementById('details').hidden = true;
+      document.getElementById('leaderboardSection').hidden = true;
+      document.getElementById('relatedSection').hidden = true;
+    } else {
+      init(slug);
+    }
+
+    async function init(slug){
+      try {
+        const res = await fetch('./games.json', { cache: 'no-store' });
+        const data = await res.json();
+        const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
+        const game = games.find(g => g.slug === slug);
+        if (!game) throw new Error('not found');
+        renderGame(game, games);
+      } catch (e) {
+        heroEl.innerHTML = '<p class="muted">Game not found.</p>';
+        document.getElementById('details').hidden = true;
+        document.getElementById('leaderboardSection').hidden = true;
+        document.getElementById('relatedSection').hidden = true;
+      }
+    }
+
+    function card(g){
+      const best = getBestScore(g.slug);
+      const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
+      return `
+        <a class="card" href="./game.html?slug=${g.slug}">
+          ${g.isNew ? '<span class="ribbon">NEW</span>' : ''}
+          ${g.thumb ? `<img src="${g.thumb}" alt="${g.title||g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
+          <div class="meta">
+            <div class="title">${g.title||g.slug} ${g.badge?`<span class="badge">${g.badge}</span>`:''} ${bestBadge}</div>
+            <div class="tags">${(g.tags||[]).map(t=>`<span>${t}</span>`).join('')}</div>
+            <p>${g.blurb||''}</p>
+          </div>
+        </a>`;
+    }
+
+    async function renderGame(game, allGames){
+      document.title = game.title;
+      pageTitle.textContent = game.title;
+      const best = getBestScore(slug);
+      const playHref = (game.path || `./games/${game.slug}/`).replace(/\?.*$/, '');
+      heroEl.innerHTML = `
+        ${game.thumb ? `<img src="${game.thumb}" alt="${game.title} thumbnail" onerror="this.remove()">` : ''}
+        <div class="info">
+          <h2>${game.title} ${game.badge?`<span class=\"badge\">${game.badge}</span>`:''}</h2>
+          <div class="tags">${(game.tags||[]).map(t=>`<span>${t}</span>`).join('')}</div>
+          <div id="heroBest" class="muted" style="margin-top:8px">${Number.isFinite(best)?`Best score: ${best}`:''}</div>
+          <div class="actions"><a class="btn" id="playBtn" href="${playHref}">▶️ Play</a></div>
+        </div>`;
+      document.getElementById('blurb').textContent = game.blurb || '';
+
+      // Load instructions if available
+      try {
+        const r = await fetch(`${playHref}README.txt`);
+        document.getElementById('instructions').textContent = r.ok ? await r.text() : 'No detailed instructions.';
+      } catch {
+        document.getElementById('instructions').textContent = 'No detailed instructions.';
+      }
+
+      // Detect controls heuristically
+      const controls = [];
+      try {
+        const codeRes = await fetch(`${playHref}main.js`);
+        if (codeRes.ok){
+          const txt = await codeRes.text();
+          if (/KeyW|KeyA|KeyS|KeyD/.test(txt)) controls.push('WASD');
+          if (/ArrowUp|ArrowDown|ArrowLeft|ArrowRight/.test(txt)) controls.push('Arrow keys');
+          if (/Space/.test(txt)) controls.push('Space');
+          if (/Enter/.test(txt)) controls.push('Enter');
+        }
+      } catch {}
+      document.getElementById('controls').textContent = controls.length ? controls.join(', ') : 'Unknown';
+
+      // Leaderboard
+      const board = getLocalLeaderboard(slug);
+      const lbEl = document.getElementById('leaderboard');
+      lbEl.innerHTML = board.length ? `<ol>${board.map(e=>`<li>${e.name}: ${e.score}</li>`).join('')}</ol>` : '<p class="muted">No scores yet.</p>';
+
+      // Related games
+      const related = allGames.filter(g => g.slug !== game.slug && g.tags && game.tags && g.tags.some(t => game.tags.includes(t)));
+      if (!related.length) document.getElementById('relatedSection').hidden = true;
+      else document.getElementById('relatedCards').innerHTML = related.map(card).join('');
+    }
+  </script>
+</body>
+</html>
