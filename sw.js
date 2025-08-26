@@ -3,7 +3,16 @@ const CACHE_VERSION = 'fresh-v1';
 const PRECACHE = `precache-${CACHE_VERSION}`;
 const RUNTIME = `runtime-${CACHE_VERSION}`;
 
-const PRECACHE_URLS = ['/', '/index.html', '/styles.css', '/games.json'];
+importScripts('/precache-manifest.js');
+
+const PRECACHE_URLS = [
+  '/',
+  '/index.html',
+  '/styles.css',
+  '/games.json',
+  '/precache-manifest.js',
+  ...(self.__PRECACHE_MANIFEST || []),
+];
 
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
@@ -46,9 +55,9 @@ self.addEventListener('fetch', event => {
 });
 
 async function cacheFirst(request) {
-  const cache = await caches.open(RUNTIME);
-  const cached = await cache.match(request);
+  const cached = await caches.match(request);
   if (cached) return cached;
+  const cache = await caches.open(RUNTIME);
   const resp = await fetch(request);
   cache.put(request, resp.clone());
   return resp;
@@ -61,9 +70,8 @@ async function networkFirst(request) {
     cache.put(request, resp.clone());
     return resp;
   } catch {
-    const cached = await cache.match(request);
+    const cached = await caches.match(request);
     if (cached) return cached;
-    if (typeof request === 'string') return caches.match(request);
     return Response.error();
   }
 }

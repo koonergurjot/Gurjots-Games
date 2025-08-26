@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "sitemap": "node tools/generate-sitemap.mjs"
+    "sitemap": "node tools/generate-sitemap.mjs",
+    "sw-manifest": "node tools/generate-sw-manifest.mjs"
   },
   "devDependencies": {
     "jsdom": "^24.0.0",
