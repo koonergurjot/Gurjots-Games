@@ -1,92 +1,41 @@
-{
-  "games": [
-    {
-      "slug": "box3d",
-      "title": "3D Box Playground",
-      "path": "./games/box3d/",
-      "thumb": "./games/box3d/thumb.png",
-      "tags": [
-        "3D",
-        "First-Person"
-      ],
-      "blurb": "Walk, jump, collect pickups.",
-      "badge": "Three.js"
-    },
-    {
-      "slug": "pong",
-      "title": "Pong Classic",
-      "path": "./games/pong/",
-      "thumb": "./games/pong/thumb.png",
-      "tags": [
-        "Arcade",
-        "Paddle"
-      ],
-      "blurb": "Classic single-player Pong.",
-      "badge": "Canvas 2D"
-    },
-    {
-      "slug": "runner",
-      "title": "Endless Runner",
-      "path": "./games/runner/",
-      "thumb": "./games/runner/thumb.png",
-      "tags": [
-        "Runner",
-        "Arcade"
-      ],
-      "blurb": "Jump to avoid obstacles.",
-      "badge": "Canvas 2D",
-      "isNew": true
-    },
-    {
-      "slug": "asteroids",
-      "title": "Asteroids",
-      "path": "./games/asteroids/",
-      "thumb": "./games/asteroids/thumb.png",
-      "tags": [
-        "Arcade",
-        "Shooter"
-      ],
-      "blurb": "Rotate, thrust, and shoot.",
-      "badge": "Canvas 2D",
-      "isNew": true
-    },
-    {
-      "slug": "shooter",
-      "title": "Top-Down Shooter",
-      "path": "./games/shooter/",
-      "thumb": "./games/shooter/thumb.png",
-      "tags": [
-        "Shooter",
-        "Action"
-      ],
-      "blurb": "Survive waves and score.",
-      "badge": "Canvas 2D"
-    },
-    {
-      "slug": "platformer",
-      "title": "Retro Platformer",
-      "path": "./games/platformer/",
-      "thumb": "./games/platformer/thumb.png",
-      "tags": [
-        "Platformer",
-        "Retro"
-      ],
-      "blurb": "Collect items and reach the goal.",
-      "badge": "Canvas 2D",
-      "isNew": true
-    },
-    {
-      "slug": "maze3d",
-      "title": "3D Maze Explorer",
-      "path": "./games/maze3d/",
-      "thumb": "./games/maze3d/thumb.png",
-      "tags": [
-        "3D",
-        "Maze"
-      ],
-      "blurb": "Find the exit quickly.",
-      "badge": "Three.js",
-      "isNew": true
-    }
-  ]
-}
+[
+  {
+    "id": "pong",
+    "title": "Pong Classic",
+    "path": "games/pong/index.html",
+    "desc": "A snappy canvas remake of the arcade legend.",
+    "tags": [
+      "classic",
+      "2D"
+    ],
+    "new": false,
+    "emoji": "\ud83c\udfd3",
+    "addedAt": "2025-08-20"
+  },
+  {
+    "id": "snake",
+    "title": "Snake",
+    "path": "games/snake/index.html",
+    "desc": "Eat, grow, don't bonk into yourself.",
+    "tags": [
+      "classic",
+      "2D"
+    ],
+    "new": true,
+    "emoji": "\ud83d\udc0d",
+    "addedAt": "2025-08-25"
+  },
+  {
+    "id": "box3d",
+    "title": "3D Box Playground",
+    "path": "games/box-playground/index.html",
+    "desc": "A tiny Three.js scene\u2014rotate and vibe.",
+    "tags": [
+      "3D",
+      "demo"
+    ],
+    "new": false,
+    "emoji": "\ud83e\uddca",
+    "addedAt": "2025-08-15"
+  }
+]

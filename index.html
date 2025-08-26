@@ -1,158 +1,71 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title data-i18n="siteTitle">Arcade Hub</title>
-  <link rel="stylesheet" href="./styles.css" />
-  <link rel="stylesheet" href="./styles.themes.css" />
+  <title>Gurjot's Games — Arcade Hub</title>
+  <meta name="description" content="A clean, fast arcade hub with simple 2D/3D games." />
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-  <header class="site-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px">
-    <h1 style="margin:0" data-i18n="siteTitle">Arcade Hub</h1>
-      <nav style="display:flex;gap:8px;align-items:center">
-        <a class="btn" href="./stats.html" data-i18n="navStats">📈 Stats</a>
-        <a class="btn" href="./quests.html" data-i18n="navQuests">🗺️ Quests</a>
-        <a class="btn" href="./cabinet.html" data-i18n="navCabinet">🕹️ Cabinet</a>
-        <select id="langSelect" style="margin-left:8px"><option value="en">EN</option><option value="es">ES</option></select>
-        <div id="themeChips" style="display:flex;gap:8px"></div>
-      </nav>
-    </header>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <img src="assets/logo.svg" alt="Logo" class="logo" />
+        <div class="titles">
+          <h1>Gurjot's Games</h1>
+          <p class="tagline">Small. Fast. Fun.</p>
+        </div>
+      </div>
+      <div class="controls">
+        <label class="sr-only" for="search">Search</label>
+        <input id="search" class="input" placeholder="Search games..." />
+        <select id="sort" class="select">
+          <option value="az">Sort: A → Z</option>
+          <option value="za">Sort: Z → A</option>
+          <option value="new">Sort: Newest</option>
+        </select>
+        <select id="theme" class="select">
+          <option value="default">Theme: Default</option>
+          <option value="retro">Theme: Retro CRT</option>
+          <option value="neon">Theme: Neon Cyberpunk</option>
+          <option value="minimal">Theme: Minimal White</option>
+        </select>
+      </div>
+    </div>
+  </header>
 
-  <main style="max-width:1100px;margin:0 auto;padding:16px">
-    <section id="recently" class="row" hidden>
-      <h2 data-i18n="recentlyPlayed">Recently Played</h2>
-      <div class="cards" id="recently-cards"></div>
+  <main class="container">
+    <section class="hero">
+      <div class="hero-copy">
+        <h2>Pick a game and play instantly</h2>
+        <p>No logins. No fluff. Just quick hits of joy. New titles will drop here automatically.</p>
+        <div class="chips" id="tagChips">
+          <!-- dynamic tags -->
+        </div>
+      </div>
     </section>
 
-    <div id="filterBar" style="display:flex;flex-direction:column;gap:8px;margin:24px 0">
-      <input type="search" id="searchInput" data-i18n="searchPlaceholder" data-i18n-attr="placeholder" />
-      <div id="tagFilters" style="display:flex;gap:4px;flex-wrap:wrap"></div>
-    </div>
-
-    <section id="all" class="row">
-      <h2 data-i18n="allGames">All Games</h2>
-      <div class="cards" id="all-cards"></div>
-      <p id="emptyState" class="muted" hidden data-i18n="emptyState">Couldn't load games.json or it's empty.</p>
+    <section>
+      <div id="status" class="status info">Loading games…</div>
+      <div id="gamesGrid" class="grid"></div>
     </section>
   </main>
 
-  <footer class="site-footer"><small data-i18n="footerIndex">Hub • Data from games.json • Offline via sw.js</small></footer>
+  <footer class="site-footer">
+    <div class="container foot-inner">
+      <p>© <span id="year"></span> Gurjot’s Games • <a href="https://gurjotsgames.netlify.app/" target="_blank" rel="noopener">Live site</a></p>
+      <div class="foot-links">
+        <a href="README.md" target="_blank">README</a>
+        <a href="games.json" target="_blank">games.json</a>
+      </div>
+    </div>
+  </footer>
 
-  <script type="module">
-    import { getLastPlayed, getBestScore, filterGames } from './shared/ui.js';
-    import { getUnlocks, currentTheme, applyTheme } from './shared/themes.js';
-    import { initI18n, t } from './shared/i18n.js';
-
-    applyTheme(currentTheme());
-    initI18n();
-
-    function themeChip(name, unlocked, active) {
-      const label = name === 'neon' ? t('themeNeon') : name === 'retro' ? t('themeRetro') : t('themeMinimal');
-      const cls = `theme-chip ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`;
-      const lock = unlocked ? '' : '🔒';
-      return `<button class="${cls}" data-skin="${name}" title="${unlocked ? '' : t('unlockByPlayingMore')}">${lock} ${label}</button>`;
-    }
-
-    const chipsEl = document.getElementById('themeChips');
-    function renderThemeChips() {
-      const unlocks = getUnlocks();
-      const cur = currentTheme();
-      chipsEl.innerHTML = ['minimal', 'neon', 'retro']
-        .map(n => themeChip(n, !!unlocks[n], cur === n))
-        .join('');
-      chipsEl.querySelectorAll('button').forEach(b => {
-        b.onclick = () => {
-          const skin = b.dataset.skin;
-          if (!getUnlocks()[skin]) return alert(t('lockedPlayMore'));
-          applyTheme(skin);
-          renderThemeChips();
-        };
-      });
-    }
-    renderThemeChips();
-
-    const allRoot = document.getElementById('all-cards');
-    const recRoot = document.getElementById('recently-cards');
-    const empty = document.getElementById('emptyState');
-    const searchInput = document.getElementById('searchInput');
-    const tagsRoot = document.getElementById('tagFilters');
-    let games = [];
-
-    function card(g) {
-      const best = getBestScore(g.slug);
-      const bestBadge = Number.isFinite(best) ? `<span class="badge best">${t('best')} ${best}</span>` : '';
-      return `
-      <a class="card" href="${(g.path || `./games/${g.slug}/`).replace(/\\?.*$/, '')}">
-        ${g.isNew ? `<span class="ribbon">${t('new')}</span>` : ''}
-        ${g.thumb ? `<img src="${g.thumb}" alt="${g.title || g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
-        <div class="meta">
-          <div class="title">${g.title || g.slug} ${g.badge ? `<span class="badge">${g.badge}</span>` : ''} ${bestBadge}</div>
-          <div class="tags">${(g.tags || []).map(t => `<span>${t}</span>`).join('')}</div>
-          <p>${g.blurb || ''}</p>
-        </div>
-      </a>`;
-    }
-
-    function renderGames(list) {
-      allRoot.innerHTML = list.map(card).join('');
-    }
-
-    function renderRows(games) {
-      const recentSlugs = getLastPlayed(12);
-      const recent = recentSlugs.map(s => games.find(g => g.slug === s)).filter(Boolean);
-      const sec = document.getElementById('recently');
-      sec.hidden = recent.length === 0;
-      recRoot.innerHTML = recent.map(card).join('');
-    }
-
-    function applyFilter() {
-      const query = searchInput.value;
-      const selected = [...tagsRoot.querySelectorAll('button.active')].map(b => b.dataset.tag);
-      const list = filterGames(games, query, selected);
-      renderGames(list);
-      if (list.length === 0) {
-        empty.textContent = 'No games match your search/filter';
-        empty.hidden = false;
-      } else {
-        empty.hidden = true;
-      }
-    }
-
-    function setupFilters() {
-      const tags = [...new Set(games.flatMap(g => g.tags || []))].sort();
-      tagsRoot.innerHTML = tags.map(t => `<button data-tag="${t}">${t}</button>`).join('');
-      tagsRoot.querySelectorAll('button').forEach(btn => {
-        btn.onclick = () => {
-          btn.classList.toggle('active');
-          applyFilter();
-        };
-      });
-      searchInput.addEventListener('input', applyFilter);
-    }
-
-    try {
-      const res = await fetch('./games.json', { cache: 'no-store' });
-      const data = await res.json();
-      games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
-      if (!games.length) empty.hidden = false; // reveal
-      renderGames(games);
-      renderRows(games);
-      setupFilters();
-    } catch (err) {
-      console.error('Failed to load games.json', err);
-      empty.hidden = false;
-      empty.classList.remove('muted');
-      empty.textContent = 'Game list failed to load. Are you running a local server?';
-    }
-  </script>
-
-  <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(console.error);
-    });
-  }
-  </script>
+  <script src="js/app.js"></script>
 </body>
 </html>

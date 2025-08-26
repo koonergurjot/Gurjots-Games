@@ -1,31 +1,34 @@
+# Gurjot's Games — Clean Downloadable Build
 
-# Arcade Fix Pack
+This is a polished, static arcade hub you can drop onto Netlify or GitHub Pages. It fixes common issues (home not rendering, missing `games.json`, broken back button) and adds visual upgrades + theming.
 
-This pack merges the Phase‑3 header (themes + Stats/Cabinet links) with the **real game grid**,
-cleans `games.json` (removes `?new=true`, adds `isNew` flags), adds a **single SW register** at the hub,
-and provides an easy way to patch games with a **boot script** (back button + last played).
-Also includes **placeholder thumbnails** for each game.
+## Highlights
+- Robust `games.json` loading with a **graceful fallback** if the fetch fails
+- **Search**, **tag filter**, and **sort** (A→Z / Z→A / Newest)
+- **Theme packs**: Default, Retro CRT, Neon Cyberpunk, Minimal White (saved to localStorage)
+- **Accessible, responsive** card grid and keyboard-friendly controls
+- Shared `injectBackButton.js` to provide a consistent **Back to Hub** on game pages
+- Three working games included:
+  - Pong (canvas)
+  - Snake (canvas)
+  - 3D Box Playground (Three.js via CDN)
 
-## How to use
-1) Backup your repo (or work in a branch).
-2) Copy **index.html** and **games.json** from this pack to your repo root (overwrite existing).
-3) Copy **shared/game-boot.js** into your repo.
-4) In each game's `index.html`, add this right before `</body>` (adjust path depth if needed):
-   ```html
-   <script type="module" src="../../shared/game-boot.js" data-slug="SLUG_HERE"></script>
-   ```
-   This auto-injects the back button and records last played.
-5) Put the provided placeholder thumbs in each game folder (they're at `games/<slug>/thumb.png` here).
-6) Commit → deploy → hard refresh (Ctrl/Cmd+Shift+R).
-
-The hub must be served via an HTTP server so the browser can fetch `games.json`. For example:
-
+## Local Dev
+Just open `index.html` in a local server (recommended). For example with Python:
 ```bash
-npx http-server .
+python3 -m http.server 8080
 ```
+Then visit http://localhost:8080
 
-Opening `index.html` directly from disk (`file://`) will not load games.
+> If you open from `file://`, some browsers block fetch for `games.json`. The hub **falls back** to an embedded list so you can still test locally.
 
-Notes:
-- The hub now ignores any `?new=true` in paths and uses `isNew` from the JSON to show ribbons.
-- If you want to keep your existing SW, no change is required; we only register it globally from the hub.
+## Add a Game
+1. Copy an existing folder under `/games/your-game/`.
+2. Point `path` in `games.json` to your new `index.html` file.
+3. Include `<script src="../../js/injectBackButton.js"></script>` inside your game page so players can return.
+
+## Deploy
+- **Netlify**: drag & drop this folder in the deploy UI or connect to Git.
+- **GitHub Pages**: push the folder to a repo and enable Pages (root or `/docs`).
+
+Enjoy!
