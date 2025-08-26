@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Arcade Hub</title>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./styles.themes.css" />
 </head>
@@ -35,6 +36,7 @@
   <script type="module">
     import { getLastPlayed, getBestScore } from './shared/ui.js';
     import { getUnlocks, currentTheme, applyTheme } from './shared/themes.js';
+    import { initMediaPreviews } from './shared/media-previews.js';
 
     applyTheme(currentTheme());
     function themeChip(name, unlocked, active){
@@ -68,9 +70,9 @@
       const best = getBestScore(g.slug);
       const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
       return `
-      <a class="card" href="${(g.path||`./games/${g.slug}/`).replace(/\?.*$/,'')}">
+      <a class="card" href="${(g.path||`./games/${g.slug}/`).replace(/\?.*$/,'')}" ${g.preview ? `data-preview="${g.preview}"` : ''}>
         ${g.isNew ? '<span class="ribbon">NEW</span>' : ''}
-        ${g.thumb ? `<img src="${g.thumb}" alt="${g.title||g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
+        ${g.thumb ? `<img src="${g.thumb}" alt="${g.title||g.slug} thumbnail" loading="lazy" decoding="async" onerror="this.remove()">` : ''}
         <div class="meta">
           <div class="title">${g.title||g.slug} ${g.badge?`<span class="badge">${g.badge}</span>`:''} ${bestBadge}</div>
           <div class="tags">${(g.tags||[]).map(t=>`<span>${t}</span>`).join('')}</div>
@@ -94,6 +96,7 @@
       if (!games.length) empty.hidden = true === false; // reveal
       allRoot.innerHTML = games.map(card).join('');
       renderRows(games);
+      initMediaPreviews();
     } catch (e) {
       empty.hidden = false;
     }
