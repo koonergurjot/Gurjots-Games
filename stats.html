@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gurjot's Games Stats</title>
+  <title data-i18n="statsTitle">Gurjot's Games Stats</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./styles.themes.css" />
   <style>
@@ -14,17 +14,18 @@
 </head>
 <body>
   <header class="site-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px">
-    <h1 style="margin:0">📈 Stats Dashboard</h1>
+    <h1 style="margin:0" data-i18n="statsTitle">📈 Stats Dashboard</h1>
     <nav style="display:flex;gap:8px;align-items:center">
-      <a class="btn" href="./index.html">← Back</a>
+      <a class="btn" href="./index.html" data-i18n="back">← Back</a>
+      <select id="langSelect"><option value="en">EN</option><option value="es">ES</option></select>
     </nav>
   </header>
 
   <main style="max-width:1100px;margin:0 auto;padding:16px">
     <div class="grid">
-      <div class="card pad"><h3>Time Played by Game</h3><canvas id="timeByGame"></canvas></div>
-      <div class="card pad"><h3>Plays per Day (last 14)</h3><canvas id="playsByDay"></canvas></div>
-      <div class="card pad"><h3>Total Plays</h3><div id="totalPlays" style="font-size:36px;font-weight:700"></div></div>
+      <div class="card pad"><h3 data-i18n="timeByGame">Time Played by Game</h3><canvas id="timeByGame"></canvas></div>
+      <div class="card pad"><h3 data-i18n="playsByDay">Plays per Day (last 14)</h3><canvas id="playsByDay"></canvas></div>
+      <div class="card pad"><h3 data-i18n="totalPlays">Total Plays</h3><div id="totalPlays" style="font-size:36px;font-weight:700"></div></div>
     </div>
   </main>
 
@@ -32,6 +33,8 @@
   <script type="module">
     import { getTimeByGame, getPlaysByDay } from './shared/metrics.js';
     import { totalPlays } from './shared/themes.js';
+    import { initI18n, t } from './shared/i18n.js';
+    initI18n();
 
     // Friendly formatter
     const msToMin = ms => (ms/60000).toFixed(1);
@@ -43,7 +46,7 @@
       type: 'bar',
       data: {
         labels: timeRows.map(r => r.slug),
-        datasets: [{ label: 'Minutes', data: timeRows.map(r => Number(msToMin(r.ms))) }]
+        datasets: [{ label: t('minutes'), data: timeRows.map(r => Number(msToMin(r.ms))) }]
       },
       options: { responsive: true, plugins: { legend: { display: false } } }
     });
@@ -55,7 +58,7 @@
       type: 'line',
       data: {
         labels: dayRows.map(r => r.day),
-        datasets: [{ label: 'Plays', data: dayRows.map(r => r.count) }]
+        datasets: [{ label: t('plays'), data: dayRows.map(r => r.count) }]
       },
       options: { responsive: true }
     });

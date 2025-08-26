@@ -1,4 +1,5 @@
 // Shared UI helpers — fresh build
+import { t } from './i18n.js';
 
 export function applyTheme(theme) {
   let t = theme;
@@ -47,7 +48,7 @@ export function injectBackButton(href = '../../') {
   if (!a) {
     a = document.createElement('a');
     a.className = 'back-to-hub';
-    a.textContent = '← Back to Hub';
+    a.textContent = t('backToHub');
     document.body.appendChild(a);
   }
   a.href = href;
@@ -117,9 +118,9 @@ export function attachPauseOverlay({ onResume, onRestart }) {
   overlay.className = 'pause-overlay hidden';
   overlay.innerHTML = `
     <div class="panel">
-      <h3>Paused</h3>
-      <button id="resumeBtn">Resume</button>
-      <button id="restartBtn">Restart</button>
+      <h3>${t('paused')}</h3>
+      <button id="resumeBtn">${t('resume')}</button>
+      <button id="restartBtn">${t('restart')}</button>
     </div>`;
   document.body.appendChild(overlay);
   const show = () => overlay.classList.remove('hidden');
