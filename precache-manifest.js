@@ -1,0 +1,23 @@
+self.__PRECACHE_MANIFEST = [
+  "/games/asteroids/index.html",
+  "/games/asteroids/main.js",
+  "/games/asteroids/thumb.png",
+  "/games/box3d/index.html",
+  "/games/box3d/main.js",
+  "/games/box3d/thumb.png",
+  "/games/maze3d/index.html",
+  "/games/maze3d/main.js",
+  "/games/maze3d/thumb.png",
+  "/games/platformer/index.html",
+  "/games/platformer/main.js",
+  "/games/platformer/thumb.png",
+  "/games/pong/index.html",
+  "/games/pong/main.js",
+  "/games/pong/thumb.png",
+  "/games/runner/index.html",
+  "/games/runner/main.js",
+  "/games/runner/thumb.png",
+  "/games/shooter/index.html",
+  "/games/shooter/main.js",
+  "/games/shooter/thumb.png"
+];

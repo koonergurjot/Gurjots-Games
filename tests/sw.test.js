@@ -11,6 +11,9 @@ describe('service worker cache management', () => {
     self.clients = {
       claim: () => Promise.resolve(),
     };
+    self.__PRECACHE_MANIFEST = ['/games/asteroids/index.html'];
+    self.importScripts = () => {};
+    self.fetch = global.fetch = () => Promise.resolve(new Response(''));
   });
 
   it('removes outdated caches on activate', async () => {
@@ -30,5 +33,12 @@ describe('service worker cache management', () => {
 
     const keys = await caches.keys();
     expect(keys.sort()).toEqual([PRECACHE, RUNTIME].sort());
+  });
+
+  it('pre-caches manifest assets on install', async () => {
+    await import('../sw.js?cache-bust=' + Date.now());
+    await self.trigger('install');
+    const cached = await caches.match('/games/asteroids/index.html');
+    expect(cached).toBeDefined();
   });
 });
