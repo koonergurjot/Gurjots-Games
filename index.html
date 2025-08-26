@@ -67,16 +67,54 @@
     function card(g) {
       const best = getBestScore(g.slug);
       const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
+      const preview = g.preview ? `data-preview="${g.preview}"` : '';
       return `
-      <a class="card" href="${(g.path||`./games/${g.slug}/`).replace(/\?.*$/,'')}">
+      <div class="card" ${preview}>
         ${g.isNew ? '<span class="ribbon">NEW</span>' : ''}
-        ${g.thumb ? `<img src="${g.thumb}" alt="${g.title||g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
-        <div class="meta">
-          <div class="title">${g.title||g.slug} ${g.badge?`<span class="badge">${g.badge}</span>`:''} ${bestBadge}</div>
-          <div class="tags">${(g.tags||[]).map(t=>`<span>${t}</span>`).join('')}</div>
-          <p>${g.blurb||''}</p>
+        <div class="media">
+          ${g.preview ? '<video muted loop playsinline hidden aria-hidden="true"></video>' : ''}
+          ${g.thumb ? `<img src="${g.thumb}" alt="${g.title||g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
         </div>
-      </a>`;
+        <div class="meta">
+          <div class="title">${g.title||g.slug}</div>
+          <div class="badges">${g.badge?`<span class="badge">${g.badge}</span>`:''} ${bestBadge} ${(g.tags||[]).map(t=>`<span class="badge tag">${t}</span>`).join('')}</div>
+          <p>${g.blurb||''}</p>
+          <div class="card-actions">
+            <a class="btn primary" href="${(g.path||`./games/${g.slug}/`).replace(/\?.*$/,'')}" aria-label="Play ${g.title||g.slug}">Play</a>
+            <a class="details-link" href="/game.html?slug=${g.slug}" aria-label="Details for ${g.title||g.slug}">Details</a>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function setupPreviews(root){
+      root.querySelectorAll('.card[data-preview]').forEach(card => {
+        const video = card.querySelector('video');
+        const img = card.querySelector('img');
+        const src = card.dataset.preview;
+        let loaded = false;
+        function play(){
+          if(!loaded){
+            video.src = src;
+            loaded = true;
+          }
+          video.hidden = false;
+          video.play();
+          if(img) img.hidden = true;
+        }
+        function stop(){
+          video.pause();
+          video.removeAttribute('src');
+          video.load();
+          loaded = false;
+          video.hidden = true;
+          if(img) img.hidden = false;
+        }
+        card.addEventListener('mouseenter', play);
+        card.addEventListener('mouseleave', stop);
+        card.addEventListener('touchstart', play);
+        card.addEventListener('touchend', stop);
+      });
     }
 
     function renderRows(games){
@@ -85,6 +123,7 @@
       const sec = document.getElementById('recently');
       sec.hidden = recent.length === 0;
       recRoot.innerHTML = recent.map(card).join('');
+      setupPreviews(recRoot);
     }
 
     try {
@@ -93,6 +132,7 @@
       const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
       if (!games.length) empty.hidden = true === false; // reveal
       allRoot.innerHTML = games.map(card).join('');
+      setupPreviews(allRoot);
       renderRows(games);
     } catch (e) {
       empty.hidden = false;

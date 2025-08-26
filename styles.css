@@ -78,13 +78,12 @@ main { max-width:1100px; margin:0 auto; padding:16px; }
 .card img { width:100%; height:140px; object-fit:cover; }
 .meta { padding:12px; }
 .title { display:flex; align-items:center; gap:6px; font-weight:600; }
-.tags { opacity:.8; margin-top:6px; }
-.tags span {
-  border:1px solid var(--tag-border);
-  border-radius:999px;
-  font-size:12px;
-  padding:2px 6px;
-  margin-right:6px;
+.badges {
+  opacity:.8;
+  margin-top:6px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
 }
 .muted { opacity:.7; }
 .ribbon {
@@ -106,7 +105,23 @@ main { max-width:1100px; margin:0 auto; padding:16px; }
   font-size:12px;
   opacity:.8;
 }
-.badge.best { margin-left:6px; }
+.badge.best { margin-left:0; }
+.card video { width:100%; height:140px; object-fit:cover; }
+.card-actions {
+  margin-top:12px;
+  display:flex;
+  gap:8px;
+}
+.card-actions .btn { flex:1; text-align:center; }
+.card-actions .details-link { align-self:center; font-size:14px; text-decoration:underline; }
+.btn.primary {
+  background:#0069d9;
+  border-color:#0069d9;
+  color:#fff;
+}
+.btn.primary:hover {
+  background:#0053ba;
+}
 
 /* Pause overlay */
 .pause-overlay {
