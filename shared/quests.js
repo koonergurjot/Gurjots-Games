@@ -114,13 +114,17 @@ function xpKey(){
 }
 
 export function getXP(){
-  return Number(localStorage.getItem(xpKey()) || 0);
+  const parsed = Number(localStorage.getItem(xpKey()));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function addXP(n){
   const k = xpKey();
   const prev = getXP();
-  localStorage.setItem(k, String(prev + n));
+  const next = prev + n;
+  if (Number.isFinite(next)){
+    localStorage.setItem(k, String(next));
+  }
 }
 
 function select(pool, count, seedStr){
