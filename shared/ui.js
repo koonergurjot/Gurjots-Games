@@ -77,7 +77,8 @@ export function getLastPlayed(limit = 10) {
 export function saveBestScore(slug, score) {
   try {
     const key = `bestScore:${slug}`;
-    const prev = Number(localStorage.getItem(key) || '-Infinity');
+    let prev = Number(localStorage.getItem(key));
+    if (!Number.isFinite(prev)) prev = -Infinity;
     if (Number(score) > prev) localStorage.setItem(key, String(score));
   } catch {}
 }
