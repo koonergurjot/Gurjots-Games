@@ -1,7 +1,8 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-const W = canvas.width, H = canvas.height;
+function size(){ fitCanvasToParent(canvas, 1100, 800, 24); } size();
+let W = canvas.width, H = canvas.height; window.addEventListener('resize', ()=>{ size(); W = canvas.width; H = canvas.height; });
 const mid = { x: W/2, y: H/2 };
 
 const PADDLE_H = 110, PADDLE_W = 12;

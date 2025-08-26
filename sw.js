@@ -1,77 +1,35 @@
-// sw.js — simple versioned worker
-const CACHE_VERSION = 'fresh-v1';
-const PRECACHE = `precache-${CACHE_VERSION}`;
-const RUNTIME = `runtime-${CACHE_VERSION}`;
-
-importScripts('/precache-manifest.js');
-
-const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/games.json',
-  '/precache-manifest.js',
-  ...(self.__PRECACHE_MANIFEST || []),
+// Basic offline caching for hub + games
+const VERSION = 'gg-v1.0.0';
+const CORE = [
+  '/', '/index.html', '/css/styles.css', '/js/app.js',
+  '/js/injectBackButton.js', '/js/resizeCanvas.global.js',
+  '/assets/logo.svg', '/assets/favicon.png', '/games.json',
+  '/404.html'
 ];
 
-self.addEventListener('install', event => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(PRECACHE);
-    await cache.addAll(PRECACHE_URLS.filter(Boolean));
-    self.skipWaiting();
-  })());
+self.addEventListener('install', (e)=>{
+  e.waitUntil(caches.open(VERSION).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()));
 });
 
-self.addEventListener('activate', event => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter(k => ![PRECACHE, RUNTIME].includes(k)).map(k => caches.delete(k)));
-    clients.claim();
-  })());
+self.addEventListener('activate', (e)=>{
+  e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==VERSION).map(k=>caches.delete(k)))))
+  self.clients.claim();
 });
 
-self.addEventListener('fetch', event => {
-  const req = event.request;
-  const url = new URL(req.url);
-  const same = url.origin === self.location.origin;
-
-  if (req.mode === 'navigate') {
-    event.respondWith((async () => {
-      const resp = await networkFirst(req);
-      return resp.type === 'error' ? networkFirst('/index.html') : resp;
-    })());
-    return;
-  }
-
-  if (same && (url.pathname.endsWith('.json'))) {
-    event.respondWith(networkFirst(req));
-    return;
-  }
-
-  if (same && (req.destination === 'style' || req.destination === 'script' || req.destination === 'image')) {
-    event.respondWith(cacheFirst(req));
-    return;
+self.addEventListener('fetch', (e)=>{
+  const req = e.request;
+  // Network-first for games.json, cache-first otherwise
+  if (new URL(req.url).pathname.endsWith('/games.json')) {
+    e.respondWith(
+      fetch(req).then(res=>{
+        const copy = res.clone();
+        caches.open(VERSION).then(c=>c.put(req, copy));
+        return res;
+      }).catch(()=>caches.match(req))
+    );
+  } else {
+    e.respondWith(
+      caches.match(req).then(cached=> cached || fetch(req).catch(()=>caches.match('/index.html')) )
+    );
   }
 });
-
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-  const cache = await caches.open(RUNTIME);
-  const resp = await fetch(request);
-  cache.put(request, resp.clone());
-  return resp;
-}
-
-async function networkFirst(request) {
-  const cache = await caches.open(RUNTIME);
-  try {
-    const resp = await fetch(request);
-    cache.put(request, resp.clone());
-    return resp;
-  } catch {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    return Response.error();
-  }
-}

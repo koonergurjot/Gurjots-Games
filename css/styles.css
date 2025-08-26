@@ -245,3 +245,17 @@ body {
   100% { background-position: 100% 0; }
 }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+
+
+/* ===== Mobile optimizations ===== */
+@media (max-width: 640px) {
+  .controls { gap: 8px; }
+  .input, .select { padding: 14px 14px; border-radius: 14px; font-size: 1rem; }
+  .chip { padding: 10px 16px; font-size: 0.98rem; }
+  .btn { padding: 12px 14px; font-size: 1rem; border-radius: 14px; }
+  .card { border-radius: 20px; }
+  .thumb { border-radius: 16px; }
+  .titles h1 { font-size: 1.2rem; }
+  .titles .tagline { font-size: 0.95rem; }
+  .hero-copy h2 { font-size: 1.6rem; }
+}

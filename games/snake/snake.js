@@ -1,4 +1,4 @@
-const c = document.getElementById('c');
+const c = document.getElementById('c'); fitCanvasToParent(c, 900, 900, 24); window.addEventListener('resize', ()=>fitCanvasToParent(c, 900, 900, 24));
 const ctx = c.getContext('2d');
 const N = 32;            // grid size
 const CELL = c.width / N;

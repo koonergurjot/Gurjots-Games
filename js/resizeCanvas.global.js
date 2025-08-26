@@ -1,0 +1,20 @@
+// Resize utility (global): window.fitCanvasToParent(canvas, maxW, maxH, padding)
+(function(){
+  function fitCanvasToParent(canvas, maxW = 1000, maxH = 700, padding = 16) {
+    const pr = window.devicePixelRatio || 1;
+    const desiredW = canvas.dataset.basew ? parseInt(canvas.dataset.basew) : canvas.width;
+    const desiredH = canvas.dataset.baseh ? parseInt(canvas.dataset.baseh) : canvas.height;
+    const ar = desiredW / desiredH;
+    const W = Math.min(window.innerWidth - padding*2, maxW);
+    const H = Math.min(window.innerHeight - padding*2, maxH);
+    let vw = W, vh = W / ar;
+    if (vh > H) { vh = H; vw = H * ar; }
+    canvas.style.width = vw + 'px';
+    canvas.style.height = vh + 'px';
+    canvas.width = Math.round(vw * pr);
+    canvas.height = Math.round(vh * pr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(canvas.width / vw, 0, 0, canvas.height / vh, 0, 0);
+  }
+  window.fitCanvasToParent = fitCanvasToParent;
+})();
