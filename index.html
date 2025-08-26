@@ -83,7 +83,7 @@
       const best = getBestScore(g.slug);
       const bestBadge = Number.isFinite(best) ? `<span class="badge best">${t('best')} ${best}</span>` : '';
       return `
-      <a class="card" href="${(g.path || `./games/${g.slug}/`).replace(/\\?.*$/, '')}">
+      <a class="card" href="${(g.path || `./games/${g.slug}/`).replace(/\?.*$/, '')}">
         ${g.isNew ? `<span class="ribbon">${t('new')}</span>` : ''}
         ${g.thumb ? `<img src="${g.thumb}" alt="${g.title || g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
         <div class="meta">
