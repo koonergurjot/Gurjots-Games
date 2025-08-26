@@ -9,6 +9,17 @@ let food = spawnFood();
 let speedMs = 120;
 let score = 0;
 let dead = false;
+const map = { 'arrowup':{x:0,y:-1}, 'w':{x:0,y:-1},
+              'arrowdown':{x:0,y:1}, 's':{x:0,y:1},
+              'arrowleft':{x:-1,y:0}, 'a':{x:-1,y:0},
+              'arrowright':{x:1,y:0}, 'd':{x:1,y:0} };
+
+function changeDirection(k) {
+  const nd = map[k];
+  if (nd && (nd.x !== -lastDir.x || nd.y !== -lastDir.y)) {
+    dir = nd;
+  }
+}
 
 function spawnFood() {
   while (true) {
@@ -92,17 +103,11 @@ document.addEventListener('keydown', e => {
     food = spawnFood(); speedMs = 120; score = 0; dead = false;
     draw(); setTimeout(tick, speedMs); return;
   }
-  const map = { 'arrowup':{x:0,y:-1}, 'w':{x:0,y:-1},
-                'arrowdown':{x:0,y:1}, 's':{x:0,y:1},
-                'arrowleft':{x:-1,y:0}, 'a':{x:-1,y:0},
-                'arrowright':{x:1,y:0}, 'd':{x:1,y:0} };
-  if (map[k]) {
-    const nd = map[k];
-    // prevent 180 turns in one tick
-    if (nd.x !== -lastDir.x || nd.y !== -lastDir.y) {
-      dir = nd;
-    }
-  }
+  changeDirection(k);
+});
+
+document.querySelectorAll('.controls button').forEach(btn => {
+  btn.addEventListener('click', () => changeDirection(btn.dataset.key));
 });
 
 draw();
