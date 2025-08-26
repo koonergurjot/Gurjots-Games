@@ -8,6 +8,7 @@ let snake = [{x:5,y:16},{x:4,y:16},{x:3,y:16}];
 let food = spawnFood();
 let speedMs = 120;
 let score = 0;
+let highScore = parseInt(localStorage.getItem('snakeHighScore')) || 0;
 let dead = false;
 
 function spawnFood() {
@@ -38,6 +39,10 @@ function tick() {
     score++;
     if (speedMs > 60) speedMs -= 3;
     food = spawnFood();
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('snakeHighScore', highScore);
+    }
   } else {
     snake.pop();
   }
@@ -70,7 +75,11 @@ function draw() {
   // HUD
   ctx.fillStyle = '#e6e7ea';
   ctx.font = 'bold 20px Inter, system-ui, sans-serif';
+  ctx.textAlign = 'left';
   ctx.fillText(`Score: ${score}`, 16, 28);
+  ctx.textAlign = 'right';
+  ctx.fillText(`High Score: ${highScore}`, c.width - 16, 28);
+  ctx.textAlign = 'left';
 
   if (dead) {
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
