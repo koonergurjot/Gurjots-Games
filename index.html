@@ -37,22 +37,25 @@
     import { getUnlocks, currentTheme, applyTheme } from './shared/themes.js';
 
     applyTheme(currentTheme());
-    function themeChip(name, unlocked, active){
-      const label = name==='neon' ? 'Neon' : name==='retro' ? 'Retro' : 'Minimal';
+
+    function themeChip(name, unlocked, active) {
+      const label = name === 'neon' ? 'Neon' : name === 'retro' ? 'Retro' : 'Minimal';
       const cls = `theme-chip ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`;
       const lock = unlocked ? '' : '🔒';
-      return `<button class="${cls}" data-skin="${name}" title="${unlocked?'':'Unlock by playing more'}">${lock} ${label}</button>`;
+      return `<button class="${cls}" data-skin="${name}" title="${unlocked ? '' : 'Unlock by playing more'}">${lock} ${label}</button>`;
     }
+
     const chipsEl = document.getElementById('themeChips');
-    function renderThemeChips(){
-      const u = getUnlocks();
+    function renderThemeChips() {
+      const unlocks = getUnlocks();
       const cur = currentTheme();
-      chipsEl.innerHTML = ['minimal','neon','retro'].map(n => themeChip(n, !!u[n], cur===n)).join('');
+      chipsEl.innerHTML = ['minimal', 'neon', 'retro']
+        .map(n => themeChip(n, !!unlocks[n], cur === n))
+        .join('');
       chipsEl.querySelectorAll('button').forEach(b => {
         b.onclick = () => {
           const skin = b.dataset.skin;
-          const unlocked = getUnlocks()[skin];
-          if (!unlocked) return alert('Locked. Play more games to unlock!');
+          if (!getUnlocks()[skin]) return alert('Locked. Play more games to unlock!');
           applyTheme(skin);
           renderThemeChips();
         };
@@ -68,18 +71,18 @@
       const best = getBestScore(g.slug);
       const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
       return `
-      <a class="card" href="${(g.path||`./games/${g.slug}/`).replace(/\?.*$/,'')}">
+      <a class="card" href="${(g.path || `./games/${g.slug}/`).replace(/\\?.*$/, '')}">
         ${g.isNew ? '<span class="ribbon">NEW</span>' : ''}
-        ${g.thumb ? `<img src="${g.thumb}" alt="${g.title||g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
+        ${g.thumb ? `<img src="${g.thumb}" alt="${g.title || g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
         <div class="meta">
-          <div class="title">${g.title||g.slug} ${g.badge?`<span class="badge">${g.badge}</span>`:''} ${bestBadge}</div>
-          <div class="tags">${(g.tags||[]).map(t=>`<span>${t}</span>`).join('')}</div>
-          <p>${g.blurb||''}</p>
+          <div class="title">${g.title || g.slug} ${g.badge ? `<span class="badge">${g.badge}</span>` : ''} ${bestBadge}</div>
+          <div class="tags">${(g.tags || []).map(t => `<span>${t}</span>`).join('')}</div>
+          <p>${g.blurb || ''}</p>
         </div>
       </a>`;
     }
 
-    function renderRows(games){
+    function renderRows(games) {
       const recentSlugs = getLastPlayed(12);
       const recent = recentSlugs.map(s => games.find(g => g.slug === s)).filter(Boolean);
       const sec = document.getElementById('recently');
@@ -91,10 +94,10 @@
       const res = await fetch('./games.json', { cache: 'no-store' });
       const data = await res.json();
       const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
-      if (!games.length) empty.hidden = true === false; // reveal
+      if (!games.length) empty.hidden = false; // reveal
       allRoot.innerHTML = games.map(card).join('');
       renderRows(games);
-    } catch (e) {
+    } catch {
       empty.hidden = false;
     }
   </script>
