@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "sitemap": "node tools/generate-sitemap.mjs"
   },
   "devDependencies": {
     "jsdom": "^24.0.0",
