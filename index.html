@@ -109,7 +109,14 @@
     function applyFilter() {
       const query = searchInput.value;
       const selected = [...tagsRoot.querySelectorAll('button.active')].map(b => b.dataset.tag);
-      renderGames(filterGames(games, query, selected));
+      const list = filterGames(games, query, selected);
+      renderGames(list);
+      if (list.length === 0) {
+        empty.textContent = 'No games match your search/filter';
+        empty.hidden = false;
+      } else {
+        empty.hidden = true;
+      }
     }
 
     function setupFilters() {
