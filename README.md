@@ -18,6 +18,14 @@ Also includes **placeholder thumbnails** for each game.
 5) Put the provided placeholder thumbs in each game folder (they're at `games/<slug>/thumb.png` here).
 6) Commit → deploy → hard refresh (Ctrl/Cmd+Shift+R).
 
+The hub must be served via an HTTP server so the browser can fetch `games.json`. For example:
+
+```bash
+npx http-server .
+```
+
+Opening `index.html` directly from disk (`file://`) will not load games.
+
 Notes:
 - The hub now ignores any `?new=true` in paths and uses `isNew` from the JSON to show ribbons.
 - If you want to keep your existing SW, no change is required; we only register it globally from the hub.
