@@ -64,6 +64,87 @@
     const recRoot = document.getElementById('recently-cards');
     const empty = document.getElementById('emptyState');
 
+    const allSection = document.getElementById('all');
+    const controls = document.createElement('div');
+    controls.style.display = 'flex';
+    controls.style.gap = '8px';
+    controls.style.flexWrap = 'wrap';
+    controls.innerHTML = `
+      <input id="searchInput" type="search" placeholder="Search">
+      <div id="tagFilters" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+      <select id="sortSelect">
+        <option value="az">A–Z</option>
+        <option value="new">Recently Added</option>
+        <option value="plays">Most Played</option>
+      </select>
+      <label><input type="checkbox" id="favOnly"> Favorites</label>
+    `;
+    allSection.insertBefore(controls, allRoot);
+
+    const searchInput = controls.querySelector('#searchInput');
+    const tagRoot = controls.querySelector('#tagFilters');
+    const sortSelect = controls.querySelector('#sortSelect');
+    const favOnly = controls.querySelector('#favOnly');
+
+    searchInput.addEventListener('input', () => {
+      applyFilters();
+      renderAll();
+    });
+    sortSelect.addEventListener('change', () => {
+      applyFilters();
+      renderAll();
+    });
+    favOnly.addEventListener('change', () => {
+      applyFilters();
+      renderAll();
+    });
+    tagRoot.addEventListener('click', e => {
+      const t = e.target;
+      if (t.dataset.tag) {
+        t.classList.toggle('active');
+        applyFilters();
+        renderAll();
+      }
+    });
+
+    let games = [];
+    let filtered = [];
+
+    function getFavorites(){
+      try { return JSON.parse(localStorage.getItem('favorites') || '[]'); }
+      catch { return []; }
+    }
+
+    function applyFilters(){
+      const q = searchInput.value.trim().toLowerCase();
+      const selected = Array.from(tagRoot.querySelectorAll('.tag-chip.active')).map(el => el.dataset.tag);
+      const favs = getFavorites();
+      filtered = games.filter(g => {
+        if (favOnly.checked && !favs.includes(g.slug)) return false;
+        if (selected.length && !selected.every(t => (g.tags || []).includes(t))) return false;
+        if (q){
+          const hay = `${g.title||g.slug} ${(g.tags||[]).join(' ')} ${g.blurb||''}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+      if (sortSelect.value === 'az') {
+        filtered.sort((a,b)=>(a.title||a.slug).localeCompare(b.title||b.slug));
+      } else if (sortSelect.value === 'new') {
+        filtered.sort((a,b)=>Number(b.isNew||0)-Number(a.isNew||0));
+      } else if (sortSelect.value === 'plays') {
+        filtered.sort((a,b)=>{
+          const pb = Number(localStorage.getItem(`plays:${b.slug}`)||0);
+          const pa = Number(localStorage.getItem(`plays:${a.slug}`)||0);
+          return pb - pa;
+        });
+      }
+    }
+
+    function renderAll(){
+      allRoot.innerHTML = filtered.map(card).join('');
+    }
+
     function card(g) {
       const best = getBestScore(g.slug);
       const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
@@ -90,9 +171,12 @@
     try {
       const res = await fetch('./games.json', { cache: 'no-store' });
       const data = await res.json();
-      const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
+      games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
       if (!games.length) empty.hidden = true === false; // reveal
-      allRoot.innerHTML = games.map(card).join('');
+      const tags = Array.from(new Set(games.flatMap(g => g.tags || []))).sort();
+      tagRoot.innerHTML = tags.map(t => `<button class="tag-chip" data-tag="${t}">${t}</button>`).join('');
+      applyFilters();
+      renderAll();
       renderRows(games);
     } catch (e) {
       empty.hidden = false;
