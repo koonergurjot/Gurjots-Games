@@ -1,5 +1,5 @@
 import { keyState } from '../../shared/controls.js';
-import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
+import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 
@@ -52,6 +52,7 @@ const HUD = {
   wave: document.getElementById('wave'),
   fireSel: document.getElementById('fireSel')
 };
+const shareBtn = document.getElementById('shareBtn');
 
 document.getElementById('pauseBtn').onclick = ()=> pause();
 document.getElementById('restartBtn').onclick = ()=> restart();
@@ -127,6 +128,7 @@ function restart(){
   spawnWave(4);
   updateHUD();
   emitEvent({ type: 'play', slug: 'asteroids' });
+  shareBtn.hidden = true;
 }
 
 function updateHUD(){
@@ -215,6 +217,8 @@ function update(dt){
         saveBestScore('asteroids', score);
         endSessionTimer('asteroids');
         emitEvent({ type: 'game_over', slug: 'asteroids', value: score });
+        shareBtn.hidden = false;
+        shareBtn.onclick = () => shareScore('asteroids', score);
       }
     }
   }

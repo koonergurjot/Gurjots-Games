@@ -135,6 +135,27 @@ export function toggleFullscreen(el = document.documentElement) {
   return document.exitFullscreen?.();
 }
 
+export async function shareScore(slug, score) {
+  const url = `${location.origin}/game.html?slug=${encodeURIComponent(slug)}`;
+  let text = `I scored ${score} in ${slug}!`;
+  try {
+    // Attempt to grab a nicer title from games.json
+    const res = await fetch(new URL('../games.json', import.meta.url));
+    const data = await res.json();
+    const game = (data.games || data).find?.(g => g.slug === slug);
+    if (game?.title) text = `I scored ${score} in ${game.title}!`;
+  } catch {}
+  const shareData = { title: 'My High Score', text, url };
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData);
+    } else {
+      await navigator.clipboard?.writeText(`${text} ${url}`);
+      alert('Share link copied to clipboard');
+    }
+  } catch {}
+}
+
 export function filterGames(games, query = '', tags = []) {
   const q = query.trim().toLowerCase();
   const tagSet = tags.map(t => t.toLowerCase());

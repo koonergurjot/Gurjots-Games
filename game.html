@@ -6,6 +6,11 @@
   <title data-i18n="genericGame">Game</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./styles.themes.css" />
+  <meta name="description" content="" />
+  <meta property="og:title" content="Game" />
+  <meta property="og:description" content="" />
+  <meta property="og:image" content="" />
+  <meta name="twitter:card" content="summary_large_image" />
   <style>
     #hero { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; }
     #hero img { width:300px; max-width:100%; border-radius:12px; border:1px solid var(--border); }
@@ -81,6 +86,17 @@
       }
     }
 
+    function updateMeta(name, content, prop = false){
+      const sel = prop ? `meta[property="${name}"]` : `meta[name="${name}"]`;
+      let el = document.head.querySelector(sel);
+      if (!el){
+        el = document.createElement('meta');
+        if (prop) el.setAttribute('property', name); else el.setAttribute('name', name);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    }
+
     function card(g){
       const best = getBestScore(g.slug);
       const bestBadge = Number.isFinite(best) ? `<span class="badge best">${t('best')} ${best}</span>` : '';
@@ -99,6 +115,10 @@
     async function renderGame(game, allGames){
       document.title = game.title;
       pageTitle.textContent = game.title;
+      updateMeta('description', game.blurb || '');
+      updateMeta('og:title', game.title, true);
+      updateMeta('og:description', game.blurb || '', true);
+      if (game.thumb) updateMeta('og:image', new URL(game.thumb, location.href).href, true);
       const best = getBestScore(slug);
       const playHref = (game.path || `./games/${game.slug}/`).replace(/\?.*$/, '');
       heroEl.innerHTML = `

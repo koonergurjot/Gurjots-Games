@@ -1,5 +1,5 @@
 import { keyState } from '../../shared/controls.js';
-import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
+import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 
@@ -35,6 +35,7 @@ const diffSel=document.getElementById('diffSel');
 diffSel.onchange=()=>{diff=diffSel.value;};
 document.getElementById('pauseBtn').onclick=()=>pause();
 document.getElementById('restartBtn').onclick=()=>restart();
+const shareBtn=document.getElementById('shareBtn');
 const overlay=attachPauseOverlay({onResume:()=>running=true,onRestart:()=>restart()});
 
 // Touch controls
@@ -60,6 +61,7 @@ function restart(){
   score=0;obstacles=[];coins=[];tick=0;running=true;
   speed=diff==='easy'?4:diff==='med'?5:6.5;
   emitEvent({ type: 'play', slug: 'runner' });
+  shareBtn.hidden=true;
 }
 
 // Game loop
@@ -96,6 +98,8 @@ function update(dt){
       saveBestScore('runner',Math.floor(score));
       endSessionTimer('runner');
       emitEvent({ type: 'game_over', slug: 'runner', value: Math.floor(score) });
+      shareBtn.hidden=false;
+      shareBtn.onclick=()=>shareScore('runner',Math.floor(score));
     }
   }
   for(const c of coins){

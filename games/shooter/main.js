@@ -1,4 +1,4 @@
-import { injectBackButton, recordLastPlayed } from '../../shared/ui.js';
+import { injectBackButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 
 const cvs = document.getElementById('game');
@@ -7,6 +7,7 @@ const W = cvs.width, H = cvs.height;
 
 const scoreEl = document.getElementById('score');
 const bestEl  = document.getElementById('best');
+const shareBtn = document.getElementById('shareBtn');
 
 injectBackButton();
 recordLastPlayed('shooter');
@@ -177,6 +178,7 @@ function gameOver(){
   const over = document.getElementById('overlay');
   over.querySelector('#over-info').textContent = `Score: ${state.score} • Best: ${state.hiscore}`;
   over.classList.add('show');
+  shareBtn.onclick = () => shareScore('shooter', state.score);
   emitEvent({ type: 'game_over', slug: 'shooter', value: state.score });
 }
 
