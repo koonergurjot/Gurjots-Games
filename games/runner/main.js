@@ -1,6 +1,7 @@
 import { keyState } from '../../shared/controls.js';
 import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
+import { emitEvent } from '../../shared/achievements.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -58,6 +59,7 @@ function restart(){
   player={x:80,y:0,w:30,h:50,vy:0,sliding:0};
   score=0;obstacles=[];coins=[];tick=0;running=true;
   speed=diff==='easy'?4:diff==='med'?5:6.5;
+  emitEvent({ type: 'play', slug: 'runner' });
 }
 
 // Game loop
@@ -93,6 +95,7 @@ function update(dt){
       running=false;
       saveBestScore('runner',Math.floor(score));
       endSessionTimer('runner');
+      emitEvent({ type: 'game_over', slug: 'runner', value: Math.floor(score) });
     }
   }
   for(const c of coins){
@@ -126,4 +129,5 @@ function pause(){running=false;overlay.show();}
 
 // Session timing
 startSessionTimer('runner');
+emitEvent({ type: 'play', slug: 'runner' });
 window.addEventListener('beforeunload',()=>endSessionTimer('runner'));

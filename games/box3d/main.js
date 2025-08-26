@@ -8,10 +8,12 @@ import { FXAAShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders
 import { Sky } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js';
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton, recordLastPlayed } from '../../shared/ui.js';
+import { emitEvent } from '../../shared/achievements.js';
 
 registerSW();
 injectBackButton();
 recordLastPlayed('box3d');
+emitEvent({ type: 'play', slug: 'box3d' });
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));

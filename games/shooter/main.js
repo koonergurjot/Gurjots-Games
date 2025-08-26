@@ -1,4 +1,5 @@
 import { injectBackButton, recordLastPlayed } from '../../shared/ui.js';
+import { emitEvent } from '../../shared/achievements.js';
 
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
@@ -9,6 +10,7 @@ const bestEl  = document.getElementById('best');
 
 injectBackButton();
 recordLastPlayed('shooter');
+emitEvent({ type: 'play', slug: 'shooter' });
 
 const state = {
   running: true,
@@ -112,6 +114,7 @@ function restart(){
   bestEl.textContent = state.hiscore;
   player.x = W/2; player.y = H/2;
   bullets = []; enemies = []; spawnTimer = 0;
+  emitEvent({ type: 'play', slug: 'shooter' });
 }
 
 let last = 0;
@@ -146,6 +149,7 @@ function update(dt){
       if(dx*dx + dy*dy < (b.r + e.r)*(b.r + e.r)){
         bullets.splice(i,1); enemies.splice(j,1);
         state.score++; scoreEl.textContent = state.score;
+        emitEvent({ type: 'score', slug: 'shooter', value: state.score });
         break;
       }
     }
@@ -173,6 +177,7 @@ function gameOver(){
   const over = document.getElementById('overlay');
   over.querySelector('#over-info').textContent = `Score: ${state.score} • Best: ${state.hiscore}`;
   over.classList.add('show');
+  emitEvent({ type: 'game_over', slug: 'shooter', value: state.score });
 }
 
 function draw(){

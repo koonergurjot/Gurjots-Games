@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Achievements</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.themes.css" />
+  <style>
+    main{max-width:700px;margin:0 auto;padding:16px;}
+    .ach-list{display:flex;flex-direction:column;gap:12px;margin-top:20px;}
+    .ach-item{display:flex;gap:12px;align-items:center;padding:10px 14px;border:1px solid var(--button-border);background:var(--button-bg);border-radius:8px;opacity:.5;}
+    .ach-item.unlocked{opacity:1;}
+    .ach-item .icon{font-size:24px;}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Achievements</h1>
+    <div id="achList" class="ach-list"></div>
+  </main>
+  <script type="module">
+    import { getAchievements } from './shared/achievements.js';
+    import { applyTheme, injectBackButton } from './shared/ui.js';
+    applyTheme();
+    injectBackButton('./');
+    const list = document.getElementById('achList');
+    const achs = getAchievements();
+    list.innerHTML = achs.map(a => `
+      <div class="ach-item ${a.unlocked ? 'unlocked' : ''}">
+        <span class="icon">${a.icon}</span>
+        <div>
+          <div><strong>${a.title}</strong></div>
+          <div class="muted">${a.desc}</div>
+        </div>
+      </div>
+    `).join('');
+  </script>
+</body>
+</html>
