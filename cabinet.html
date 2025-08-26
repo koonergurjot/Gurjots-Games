@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gurjot's Games Cabinet Mode</title>
+  <title data-i18n="cabinetTitle">Gurjot's Games Cabinet Mode</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./styles.themes.css" />
   <style>
@@ -16,18 +16,21 @@
 <body>
   <div class="wrap">
     <header class="site-header">
-      <strong>Cabinet Mode</strong>
+      <strong data-i18n="cabinetMode">Cabinet Mode</strong>
       <span id="label" class="muted" style="margin-left:auto"></span>
-      <button id="fsBtn" class="btn">⛶ Fullscreen</button>
-      <button id="startBtn" class="btn">▶️ Start</button>
-      <button id="stopBtn" class="btn">⏸️ Stop</button>
+      <select id="langSelect" style="margin-left:8px"><option value="en">EN</option><option value="es">ES</option></select>
+      <button id="fsBtn" class="btn" data-i18n="fullscreen">⛶ Fullscreen</button>
+      <button id="startBtn" class="btn" data-i18n="start">▶️ Start</button>
+      <button id="stopBtn" class="btn" data-i18n="stop">⏸️ Stop</button>
     </header>
     <iframe id="view" title="Game view"></iframe>
   </div>
 
   <script type="module">
     import { applyTheme, currentTheme } from './shared/themes.js';
+    import { initI18n } from './shared/i18n.js';
     applyTheme(currentTheme());
+    initI18n();
 
     const ROTATE_MS = 60000; // 60 seconds
     const frame = document.getElementById('view');

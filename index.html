@@ -3,52 +3,55 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Arcade Hub</title>
+  <title data-i18n="siteTitle">Arcade Hub</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./styles.themes.css" />
 </head>
 <body>
   <header class="site-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px">
-    <h1 style="margin:0">Arcade Hub</h1>
+    <h1 style="margin:0" data-i18n="siteTitle">Arcade Hub</h1>
       <nav style="display:flex;gap:8px;align-items:center">
-        <a class="btn" href="./stats.html">📈 Stats</a>
-        <a class="btn" href="./quests.html">🗺️ Quests</a>
-        <a class="btn" href="./cabinet.html">🕹️ Cabinet</a>
+        <a class="btn" href="./stats.html" data-i18n="navStats">📈 Stats</a>
+        <a class="btn" href="./quests.html" data-i18n="navQuests">🗺️ Quests</a>
+        <a class="btn" href="./cabinet.html" data-i18n="navCabinet">🕹️ Cabinet</a>
+        <select id="langSelect" style="margin-left:8px"><option value="en">EN</option><option value="es">ES</option></select>
         <div id="themeChips" style="display:flex;gap:8px"></div>
       </nav>
     </header>
 
   <main style="max-width:1100px;margin:0 auto;padding:16px">
     <section id="recently" class="row" hidden>
-      <h2>Recently Played</h2>
+      <h2 data-i18n="recentlyPlayed">Recently Played</h2>
       <div class="cards" id="recently-cards"></div>
     </section>
 
     <div id="filterBar" style="display:flex;flex-direction:column;gap:8px;margin:24px 0">
-      <input type="search" id="searchInput" placeholder="Search games..." />
+      <input type="search" id="searchInput" data-i18n="searchPlaceholder" data-i18n-attr="placeholder" />
       <div id="tagFilters" style="display:flex;gap:4px;flex-wrap:wrap"></div>
     </div>
 
     <section id="all" class="row">
-      <h2>All Games</h2>
+      <h2 data-i18n="allGames">All Games</h2>
       <div class="cards" id="all-cards"></div>
-      <p id="emptyState" class="muted" hidden>Couldn't load <code>games.json</code> or it's empty.</p>
+      <p id="emptyState" class="muted" hidden data-i18n="emptyState">Couldn't load games.json or it's empty.</p>
     </section>
   </main>
 
-  <footer class="site-footer"><small>Hub • Data from games.json • Offline via sw.js</small></footer>
+  <footer class="site-footer"><small data-i18n="footerIndex">Hub • Data from games.json • Offline via sw.js</small></footer>
 
   <script type="module">
     import { getLastPlayed, getBestScore, filterGames } from './shared/ui.js';
     import { getUnlocks, currentTheme, applyTheme } from './shared/themes.js';
+    import { initI18n, t } from './shared/i18n.js';
 
     applyTheme(currentTheme());
+    initI18n();
 
     function themeChip(name, unlocked, active) {
-      const label = name === 'neon' ? 'Neon' : name === 'retro' ? 'Retro' : 'Minimal';
+      const label = name === 'neon' ? t('themeNeon') : name === 'retro' ? t('themeRetro') : t('themeMinimal');
       const cls = `theme-chip ${active ? 'active' : ''} ${unlocked ? '' : 'locked'}`;
       const lock = unlocked ? '' : '🔒';
-      return `<button class="${cls}" data-skin="${name}" title="${unlocked ? '' : 'Unlock by playing more'}">${lock} ${label}</button>`;
+      return `<button class="${cls}" data-skin="${name}" title="${unlocked ? '' : t('unlockByPlayingMore')}">${lock} ${label}</button>`;
     }
 
     const chipsEl = document.getElementById('themeChips');
@@ -61,7 +64,7 @@
       chipsEl.querySelectorAll('button').forEach(b => {
         b.onclick = () => {
           const skin = b.dataset.skin;
-          if (!getUnlocks()[skin]) return alert('Locked. Play more games to unlock!');
+          if (!getUnlocks()[skin]) return alert(t('lockedPlayMore'));
           applyTheme(skin);
           renderThemeChips();
         };
@@ -78,10 +81,10 @@
 
     function card(g) {
       const best = getBestScore(g.slug);
-      const bestBadge = Number.isFinite(best) ? `<span class="badge best">Best: ${best}</span>` : '';
+      const bestBadge = Number.isFinite(best) ? `<span class="badge best">${t('best')} ${best}</span>` : '';
       return `
       <a class="card" href="${(g.path || `./games/${g.slug}/`).replace(/\\?.*$/, '')}">
-        ${g.isNew ? '<span class="ribbon">NEW</span>' : ''}
+        ${g.isNew ? `<span class="ribbon">${t('new')}</span>` : ''}
         ${g.thumb ? `<img src="${g.thumb}" alt="${g.title || g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
         <div class="meta">
           <div class="title">${g.title || g.slug} ${g.badge ? `<span class="badge">${g.badge}</span>` : ''} ${bestBadge}</div>
