@@ -37,5 +37,31 @@
     "new": false,
     "emoji": "\ud83e\uddca",
     "addedAt": "2025-08-15"
+  },
+  {
+    "id": "tetris",
+    "title": "Tetris",
+    "path": "games/tetris/index.html",
+    "desc": "Classic falling blocks. Clear lines, level up.",
+    "tags": [
+      "classic",
+      "2D"
+    ],
+    "new": true,
+    "emoji": "\ud83e\udde9",
+    "addedAt": "2025-08-26"
+  },
+  {
+    "id": "breakout",
+    "title": "Breakout",
+    "path": "games/breakout/index.html",
+    "desc": "Smash bricks, power-ups, chase the score.",
+    "tags": [
+      "classic",
+      "2D"
+    ],
+    "new": true,
+    "emoji": "\ud83e\uddf1",
+    "addedAt": "2025-08-26"
   }
 ]

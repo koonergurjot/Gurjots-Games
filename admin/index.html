@@ -1,64 +1,32 @@
 <!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Admin — Gurjot's Games</title>
-  <link rel="stylesheet" href="../css/styles.css" />
-  <style>
-    body { padding: 18px; }
-    textarea { width: 100%; height: 60vh; border-radius: 12px; background: var(--bg-soft); color: var(--text);
-      border:1px solid var(--card-border); padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .bar { display:flex; gap:10px; margin: 12px 0 20px; }
-    .drop { padding: 16px; border:2px dashed var(--card-border); border-radius: 12px; text-align:center; margin-top: 14px; }
-  </style>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Admin — Gurjot's Games</title>
+<link rel="stylesheet" href="../css/styles.css"/>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>body{padding:18px}.row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}textarea{width:100%;height:46vh;border-radius:12px;background:var(--bg-soft);color:var(--text);border:1px solid var(--card-border);padding:12px;font-family:ui-monospace,menlo,consolas}.drop{padding:18px;border:2px dashed var(--card-border);border-radius:12px;text-align:center;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:10px 0}.mini{background:var(--bg-soft);border:1px solid var(--card-border);border-radius:12px;padding:10px}.mini h4{margin:4px 0 6px}.pill{font-size:.8rem;padding:4px 8px;border-radius:999px;border:1px solid var(--card-border);background:var(--chip);color:var(--text)}.hide{display:none}</style>
 </head>
 <body>
-  <h2>Admin / CMS (static-friendly)</h2>
-  <div class="status info">This admin updates <code>games.json</code> in your browser only. Use “Download” to save and commit the file to your repo.</div>
-  <div class="bar">
-    <button class="btn" id="load">Load games.json</button>
-    <button class="btn primary" id="download">Download updated games.json</button>
-  </div>
-  <textarea id="editor" spellcheck="false"></textarea>
-  <div class="drop" id="drop">Drag & drop a game ZIP here to attach metadata (you’ll still need to add files to your repo).</div>
-
-  <script>
-  const ed = document.getElementById('editor');
-  document.getElementById('load').onclick = async ()=>{
-    const res = await fetch('../games.json', {cache:'no-store'});
-    ed.value = JSON.stringify(await res.json(), null, 2);
-  };
-  document.getElementById('download').onclick = ()=>{
-    try { JSON.parse(ed.value); } catch(e) { alert('Invalid JSON'); return; }
-    const blob = new Blob([ed.value], {type:'application/json'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'games.json';
-    a.click();
-  };
-  const drop = document.getElementById('drop');
-  ;['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.style.background='rgba(255,255,255,0.06)'; }));
-  ;['dragleave','drop'].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.style.background='transparent'; }));
-  drop.addEventListener('drop', async (e)=>{
-    const file = e.dataTransfer.files[0];
-    if (!file) return;
-    const name = file.name.replace(/\.zip$/i,'');
-    let data = [];
-    try { data = JSON.parse(ed.value); } catch { data = []; }
-    data.push({
-      id: name.toLowerCase().replace(/[^a-z0-9]+/g,'-'),
-      title: name,
-      path: `games/${name}/index.html`,
-      desc: "New uploaded game — update me!",
-      tags: ["new"],
-      new: true,
-      emoji: "🎮",
-      addedAt: new Date().toISOString().slice(0,10)
-    });
-    ed.value = JSON.stringify(data, null, 2);
-    alert('Added metadata for ' + name + '. Don’t forget to commit the actual files.');
-  });
-  </script>
-</body>
-</html>
+<h2>Admin / CMS</h2>
+<div class="status info">Hidden editor for <code>games.json</code>, ZIP import, and patch export.</div>
+<div class="row" style="margin-top:10px">
+  <button class="btn" id="load">Load games.json</button>
+  <button class="btn" id="validate">Validate</button>
+  <button class="btn" id="backup">Download backup</button>
+  <button class="btn primary" id="saveJson">Download updated games.json</button>
+  <button class="btn" id="exportPatch">Download patch ZIP</button>
+</div>
+<textarea id="editor" spellcheck="false" placeholder="Click 'Load games.json' or paste JSON here"></textarea>
+<div class="drop" id="drop"><strong>Drag & drop a game ZIP here</strong><br/>Must contain an <code>index.html</code>. Optional: <code>thumb.png</code>/<code>thumbnail.png</code>.</div>
+<div class="grid" id="imports"></div>
+<script>
+const ed=document.getElementById('editor');const imports=document.getElementById('imports');let pendingAdds=[];
+document.getElementById('load').onclick=async()=>{const res=await fetch('../games.json',{cache:'no-store'});ed.value=JSON.stringify(await res.json(),null,2);alert('Loaded games.json')};
+document.getElementById('validate').onclick=()=>{try{const arr=JSON.parse(ed.value);if(!Array.isArray(arr))throw new Error('Root must be an array');const ids=new Set();const probs=[];arr.forEach((g,i)=>{['id','title','path','desc'].forEach(k=>{if(!g[k])probs.push(`Game[${i}] missing ${k}`)});if(ids.has(g.id))probs.push('Duplicate id '+g.id);ids.add(g.id);if(!/^games\//.test(g.path))probs.push('Bad path '+g.path);if(g.thumb && !/^assets\//.test(g.thumb))probs.push('Thumb should be under assets/: '+g.thumb);});alert(probs.length?('Issues:\n'+probs.join('\n')):'Looks good ✅')}catch(e){alert('Invalid JSON: '+e.message)}};
+function dl(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+document.getElementById('backup').onclick=()=>dl('games.backup.json',new Blob([ed.value||'[]'],{type:'application/json'}));
+document.getElementById('saveJson').onclick=()=>{try{JSON.parse(ed.value)}catch(e){alert('Invalid JSON');return}dl('games.json',new Blob([ed.value],{type:'application/json'}))};
+const drop=document.getElementById('drop');['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.background='rgba(255,255,255,0.06)'}));['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.background='transparent'}));
+drop.addEventListener('drop',async e=>{const file=e.dataTransfer.files[0];if(!file)return;const zip=await JSZip.loadAsync(file);let prefix='';const folders=new Set();zip.forEach((p,f)=>{const seg=p.split('/');if(seg.length>1)folders.add(seg[0])});if(folders.size===1)prefix=[...folders][0]+'/';const idx=zip.file(prefix+'index.html')||zip.file('index.html');if(!idx){alert('No index.html found');return}const name=file.name.replace(/\.zip$/i,'');const id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-');const title=name;const tf=zip.file(prefix+'thumb.png')||zip.file(prefix+'thumbnail.png')||zip.file('thumb.png')||zip.file('thumbnail.png');let thumbPath='';if(tf)thumbPath='assets/thumbs/'+id+'.png';let data=[];try{data=JSON.parse(ed.value);if(!Array.isArray(data))throw 0}catch{data=[]}if(data.some(g=>g.id===id)){if(!confirm('Game id exists. Overwrite entry?'))return;data=data.filter(g=>g.id!==id)}data.push({id,title,path:`games/${id}/index.html`,desc:'New uploaded game — update me!',tags:['new'],new:true,emoji:'🎮',thumb:thumbPath||undefined,addedAt:new Date().toISOString().slice(0,10)});ed.value=JSON.stringify(data,null,2);pendingAdds.push({id,zip,prefix,tf});const card=document.createElement('div');card.className='mini';card.innerHTML=`<h4>${title}</h4><div class="row"><span class="pill">id: ${id}</span><span class="pill">path: games/${id}/index.html</span>${tf?'<span class="pill">thumb ✓</span>':''}</div><div class="row"><small>Files ready for export.</small></div>`;imports.prepend(card)});
+document.getElementById('exportPatch').onclick=async()=>{try{JSON.parse(ed.value)}catch(e){alert('Invalid JSON');return}const out=new JSZip();out.file('games.json',ed.value);for(const it of pendingAdds){const base='games/'+it.id+'/';const entries=[];it.zip.forEach((p,f)=>{if(!f.dir)entries.push([p,f])});for(const [p,f] of entries){let rel=p.startsWith(it.prefix)?p.slice(it.prefix.length):p;if(!rel)continue;out.file(base+rel,await f.async('blob'))}if(it.tf)out.file('assets/thumbs/'+it.id+'.png',await it.tf.async('blob'))}const blob=await out.generateAsync({type:'blob'});dl('gurjots-games-patch.zip',blob)};
+const qp=new URLSearchParams(location.search);if(qp.get('key')!=='letmein'){document.querySelectorAll('button, textarea, .drop').forEach(el=>el.classList.add('hide'));const warn=document.createElement('div');warn.className='status error';warn.textContent='Access denied. Append ?key=letmein to use this page.';document.body.prepend(warn)}
+</script></body></html>
