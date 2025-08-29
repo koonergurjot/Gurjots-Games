@@ -26,19 +26,6 @@
     "addedAt": "2025-08-25"
   },
   {
-    "id": "box3d",
-    "title": "3D Box Playground",
-    "path": "games/box-playground/index.html",
-    "desc": "A tiny Three.js scene\u2014rotate and vibe.",
-    "tags": [
-      "3D",
-      "demo"
-    ],
-    "new": false,
-    "emoji": "\ud83e\uddca",
-    "addedAt": "2025-08-15"
-  },
-  {
     "id": "tetris",
     "title": "Tetris",
     "path": "games/tetris/index.html",
@@ -63,5 +50,15 @@
     "new": true,
     "emoji": "\ud83e\uddf1",
     "addedAt": "2025-08-26"
+  },
+  {
+    "id": "chess",
+    "title": "Chess",
+    "path": "games/chess/index.html"
+  },
+  {
+    "id": "g2048",
+    "title": "2048",
+    "path": "games/2048/index.html"
   }
 ]

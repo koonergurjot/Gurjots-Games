@@ -17,7 +17,7 @@ function step(){ if(paused)return; maybeSpawnPower(); applyPower();
   if(ball.x<-20){ right.score++; GG.addXP(2); SFX.seq([[260],[200]]); ball=resetBall(1); }
   if(ball.x>W+20){ left.score++; GG.addXP(2); SFX.seq([[260],[200]]); ball=resetBall(-1); }
 }
-function draw(){ ctx.clearRect(0,0,canvas.width,canvas.height); W=canvas.width; H=canvas.height;
+const trail=[]; function draw(){ trail.push({x:ball.x,y:ball.y}); if(trail.length>12) trail.shift(); ctx.clearRect(0,0,canvas.width,canvas.height); W=canvas.width; H=canvas.height;
   ctx.fillStyle='#11162a'; ctx.fillRect(0,0,W,H); ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.setLineDash([12,18]); ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke(); ctx.setLineDash([]);
   ctx.fillStyle='#e6e7ea'; ctx.fillRect(left.x,left.y,PADDLE_W,paddleHeight(left)); ctx.fillRect(right.x,right.y,PADDLE_W,paddleHeight(right));
   ctx.beginPath(); ctx.arc(ball.x,ball.y,BALL_R,0,Math.PI*2); ctx.fill();
