@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import makeServiceWorkerEnv from 'service-worker-mock';
 
-const CACHE_VERSION = 'fresh-v1';
-const PRECACHE = `precache-${CACHE_VERSION}`;
-const RUNTIME = `runtime-${CACHE_VERSION}`;
+const CACHE_NAME = 'gg-v5';
 
 describe('service worker cache management', () => {
   beforeEach(() => {
@@ -17,28 +15,22 @@ describe('service worker cache management', () => {
   });
 
   it('removes outdated caches on activate', async () => {
-    // populate with old caches
-    await caches.open('precache-old');
-    await caches.open('runtime-old');
+    await caches.open('gg-old');
     await caches.open('unused-cache');
-    // open current caches
-    await caches.open(PRECACHE);
-    await caches.open(RUNTIME);
+    await caches.open(CACHE_NAME);
 
-    // import service worker to register listeners
     await import('../sw.js?cache-bust=' + Date.now());
 
-    // trigger activation and wait for cleanup
     await self.trigger('activate');
 
     const keys = await caches.keys();
-    expect(keys.sort()).toEqual([PRECACHE, RUNTIME].sort());
+    expect(keys).toEqual([CACHE_NAME]);
   });
 
   it('pre-caches manifest assets on install', async () => {
     await import('../sw.js?cache-bust=' + Date.now());
     await self.trigger('install');
-    const cached = await caches.match('/games/asteroids/index.html');
+    const cached = await caches.match('/index.html');
     expect(cached).toBeDefined();
   });
 });
