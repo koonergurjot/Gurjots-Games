@@ -38,5 +38,10 @@ export function applyTheme(name){
 }
 
 export function currentTheme(){
-  return localStorage.getItem(THEME_KEY) || 'minimal';
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored) return stored;
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const skin = prefersDark ? 'neon' : 'minimal';
+  localStorage.setItem(THEME_KEY, skin);
+  return skin;
 }
