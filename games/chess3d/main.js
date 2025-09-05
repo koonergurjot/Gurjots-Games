@@ -93,9 +93,16 @@ async function maybeAIMove(){
   const { uci } = await requestBestMove(rules.fen(), { skill: getDifficulty(), depth: 8 + getDifficulty() });
   thinkingEl.hidden = true;
   if (token !== searchToken || !uci) return;
-  const res = rules.move({ from: uci.slice(0,2), to: uci.slice(2,4), promotion: uci.slice(4) });
+  const from = uci.slice(0,2);
+  const to = uci.slice(2,4);
+  let promotion;
+  if (uci.length > 4) {
+    promotion = uci.includes('=') ? uci.split('=')[1].toLowerCase() : 'q';
+  }
+  const res = rules.move({ from, to, promotion });
   if (res?.ok) {
-    await movePieceByUci(uci);
+    const uciMove = from + to + (promotion ? '=' + promotion : '');
+    await movePieceByUci(uciMove);
     updateStatus();
   }
 }
@@ -216,13 +223,10 @@ async function boot(){
     controls,
     boardHelpers: helpers,
     rulesApi: rules,
-    onMove: async ({ from, to }) => {
-      const res = rules.move({ from, to });
-      if (res?.ok) {
-        await movePieceByUci(from + to);
-        updateStatus();
-        maybeAIMove();
-      }
+    onMove: async ({ from, to, promotion }) => {
+      await movePieceByUci(from + to + (promotion ? '=' + promotion : ''));
+      updateStatus();
+      maybeAIMove();
     },
   });
   updateStatus();

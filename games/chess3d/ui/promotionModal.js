@@ -1,4 +1,6 @@
-export function showPromotionModal(color = 'w') {
+// Simple modal for pawn promotion selection.
+// Returns a Promise resolving to one of 'q', 'r', 'b' or 'n'.
+export function openPromotion(color = 'w') {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     Object.assign(overlay.style, {
