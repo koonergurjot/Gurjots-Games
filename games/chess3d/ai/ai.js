@@ -1,4 +1,4 @@
-
+// Stockfish-based AI helper for Chess3D.
 let worker = null;
 let readyPromise = null;
 let currentResolve = null;
