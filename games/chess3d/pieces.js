@@ -251,23 +251,56 @@ export function movePiece(id, targetSquare, animate = true) {
   if (!piece || !boardHelpers) return;
   const pos = boardHelpers.squareToPosition(targetSquare);
   piece.square = targetSquare;
+  const mesh = piece.mesh;
   if (animate) {
-    const start = piece.mesh.position.clone();
+    const start = mesh.position.clone();
     const end = new THREE.Vector3(pos.x, 0, pos.z);
-    let t = 0;
-    function step() {
-      t += 0.1;
-      piece.mesh.position.lerpVectors(start, end, t);
+    const duration = 250;
+    const startTime = performance.now();
+    function step(now) {
+      const t = Math.min((now - startTime) / duration, 1);
+      mesh.position.lerpVectors(start, end, t);
+      mesh.position.y = Math.sin(Math.PI * t) * 0.5;
       if (t < 1) requestAnimationFrame(step);
+      else mesh.position.y = 0;
     }
-    step();
+    requestAnimationFrame(step);
   } else {
-    piece.mesh.position.set(pos.x, 0, pos.z);
+    mesh.position.set(pos.x, 0, pos.z);
   }
 }
 
 export function listPieces() {
   return Array.from(pieces.values());
+}
+
+export function capturePiece(id, animate = true) {
+  const piece = pieces.get(id);
+  if (!piece) return;
+  piece.square = null;
+  const mesh = piece.mesh;
+  const mats = [];
+  mesh.traverse?.((c) => {
+    if (c.isMesh) {
+      c.material = c.material.clone();
+      c.material.transparent = true;
+      mats.push(c.material);
+    }
+  });
+  if (animate) {
+    const startTime = performance.now();
+    const duration = 250;
+    function fade(now) {
+      const t = Math.min((now - startTime) / duration, 1);
+      mesh.scale.setScalar(1 - t);
+      mats.forEach(m => m.opacity = 1 - t);
+      if (t < 1) requestAnimationFrame(fade);
+      else mesh.parent?.remove(mesh);
+    }
+    requestAnimationFrame(fade);
+  } else {
+    mesh.parent?.remove(mesh);
+  }
 }
 
 export { createPiece };
