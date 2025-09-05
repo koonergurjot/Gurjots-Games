@@ -303,5 +303,15 @@ export function capturePiece(id, animate = true) {
   }
 }
 
+export function resetPieces(scene) {
+  pieces.forEach(p => {
+    p.mesh.parent?.remove(p.mesh);
+  });
+  pieces.clear();
+  if (boardHelpers) {
+    placeInitialPosition(scene, boardHelpers);
+  }
+}
+
 export { createPiece };
 

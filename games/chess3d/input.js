@@ -13,7 +13,7 @@ import {
   inStalemate,
 } from './engine/rules.js';
 
-export function initInput({ scene, camera, renderer, controls }) {
+export function initInput({ scene, camera, renderer, controls, onStatus } = {}) {
   const highlighter = initHighlight(scene);
   const lastMove = initLastMove(scene);
   const raycaster = new THREE.Raycaster();
@@ -23,6 +23,7 @@ export function initInput({ scene, camera, renderer, controls }) {
   let startSquare = null;
   let dragging = false;
   let currentMoves = [];
+  const statusCb = onStatus;
 
   function setPointer(event) {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -131,19 +132,32 @@ export function initInput({ scene, camera, renderer, controls }) {
   renderer.domElement.addEventListener('pointermove', onPointerMove);
   renderer.domElement.addEventListener('pointerup', onPointerUp);
 
+  function updateStatus() {
+    const side = turn() === 'w' ? 'White' : 'Black';
+    let text;
+    if (inCheckmate()) {
+      text = 'Checkmate';
+    } else if (inStalemate()) {
+      text = 'Stalemate';
+    } else {
+      text = `${side} to move` + (inCheck() ? ' — Check' : '');
+    }
+    statusCb?.(text);
+  }
+
+  function reset() {
+    selected = null;
+    startSquare = null;
+    dragging = false;
+    currentMoves = [];
+    highlighter.clear();
+    lastMove.clear();
+    updateStatus();
+  }
+
   initRules();
   updateStatus();
-}
 
-function updateStatus() {
-  const side = turn() === 'w' ? 'White' : 'Black';
-  if (inCheckmate()) {
-    console.log('Checkmate');
-  } else if (inStalemate()) {
-    console.log('Stalemate');
-  } else {
-    const status = `${side} to move` + (inCheck() ? ' (check)' : '');
-    console.log(status);
-  }
+  return { reset, updateStatus };
 }
 
