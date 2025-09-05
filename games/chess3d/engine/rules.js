@@ -51,3 +51,7 @@ export function inStalemate() {
 export function historySAN() {
   return game?.history() ?? [];
 }
+
+export function history() {
+  return game?.history({ verbose: true }) ?? [];
+}

@@ -1,7 +1,8 @@
 import * as THREE from './lib/three.module.js';
 import { squareToPosition, positionToSquare } from './board.js';
-import { listPieces, getPieceBySquare, movePiece } from './pieces.js';
+import { listPieces, getPieceBySquare, movePiece, capturePiece } from './pieces.js';
 import { initHighlight } from './ui/highlight.js';
+import { initLastMove } from './ui/lastMove.js';
 import {
   init as initRules,
   getLegalMoves,
@@ -14,6 +15,7 @@ import {
 
 export function initInput({ scene, camera, renderer, controls }) {
   const highlighter = initHighlight(scene);
+  const lastMove = initLastMove(scene);
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -63,10 +65,9 @@ export function initInput({ scene, camera, renderer, controls }) {
       }
       const victim = getPieceBySquare(captureSquare);
       if (victim && victim.color !== selected.color) {
-        victim.mesh.parent.remove(victim.mesh);
-        victim.square = null;
+        capturePiece(victim.id);
       }
-      movePiece(selected.id, result.to, false);
+      movePiece(selected.id, result.to);
       if (result.flags && (result.flags.includes('k') || result.flags.includes('q'))) {
         const rookFrom = result.flags.includes('k')
           ? (selected.color === 'w' ? 'h1' : 'h8')
@@ -75,11 +76,12 @@ export function initInput({ scene, camera, renderer, controls }) {
           ? (selected.color === 'w' ? 'f1' : 'f8')
           : (selected.color === 'w' ? 'd1' : 'd8');
         const rook = getPieceBySquare(rookFrom);
-        if (rook) movePiece(rook.id, rookTo, false);
+        if (rook) movePiece(rook.id, rookTo);
       }
       if (result.promotion) {
         selected.type = result.promotion.toUpperCase();
       }
+      lastMove.fromHistory();
       updateStatus();
     } else {
       movePiece(selected.id, startSquare, false);
