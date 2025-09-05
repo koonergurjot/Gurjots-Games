@@ -248,7 +248,7 @@ export function getPieceBySquare(square) {
 
 export function movePiece(id, targetSquare, animate = true) {
   const piece = pieces.get(id);
-  if (!piece || !boardHelpers) return;
+  if (!piece || !boardHelpers) return Promise.resolve();
   const pos = boardHelpers.squareToPosition(targetSquare);
   piece.square = targetSquare;
   const mesh = piece.mesh;
@@ -257,17 +257,22 @@ export function movePiece(id, targetSquare, animate = true) {
     const end = new THREE.Vector3(pos.x, 0, pos.z);
     const duration = 250;
     const startTime = performance.now();
-    function step(now) {
-      const t = Math.min((now - startTime) / duration, 1);
-      mesh.position.lerpVectors(start, end, t);
-      mesh.position.y = Math.sin(Math.PI * t) * 0.5;
-      if (t < 1) requestAnimationFrame(step);
-      else mesh.position.y = 0;
-    }
-    requestAnimationFrame(step);
-  } else {
-    mesh.position.set(pos.x, 0, pos.z);
+    return new Promise((resolve) => {
+      function step(now) {
+        const t = Math.min((now - startTime) / duration, 1);
+        mesh.position.lerpVectors(start, end, t);
+        mesh.position.y = Math.sin(Math.PI * t) * 0.5;
+        if (t < 1) requestAnimationFrame(step);
+        else {
+          mesh.position.y = 0;
+          resolve();
+        }
+      }
+      requestAnimationFrame(step);
+    });
   }
+  mesh.position.set(pos.x, 0, pos.z);
+  return Promise.resolve();
 }
 
 export function listPieces() {
@@ -276,7 +281,7 @@ export function listPieces() {
 
 export function capturePiece(id, animate = true) {
   const piece = pieces.get(id);
-  if (!piece) return;
+  if (!piece) return Promise.resolve();
   piece.square = null;
   const mesh = piece.mesh;
   const mats = [];
@@ -290,17 +295,22 @@ export function capturePiece(id, animate = true) {
   if (animate) {
     const startTime = performance.now();
     const duration = 250;
-    function fade(now) {
-      const t = Math.min((now - startTime) / duration, 1);
-      mesh.scale.setScalar(1 - t);
-      mats.forEach(m => m.opacity = 1 - t);
-      if (t < 1) requestAnimationFrame(fade);
-      else mesh.parent?.remove(mesh);
-    }
-    requestAnimationFrame(fade);
-  } else {
-    mesh.parent?.remove(mesh);
+    return new Promise((resolve) => {
+      function fade(now) {
+        const t = Math.min((now - startTime) / duration, 1);
+        mesh.scale.setScalar(1 - t);
+        mats.forEach(m => m.opacity = 1 - t);
+        if (t < 1) requestAnimationFrame(fade);
+        else {
+          mesh.parent?.remove(mesh);
+          resolve();
+        }
+      }
+      requestAnimationFrame(fade);
+    });
   }
+  mesh.parent?.remove(mesh);
+  return Promise.resolve();
 }
 
 export function resetPieces(scene) {
