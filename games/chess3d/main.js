@@ -1,9 +1,11 @@
 import * as THREE from './lib/three.module.js';
 import { OrbitControls } from './lib/OrbitControls.js';
 import { createBoard, squareToPosition } from './board.js';
-import { placeInitialPosition } from './pieces.js';
+import { placeInitialPosition, resetPieces } from './pieces.js';
 import { initCoords, setCoordsVisible } from './ui/coords.js';
 import { initInput } from './input.js';
+import { init as initRules } from './engine/rules.js';
+import { initHUD } from './ui/hud.js';
 
 console.log('[chess3d] boot');
 
@@ -44,9 +46,6 @@ placeInitialPosition(scene, { squareToPosition });
 
 // coordinate labels
 initCoords(stage);
-setCoordsVisible(true);
-// expose toggle placeholder for future HUD
-window.setCoordsVisible = setCoordsVisible;
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -55,7 +54,42 @@ controls.minDistance = 3;
 controls.maxDistance = 20;
 controls.maxPolarAngle = Math.PI / 2;
 
-initInput({ scene, camera, renderer, controls });
+let input;
+let flipped = false;
+
+function flipBoard() {
+  flipped = !flipped;
+  const start = camera.position.clone();
+  const end = flipped ? new THREE.Vector3(-5, 5, -5) : new THREE.Vector3(5, 5, 5);
+  const startTime = performance.now();
+  const duration = 500;
+  function animate(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    camera.position.lerpVectors(start, end, t);
+    camera.lookAt(0, 0, 0);
+    controls.update();
+    if (t < 1) requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+}
+
+const hud = initHUD({
+  onNewGame: () => {
+    initRules();
+    resetPieces(scene);
+    input.reset();
+  },
+  onFlipBoard: flipBoard,
+  onToggleCoords: v => setCoordsVisible(v),
+});
+
+input = initInput({
+  scene,
+  camera,
+  renderer,
+  controls,
+  onStatus: text => hud.setStatus(text),
+});
 
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
