@@ -9,7 +9,7 @@
       "2D"
     ],
     "new": false,
-    "emoji": "\ud83c\udfd3",
+    "emoji": "🏓",
     "addedAt": "2025-08-20"
   },
   {
@@ -22,7 +22,7 @@
       "2D"
     ],
     "new": true,
-    "emoji": "\ud83d\udc0d",
+    "emoji": "🐍",
     "addedAt": "2025-08-25"
   },
   {
@@ -35,7 +35,7 @@
       "2D"
     ],
     "new": true,
-    "emoji": "\ud83e\udde9",
+    "emoji": "🧩",
     "addedAt": "2025-08-26"
   },
   {
@@ -48,13 +48,23 @@
       "2D"
     ],
     "new": true,
-    "emoji": "\ud83e\uddf1",
+    "emoji": "🧱",
     "addedAt": "2025-08-26"
   },
   {
     "id": "chess",
-    "title": "Chess",
+    "title": "Chess (2D)",
     "path": "games/chess/index.html"
+  },
+  {
+    "id": "chess3d",
+    "title": "Chess 3D (Local)",
+    "path": "games/chess3d/index.html",
+    "new": true,
+    "tags": [
+      "3D",
+      "offline"
+    ]
   },
   {
     "id": "g2048",
