@@ -2,100 +2,15 @@ import * as THREE from './lib/three.module.js';
 import { squareToPosition, positionToSquare } from './board.js';
 import { listPieces, getPieceBySquare, movePiece } from './pieces.js';
 import { initHighlight } from './ui/highlight.js';
-
-const FILES = 'abcdefgh';
-
-function squareToCoords(square) {
-  return { file: FILES.indexOf(square[0]), rank: parseInt(square[1], 10) - 1 };
-}
-
-function coordsToSquare(file, rank) {
-  if (file < 0 || file > 7 || rank < 0 || rank > 7) return null;
-  return FILES[file] + (rank + 1);
-}
-
-function buildOccupancy() {
-  const map = new Map();
-  for (const p of listPieces()) {
-    if (!p.square) continue;
-    map.set(p.square, p);
-  }
-  return map;
-}
-
-function computeMoves(piece) {
-  const occ = buildOccupancy();
-  const moves = { candidates: [], blocked: [] };
-  const { file, rank } = squareToCoords(piece.square);
-
-  function addSq(f, r, type = 'candidate') {
-    const sq = coordsToSquare(f, r);
-    if (!sq) return false;
-    const other = occ.get(sq);
-    if (!other) {
-      if (type === 'candidate') moves.candidates.push(sq);
-      return true;
-    }
-    if (other.color === piece.color) {
-      moves.blocked.push(sq);
-    } else {
-      moves.candidates.push(sq);
-    }
-    return false;
-  }
-
-  function slide(dirs) {
-    for (const [df, dr] of dirs) {
-      let f = file + df;
-      let r = rank + dr;
-      while (addSq(f, r)) {
-        f += df;
-        r += dr;
-      }
-    }
-  }
-
-  switch (piece.type) {
-    case 'P': {
-      const dir = piece.color === 'w' ? 1 : -1;
-      const ahead = coordsToSquare(file, rank + dir);
-      if (ahead) {
-        const occAhead = occ.get(ahead);
-        if (!occAhead) moves.candidates.push(ahead); else moves.blocked.push(ahead);
-      }
-      const caps = [coordsToSquare(file - 1, rank + dir), coordsToSquare(file + 1, rank + dir)];
-      for (const sq of caps) {
-        if (!sq) continue;
-        const p = occ.get(sq);
-        if (p) {
-          if (p.color !== piece.color) moves.candidates.push(sq); else moves.blocked.push(sq);
-        }
-      }
-      break;
-    }
-    case 'R':
-      slide([[1,0],[-1,0],[0,1],[0,-1]]);
-      break;
-    case 'B':
-      slide([[1,1],[1,-1],[-1,1],[-1,-1]]);
-      break;
-    case 'Q':
-      slide([[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]);
-      break;
-    case 'K': {
-      const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
-      for (const [df, dr] of dirs) addSq(file + df, rank + dr);
-      break;
-    }
-    case 'N': {
-      const jumps = [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
-      for (const [df, dr] of jumps) addSq(file + df, rank + dr);
-      break;
-    }
-  }
-
-  return moves;
-}
+import {
+  init as initRules,
+  getLegalMoves,
+  move as makeMove,
+  turn,
+  inCheck,
+  inCheckmate,
+  inStalemate,
+} from './engine/rules.js';
 
 export function initInput({ scene, camera, renderer, controls }) {
   const highlighter = initHighlight(scene);
@@ -105,7 +20,7 @@ export function initInput({ scene, camera, renderer, controls }) {
   let selected = null;
   let startSquare = null;
   let dragging = false;
-  let currentMoves = { candidates: [], blocked: [] };
+  let currentMoves = [];
 
   function setPointer(event) {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -131,22 +46,41 @@ export function initInput({ scene, camera, renderer, controls }) {
   }
 
   function highlight(piece) {
-    currentMoves = computeMoves(piece);
+    currentMoves = getLegalMoves(piece.square);
     const selectedPos = squareToPosition(piece.square);
-    const candPos = currentMoves.candidates.map(s => squareToPosition(s));
-    const blockedPos = currentMoves.blocked.map(s => squareToPosition(s));
-    highlighter.show({ selected: selectedPos, candidates: candPos, blocked: blockedPos });
+    const candPos = currentMoves.map(s => squareToPosition(s));
+    highlighter.show({ selected: selectedPos, candidates: candPos, blocked: [] });
   }
 
   function attempt(targetSquare) {
     if (!selected) return;
-    if (currentMoves.candidates.includes(targetSquare)) {
-      const victim = getPieceBySquare(targetSquare);
+    const result = makeMove({ from: startSquare, to: targetSquare, promotion: 'q' });
+    if (result) {
+      let captureSquare = targetSquare;
+      if (result.flags && result.flags.includes('e')) {
+        const dir = selected.color === 'w' ? -1 : 1;
+        captureSquare = targetSquare[0] + (parseInt(targetSquare[1], 10) + dir);
+      }
+      const victim = getPieceBySquare(captureSquare);
       if (victim && victim.color !== selected.color) {
         victim.mesh.parent.remove(victim.mesh);
         victim.square = null;
       }
-      movePiece(selected.id, targetSquare, false);
+      movePiece(selected.id, result.to, false);
+      if (result.flags && (result.flags.includes('k') || result.flags.includes('q'))) {
+        const rookFrom = result.flags.includes('k')
+          ? (selected.color === 'w' ? 'h1' : 'h8')
+          : (selected.color === 'w' ? 'a1' : 'a8');
+        const rookTo = result.flags.includes('k')
+          ? (selected.color === 'w' ? 'f1' : 'f8')
+          : (selected.color === 'w' ? 'd1' : 'd8');
+        const rook = getPieceBySquare(rookFrom);
+        if (rook) movePiece(rook.id, rookTo, false);
+      }
+      if (result.promotion) {
+        selected.type = result.promotion.toUpperCase();
+      }
+      updateStatus();
     } else {
       movePiece(selected.id, startSquare, false);
     }
@@ -164,7 +98,7 @@ export function initInput({ scene, camera, renderer, controls }) {
       return;
     }
     const piece = pickPiece(event);
-    if (piece) {
+    if (piece && piece.color === turn()) {
       selected = piece;
       startSquare = piece.square;
       highlight(piece);
@@ -194,5 +128,20 @@ export function initInput({ scene, camera, renderer, controls }) {
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
   renderer.domElement.addEventListener('pointermove', onPointerMove);
   renderer.domElement.addEventListener('pointerup', onPointerUp);
+
+  initRules();
+  updateStatus();
+}
+
+function updateStatus() {
+  const side = turn() === 'w' ? 'White' : 'Black';
+  if (inCheckmate()) {
+    console.log('Checkmate');
+  } else if (inStalemate()) {
+    console.log('Stalemate');
+  } else {
+    const status = `${side} to move` + (inCheck() ? ' (check)' : '');
+    console.log(status);
+  }
 }
 
