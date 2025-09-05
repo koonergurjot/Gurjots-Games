@@ -1,13 +1,29 @@
+const engine = new Worker(new URL('./stockfish.js', import.meta.url), { type: 'classic' });
 
-/**
- * Placeholder worker. Replace with real Stockfish integration (see Phase 10a).
- */
-self.addEventListener('message', (ev)=>{
-  const data = ev.data || {};
-  if (data.type === 'go'){
-    // Fake engine: wait briefly and "pass"
-    setTimeout(()=>{
-      self.postMessage({ type:'bestmove', uci:null });
-    }, 200);
+engine.onmessage = (e) => {
+  const line = e.data;
+  if (typeof line === 'string') {
+    if (line.startsWith('bestmove')) {
+      const uci = line.split(' ')[1] ?? null;
+      postMessage({ type: 'bestmove', uci: (uci && uci !== '(none)' && uci !== '0000') ? uci : null });
+    } else if (line === 'readyok') {
+      postMessage({ type: 'ready' });
+    }
   }
-});
+};
+
+engine.postMessage('uci');
+engine.postMessage('isready');
+
+onmessage = (e) => {
+  const data = e.data || {};
+  if (data.type === 'position') {
+    engine.postMessage(`position fen ${data.fen}`);
+  } else if (data.type === 'go') {
+    if (typeof data.skill === 'number') {
+      engine.postMessage(`setoption name Skill Level value ${data.skill}`);
+    }
+    const depth = typeof data.depth === 'number' ? data.depth : '';
+    engine.postMessage(`go${depth ? ' depth ' + depth : ''}`);
+  }
+};
