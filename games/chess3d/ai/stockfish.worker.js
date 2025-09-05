@@ -1,3 +1,4 @@
+// Web Worker wrapper around the Stockfish engine.
 const engine = new Worker(new URL('./stockfish.js', import.meta.url), { type: 'classic' });
 
 engine.onmessage = (e) => {
