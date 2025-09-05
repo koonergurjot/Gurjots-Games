@@ -25,6 +25,7 @@ export function initInput({ scene, camera, renderer, controls, onStatus } = {}) 
   let dragging = false;
   let currentMoves = [];
   const statusCb = onStatus;
+  let enabled = true;
 
   function setPointer(event) {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -103,6 +104,7 @@ export function initInput({ scene, camera, renderer, controls, onStatus } = {}) 
   }
 
   function onPointerDown(event) {
+    if (!enabled) return;
     if (selected && event.pointerType !== 'mouse' && !dragging) {
       setPointer(event);
       const { square } = rayToSquare();
@@ -122,14 +124,14 @@ export function initInput({ scene, camera, renderer, controls, onStatus } = {}) 
   }
 
   function onPointerMove(event) {
-    if (!dragging || !selected) return;
+    if (!enabled || !dragging || !selected) return;
     setPointer(event);
     const { position } = rayToSquare();
     selected.mesh.position.set(position.x, 0, position.z);
   }
 
   function onPointerUp(event) {
-    if (!selected) return;
+    if (!enabled || !selected) return;
     if (dragging) {
       setPointer(event);
       const { square } = rayToSquare();
@@ -168,6 +170,10 @@ export function initInput({ scene, camera, renderer, controls, onStatus } = {}) 
   initRules();
   updateStatus();
 
-  return { reset, updateStatus };
+  function setEnabled(v) {
+    enabled = v;
+  }
+
+  return { reset, updateStatus, setEnabled };
 }
 

@@ -59,10 +59,33 @@ Object.assign(statusEl.style, {
 });
 document.body.appendChild(statusEl);
 
+const thinkingEl = document.createElement('div');
+thinkingEl.textContent = 'Engine thinking…';
+Object.assign(thinkingEl.style, {
+  position: 'absolute',
+  bottom: '12px',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  background: 'rgba(0,0,0,0.6)',
+  color: '#e6e7ea',
+  padding: '4px 8px',
+  borderRadius: '6px',
+  font: '500 14px/1 Inter,system-ui',
+  display: 'none',
+});
+document.body.appendChild(thinkingEl);
+
 // game state
 const params = new URL(location.href).searchParams;
-let mode = params.get('mode') || 'pvp'; // 'pvp' | 'ai-white' | 'ai-black'
-const difficulty = parseInt(params.get('depth') || params.get('difficulty') || '2', 10);
+const modeKey = 'chess3d:mode';
+const diffKey = 'chess3d:difficulty';
+let mode = params.get('mode') || localStorage.getItem(modeKey) || 'pvp'; // 'pvp' | 'ai-white' | 'ai-black'
+localStorage.setItem(modeKey, mode);
+let difficulty = parseInt(
+  params.get('depth') || params.get('difficulty') || localStorage.getItem(diffKey) || '2',
+  10,
+);
+localStorage.setItem(diffKey, String(difficulty));
 let isAIMove = false;
 let aiToken = 0;
 let lastHistoryLen = 0;
@@ -76,26 +99,32 @@ async function maybeAIMove() {
   if (mode === 'pvp') return;
   const aiColor = mode === 'ai-black' ? 'b' : 'w';
   if (turn() !== aiColor) return;
-  if (inCheckmate() || inStalemate()) return;
+  if (inCheckmate() || inStalemate()) {
+    invalidateSearch();
+    return;
+  }
 
   const token = ++aiToken;
   const currentFen = fen();
+  thinkingEl.style.display = 'block';
   try {
     const best = await requestBestMove(currentFen, { depth: difficulty });
     if (token !== aiToken || !best) return;
     const uci = typeof best === 'string' ? best : best.bestmove || best.move || '';
     const from = uci.slice(0, 2);
     const to = uci.slice(2, 4);
-    const promotion = uci[4];
+    let promotion = uci[4];
     const piece = getPieceBySquare(from);
     if (!piece) return;
+    const needsPromotion =
+      piece.type === 'P' &&
+      ((piece.color === 'w' && to[1] === '8') || (piece.color === 'b' && to[1] === '1'));
+    if (!promotion && needsPromotion) promotion = 'q';
 
     isAIMove = true;
+    input.setEnabled(false);
     const result = applyMove({ from, to, promotion });
-    if (!result) {
-      isAIMove = false;
-      return;
-    }
+    if (!result) return;
 
     let captureSquare = to;
     if (result.flags && result.flags.includes('e')) {
@@ -103,9 +132,10 @@ async function maybeAIMove() {
       captureSquare = to[0] + (parseInt(to[1], 10) + dir);
     }
     const victim = getPieceBySquare(captureSquare);
-    if (victim && victim.color !== piece.color) capturePiece(victim.id);
+    const anims = [];
+    if (victim && victim.color !== piece.color) anims.push(capturePiece(victim.id));
 
-    movePiece(piece.id, result.to);
+    anims.push(movePiece(piece.id, result.to));
     if (result.flags && (result.flags.includes('k') || result.flags.includes('q'))) {
       const rookFrom = result.flags.includes('k')
         ? (piece.color === 'w' ? 'h1' : 'h8')
@@ -114,12 +144,15 @@ async function maybeAIMove() {
         ? (piece.color === 'w' ? 'f1' : 'f8')
         : (piece.color === 'w' ? 'd1' : 'd8');
       const rook = getPieceBySquare(rookFrom);
-      if (rook) movePiece(rook.id, rookTo);
+      if (rook) anims.push(movePiece(rook.id, rookTo));
     }
     if (result.promotion) piece.type = result.promotion.toUpperCase();
     input.updateStatus();
+    await Promise.all(anims);
   } finally {
+    thinkingEl.style.display = 'none';
     isAIMove = false;
+    input.setEnabled(true);
   }
 }
 
@@ -147,6 +180,11 @@ const input = initInput({
   onStatus: (t) => {
     statusEl.textContent = t;
     const len = history().length;
+    if (inCheckmate() || inStalemate()) {
+      lastHistoryLen = len;
+      invalidateSearch();
+      return;
+    }
     if (!isAIMove && len !== lastHistoryLen) {
       lastHistoryLen = len;
       maybeAIMove();
@@ -155,6 +193,26 @@ const input = initInput({
     }
   },
 });
+
+function setMode(newMode) {
+  if (mode === newMode) return;
+  mode = newMode;
+  localStorage.setItem(modeKey, mode);
+  invalidateSearch();
+  input.updateStatus();
+  maybeAIMove();
+}
+
+function setDifficulty(newDepth) {
+  const nd = parseInt(newDepth, 10);
+  if (Number.isNaN(nd) || difficulty === nd) return;
+  difficulty = nd;
+  localStorage.setItem(diffKey, String(difficulty));
+  invalidateSearch();
+  maybeAIMove();
+}
+
+globalThis.chess3d = { setMode, setDifficulty, newGame: reset };
 
 globalThis.HUD?.create({ title: 'Chess 3D', onRestart: reset });
 
