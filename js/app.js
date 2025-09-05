@@ -10,7 +10,51 @@ const defaultGames=[
 const state={games:[],tags:new Set(),activeTag:null,search:"",sort:"az"};
 function setTheme(name){document.body.classList.remove("theme-retro","theme-neon","theme-minimal");if(name==="retro")document.body.classList.add("theme-retro");if(name==="neon")document.body.classList.add("theme-neon");if(name==="minimal")document.body.classList.add("theme-minimal");localStorage.setItem("gg:theme",name);}
 function hydrateUI(){$("#year").textContent=new Date().getFullYear();const saved=localStorage.getItem("gg:theme")||"default";$("#theme").value=saved;setTheme(saved);$("#theme").addEventListener("change",e=>setTheme(e.target.value));$("#search").addEventListener("input",e=>{state.search=e.target.value.toLowerCase().trim();render();});$("#sort").addEventListener("change",e=>{state.sort=e.target.value;render();});}
-function buildTagChips(){const w=$("#tagChips");w.innerHTML="";const all=document.createElement("button");all.className="chip"+(state.activeTag?"":" active");all.textContent="All";all.onclick=()=>{state.activeTag=null;render();};w.appendChild(all);[...state.tags].sort().forEach(tag=>{const b=document.createElement("button");b.className="chip"+(state.activeTag===tag?" active":"");b.textContent=tag;b.onclick=()=>{state.activeTag=(state.activeTag===tag?null:tag);render();};w.appendChild(b);});}
+function buildTagChips(){
+  const w=$("#tagChips");
+  w.innerHTML="";
+
+  const all=document.createElement("button");
+  const allActive=!state.activeTag;
+  all.className="chip"+(allActive?" active":"");
+  all.textContent="All";
+  all.setAttribute("aria-pressed",allActive?"true":"false");
+  all.onclick=()=>{
+    state.activeTag=null;
+    $$("#tagChips button").forEach(btn=>{
+      const active=btn===all;
+      btn.classList.toggle("active",active);
+      btn.setAttribute("aria-pressed",active?"true":"false");
+    });
+    render();
+  };
+  w.appendChild(all);
+
+  [...state.tags].sort().forEach(tag=>{
+    const b=document.createElement("button");
+    const active=state.activeTag===tag;
+    b.className="chip"+(active?" active":"");
+    b.textContent=tag;
+    b.setAttribute("aria-pressed",active?"true":"false");
+    b.onclick=()=>{
+      const willActivate=state.activeTag!==tag;
+      state.activeTag=willActivate?tag:null;
+      $$("#tagChips button").forEach(btn=>{
+        if(btn===all){
+          const isActive=!willActivate;
+          btn.classList.toggle("active",isActive);
+          btn.setAttribute("aria-pressed",isActive?"true":"false");
+        }else{
+          const isActive=btn===b&&willActivate;
+          btn.classList.toggle("active",isActive);
+          btn.setAttribute("aria-pressed",isActive?"true":"false");
+        }
+      });
+      render();
+    };
+    w.appendChild(b);
+  });
+}
 function skeletonCards(n=6){const grid=$("#gamesGrid");grid.innerHTML="";for(let i=0;i<n;i++){const card=document.createElement("article");card.className="card";const th=document.createElement("div");th.className="thumb skeleton";card.appendChild(th);const t=document.createElement("div");t.className="skeleton";t.style.cssText="height:18px;width:60%;margin:10px 0 8px;border-radius:6px;";card.appendChild(t);const l=document.createElement("div");l.className="skeleton";l.style.cssText="height:14px;width:90%;border-radius:6px;";card.appendChild(l);grid.appendChild(card);}}
 function particleBG(){const cvs=document.createElement('canvas');cvs.id='bgParticles';Object.assign(cvs.style,{position:'fixed',inset:0,zIndex:0,pointerEvents:'none'});document.body.prepend(cvs);const ctx=cvs.getContext('2d');let w,h,dpr,dots=[];function resize(){dpr=window.devicePixelRatio||1;w=cvs.width=innerWidth*dpr;h=cvs.height=innerHeight*dpr;cvs.style.width=innerWidth+'px';cvs.style.height=innerHeight+'px';dots=new Array(80).fill(0).map(()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*0.4*dpr,vy:(Math.random()-.5)*0.4*dpr,r:(0.6+Math.random()*1.6)*dpr}));}resize();addEventListener('resize',resize);function draw(){ctx.clearRect(0,0,w,h);ctx.fillStyle='rgba(255,255,255,0.15)';dots.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>w)p.vx*=-1;if(p.y<0||p.y>h)p.vy*=-1;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();});requestAnimationFrame(draw);}draw();}
 function getGameMetaText(id){return localStorage.getItem('gg:meta:'+id)||'';}
