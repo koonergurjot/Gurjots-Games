@@ -3,12 +3,15 @@ import * as rules from "./engine/rules.js";
 import { mountInput } from "./input.js";
 import { createPieces, placeInitialPosition, movePieceByUci } from "./pieces.js";
 import { mountHUD } from "./ui/hud.js";
+import { initEngine, requestBestMove, cancel } from "./ai/ai.js";
+import { mountModeBar, getMode, getDifficulty } from "./ui/modeBar.js";
 
 console.log('[Chess3D] booting');
 
 const stage = document.getElementById('stage');
 const statusEl = document.getElementById('status');
 const coordsEl = document.getElementById('coords');
+const thinkingEl = document.getElementById('thinking');
 stage.style.position = 'relative';
 stage.appendChild(coordsEl);
 coordsEl.style.position = 'absolute';
@@ -20,6 +23,7 @@ coordsEl.style.pointerEvents = 'none';
 
 let squareToPosition, positionToSquare, tileSize;
 let currentCamera;
+let searchToken = 0;
 
 function toggleCoords(show) {
   localStorage.setItem('chess3d.coords', show ? '1' : '0');
@@ -78,6 +82,24 @@ function updateStatus() {
   statusEl.textContent = text;
 }
 
+async function maybeAIMove(){
+  const mode = getMode();
+  const turn = rules.turn();
+  const aiTurn = (mode === 'aiw' && turn === 'b') || (mode === 'aib' && turn === 'w');
+  if (!aiTurn) return;
+  cancel();
+  const token = ++searchToken;
+  thinkingEl.hidden = false;
+  const { uci } = await requestBestMove(rules.fen(), { skill: getDifficulty(), depth: 8 + getDifficulty() });
+  thinkingEl.hidden = true;
+  if (token !== searchToken || !uci) return;
+  const res = rules.move({ from: uci.slice(0,2), to: uci.slice(2,4), promotion: uci.slice(4) });
+  if (res?.ok) {
+    await movePieceByUci(uci);
+    updateStatus();
+  }
+}
+
 function flipCamera() {
   if (!currentCamera) return;
   const startX = currentCamera.position.x;
@@ -103,9 +125,22 @@ mountHUD({
     rules.loadFEN(null);
     placeInitialPosition();
     updateStatus();
+    cancel();
+    searchToken++;
+    thinkingEl.hidden = true;
+    maybeAIMove();
   },
   onFlip: flipCamera,
   onCoords: toggleCoords,
+});
+
+mountModeBar(document.getElementById('hud'), {
+  onChange: () => {
+    cancel();
+    searchToken++;
+    thinkingEl.hidden = true;
+    maybeAIMove();
+  }
 });
 
 async function boot(){
@@ -120,6 +155,7 @@ async function boot(){
   }
 
   statusEl.textContent = 'Initializing…';
+  await initEngine();
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(
@@ -185,10 +221,12 @@ async function boot(){
       if (res?.ok) {
         await movePieceByUci(from + to);
         updateStatus();
+        maybeAIMove();
       }
     },
   });
   updateStatus();
+  maybeAIMove();
 
   function animate() {
     requestAnimationFrame(animate);
