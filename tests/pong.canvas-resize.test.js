@@ -45,6 +45,7 @@ describe('pong canvas resizing', () => {
     window.requestAnimationFrame = () => {};
 
     runScript('js/resizeCanvas.global.js');
+    window.GG = { incPlays() {}, addXP() {}, setMeta() {}, addAch() {} };
     expect(typeof window.fitCanvasToParent).toBe('function');
 
     runScript('games/pong/pong.js');

@@ -44,6 +44,17 @@ export const registry = [
 
 const toastQueue = [];
 let showing = false;
+let container;
+
+function getContainer() {
+  if (!container) {
+    container = document.createElement('div');
+    container.setAttribute('role', 'status');
+    container.setAttribute('aria-live', 'polite');
+    document.body.appendChild(container);
+  }
+  return container;
+}
 
 function queueToast(ach) {
   toastQueue.push(ach);
@@ -57,11 +68,14 @@ function showNextToast() {
   const el = document.createElement('div');
   el.className = 'ach-toast';
   el.textContent = `${ach.icon} ${ach.title}`;
-  document.body.appendChild(el);
+  getContainer().appendChild(el);
   requestAnimationFrame(() => el.classList.add('show'));
   setTimeout(() => {
     el.classList.remove('show');
-    setTimeout(() => { el.remove(); showNextToast(); }, 300);
+    setTimeout(() => {
+      el.remove();
+      showNextToast();
+    }, 300);
   }, 3000);
 }
 
