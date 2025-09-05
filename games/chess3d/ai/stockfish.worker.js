@@ -25,5 +25,7 @@ onmessage = (e) => {
     }
     const depth = typeof data.depth === 'number' ? data.depth : '';
     engine.postMessage(`go${depth ? ' depth ' + depth : ''}`);
+  } else if (data.type === 'stop') {
+    engine.postMessage('stop');
   }
 };
