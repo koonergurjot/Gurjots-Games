@@ -3,6 +3,7 @@ import { squareToPosition, positionToSquare } from './board.js';
 import { listPieces, getPieceBySquare, movePiece, capturePiece } from './pieces.js';
 import { initHighlight } from './ui/highlight.js';
 import { initLastMove } from './ui/lastMove.js';
+import { showPromotionModal } from './ui/promotionModal.js';
 import {
   init as initRules,
   getLegalMoves,
@@ -55,9 +56,17 @@ export function initInput({ scene, camera, renderer, controls, onStatus } = {}) 
     highlighter.show({ selected: selectedPos, candidates: candPos, blocked: [] });
   }
 
-  function attempt(targetSquare) {
+  async function attempt(targetSquare) {
     if (!selected) return;
-    const result = makeMove({ from: startSquare, to: targetSquare, promotion: 'q' });
+    let promotion = 'q';
+    const needsPromotion = selected.type === 'P' && (
+      (selected.color === 'w' && targetSquare[1] === '8') ||
+      (selected.color === 'b' && targetSquare[1] === '1')
+    );
+    if (needsPromotion) {
+      promotion = await showPromotionModal(selected.color);
+    }
+    const result = makeMove({ from: startSquare, to: targetSquare, promotion });
     if (result) {
       let captureSquare = targetSquare;
       if (result.flags && result.flags.includes('e')) {
@@ -134,15 +143,16 @@ export function initInput({ scene, camera, renderer, controls, onStatus } = {}) 
 
   function updateStatus() {
     const side = turn() === 'w' ? 'White' : 'Black';
-    let text;
     if (inCheckmate()) {
-      text = 'Checkmate';
-    } else if (inStalemate()) {
-      text = 'Stalemate';
-    } else {
-      text = `${side} to move` + (inCheck() ? ' — Check' : '');
+      const winner = side === 'w' ? 'Black' : 'White';
+      statusCb?.(`Checkmate — ${winner} wins`);
+      return;
     }
-    statusCb?.(text);
+    if (inStalemate()) {
+      statusCb?.('Stalemate');
+      return;
+    }
+    statusCb?.(`${side} to move${inCheck() ? ' — Check' : ''}`);
   }
 
   function reset() {
