@@ -3,6 +3,7 @@
  * Chess 3D (Local) bootstrap.
  * This file gracefully degrades when vendor libs are missing.
  */
+import { initEngine as initAI, requestBestMove, cancel as cancelAI } from './ai/ai.js';
 const stage = document.getElementById('stage');
 const statusEl = document.getElementById('status');
 const warnEl = document.getElementById('warning');
@@ -10,8 +11,11 @@ const thinkingEl = document.getElementById('thinking');
 
 statusEl.textContent = 'Loading renderer…';
 
-let THREE, Controls, scene, camera, renderer, controls, boardHelpers, rules;
+let THREE, Controls, scene, camera, renderer, controls, boardHelpers, rules, pieces;
 let input;
+let vsAI = false;
+const aiSide = 'b';
+const aiOpts = { skill: 4, depth: 10 };
 
 function showWarn(msg){
   warnEl.hidden = false;
@@ -70,7 +74,7 @@ async function boot(){
   boardHelpers = await board.createBoard(scene, THREE);
 
   // Pieces
-  const pieces = await import('./pieces.js');
+  pieces = await import('./pieces.js');
   await pieces.createPieces(scene, THREE, boardHelpers);
   await pieces.placeInitialPosition();
 
@@ -101,6 +105,7 @@ async function boot(){
       if (res && res.ok){
         await pieces.movePieceByUci(`${from}${to}${promotion?("=" + promotion):""}`);
         updateStatus();
+        await maybeAIMove();
       }
     }
   });
@@ -125,11 +130,29 @@ function updateStatus(){
 }
 
 function newGame(){
+  cancelAI();
+  thinkingEl.style.display = 'none';
   if (rules && rules.ready) {
     rules.loadFEN(null);
     import('./pieces.js').then(p => p.placeInitialPosition());
     updateStatus();
   }
+}
+
+function undo(){
+  cancelAI();
+  thinkingEl.style.display = 'none';
+  // TODO: implement piece undo visuals
+  if (rules && rules.ready) {
+    rules.undo();
+    updateStatus();
+  }
+}
+
+function setMode(m){
+  cancelAI();
+  thinkingEl.style.display = 'none';
+  vsAI = (m === 'ai');
 }
 
 function flipCamera(){
@@ -162,4 +185,32 @@ function loop(){
   if (renderer && scene && camera) renderer.render(scene, camera);
 }
 
+async function maybeAIMove(){
+  if (!vsAI || !rules || !rules.ready) return;
+  if (rules.turn() !== aiSide) return;
+  thinkingEl.style.display = 'block';
+  try{
+    await initAI();
+    const { uci } = await requestBestMove(rules.fen(), aiOpts);
+    thinkingEl.style.display = 'none';
+    if (uci){
+      const from = uci.slice(0,2);
+      const to = uci.slice(2,4);
+      const promotion = uci.includes('=') ? uci.slice(5) : undefined;
+      const res = rules.move({ from, to, promotion });
+      if (res && res.ok){
+        await pieces.movePieceByUci(uci);
+        updateStatus();
+      }
+    }
+  } catch (e){
+    thinkingEl.style.display = 'none';
+    console.warn('[Chess3D] AI move failed', e);
+  }
+}
+
 boot();
+
+// expose helpers for potential UI controls
+window.__chess3dUndo = undo;
+window.__chess3dSetMode = setMode;
