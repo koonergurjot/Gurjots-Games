@@ -1,6 +1,7 @@
 import * as THREE from './lib/three.module.js';
 import { OrbitControls } from './lib/OrbitControls.js';
-import { createBoard } from './board.js';
+import { createBoard, squareToPosition } from './board.js';
+import { placeInitialPosition } from './pieces.js';
 import { initCoords, setCoordsVisible } from './ui/coords.js';
 
 console.log('[chess3d] boot');
@@ -38,6 +39,7 @@ scene.add(dirLight);
 
 // board
 createBoard(scene);
+placeInitialPosition(scene, { squareToPosition });
 
 // coordinate labels
 initCoords(stage);
