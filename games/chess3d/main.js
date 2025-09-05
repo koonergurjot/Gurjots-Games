@@ -2,6 +2,7 @@ import { createBoard } from "./board.js";
 import * as rules from "./engine/rules.js";
 import { mountInput } from "./input.js";
 import { createPieces, placeInitialPosition, movePieceByUci } from "./pieces.js";
+import { mountHUD } from "./ui/hud.js";
 
 console.log('[Chess3D] booting');
 
@@ -18,8 +19,10 @@ coordsEl.style.height = '100%';
 coordsEl.style.pointerEvents = 'none';
 
 let squareToPosition, positionToSquare, tileSize;
+let currentCamera;
 
 function toggleCoords(show) {
+  localStorage.setItem('chess3d.coords', show ? '1' : '0');
   if (show) {
     coordsEl.hidden = false;
     coordsEl.innerHTML = '';
@@ -75,6 +78,36 @@ function updateStatus() {
   statusEl.textContent = text;
 }
 
+function flipCamera() {
+  if (!currentCamera) return;
+  const startX = currentCamera.position.x;
+  const startZ = currentCamera.position.z;
+  const endX = -startX;
+  const endZ = -startZ;
+  const y = currentCamera.position.y;
+  const duration = 500;
+  const startTime = performance.now();
+  function animate(time) {
+    const t = Math.min((time - startTime) / duration, 1);
+    currentCamera.position.x = startX + (endX - startX) * t;
+    currentCamera.position.z = startZ + (endZ - startZ) * t;
+    currentCamera.position.y = y;
+    currentCamera.lookAt(0, 0, 0);
+    if (t < 1) requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+}
+
+mountHUD({
+  onNew: () => {
+    rules.loadFEN(null);
+    placeInitialPosition();
+    updateStatus();
+  },
+  onFlip: flipCamera,
+  onCoords: toggleCoords,
+});
+
 async function boot(){
   let THREE, Controls;
   try {
@@ -98,6 +131,7 @@ async function boot(){
   );
   camera.position.set(6, 10, 6);
   camera.lookAt(0, 0, 0);
+  currentCamera = camera;
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -131,6 +165,8 @@ async function boot(){
   const helpers = await createBoard(scene, THREE);
   ({ squareToPosition, positionToSquare, tileSize } = helpers);
   toggleCoords(true);
+  const savedCoords = localStorage.getItem('chess3d.coords');
+  if (savedCoords !== null) toggleCoords(savedCoords === '1');
   statusEl.textContent = 'Board ready';
 
   await rules.init();
