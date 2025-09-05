@@ -1,7 +1,69 @@
+import { createBoard } from "./board.js";
+
 console.log('[Chess3D] booting');
 
 const stage = document.getElementById('stage');
 const statusEl = document.getElementById('status');
+const coordsEl = document.getElementById('coords');
+stage.style.position = 'relative';
+stage.appendChild(coordsEl);
+coordsEl.style.position = 'absolute';
+coordsEl.style.left = '0';
+coordsEl.style.top = '0';
+coordsEl.style.width = '100%';
+coordsEl.style.height = '100%';
+coordsEl.style.pointerEvents = 'none';
+
+let squareToPosition, positionToSquare, tileSize;
+
+function toggleCoords(show) {
+  if (show) {
+    coordsEl.hidden = false;
+    coordsEl.innerHTML = '';
+    const files = 'ABCDEFGH';
+    const ranks = '12345678';
+
+    const top = document.createElement('div');
+    top.style.position = 'absolute';
+    top.style.top = '0';
+    top.style.left = '0';
+    top.style.right = '0';
+    top.style.display = 'flex';
+    top.style.justifyContent = 'space-between';
+    files.split('').forEach((ch) => {
+      const span = document.createElement('span');
+      span.textContent = ch;
+      top.appendChild(span);
+    });
+    const bottom = top.cloneNode(true);
+    bottom.style.top = '';
+    bottom.style.bottom = '0';
+    coordsEl.appendChild(top);
+    coordsEl.appendChild(bottom);
+
+    const left = document.createElement('div');
+    left.style.position = 'absolute';
+    left.style.top = '0';
+    left.style.bottom = '0';
+    left.style.left = '0';
+    left.style.display = 'flex';
+    left.style.flexDirection = 'column';
+    left.style.justifyContent = 'space-between';
+    ranks.split('').forEach((ch) => {
+      const span = document.createElement('span');
+      span.textContent = ch;
+      left.appendChild(span);
+    });
+    const right = left.cloneNode(true);
+    right.style.left = '';
+    right.style.right = '0';
+    coordsEl.appendChild(left);
+    coordsEl.appendChild(right);
+  } else {
+    coordsEl.hidden = true;
+    coordsEl.innerHTML = '';
+  }
+}
 
 async function boot(){
   let THREE, Controls;
@@ -55,6 +117,11 @@ async function boot(){
   scene.add(dir);
 
   statusEl.textContent = 'Scene ready';
+
+  const helpers = await createBoard(scene, THREE);
+  ({ squareToPosition, positionToSquare, tileSize } = helpers);
+  toggleCoords(true);
+  statusEl.textContent = 'Board ready';
 
   function animate() {
     requestAnimationFrame(animate);
