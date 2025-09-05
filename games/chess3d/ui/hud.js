@@ -25,3 +25,21 @@ export function mountHUD({ onNew, onFlip, onCoords }) {
   hud.appendChild(btnFlip);
   hud.appendChild(btnCoords);
 }
+
+export function addGameButtons({ onResign, onDraw } = {}) {
+  const hud = document.getElementById('hud');
+  const btnResign = document.createElement('button');
+  btnResign.textContent = 'Resign';
+  if (onResign) btnResign.onclick = onResign;
+
+  const btnDraw = document.createElement('button');
+  btnDraw.textContent = 'Offer Draw';
+  btnDraw.onclick = () => {
+    if (confirm('Accept draw?')) {
+      if (onDraw) onDraw();
+    }
+  };
+
+  hud.appendChild(btnResign);
+  hud.appendChild(btnDraw);
+}

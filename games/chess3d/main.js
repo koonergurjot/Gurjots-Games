@@ -237,3 +237,102 @@ async function boot(){
 }
 
 boot();
+
+let gameOver = false;
+let rebuilding = false;
+let clockPaused = false;
+let clocks;
+let moveList;
+
+function endGame(text){
+  gameOver = true;
+  stage.style.pointerEvents = 'none';
+  cancel();
+  searchToken++;
+  thinkingEl.hidden = true;
+  if (text) statusEl.textContent = text;
+}
+
+const origMaybeAIMove = maybeAIMove;
+maybeAIMove = async function(){
+  if (gameOver) return;
+  await origMaybeAIMove();
+  moveList?.setIndex(rules.historySAN().length);
+};
+
+const origRulesMove = rules.move;
+rules.move = function(opts){
+  if (gameOver) return { ok: false };
+  if (rebuilding) return origRulesMove(opts);
+  const res = origRulesMove(opts);
+  if (res?.ok){
+    moveList?.refresh();
+    moveList?.setIndex(rules.historySAN().length);
+    if (clockPaused){ clocks?.resume(); clockPaused = false; }
+    clocks?.startTurn(rules.turn());
+    if (rules.inCheckmate()) endGame(`${rules.turn()==='w'?'Black':'White'} wins by checkmate`);
+    else if (rules.inStalemate()) endGame('Draw by stalemate');
+  }
+  return res;
+};
+
+async function jumpToPly(ply){
+  rebuilding = true;
+  clockPaused = true;
+  clocks?.pause();
+  cancel();
+  searchToken++;
+  thinkingEl.hidden = true;
+  const { default: Chess } = await import('./engine/chess.min.js');
+  const temp = new Chess();
+  const moves = rules.historySAN();
+  rules.loadFEN(null);
+  await placeInitialPosition();
+  for (let i = 0; i < ply; i++) {
+    const m = temp.move(moves[i]);
+    if (!m) break;
+    origRulesMove({ from: m.from, to: m.to, promotion: m.promotion });
+    await movePieceByUci(m.from + m.to + (m.promotion || ''));
+  }
+  updateStatus();
+  moveList?.setIndex(ply);
+  moveList?.refresh();
+  rebuilding = false;
+  gameOver = false;
+  stage.style.pointerEvents = 'auto';
+}
+
+import('./ui/clocks.js').then(({ mountClocks }) => {
+  clocks = mountClocks(document.getElementById('hud'), {
+    onFlag: (side) => {
+      const winner = side === 'w' ? 'Black' : 'White';
+      endGame(`${winner} wins on time`);
+    },
+  });
+});
+
+import('./ui/movelist.js').then(({ mountMoveList }) => {
+  moveList = mountMoveList(document.getElementById('hud'), { onJump: jumpToPly });
+});
+
+import('./ui/hud.js').then(({ addGameButtons }) => {
+  addGameButtons({
+    onResign: () => {
+      const loser = rules.turn();
+      const winner = loser === 'w' ? 'Black' : 'White';
+      endGame(`${winner} wins by resignation`);
+    },
+    onDraw: () => endGame('Draw agreed'),
+  });
+  const hud = document.getElementById('hud');
+  const btnNew = hud && hud.querySelector('button');
+  if (btnNew) {
+    btnNew.addEventListener('click', () => {
+      gameOver = false;
+      stage.style.pointerEvents = 'auto';
+      clocks?.reset();
+      moveList?.refresh();
+      moveList?.setIndex(rules.historySAN().length);
+    });
+  }
+});
