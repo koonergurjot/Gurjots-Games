@@ -3,6 +3,7 @@ import { OrbitControls } from './lib/OrbitControls.js';
 import { createBoard, squareToPosition } from './board.js';
 import { placeInitialPosition } from './pieces.js';
 import { initCoords, setCoordsVisible } from './ui/coords.js';
+import { initInput } from './input.js';
 
 console.log('[chess3d] boot');
 
@@ -53,6 +54,8 @@ controls.dampingFactor = 0.05;
 controls.minDistance = 3;
 controls.maxDistance = 20;
 controls.maxPolarAngle = Math.PI / 2;
+
+initInput({ scene, camera, renderer, controls });
 
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
