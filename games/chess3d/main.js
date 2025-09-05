@@ -1,5 +1,7 @@
 import * as THREE from './lib/three.module.js';
 import { OrbitControls } from './lib/OrbitControls.js';
+import { createBoard } from './board.js';
+import { initCoords, setCoordsVisible } from './ui/coords.js';
 
 console.log('[chess3d] boot');
 
@@ -33,6 +35,15 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(5, 10, 7.5);
 dirLight.castShadow = true;
 scene.add(dirLight);
+
+// board
+createBoard(scene);
+
+// coordinate labels
+initCoords(stage);
+setCoordsVisible(true);
+// expose toggle placeholder for future HUD
+window.setCoordsVisible = setCoordsVisible;
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
