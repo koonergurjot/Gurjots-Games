@@ -4,6 +4,7 @@
  */
 let THREERef, sceneRef, helpersRef;
 const pieces = new Map(); // id -> {mesh, square, type, color}
+let currentPieceStyle = 'classic';
 
 export async function createPieces(scene, THREE, helpers){
   THREERef = THREE; sceneRef = scene; helpersRef = helpers;
@@ -22,6 +23,7 @@ export async function placeInitialPosition(){
     spawn(back[f],'w', fileRankToSquare(f,0));
     spawn(back[f],'b', fileRankToSquare(f,7));
   }
+  setPieceStyle(currentPieceStyle);
 }
 
 export function listPieces(){
@@ -126,3 +128,22 @@ async function animateTo(mesh, target){
 }
 
 function fileRankToSquare(f,r){ return String.fromCharCode(97+f) + (r+1); }
+
+export function setPieceStyle(style){
+  if (!THREERef) return;
+  currentPieceStyle = style;
+  const T = THREERef;
+  const styles = {
+    classic: (c)=> new T.MeshStandardMaterial({ color: c==='w'?0xeeeeee:0x222222, metalness:0.2, roughness:0.6 }),
+    metal: (c)=> new T.MeshStandardMaterial({ color: c==='w'?0xdddddd:0x333333, metalness:1, roughness:0.2 }),
+    glass: (c)=> new T.MeshPhysicalMaterial({ color: c==='w'?0xffffff:0x444444, metalness:0, roughness:0, transparent:true, opacity:0.4, transmission:1 })
+  };
+  for (const p of pieces.values()){
+    const mat = (styles[style]||styles.classic)(p.color);
+    p.mesh.traverse(ch=>{ if (ch.isMesh) ch.material = mat; });
+  }
+}
+
+export function getPieceStyle(){
+  return currentPieceStyle;
+}

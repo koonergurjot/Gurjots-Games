@@ -5,6 +5,8 @@ import { createPieces, placeInitialPosition, movePieceByUci } from "./pieces.js"
 import { mountHUD } from "./ui/hud.js";
 import { initEngine, requestBestMove, cancel } from "./ai/ai.js";
 import { mountModeBar, getMode, getDifficulty } from "./ui/modeBar.js";
+import { mountThemePicker } from "./ui/themePicker.js";
+import { mountCameraPresets } from "./ui/cameraPresets.js";
 
 console.log('[Chess3D] booting');
 
@@ -196,6 +198,8 @@ async function boot(){
   controls.dampingFactor = 0.08;
   controls.maxPolarAngle = Math.PI * 0.49;
 
+  mountCameraPresets(document.getElementById('hud'), camera, controls);
+
   const amb = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(amb);
   const dir = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -215,6 +219,7 @@ async function boot(){
   await rules.init();
   await createPieces(scene, THREE, helpers);
   await placeInitialPosition();
+  mountThemePicker(document.getElementById('hud'));
   mountInput({
     THREE,
     scene,

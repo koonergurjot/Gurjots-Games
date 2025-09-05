@@ -2,7 +2,13 @@
 /**
  * Creates an 8x8 board at y=0. Provides helpers to map algebraic squares to positions.
  */
+let tiles = [];
+let rim;
+let THREERef;
+
 export async function createBoard(scene, THREE){
+  THREERef = THREE;
+  tiles = [];
   const group = new THREE.Group();
   const tileSize = 1;
   const half = 4 * tileSize;
@@ -18,6 +24,8 @@ export async function createBoard(scene, THREE){
       mesh.receiveShadow = true;
       mesh.position.set(-half + f*tileSize + tileSize/2, 0, -half + r*tileSize + tileSize/2);
       mesh.userData.square = fileRankToSquare(f, r);
+      mesh.userData.isLight = isLight;
+      tiles.push(mesh);
       group.add(mesh);
     }
   }
@@ -25,7 +33,7 @@ export async function createBoard(scene, THREE){
   // simple rim
   const rimGeom = new THREE.BoxGeometry(8*tileSize+0.4, 0.08, 8*tileSize+0.4);
   const rimMat = new THREE.MeshStandardMaterial({ color: 0x2b3140 });
-  const rim = new THREE.Mesh(rimGeom, rimMat);
+  rim = new THREE.Mesh(rimGeom, rimMat);
   rim.position.y = -0.07;
   rim.receiveShadow = true;
   group.add(rim);
@@ -48,6 +56,42 @@ export async function createBoard(scene, THREE){
     }
   };
   return helpers;
+}
+
+export function setBoardTheme(theme){
+  if (!THREERef) return;
+  const T = THREERef;
+  const themes = {
+    wood: {
+      light: 0xdab893,
+      dark: 0x8b5a2b,
+      rim: 0x5a3a22,
+      metalness: 0.2,
+      roughness: 0.8,
+    },
+    marble: {
+      light: 0xffffff,
+      dark: 0xaaaaaa,
+      rim: 0x666666,
+      metalness: 0.1,
+      roughness: 0.5,
+    },
+    neon: {
+      light: 0x00ffcc,
+      dark: 0x003366,
+      rim: 0x000000,
+      metalness: 0.6,
+      roughness: 0.3,
+    }
+  };
+  const cfg = themes[theme] || themes.wood;
+  const lightMat = new T.MeshStandardMaterial({ color: cfg.light, metalness: cfg.metalness, roughness: cfg.roughness });
+  const darkMat = new T.MeshStandardMaterial({ color: cfg.dark, metalness: cfg.metalness, roughness: cfg.roughness });
+  const rimMat = new T.MeshStandardMaterial({ color: cfg.rim, metalness: cfg.metalness, roughness: cfg.roughness });
+  tiles.forEach((tile)=>{
+    tile.material = tile.userData.isLight ? lightMat : darkMat;
+  });
+  if (rim) rim.material = rimMat;
 }
 
 function squareToFileRank(square){
