@@ -1,4 +1,7 @@
 import { createBoard } from "./board.js";
+import * as rules from "./engine/rules.js";
+import { mountInput } from "./input.js";
+import { createPieces, placeInitialPosition, movePieceByUci } from "./pieces.js";
 
 console.log('[Chess3D] booting');
 
@@ -65,6 +68,13 @@ function toggleCoords(show) {
   }
 }
 
+function updateStatus() {
+  const side = rules.turn() === 'w' ? 'White' : 'Black';
+  let text = `${side} to move`;
+  if (rules.inCheck()) text += ' — Check';
+  statusEl.textContent = text;
+}
+
 async function boot(){
   let THREE, Controls;
   try {
@@ -122,6 +132,27 @@ async function boot(){
   ({ squareToPosition, positionToSquare, tileSize } = helpers);
   toggleCoords(true);
   statusEl.textContent = 'Board ready';
+
+  await rules.init();
+  await createPieces(scene, THREE, helpers);
+  await placeInitialPosition();
+  mountInput({
+    THREE,
+    scene,
+    camera,
+    renderer,
+    controls,
+    boardHelpers: helpers,
+    rulesApi: rules,
+    onMove: async ({ from, to }) => {
+      const res = rules.move({ from, to });
+      if (res?.ok) {
+        await movePieceByUci(from + to);
+        updateStatus();
+      }
+    },
+  });
+  updateStatus();
 
   function animate() {
     requestAnimationFrame(animate);
