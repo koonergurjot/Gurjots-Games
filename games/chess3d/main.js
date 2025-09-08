@@ -197,7 +197,8 @@ async function boot(){
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = 1.15;
+  try { renderer.outputColorSpace = THREE.SRGBColorSpace; } catch(_) { try { renderer.outputEncoding = THREE.sRGBEncoding; } catch(_){} }
   stage.appendChild(renderer.domElement);
 
   window.addEventListener('resize', () => {
@@ -215,9 +216,9 @@ async function boot(){
 
   mountCameraPresets(document.getElementById('hud'), camera, controls);
 
-  const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.6);
+  const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.7);
   scene.add(amb);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.85);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
   dir.position.set(8, 12, 6);
   dir.castShadow = true;
   dir.shadow.mapSize.set(1024,1024);
@@ -227,7 +228,21 @@ async function boot(){
   dir.shadow.camera.right = 10;
   dir.shadow.camera.top = 10;
   dir.shadow.camera.bottom = -10;
+  dir.shadow.bias = -0.0005;
+  dir.shadow.normalBias = 0.02;
   scene.add(dir);
+
+  // Fill light for softer contrast
+  const fill = new THREE.DirectionalLight(0x8bb2ff, 0.25);
+  fill.position.set(-6, 6, -8);
+  scene.add(fill);
+
+  // Soft ground shadow outside the board
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), new THREE.ShadowMaterial({ opacity: 0.18 }));
+  ground.rotation.x = -Math.PI/2;
+  ground.position.y = -0.08;
+  ground.receiveShadow = true;
+  scene.add(ground);
 
   statusEl.textContent = 'Scene ready';
 
