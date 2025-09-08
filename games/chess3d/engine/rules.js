@@ -25,6 +25,7 @@ export function move({ from, to, promotion }) {
   const res = game.move({ from, to, promotion });
   return res ? { ok: true, san: res.san, flags: res.flags } : { ok: false };
 }
+export const _internal = { get game(){ return game; } };
 
 export function undo() {
   game.undo();
