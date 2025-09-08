@@ -118,9 +118,11 @@ export function attachPauseOverlay({ onResume, onRestart }) {
   overlay.className = 'pause-overlay hidden';
   overlay.innerHTML = `
     <div class="panel">
-      <h3>${t('paused')}</h3>
-      <button id="resumeBtn">${t('resume')}</button>
-      <button id="restartBtn">${t('restart')}</button>
+      <h3 style="margin:0 0 12px 0; font: 700 18px Inter,system-ui">${t('paused')}</h3>
+      <div style="display:flex; gap:10px; justify-content:center">
+        <button id="resumeBtn" class="btn">${t('resume')}</button>
+        <button id="restartBtn" class="btn">${t('restart')}</button>
+      </div>
     </div>`;
   document.body.appendChild(overlay);
   const show = () => overlay.classList.remove('hidden');
