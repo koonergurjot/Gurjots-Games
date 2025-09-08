@@ -39,6 +39,9 @@ export async function createBoard(scene, THREE){
   group.add(rim);
 
   scene.add(group);
+  try{
+    group.traverse((ch)=>{ if (ch.isMesh){ ch.castShadow = !!ch.castShadow; ch.receiveShadow = true; }});
+  }catch(_){ }
 
   const helpers = {
     tileSize,

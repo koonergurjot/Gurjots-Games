@@ -111,13 +111,13 @@ function spawn(type, color, square){
 
 function buildMesh(type, color){
   const T = THREERef;
-  const mat = new T.MeshPhysicalMaterial({ color: color==='w' ? 0xe9edf5 : 0x20232a, metalness:0.35, roughness:0.35, reflectivity: 0.4, clearcoat: 0.4, clearcoatRoughness: 0.25 });
+  const mat = (T.MeshPhysicalMaterial ? new T.MeshPhysicalMaterial({ color: color==='w' ? 0xe9edf5 : 0x20232a, metalness:0.35, roughness:0.35, reflectivity: 0.4, clearcoat: 0.4, clearcoatRoughness: 0.25 }) : new T.MeshStandardMaterial({ color: color==='w' ? 0xe9edf5 : 0x20232a, metalness:0.3, roughness:0.4 }));
   const h = {K:1.05,Q:0.95,R:0.78,B:0.78,N:0.78,P:0.62}[type] || 0.62;
 
   // Higher fidelity shape: beveled base + lathe body + type head
   const group = new T.Group();
   const base = new T.Mesh(new T.CylinderGeometry(0.34, 0.38, 0.08, 32), mat);
-  const bevel = new T.Mesh(new T.TorusGeometry(0.31, 0.04, 12, 48), mat);
+  const bevel = new T.Mesh((T.TorusGeometry? new T.TorusGeometry(0.31, 0.04, 12, 48) : new T.CylinderGeometry(0.32, 0.32, 0.02, 24)), mat);
   bevel.rotation.x = Math.PI/2;
   bevel.position.y = 0.04;
   const profile = [];
@@ -127,14 +127,14 @@ function buildMesh(type, color){
     const r=0.28 - 0.08*(t*t);
     profile.push(new T.Vector2(r, 0.08 + t*bodyH));
   }
-  const body = new T.Mesh(new T.LatheGeometry(profile, 36), mat);
+  const body = new T.Mesh((T.LatheGeometry ? new T.LatheGeometry(profile, 36) : new T.CylinderGeometry(0.24, 0.28, bodyH, 16)), mat);
   const headY = 0.08 + bodyH + 0.08;
   let head;
-  if (type==='K') head = new T.Mesh(new T.CapsuleGeometry(0.16, 0.18, 8, 16), mat);
+  if (type==='K') head = new T.Mesh((T.CapsuleGeometry? new T.CapsuleGeometry(0.16, 0.18, 8, 16) : new T.CylinderGeometry(0.18, 0.18, 0.26, 12)), mat);
   else if (type==='Q') head = new T.Mesh(new T.ConeGeometry(0.2, 0.22, 16), mat);
   else if (type==='R') head = new T.Mesh(new T.CylinderGeometry(0.22, 0.22, 0.22, 16), mat);
-  else if (type==='B') head = new T.Mesh(new T.OctahedronGeometry(0.18, 0), mat);
-  else if (type==='N') head = new T.Mesh(new T.CapsuleGeometry(0.15, 0.12, 8, 12), mat);
+  else if (type==='B') head = new T.Mesh((T.OctahedronGeometry? new T.OctahedronGeometry(0.18, 0) : new T.SphereGeometry(0.17, 12, 10)), mat);
+  else if (type==='N') head = new T.Mesh((T.CapsuleGeometry? new T.CapsuleGeometry(0.15, 0.12, 8, 12) : new T.ConeGeometry(0.16, 0.18, 10)), mat);
   else head = new T.Mesh(new T.SphereGeometry(0.16, 20, 14), mat);
   head.position.y = headY;
   body.castShadow = head.castShadow = base.castShadow = bevel.castShadow = true;

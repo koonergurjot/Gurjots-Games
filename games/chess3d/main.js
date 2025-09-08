@@ -167,9 +167,16 @@ async function boot(){
     THREE = await import('./lib/three.module.js');
     ({ OrbitControls: Controls } = await import('./lib/OrbitControls.js'));
   } catch (e) {
-    statusEl.textContent = 'Three.js vendor files missing. Add them to games/chess3d/lib.';
-    console.warn('[Chess3D] missing vendor libs', e);
-    return;
+    console.warn('[Chess3D] local vendor libs failed, attempting CDN fallback…', e);
+    try {
+      THREE = await import('https://unpkg.com/three@0.157.0/build/three.module.js');
+      ({ OrbitControls: Controls } = await import('https://unpkg.com/three@0.157.0/examples/jsm/controls/OrbitControls.js'));
+      statusEl.textContent = 'Loaded Three.js from CDN';
+    } catch (e2) {
+      statusEl.textContent = 'Failed to load Three.js. Please ensure internet access or vendor libs in games/chess3d/lib';
+      console.error('[Chess3D] failed to load Three.js from CDN', e2);
+      return;
+    }
   }
 
   statusEl.textContent = 'Initializing…';
@@ -194,10 +201,10 @@ async function boot(){
   const width = stage.clientWidth || window.innerWidth;
   const height = stage.clientHeight || window.innerHeight;
   renderer.setSize(width, height);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  try { renderer.shadowMap.enabled = true; } catch(_) {}
+  try { renderer.shadowMap.type = THREE.PCFSoftShadowMap ?? THREE.BasicShadowMap; } catch(_) {}
+  try { renderer.toneMapping = THREE.ACESFilmicToneMapping ?? THREE.ReinhardToneMapping ?? 0; } catch(_) {}
+  try { renderer.toneMappingExposure = 1.15; } catch(_) {}
   try { renderer.outputColorSpace = THREE.SRGBColorSpace; } catch(_) { try { renderer.outputEncoding = THREE.sRGBEncoding; } catch(_){} }
   stage.appendChild(renderer.domElement);
 
@@ -216,7 +223,7 @@ async function boot(){
 
   mountCameraPresets(document.getElementById('hud'), camera, controls);
 
-  const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.7);
+  const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.8);
   scene.add(amb);
   const dir = new THREE.DirectionalLight(0xffffff, 0.9);
   dir.position.set(8, 12, 6);
@@ -238,7 +245,8 @@ async function boot(){
   scene.add(fill);
 
   // Soft ground shadow outside the board
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), new THREE.ShadowMaterial({ opacity: 0.18 }));
+  const GroundMat = THREE.ShadowMaterial ? new THREE.ShadowMaterial({ opacity: 0.18 }) : new THREE.MeshPhongMaterial({ color: 0x000000, transparent: true, opacity: 0.15 });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), GroundMat);
   ground.rotation.x = -Math.PI/2;
   ground.position.y = -0.08;
   ground.receiveShadow = true;
@@ -265,7 +273,7 @@ async function boot(){
   // Last move arrow
   let lastMoveHelper;
   import('./ui/lastMove.js').then(({ initLastMove })=>{
-    lastMoveHelper = initLastMove(scene, helpers);
+    lastMoveHelper = initLastMove(scene, helpers, THREE);
   });
   mountInput({
     THREE,
@@ -300,6 +308,7 @@ async function boot(){
     renderer.render(scene, camera);
   }
   animate();
+  try{ window.__Chess3DBooted = true; }catch(_){}
 }
 
 boot();
