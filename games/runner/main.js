@@ -18,6 +18,8 @@ const GROUND = 60;
 let speed = 5;
 const gravity = 0.8;
 const jumpVel = 14;
+// input buffers (seconds)
+let jumpBuffer = 0, slideBuffer = 0; const BUF_MAX = 0.12;
 const slideDur = 20;
 
 // State
@@ -45,8 +47,8 @@ document.body.appendChild(Object.assign(document.createElement('div'),{className
 touchL.addEventListener('click',()=>slide()); touchR.addEventListener('click',()=>jump());
 
 // Functions
-function jump(){ if(player.y<=0&&player.sliding<=0){ player.vy=-jumpVel; } }
-function slide(){ if(player.y<=0&&player.sliding<=0){ player.sliding=slideDur; } }
+function jump(){ if(player.y<=0&&player.sliding<=0){ player.vy=-jumpVel; return true; } return false; }
+function slide(){ if(player.y<=0&&player.sliding<=0){ player.sliding=slideDur; return true; } return false; }
 function spawn(){
   if(tick%Math.floor(120/speed)===0){
     if(Math.random()<0.6){ // obstacle
@@ -77,6 +79,9 @@ requestAnimationFrame(loop);
 
 function update(dt){
   tick++;
+  // decay buffers
+  if(jumpBuffer>0) jumpBuffer=Math.max(0,jumpBuffer-dt*0.016);
+  if(slideBuffer>0) slideBuffer=Math.max(0,slideBuffer-dt*0.016);
   // difficulty scaling
   speed += 0.0005;
   // Player physics
@@ -85,8 +90,11 @@ function update(dt){
   if(player.y>0){player.y=0;player.vy=0;}
   if(player.sliding>0) player.sliding--;
   // Keys
-  if(keys.has('arrowup')||keys.has(' ')) jump();
-  if(keys.has('arrowdown')) slide();
+  if(keys.has('arrowup')||keys.has(' ')) jumpBuffer = BUF_MAX;
+  if(keys.has('arrowdown')) slideBuffer = BUF_MAX;
+  // consume buffers when eligible
+  if(jumpBuffer>0 && player.y<=0 && player.sliding<=0){ if(jump()) jumpBuffer=0; }
+  if(slideBuffer>0 && player.y<=0 && player.sliding<=0){ if(slide()) slideBuffer=0; }
   // Spawn obstacles/coins
   spawn();
   obstacles.forEach(o=>o.x-=speed); coins.forEach(c=>c.x-=speed);

@@ -118,7 +118,10 @@ function aiSpeed(){
   return diff==='easy'? 4 : diff==='med'? 6 : diff==='hard'? 7.5 : 9.5;
 }
 function updateAI(){
-  const target = ball.y - PADDLE.h/2 + (Math.random()*8-4); // small jitter
+  // error band increases with ball distance; narrows when ball is close
+  const dist = Math.abs(ball.x - FIELD.w*0.7);
+  const err = clamp(dist/200, 0.5, 6.0) * (diff==='easy'?1.6:diff==='med'?1.0:diff==='hard'?0.7:0.5);
+  const target = ball.y - PADDLE.h/2 + (Math.random()*err - err/2);
   const delta = target - right.y;
   right.y += clamp(delta, -aiSpeed(), aiSpeed());
 }
