@@ -167,9 +167,16 @@ async function boot(){
     THREE = await import('./lib/three.module.js');
     ({ OrbitControls: Controls } = await import('./lib/OrbitControls.js'));
   } catch (e) {
-    statusEl.textContent = 'Three.js vendor files missing. Add them to games/chess3d/lib.';
-    console.warn('[Chess3D] missing vendor libs', e);
-    return;
+    console.warn('[Chess3D] local vendor libs failed, attempting CDN fallback…', e);
+    try {
+      THREE = await import('https://unpkg.com/three@0.157.0/build/three.module.js');
+      ({ OrbitControls: Controls } = await import('https://unpkg.com/three@0.157.0/examples/jsm/controls/OrbitControls.js'));
+      statusEl.textContent = 'Loaded Three.js from CDN';
+    } catch (e2) {
+      statusEl.textContent = 'Failed to load Three.js. Please ensure internet access or vendor libs in games/chess3d/lib';
+      console.error('[Chess3D] failed to load Three.js from CDN', e2);
+      return;
+    }
   }
 
   statusEl.textContent = 'Initializing…';
@@ -301,6 +308,7 @@ async function boot(){
     renderer.render(scene, camera);
   }
   animate();
+  try{ window.__Chess3DBooted = true; }catch(_){}
 }
 
 boot();

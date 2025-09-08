@@ -17,6 +17,12 @@
   <div id="thinking" hidden>Engine thinking…</div>
   <div id="status"></div>
   <script type="module" src="./main.js"></script>
+  <script>
+    setTimeout(()=>{
+      const el=document.getElementById('status');
+      if(el && !window.__Chess3DBooted){ el.textContent = 'Initializing renderer… if this persists, check network or open console (F12) for errors.'; }
+    }, 1800);
+  </script>
   <script src="/js/sfx.js"></script>
   <script src="/js/hud.js"></script>
 </body>
