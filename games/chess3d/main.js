@@ -357,7 +357,7 @@ maybeAIMove = async function(){
   moveList?.setIndex(rules.historySAN().length);
 };
 
-rules.move = applyMove;
+// Do not mutate ESM exports; call handlePostMove() at call sites instead
 
 async function jumpToPly(ply){
   rebuilding = true;
@@ -366,8 +366,9 @@ async function jumpToPly(ply){
   cancel();
   searchToken++;
   thinkingEl.hidden = true;
-  const { default: Chess } = await import('./engine/chess.min.js');
-  const temp = new Chess();
+  const mod = await import('./engine/chess.min.js');
+  const ChessCtor = mod.default || mod.Chess || mod;
+  const temp = new ChessCtor();
   const moves = rules.historySAN();
   rules.loadFEN(null);
   await placeInitialPosition();

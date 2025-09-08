@@ -1,10 +1,11 @@
-import Chess from "./chess.min.js";
+import * as ChessModule from "./chess.min.js";
 
 export let ready = false;
 let game;
 
 export async function init() {
-  game = new Chess();
+  const ChessCtor = ChessModule.default || ChessModule.Chess || ChessModule;
+  game = new ChessCtor();
   ready = true;
 }
 
