@@ -10,6 +10,11 @@ const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerH
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
+// minimap
+const mapRenderer = new THREE.WebGLRenderer({ antialias: false });
+mapRenderer.setSize(200, 200);
+mapRenderer.domElement.style.position='fixed'; mapRenderer.domElement.style.right='12px'; mapRenderer.domElement.style.bottom='12px'; mapRenderer.domElement.style.border='1px solid rgba(255,255,255,0.2)'; mapRenderer.domElement.style.borderRadius='6px';
+document.body.appendChild(mapRenderer.domElement);
 
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
 scene.add(hemi);
@@ -32,6 +37,8 @@ let paused = true;
 let startTime = 0;
 let best = Number(localStorage.getItem('besttime:maze3d') || 0);
 if (best) bestEl.textContent = best.toFixed(2);
+
+let trail = []; let lastTrailPos = null;
 
 const keys = {};
 document.addEventListener('keydown', (e) => {
@@ -108,6 +115,9 @@ function buildMaze() {
   floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
+
+  // breadcrumb trail
+  trail = [];
 
   const [sx, sz] = cellToWorld(1,1,cols,rows);
   controls.getObject().position.set(sx, 1.5, sz);
@@ -187,6 +197,8 @@ function update(dt) {
 
   const pos = controls.getObject().position;
   pos.y = 1.5;
+  // breadcrumbs
+  if (!lastTrailPos || pos.distanceTo(lastTrailPos) > 1.5){ trail.push(pos.clone()); lastTrailPos = pos.clone(); if (trail.length>200) trail.shift(); }
   for (const box of wallBoxes) {
     if (box.containsPoint(pos)) {
       pos.copy(prev);
@@ -209,6 +221,16 @@ function loop() {
     update(dt);
   }
   renderer.render(scene, camera);
+  // render minimap (orthographic top-down)
+  const miniCam = new THREE.OrthographicCamera(-cellSize*MAZE_CELLS*1.2, cellSize*MAZE_CELLS*1.2, cellSize*MAZE_CELLS*1.2, -cellSize*MAZE_CELLS*1.2, 0.1, 1000);
+  miniCam.position.set(0, 80, 0); miniCam.lookAt(new THREE.Vector3(0,0,0));
+  // simple overlay: draw player/trail using 2D context on top of mapRenderer after render
+  mapRenderer.render(scene, miniCam);
+  const ctx2 = mapRenderer.domElement.getContext('2d');
+  ctx2.save(); ctx2.globalAlpha=0.9; ctx2.fillStyle='rgba(255,255,255,0.15)'; ctx2.fillRect(0,0,200,200); ctx2.restore();
+  // trail dots
+  if (trail.length){ ctx2.fillStyle='#38bdf8'; for (const p of trail){ const u=(p.x/(cellSize*MAZE_CELLS*1.2))*100+100; const v=(p.z/(cellSize*MAZE_CELLS*1.2))*100+100; ctx2.fillRect(u-1,v-1,2,2); } }
+  const p = controls.getObject().position; const u=(p.x/(cellSize*MAZE_CELLS*1.2))*100+100; const v=(p.z/(cellSize*MAZE_CELLS*1.2))*100+100; ctx2.fillStyle='#eab308'; ctx2.fillRect(u-2,v-2,4,4);
 }
 
 window.addEventListener('resize', () => {

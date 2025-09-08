@@ -8,6 +8,7 @@ const EMPTY = '.';
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
 const COLORS={w:1,b:-1};
 let board=[], turn='w', sel=null, moves=[], over=false;
+let lastMove=null; let premove=null;
 
 function reset(){ board = parseFEN(START); turn='w'; sel=null; moves=[]; over=false; draw(); status('White to move'); }
 function parseFEN(f){ const rows=f.split('/'); const b=[]; for(const r of rows){ const row=[]; for(const ch of r){ if(/[1-8]/.test(ch)){ for(let i=0;i<Number(ch);i++) row.push(EMPTY);} else row.push(ch);} b.push(row);} return b; }
@@ -121,6 +122,7 @@ function draw(){
     ctx.fillStyle='rgba(80,200,255,.25)';
     moves.forEach(m=>{ ctx.beginPath(); ctx.arc(m.x*S+S/2, m.y*S+S/2, 10, 0, Math.PI*2); ctx.fill(); });
   }
+  if(lastMove){ ctx.fillStyle='rgba(255,230,0,0.18)'; ctx.fillRect(lastMove.from.x*S,lastMove.from.y*S,S,S); ctx.fillRect(lastMove.to.x*S,lastMove.to.y*S,S,S); }
   // draw pieces (simple text glyphs)
   for(let y=0;y<8;y++) for(let x=0;x<8;x++){
     const p=pieceAt(x,y); if(p===EMPTY) continue;
@@ -142,8 +144,16 @@ c.addEventListener('click', (e)=>{
   } else {
     const m = moves.find(mm=>mm.x===x&&mm.y===y);
     if(m){
-      board[m.y][m.x]=board[sel.y][sel.x]; board[sel.y][sel.x]=EMPTY;
+      const from={x:sel.x,y:sel.y};
+      board[m.y][m.x]=board[sel.y][sel.x]; board[sel.y][sel.x]=EMPTY; lastMove={from,to:{x:m.x,y:m.y}};
       sel=null; moves=[]; turn = (turn==='w'?'b':'w');
+      // if premove set and it's now your color, execute if legal
+      if(premove && colorOf(pieceAt(premove.from.x,premove.from.y))===turn){
+        const legal=genMoves(premove.from.x,premove.from.y).find(z=>z.x===premove.to.x&&z.y===premove.to.y);
+        if(legal){ sel={x:premove.from.x,y:premove.from.y}; moves=[legal]; const fakeEvt={clientX:(legal.x+0.5)*S + r.left, clientY:(legal.y+0.5)*S + r.top}; // not used further
+          board[legal.y][legal.x]=board[sel.y][sel.x]; board[sel.y][sel.x]=EMPTY; lastMove={from:{x:sel.x,y:sel.y},to:{x:legal.x,y:legal.y}}; sel=null; moves=[]; turn=(turn==='w'?'b':'w'); }
+        premove=null;
+      }
       if (checkmate(turn)){ status((turn==='w'?'White':'Black')+' in checkmate!'); over=true; } 
       else if (inCheck(turn)){ status((turn==='w'?'White':'Black')+' to move — CHECK!'); } 
       else status((turn==='w'?'White':'Black')+' to move');
@@ -151,6 +161,8 @@ c.addEventListener('click', (e)=>{
     } else { sel=null; moves=[]; draw(); }
   }
 });
+// Right-click to set premove
+c.addEventListener('contextmenu',(e)=>{ e.preventDefault(); const r=c.getBoundingClientRect(); const x=((e.clientX-r.left)/S)|0, y=((e.clientY-r.top)/S)|0; if(!sel){ const p=pieceAt(x,y); if(!p||p===EMPTY||colorOf(p)!==turn) return; sel={x,y}; moves=genMoves(x,y); draw(); } else { const m=moves.find(mm=>mm.x===x&&mm.y===y); if(m){ premove={from:{x:sel.x,y:sel.y}, to:{x:m.x,y:m.y}}; sel=null; moves=[]; status('Premove set'); draw(); } else { sel=null; moves=[]; draw(); } } });
 function checkmate(side){
   // if in check and no legal moves
   if(!inCheck(side)) return false;

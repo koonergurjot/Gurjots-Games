@@ -44,6 +44,7 @@ const ship = {
 const bullets = [];
 const rocks = [];
 const particles = [];
+const saucers = [];
 
 let fireMode = 'single'; // 'single' | 'burst' | 'rapid'
 const HUD = {
@@ -59,6 +60,14 @@ document.getElementById('restartBtn').onclick = ()=> restart();
 HUD.fireSel.onchange = ()=> fireMode = HUD.fireSel.value;
 
 const overlay = attachPauseOverlay({ onResume: ()=> running = true, onRestart: ()=> restart() });
+
+// Saucer enemy spawn timer
+let saucerTimer = 8;
+function spawnSaucer(){
+  const y = 60 + Math.random()*(innerHeight-120);
+  const dir = Math.random()<0.5? 1 : -1;
+  saucers.push({ x: dir<0? innerWidth+40 : -40, y, vx: dir*2.2, vy: 0, r: 12, fire: 0, hp: 2 });
+}
 
 function spawnWave(n){
   for (let i=0;i<n;i++){
@@ -107,7 +116,7 @@ function shoot(spread=0, speedMul=1){
   const angle = ship.angle + (spread||0);
   const vx = Math.cos(angle)*speed + ship.vx*0.2;
   const vy = Math.sin(angle)*speed + ship.vy*0.2;
-  bullets.push({ x: ship.x + Math.cos(angle)*ship.radius, y: ship.y + Math.sin(angle)*ship.radius, vx, vy, life: 60 });
+  bullets.push({ x: ship.x + Math.cos(angle)*ship.radius, y: ship.y + Math.sin(angle)*ship.radius, vx, vy, life: 60, enemy:false });
   beep(660,0.03);
 }
 
@@ -124,7 +133,7 @@ function pause(){ running=false; overlay.show(); }
 function restart(){
   running=true; score=0; lives=3; wave=1;
   ship.x=innerWidth/2; ship.y=innerHeight/2; ship.vx=ship.vy=0; ship.angle=-Math.PI/2; ship.inv=60;
-  bullets.length=0; rocks.length=0; particles.length=0;
+  bullets.length=0; rocks.length=0; particles.length=0; saucers.length=0; saucerTimer=6;
   spawnWave(4);
   updateHUD();
   emitEvent({ type: 'play', slug: 'asteroids' });
@@ -160,11 +169,11 @@ requestAnimationFrame(loop);
 
 function update(dt){
   // Ship movement
-  if (keys.has('arrowleft')) ship.angle -= 0.07;
-  if (keys.has('arrowright')) ship.angle += 0.07;
+  if (keys.has('arrowleft')) ship.angle -= 0.065;
+  if (keys.has('arrowright')) ship.angle += 0.065;
   if (keys.has('arrowup')) {
-    ship.vx += Math.cos(ship.angle) * ship.thrust;
-    ship.vy += Math.sin(ship.angle) * ship.thrust;
+    ship.vx += Math.cos(ship.angle) * (ship.thrust*1.05);
+    ship.vy += Math.sin(ship.angle) * (ship.thrust*1.05);
     particles.push({ x: ship.x - Math.cos(ship.angle)*12, y: ship.y - Math.sin(ship.angle)*12, vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5, life: 18, col: '#6ee7b7' });
   }
   ship.x += ship.vx; ship.y += ship.vy;
@@ -179,11 +188,27 @@ function update(dt){
   // Rocks
   for (const r of rocks){ r.x+=r.vx; r.y+=r.vy; r.angle+=r.rot; wrap(r); }
 
+  // Saucer spawn + behavior
+  saucerTimer -= dt*0.016;
+  if (saucers.length===0 && saucerTimer<=0){ spawnSaucer(); saucerTimer = 10 + Math.random()*8; }
+  for (const s of saucers){
+    s.x += s.vx; s.y += s.vy; wrap(s);
+    s.fire -= dt*0.016;
+    if (s.fire<=0){
+      s.fire = 1.2 + Math.random()*0.8;
+      const dx = ship.x - s.x, dy = ship.y - s.y; const a = Math.atan2(dy,dx);
+      const noise = (Math.random()-0.5) * (Math.hypot(dx,dy)/innerWidth) * 0.6;
+      const ang = a + noise; const sp = 4.5;
+      bullets.push({ x:s.x, y:s.y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, life: 180, enemy:true });
+    }
+  }
+
   // Collisions: bullets vs rocks
   for (let i=rocks.length-1;i>=0;i--){
     const r = rocks[i];
     for (let j=bullets.length-1;j>=0;j--){
       const b = bullets[j];
+      if (b.enemy) continue;
       if (Math.hypot(b.x-r.x, b.y-r.y) < r.radius){
         bullets.splice(j,1);
         rocks.splice(i,1);
@@ -204,6 +229,15 @@ function update(dt){
     }
   }
 
+  // Collisions: bullets vs saucers
+  for (let i=saucers.length-1;i>=0;i--){
+    const s = saucers[i];
+    for (let j=bullets.length-1;j>=0;j--){
+      const b = bullets[j]; if (b.enemy) continue;
+      if (Math.hypot(b.x-s.x, b.y-s.y) < s.r){ bullets.splice(j,1); s.hp--; if (s.hp<=0){ saucers.splice(i,1); explode(s.x,s.y,28,'#f59e0b'); score += 150; updateHUD(); } break; }
+    }
+  }
+
   // Collisions: ship vs rocks
   for (let i=rocks.length-1;i>=0;i--){
     const r=rocks[i];
@@ -220,6 +254,17 @@ function update(dt){
         shareBtn.hidden = false;
         shareBtn.onclick = () => shareScore('asteroids', score);
       }
+    }
+  }
+
+  // Ship hit by enemy bullets
+  for (let j=bullets.length-1;j>=0;j--){
+    const b=bullets[j]; if(!b.enemy) continue; if (ship.inv>0) continue;
+    if (Math.hypot(ship.x-b.x, ship.y-b.y) < ship.radius){
+      bullets.splice(j,1);
+      explode(ship.x, ship.y, 24, '#e11d48');
+      lives--; ship.inv=90; ship.vx=ship.vy=0; updateHUD();
+      if (lives<=0){ running=false; saveBestScore('asteroids', score); endSessionTimer('asteroids'); emitEvent({ type: 'game_over', slug: 'asteroids', value: score }); shareBtn.hidden=false; shareBtn.onclick=()=>shareScore('asteroids', score); }
     }
   }
 
@@ -282,6 +327,9 @@ function render(){
   // bullets
   ctx.fillStyle = '#eaeaf2';
   for (const b of bullets){ ctx.fillRect(b.x-2,b.y-2,4,4); }
+
+  // saucers
+  ctx.fillStyle = '#f59e0b'; for (const s of saucers){ ctx.fillRect(s.x-12, s.y-6, 24, 12); }
 
   // rocks
   for (const r of rocks){ drawRock(r); }
