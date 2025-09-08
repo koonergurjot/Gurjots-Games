@@ -71,6 +71,9 @@ class Enemy {
     else if(edge===2){ this.x = Math.random()*W; this.y = H + this.r; }
     else { this.x = -this.r; this.y = Math.random()*H; }
     this.speed = 80 + Math.random()*70;
+    this.elite = Math.random() < 0.15; // 15% elites
+    if (this.elite){ this.speed *= 1.6; this.r = 18; }
+    this.hitFlash = 0;
   }
   update(dt, player){
     const dx = player.x - this.x;
@@ -80,10 +83,16 @@ class Enemy {
     this.y += this.speed * dt * dy / d;
   }
   draw(ctx){
-    ctx.fillStyle = '#ff6b6b';
+    ctx.fillStyle = this.elite ? '#f59e0b' : '#ff6b6b';
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
     ctx.fill();
+    if (this.hitFlash>0){
+      ctx.globalAlpha = Math.min(this.hitFlash, 1);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.r*0.7, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1; this.hitFlash -= 0.1;
+    }
   }
 }
 
@@ -148,8 +157,10 @@ function update(dt){
       const e = enemies[j];
       const dx = b.x - e.x, dy = b.y - e.y;
       if(dx*dx + dy*dy < (b.r + e.r)*(b.r + e.r)){
-        bullets.splice(i,1); enemies.splice(j,1);
-        state.score++; scoreEl.textContent = state.score;
+        bullets.splice(i,1);
+        e.hitFlash = 1;
+        enemies.splice(j,1);
+        state.score += e.elite ? 3 : 1; scoreEl.textContent = state.score;
         emitEvent({ type: 'score', slug: 'shooter', value: state.score });
         break;
       }
