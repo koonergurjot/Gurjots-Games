@@ -111,31 +111,34 @@ function spawn(type, color, square){
 
 function buildMesh(type, color){
   const T = THREERef;
-  const mat = new T.MeshStandardMaterial({ color: color==='w' ? 0xeeeeee : 0x222222, metalness:0.2, roughness:0.6 });
-  const h = {K:1.0,Q:0.9,R:0.7,B:0.75,N:0.75,P:0.6}[type] || 0.6;
+  const mat = new T.MeshPhysicalMaterial({ color: color==='w' ? 0xe9edf5 : 0x20232a, metalness:0.35, roughness:0.35, reflectivity: 0.4, clearcoat: 0.4, clearcoatRoughness: 0.25 });
+  const h = {K:1.05,Q:0.95,R:0.78,B:0.78,N:0.78,P:0.62}[type] || 0.62;
 
-  // Simple shape: stacked cylinders with a head
+  // Higher fidelity shape: beveled base + lathe body + type head
   const group = new T.Group();
-  const base = new T.Mesh(new T.CylinderGeometry(0.32, 0.36, 0.08, 24), mat);
-  const body = new T.Mesh(new T.CylinderGeometry(0.24, 0.28, h*0.7, 16), mat);
-  const head = new T.Mesh(new T.SphereGeometry(0.18, 16, 12), mat);
-  body.position.y = 0.08 + (h*0.35);
-  head.position.y = body.position.y + (h*0.4);
-  group.add(base, body, head);
-
-  // simple type-specific tweak
-  if (type === 'R'){
-    const top = new T.Mesh(new T.CylinderGeometry(0.3, 0.3, 0.06, 12), mat);
-    top.position.y = head.position.y + 0.1;
-    group.add(top);
+  const base = new T.Mesh(new T.CylinderGeometry(0.34, 0.38, 0.08, 32), mat);
+  const bevel = new T.Mesh(new T.TorusGeometry(0.31, 0.04, 12, 48), mat);
+  bevel.rotation.x = Math.PI/2;
+  bevel.position.y = 0.04;
+  const profile = [];
+  const bodyH = h*0.7;
+  for(let i=0;i<=10;i++){
+    const t=i/10;
+    const r=0.28 - 0.08*(t*t);
+    profile.push(new T.Vector2(r, 0.08 + t*bodyH));
   }
-  if (type === 'N'){
-    const nose = new T.Mesh(new T.ConeGeometry(0.12, 0.18, 10), mat);
-    nose.position.set(0.12, head.position.y, 0);
-    nose.rotation.z = Math.PI * 0.5;
-    group.add(nose);
-  }
-
+  const body = new T.Mesh(new T.LatheGeometry(profile, 36), mat);
+  const headY = 0.08 + bodyH + 0.08;
+  let head;
+  if (type==='K') head = new T.Mesh(new T.CapsuleGeometry(0.16, 0.18, 8, 16), mat);
+  else if (type==='Q') head = new T.Mesh(new T.ConeGeometry(0.2, 0.22, 16), mat);
+  else if (type==='R') head = new T.Mesh(new T.CylinderGeometry(0.22, 0.22, 0.22, 16), mat);
+  else if (type==='B') head = new T.Mesh(new T.OctahedronGeometry(0.18, 0), mat);
+  else if (type==='N') head = new T.Mesh(new T.CapsuleGeometry(0.15, 0.12, 8, 12), mat);
+  else head = new T.Mesh(new T.SphereGeometry(0.16, 20, 14), mat);
+  head.position.y = headY;
+  body.castShadow = head.castShadow = base.castShadow = bevel.castShadow = true;
+  group.add(base, bevel, body, head);
   return group;
 }
 
@@ -181,9 +184,9 @@ export function setPieceStyle(style){
   currentPieceStyle = style;
   const T = THREERef;
   const styles = {
-    classic: (c)=> new T.MeshStandardMaterial({ color: c==='w'?0xeeeeee:0x222222, metalness:0.2, roughness:0.6 }),
-    metal: (c)=> new T.MeshStandardMaterial({ color: c==='w'?0xdddddd:0x333333, metalness:1, roughness:0.2 }),
-    glass: (c)=> new T.MeshPhysicalMaterial({ color: c==='w'?0xffffff:0x444444, metalness:0, roughness:0, transparent:true, opacity:0.4, transmission:1 })
+    classic: (c)=> new T.MeshPhysicalMaterial({ color: c==='w'?0xe9edf5:0x20232a, metalness:0.35, roughness:0.35, reflectivity: 0.4, clearcoat: 0.4, clearcoatRoughness: 0.25 }),
+    metal: (c)=> new T.MeshPhysicalMaterial({ color: c==='w'?0xdfe4ea:0x2a2e35, metalness:0.95, roughness:0.18, reflectivity: 0.9, clearcoat:0.6, clearcoatRoughness:0.15 }),
+    glass: (c)=> new T.MeshPhysicalMaterial({ color: c==='w'?0xffffff:0x9ad0ff, metalness:0.0, roughness:0.02, transparent:true, opacity:0.35, transmission:1, ior: 1.3, thickness: 0.35 })
   };
   for (const p of pieces.values()){
     const mat = (styles[style]||styles.classic)(p.color);

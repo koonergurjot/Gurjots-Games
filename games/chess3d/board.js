@@ -13,8 +13,8 @@ export async function createBoard(scene, THREE){
   const tileSize = 1;
   const half = 4 * tileSize;
 
-  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xb7c0d8 });
-  const blackMat = new THREE.MeshStandardMaterial({ color: 0x5a6373 });
+  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xb7c0d8, metalness: 0.15, roughness: 0.45 });
+  const blackMat = new THREE.MeshStandardMaterial({ color: 0x5a6373, metalness: 0.2, roughness: 0.5 });
 
   const geom = new THREE.BoxGeometry(tileSize, 0.1, tileSize);
   for (let r=0;r<8;r++){
@@ -31,8 +31,8 @@ export async function createBoard(scene, THREE){
   }
 
   // simple rim
-  const rimGeom = new THREE.BoxGeometry(8*tileSize+0.4, 0.08, 8*tileSize+0.4);
-  const rimMat = new THREE.MeshStandardMaterial({ color: 0x2b3140 });
+  const rimGeom = new THREE.BoxGeometry(8*tileSize+0.6, 0.12, 8*tileSize+0.6);
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0x2b3140, metalness: 0.35, roughness: 0.35 });
   rim = new THREE.Mesh(rimGeom, rimMat);
   rim.position.y = -0.07;
   rim.receiveShadow = true;
