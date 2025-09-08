@@ -2,17 +2,20 @@
 const c=document.getElementById('board'), ctx=c.getContext('2d'); const N=4; const S=80; const PAD=12;
 const hud=HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset()});
 let grid, score=0, over=false, won=false;
-let prevGrid=null, prevScore=0; // one-step undo
+let history=[]; // undo history
 function reset(){ grid=Array.from({length:N},()=>Array(N).fill(0)); score=0; over=false; won=false; addTile(); addTile(); draw(); }
 function addTile(){ const empty=[]; for(let y=0;y<N;y++) for(let x=0;x<N;x++) if(!grid[y][x]) empty.push([x,y]); if(!empty.length) return; const [x,y]=empty[(Math.random()*empty.length)|0]; grid[y][x] = Math.random()<0.9?2:4; }
 function slide(row){ const a=row.filter(v=>v); for(let i=0;i<a.length-1;i++){ if(a[i]===a[i+1]){ a[i]*=2; score+=a[i]; a.splice(i+1,1);} } while(a.length<N) a.push(0); return a; }
+function saveState(){ history.push({grid:JSON.parse(JSON.stringify(grid)), score:score}); if(history.length>10) history.shift(); }
+function undo(){ if(history.length>1){ history.pop(); const prev=history[history.length-1]; grid=JSON.parse(JSON.stringify(prev.grid)); score=prev.score; over=false; won=false; draw(); } }
 function move(dir){ // 0=left,1=up,2=right,3=down
+  if(over||won) return; saveState();
   const before = JSON.stringify(grid);
   if(dir===0){ for(let y=0;y<N;y++) grid[y]=slide(grid[y]); }
   if(dir===2){ for(let y=0;y<N;y++) grid[y]=slide(grid[y].reverse()).reverse(); }
   if(dir===1){ for(let x=0;x<N;x++){ const col=slide([grid[0][x],grid[1][x],grid[2][x],grid[3][x]]); for(let y=0;y<N;y++) grid[y][x]=col[y]; } }
   if(dir===3){ for(let x=0;x<N;x++){ const col=slide([grid[3][x],grid[2][x],grid[1][x],grid[0][x]]).reverse(); for(let y=0;y<N;y++) grid[y][x]=col[y]; } }
-  if (JSON.stringify(grid)!==before){ prevGrid = JSON.parse(before); prevScore = score; addTile(); }
+  if (JSON.stringify(grid)!==before){ addTile(); } else { history.pop(); }
   check(); draw();
 }
 function check(){ won = won || grid.flat().some(v=>v>=2048); over = !won && !canMove(); }
@@ -30,7 +33,7 @@ addEventListener('keydown', e=>{
   if(e.key==='ArrowRight') move(2);
   if(e.key==='ArrowDown') move(3);
   if(e.key==='r'||e.key==='R') reset();
-  if(e.key.toLowerCase()==='z' && prevGrid){ grid = prevGrid; score = prevScore; prevGrid=null; draw(); }
+  if(e.key.toLowerCase()==='z') undo();
 });
 // swipe controls
 let touchStart=null; c.addEventListener('touchstart',e=>{touchStart=e.touches[0]});
