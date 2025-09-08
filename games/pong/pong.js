@@ -12,8 +12,28 @@ function step(){ if(paused)return; maybeSpawnPower(); applyPower();
   if(!twoP&&!keys['arrowup']&&!keys['arrowdown']){ right.y+= (target-right.y)*aiSpeed; } else { right.y=clamp(right.y+right.vy,0,H-paddleHeight(right)); }
   ball.x+=ball.vx; ball.y+=ball.vy;
   if(ball.y<BALL_R||ball.y>H-BALL_R){ ball.vy*=-1; SFX.beep({freq:220}); }
-  if(ball.x-BALL_R<left.x+PADDLE_W&&ball.y>left.y&&ball.y<left.y+paddleHeight(left)&&ball.vx<0){ ball.vx*=-1.05; const rel=(ball.y-(left.y+paddleHeight(left)/2))/(paddleHeight(left)/2); ball.vy=rel*6; lastHit='left'; SFX.beep({freq:440}); }
-  if(ball.x+BALL_R>right.x&&ball.y>right.y&&ball.y<right.y+paddleHeight(right)&&ball.vx>0){ ball.vx*=-1.05; const rel=(ball.y-(right.y+paddleHeight(right)/2))/(paddleHeight(right)/2); ball.vy=rel*6; lastHit='right'; SFX.beep({freq:520}); }
+  // angle clamp helper to avoid flat trajectories
+  function clampBounce(vx, vy){
+    const sp=Math.hypot(vx,vy)||1; let ang=Math.atan2(vy,vx);
+    const min=0.25, max=Math.PI-0.25; // keep away from 0 or PI by 0.25 rad
+    if(ang<min&&ang>-min) ang=Math.sign(ang||1)*min;
+    if(ang>max||ang< -max) ang=Math.sign(ang)* (Math.PI-0.25);
+    return {vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp};
+  }
+  if(ball.x-BALL_R<left.x+PADDLE_W&&ball.y>left.y&&ball.y<left.y+paddleHeight(left)&&ball.vx<0){
+    const rel=(ball.y-(left.y+paddleHeight(left)/2))/(paddleHeight(left)/2);
+    ball.vx = Math.abs(ball.vx)*1.05;
+    ball.vy = rel*6;
+    const n=clampBounce(ball.vx,ball.vy); ball.vx=n.vx; ball.vy=n.vy;
+    lastHit='left'; SFX.beep({freq:440});
+  }
+  if(ball.x+BALL_R>right.x&&ball.y>right.y&&ball.y<right.y+paddleHeight(right)&&ball.vx>0){
+    const rel=(ball.y-(right.y+paddleHeight(right)/2))/(paddleHeight(right)/2);
+    ball.vx = -Math.abs(ball.vx)*1.05;
+    ball.vy = rel*6;
+    const n=clampBounce(ball.vx,ball.vy); ball.vx=n.vx; ball.vy=n.vy;
+    lastHit='right'; SFX.beep({freq:520});
+  }
   if(ball.x<-20){ right.score++; GG.addXP(2); SFX.seq([[260],[200]]); ball=resetBall(1); }
   if(ball.x>W+20){ left.score++; GG.addXP(2); SFX.seq([[260],[200]]); ball=resetBall(-1); }
 }
