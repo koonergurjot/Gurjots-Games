@@ -1,6 +1,4 @@
-import * as THREE from '../lib/three.module.js';
-
-export function initLastMove(scene, helpers) {
+export function initLastMove(scene, helpers, THREE) {
   const group = new THREE.Group();
   scene.add(group);
   let arrow = null;

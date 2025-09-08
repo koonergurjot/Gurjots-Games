@@ -194,10 +194,10 @@ async function boot(){
   const width = stage.clientWidth || window.innerWidth;
   const height = stage.clientHeight || window.innerHeight;
   renderer.setSize(width, height);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  try { renderer.shadowMap.enabled = true; } catch(_) {}
+  try { renderer.shadowMap.type = THREE.PCFSoftShadowMap ?? THREE.BasicShadowMap; } catch(_) {}
+  try { renderer.toneMapping = THREE.ACESFilmicToneMapping ?? THREE.ReinhardToneMapping ?? 0; } catch(_) {}
+  try { renderer.toneMappingExposure = 1.15; } catch(_) {}
   try { renderer.outputColorSpace = THREE.SRGBColorSpace; } catch(_) { try { renderer.outputEncoding = THREE.sRGBEncoding; } catch(_){} }
   stage.appendChild(renderer.domElement);
 
@@ -216,7 +216,7 @@ async function boot(){
 
   mountCameraPresets(document.getElementById('hud'), camera, controls);
 
-  const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.7);
+  const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.8);
   scene.add(amb);
   const dir = new THREE.DirectionalLight(0xffffff, 0.9);
   dir.position.set(8, 12, 6);
@@ -238,7 +238,8 @@ async function boot(){
   scene.add(fill);
 
   // Soft ground shadow outside the board
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), new THREE.ShadowMaterial({ opacity: 0.18 }));
+  const GroundMat = THREE.ShadowMaterial ? new THREE.ShadowMaterial({ opacity: 0.18 }) : new THREE.MeshPhongMaterial({ color: 0x000000, transparent: true, opacity: 0.15 });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), GroundMat);
   ground.rotation.x = -Math.PI/2;
   ground.position.y = -0.08;
   ground.receiveShadow = true;
@@ -265,7 +266,7 @@ async function boot(){
   // Last move arrow
   let lastMoveHelper;
   import('./ui/lastMove.js').then(({ initLastMove })=>{
-    lastMoveHelper = initLastMove(scene, helpers);
+    lastMoveHelper = initLastMove(scene, helpers, THREE);
   });
   mountInput({
     THREE,
