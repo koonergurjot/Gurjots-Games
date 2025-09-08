@@ -26,6 +26,34 @@ coordsEl.style.pointerEvents = 'none';
 let squareToPosition, positionToSquare, tileSize;
 let currentCamera;
 let searchToken = 0;
+let evalBar;
+let lastMoveHelper;
+const origRulesMove = rules.move;
+
+function handlePostMove(){
+  try{ moveList?.refresh(); moveList?.setIndex(rules.historySAN().length); }catch(_){ }
+  try{ if (clockPaused){ clocks?.resume(); clockPaused = false; } clocks?.startTurn(rules.turn()); }catch(_){ }
+  try{
+    import('./ai/ai.js').then(({ evaluate })=>{
+      evaluate(rules.fen(),{ depth: 10 }).then(({ cp, mate, pv })=>{
+        const line = mate ? `Mate in ${mate}` : pv || '';
+        try{ evalBar?.update(cp, line); }catch(_){ }
+      });
+    });
+  }catch(_){ }
+  if (rules.inCheckmate()) endGame(`${rules.turn()==='w'?'Black':'White'} wins by checkmate`);
+  else if (rules.inStalemate()) endGame('Draw by stalemate');
+}
+
+function applyMove(opts){
+  if (gameOver) return { ok: false };
+  if (rebuilding) return origRulesMove(opts);
+  const res = origRulesMove(opts);
+  if (res?.ok){
+    handlePostMove();
+  }
+  return res;
+}
 
 function toggleCoords(show) {
   localStorage.setItem('chess3d.coords', show ? '1' : '0');
@@ -167,16 +195,9 @@ async function boot(){
     THREE = await import('./lib/three.module.js');
     ({ OrbitControls: Controls } = await import('./lib/OrbitControls.js'));
   } catch (e) {
-    console.warn('[Chess3D] local vendor libs failed, attempting CDN fallback…', e);
-    try {
-      THREE = await import('https://unpkg.com/three@0.157.0/build/three.module.js');
-      ({ OrbitControls: Controls } = await import('https://unpkg.com/three@0.157.0/examples/jsm/controls/OrbitControls.js'));
-      statusEl.textContent = 'Loaded Three.js from CDN';
-    } catch (e2) {
-      statusEl.textContent = 'Failed to load Three.js. Please ensure internet access or vendor libs in games/chess3d/lib';
-      console.error('[Chess3D] failed to load Three.js from CDN', e2);
-      return;
-    }
+    statusEl.textContent = 'Three.js vendor files missing. Add them to games/chess3d/lib.';
+    console.warn('[Chess3D] missing vendor libs', e);
+    return;
   }
 
   statusEl.textContent = 'Initializing…';
@@ -266,12 +287,10 @@ async function boot(){
   await placeInitialPosition();
   mountThemePicker(document.getElementById('hud'));
   // Eval bar
-  let evalBar;
   import('./ui/evalBar.js').then(({ mountEvalBar })=>{
     evalBar = mountEvalBar(document.getElementById('hud'));
   });
   // Last move arrow
-  let lastMoveHelper;
   import('./ui/lastMove.js').then(({ initLastMove })=>{
     lastMoveHelper = initLastMove(scene, helpers, THREE);
   });
@@ -335,37 +354,7 @@ maybeAIMove = async function(){
   moveList?.setIndex(rules.historySAN().length);
 };
 
-const origRulesMove = rules.move;
-rules.move = function(opts){
-  if (gameOver) return { ok: false };
-  if (rebuilding) return origRulesMove(opts);
-  const res = origRulesMove(opts);
-  if (res?.ok){
-    moveList?.refresh();
-    moveList?.setIndex(rules.historySAN().length);
-    if (clockPaused){ clocks?.resume(); clockPaused = false; }
-    clocks?.startTurn(rules.turn());
-    // update last move arrow and eval bar asynchronously
-    try{
-      const hist = rules.historySAN();
-      const fen = rules.fen();
-      if (lastMoveHelper && hist.length){
-        // We do not have from/to in SAN, but we can rely on animate hook in jump or use evaluation only
-      }
-      if (evalBar){
-        import('./ai/ai.js').then(({ evaluate })=>{
-          evaluate(fen,{ depth: 10 }).then(({ cp, mate, pv })=>{
-            const line = mate ? `Mate in ${mate}` : pv || '';
-            evalBar.update(cp, line);
-          });
-        });
-      }
-    }catch(_e){}
-    if (rules.inCheckmate()) endGame(`${rules.turn()==='w'?'Black':'White'} wins by checkmate`);
-    else if (rules.inStalemate()) endGame('Draw by stalemate');
-  }
-  return res;
-};
+rules.move = applyMove;
 
 async function jumpToPly(ply){
   rebuilding = true;
