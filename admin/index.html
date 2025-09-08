@@ -15,7 +15,8 @@
   <button class="btn primary" id="saveJson">Download updated games.json</button>
   <button class="btn" id="exportPatch">Download patch ZIP</button>
 </div>
-<textarea id="editor" spellcheck="false" placeholder="Click 'Load games.json' or paste JSON here"></textarea>
+<label for="editor" class="sr-only">JSON Editor</label>
+<textarea id="editor" name="editor" spellcheck="false" placeholder="Click 'Load games.json' or paste JSON here"></textarea>
 <div class="drop" id="drop"><strong>Drag & drop a game ZIP here</strong><br/>Must contain an <code>index.html</code>. Optional: <code>thumb.png</code>/<code>thumbnail.png</code>.</div>
 <div class="grid" id="imports"></div>
 <script>
