@@ -7,6 +7,22 @@ engine.onmessage = (e) => {
     if (line.startsWith('bestmove')) {
       const uci = line.split(' ')[1] ?? null;
       postMessage({ type: 'bestmove', uci: (uci && uci !== '(none)' && uci !== '0000') ? uci : null });
+    } else if (line.startsWith('info')) {
+      const parts = line.split(' ');
+      const depthIdx = parts.indexOf('depth');
+      const scoreIdx = parts.indexOf('score');
+      const pvIdx = parts.indexOf('pv');
+      let cp = null;
+      let mate = null;
+      if (scoreIdx !== -1) {
+        const type = parts[scoreIdx + 1];
+        const val = parseInt(parts[scoreIdx + 2], 10);
+        if (type === 'cp') cp = val;
+        else if (type === 'mate') mate = val;
+      }
+      const depth = depthIdx !== -1 ? parseInt(parts[depthIdx + 1], 10) : undefined;
+      const pv = pvIdx !== -1 ? parts.slice(pvIdx + 1).join(' ') : undefined;
+      postMessage({ type: 'info', depth, cp, mate, pv });
     } else if (line === 'readyok') {
       postMessage({ type: 'ready' });
     }

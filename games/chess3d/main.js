@@ -318,6 +318,9 @@ import('./ui/clocks.js').then(({ mountClocks }) => {
       endGame(`${winner} wins on time`);
     },
   });
+  import('./modes/analysis.js').then(({ mountAnalysis }) => {
+    mountAnalysis(document.getElementById('hud'), { clocks });
+  });
 });
 
 import('./ui/movelist.js').then(({ mountMoveList }) => {

@@ -48,6 +48,31 @@ export async function requestBestMove(fen, {depth=10, skill=4}={}){
   });
 }
 
+export async function evaluate(fen,{depth=12}={}){
+  if (!worker) return { cp: null, mate: null, pv: null };
+  await initEngine();
+  return new Promise((resolve)=>{
+    let lastInfo = null;
+    const onMsg = (ev)=>{
+      const data = ev.data || {};
+      if (data.type === 'info') {
+        lastInfo = data;
+      } else if (data.type === 'bestmove') {
+        worker.removeEventListener('message', onMsg);
+        currentResolve = null;
+        resolve({ cp: lastInfo?.cp ?? null, mate: lastInfo?.mate ?? null, pv: lastInfo?.pv || '' });
+      }
+    };
+    currentResolve = ()=>{
+      worker.removeEventListener('message', onMsg);
+      resolve({ cp: null, mate: null, pv: '' });
+    };
+    worker.addEventListener('message', onMsg);
+    worker.postMessage({ type:'position', fen });
+    worker.postMessage({ type:'go', depth });
+  });
+}
+
 export function cancel(){
   if (!worker) return;
   worker.postMessage({ type:'stop' });
