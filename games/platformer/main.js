@@ -31,6 +31,12 @@ const state = {
 };
 
 const player = { x: 100, y: 0, w: 40, h: 48, vx: 0, vy: 0, onGround: false };
+// Jump feel helpers
+let jumpBuffer = 0;        // seconds remaining to accept a buffered jump
+let coyoteTime = 0;        // seconds remaining to allow late jump after leaving ground
+const JUMP_BUFFER_MAX = 0.12;
+const COYOTE_MAX = 0.12;
+let jumpHeld = false;      // for variable jump height
 const moveSpeed = 300;
 const gravity = 2000;
 const jumpV = -900;
@@ -39,20 +45,29 @@ let camX = 0;
 const keys = new Map();
 addEventListener('keydown', e => {
   keys.set(e.code, true);
-  if (e.code === 'ArrowUp' || e.code === 'Space') jump();
+  if (e.code === 'ArrowUp' || e.code === 'Space') {
+    jumpHeld = true;
+    // buffer the jump even if not currently on ground
+    jumpBuffer = JUMP_BUFFER_MAX;
+  }
   if (e.code === 'KeyP') state.running = !state.running;
   if (e.code === 'KeyR') restart();
 });
-addEventListener('keyup', e => keys.set(e.code, false));
+addEventListener('keyup', e => {
+  keys.set(e.code, false);
+  if (e.code === 'ArrowUp' || e.code === 'Space') {
+    jumpHeld = false;
+    // variable jump height: cut upward velocity on early release
+    if (player.vy < 0) player.vy *= 0.55;
+  }
+});
 addEventListener('pointerdown', () => { if (state.running) jump(); else restart(); });
 document.getElementById('restartBtn').addEventListener('click', () => restart());
 const shareBtn = document.getElementById('shareBtn');
 
 function jump(){
-  if (player.onGround){
-    player.vy = jumpV;
-    player.onGround = false;
-  }
+  player.vy = jumpV;
+  player.onGround = false;
 }
 
 function restart(){
@@ -76,6 +91,10 @@ function loop(ts){
 }
 
 function update(dt){
+  // decrement timers
+  if (jumpBuffer > 0) jumpBuffer = Math.max(0, jumpBuffer - dt);
+  if (coyoteTime > 0) coyoteTime = Math.max(0, coyoteTime - dt);
+
   player.vx = 0;
   if (keys.get('ArrowLeft'))  player.vx = -moveSpeed;
   if (keys.get('ArrowRight')) player.vx =  moveSpeed;
@@ -88,6 +107,18 @@ function update(dt){
   player.vy += gravity * dt;
   player.y += player.vy * dt;
   resolveCollisions('y');
+
+  // if we just left ground, start coyote time window
+  if (!player.onGround && coyoteTime === 0) {
+    // Detect transition: handled in resolveCollisions; here, only refresh when leaving
+  }
+
+  // consume buffered jump if conditions met
+  if (jumpBuffer > 0 && (player.onGround || coyoteTime > 0)){
+    jump();
+    jumpBuffer = 0;
+    coyoteTime = 0;
+  }
 
   checkCollectibles();
 
@@ -126,8 +157,17 @@ function resolveCollisions(axis){
       for (let x = left; x <= right; x++){
         if (getTile(x, bottom) === '1'){
           player.y = bottom * TILE - player.h;
-          player.vy = 0; player.onGround = true; return;
+          player.vy = 0;
+          if (!player.onGround) {
+            // just landed; allow immediate jump consumption but reset timers
+            player.onGround = true;
+          }
+          return;
         }
+      }
+      // left ground this frame
+      if (player.onGround) {
+        coyoteTime = COYOTE_MAX;
       }
       player.onGround = false;
     } else if (player.vy < 0){
