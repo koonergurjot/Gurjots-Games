@@ -5,7 +5,7 @@ const COLS=10, ROWS=20, CELL=Math.floor(c.height/ROWS);
 const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
 const SHAPES = { I:[[1,1,1,1]], O:[[2,2],[2,2]], T:[[0,3,0],[3,3,3]], S:[[0,4,4],[4,4,0]], Z:[[5,5,0],[0,5,5]], J:[[6,0,0],[6,6,6]], L:[[0,0,7],[7,7,7]] };
 let grid = Array.from({length:ROWS},()=>Array(COLS).fill(0));
-let bag = []; function nextFromBag(){ if(bag.length===0) bag = Object.keys(SHAPES); const idx=(Math.random()*bag.length)|0; const t=bag.splice(idx,1)[0]; return SHAPES[t].map(r=>r.slice()); }
+let bag = []; function nextFromBag(){ if(bag.length===0) bag = Object.keys(SHAPES).sort(()=>Math.random()-0.5); const t=bag.shift(); return SHAPES[t].map(r=>r.slice()); }
 let nextM = nextFromBag(); let holdM=null; let canHold=true;
 let cur = spawn();
 let score=0, level=1, lines=0, over=false, dropMs=700, last=0, paused=false;
