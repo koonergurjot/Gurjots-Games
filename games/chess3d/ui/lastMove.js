@@ -1,8 +1,6 @@
 import * as THREE from '../lib/three.module.js';
-import { squareToPosition } from '../board.js';
-import { history } from '../engine/rules.js';
 
-export function initLastMove(scene) {
+export function initLastMove(scene, helpers) {
   const group = new THREE.Group();
   scene.add(group);
   let arrow = null;
@@ -17,8 +15,8 @@ export function initLastMove(scene) {
   function show(from, to) {
     clear();
     if (!from || !to) return;
-    const fromPos = squareToPosition(from);
-    const toPos = squareToPosition(to);
+    const fromPos = helpers.squareToPosition(from);
+    const toPos = helpers.squareToPosition(to);
     if (!fromPos || !toPos) return;
     const start = new THREE.Vector3(fromPos.x, 0.05, fromPos.z);
     const end = new THREE.Vector3(toPos.x, 0.05, toPos.z);
@@ -32,15 +30,5 @@ export function initLastMove(scene) {
     group.add(arrow);
   }
 
-  function fromHistory() {
-    const moves = history();
-    if (!moves.length) {
-      clear();
-      return;
-    }
-    const last = moves[moves.length - 1];
-    show(last.from, last.to);
-  }
-
-  return { show, fromHistory, clear };
+  return { show, clear };
 }

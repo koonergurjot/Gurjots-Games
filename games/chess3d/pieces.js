@@ -45,12 +45,28 @@ export async function movePieceByUci(uci){
   const mover = getPieceBySquare(from);
   if (!mover) return;
 
-  // capture if present
-  const cap = getPieceBySquare(to);
+  // en passant capture: if pawn moves diagonally to empty square, capture pawn behind
+  let cap = getPieceBySquare(to);
   if (cap){
-    sceneRef.remove(cap.mesh);
+    await fadeOutAndRemove(cap.mesh);
+    try{ window.SFX?.beep?.({ freq: 520, dur: 0.08, vol: 0.25 }); }catch(_){}
     for (const [id, p] of pieces.entries()){
       if (p === cap) pieces.delete(id);
+    }
+  }
+  else {
+    // check possible en passant
+    if (mover.type === 'P' && from[0] !== to[0]){
+      const dir = mover.color === 'w' ? -1 : 1; // board ranks increase upwards; captured pawn behind target
+      const epSquare = to[0] + String(parseInt(to[1],10) + dir);
+      const ep = getPieceBySquare(epSquare);
+      if (ep && ep.type === 'P' && ep.color !== mover.color){
+        await fadeOutAndRemove(ep.mesh);
+        try{ window.SFX?.beep?.({ freq: 520, dur: 0.08, vol: 0.25 }); }catch(_){}
+        for (const [id, p] of pieces.entries()){
+          if (p === ep) pieces.delete(id);
+        }
+      }
     }
   }
 
@@ -59,6 +75,21 @@ export async function movePieceByUci(uci){
 
   const target = helpersRef.squareToPosition(to);
   await animateTo(mover.mesh, target);
+  try{ window.SFX?.beep?.({ freq: 600, dur: 0.05, vol: 0.2 }); }catch(_){}
+
+  // handle castling rook move
+  if (mover.type === 'K' && Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) === 2){
+    const isKingSide = to.charCodeAt(0) > from.charCodeAt(0);
+    const rank = from[1];
+    const rookFrom = (isKingSide ? 'h' : 'a') + rank;
+    const rookTo = (isKingSide ? 'f' : 'd') + rank;
+    const rook = getPieceBySquare(rookFrom);
+    if (rook){
+      rook.square = rookTo;
+      const rTarget = helpersRef.squareToPosition(rookTo);
+      await animateTo(rook.mesh, rTarget);
+    }
+  }
 }
 
 function clearPieces(){
@@ -125,6 +156,22 @@ async function animateTo(mesh, target){
     }
     requestAnimationFrame(step);
   });
+}
+
+async function fadeOutAndRemove(mesh){
+  const mats=[];
+  mesh.traverse((ch)=>{ if (ch.isMesh) mats.push(ch.material); });
+  const start=performance.now();
+  const dur=200;
+  await new Promise((resolve)=>{
+    function step(t){
+      const k=Math.min(1,(t-start)/dur);
+      mats.forEach(m=>{ if (m && 'opacity' in m){ m.transparent=true; m.opacity=1-k; }});
+      if (k<1) requestAnimationFrame(step); else resolve();
+    }
+    requestAnimationFrame(step);
+  });
+  sceneRef.remove(mesh);
 }
 
 function fileRankToSquare(f,r){ return String.fromCharCode(97+f) + (r+1); }

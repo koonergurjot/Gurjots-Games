@@ -40,8 +40,10 @@ onmessage = (e) => {
     if (typeof data.skill === 'number') {
       engine.postMessage(`setoption name Skill Level value ${data.skill}`);
     }
-    const depth = typeof data.depth === 'number' ? data.depth : '';
-    engine.postMessage(`go${depth ? ' depth ' + depth : ''}`);
+    const args = [];
+    if (typeof data.depth === 'number') args.push(`depth ${data.depth}`);
+    if (typeof data.movetime === 'number') args.push(`movetime ${data.movetime}`);
+    engine.postMessage(`go${args.length ? ' ' + args.join(' ') : ''}`);
   } else if (data.type === 'stop') {
     engine.postMessage('stop');
   }

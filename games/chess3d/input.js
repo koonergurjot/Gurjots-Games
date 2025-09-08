@@ -7,6 +7,7 @@ export function mountInput({ THREE, scene, camera, renderer, controls, boardHelp
   const mouse = new THREE.Vector2();
   let selectedSquare = null;
   const markers = [];
+  let hoverMesh = null;
 
   function clearMarkers() {
     while (markers.length) {
@@ -78,6 +79,25 @@ export function mountInput({ THREE, scene, camera, renderer, controls, boardHelp
   renderer.domElement.addEventListener('pointerup', (e) => {
     if (controls) controls.enabled = true;
     onPointer(e);
+  });
+  renderer.domElement.addEventListener('pointermove', (e) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(scene.children, true);
+    const tile = intersects.find((i) => i.object.userData && i.object.userData.square);
+    if (tile){
+      const pos = boardHelpers.squareToPosition(tile.object.userData.square);
+      if (!hoverMesh){
+        const g = new THREE.RingGeometry(boardHelpers.tileSize*0.45, boardHelpers.tileSize*0.49, 24);
+        const m = new THREE.MeshBasicMaterial({ color: 0xffff88, transparent:true, opacity:0.45, depthWrite:false, depthTest:false });
+        hoverMesh = new THREE.Mesh(g,m); hoverMesh.rotation.x = -Math.PI/2; scene.add(hoverMesh);
+      }
+      hoverMesh.position.set(pos.x, pos.y + 0.02, pos.z);
+    }else if (hoverMesh){
+      scene.remove(hoverMesh); hoverMesh = null;
+    }
   });
 }
 
