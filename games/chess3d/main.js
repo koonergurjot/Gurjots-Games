@@ -143,6 +143,8 @@ async function maybeAIMove(){
     const uciMove = from + to + (promotion ? '=' + promotion : '');
     await movePieceByUci(uciMove);
     updateStatus();
+    try{ lastMoveHelper?.show(from,to); }catch(_){ }
+    handlePostMove();
   }
 }
 
@@ -314,7 +316,8 @@ async function boot(){
       } catch(_){}
       updateStatus();
       // show last move arrow if helper ready
-      try{ lastMoveHelper?.show(from,to); }catch(_){}
+      try{ lastMoveHelper?.show(from,to); }catch(_){ }
+      handlePostMove();
       maybeAIMove();
     },
   });
