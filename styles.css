@@ -10,6 +10,8 @@
   --tag-border: #2a2a36;
   --panel-bg: #111;
   --panel-fg: #fff;
+  --accent: #38bdf8;
+  --focus: #93c5fd;
 }
 
 :root[data-theme="light"] {
@@ -30,9 +32,14 @@
 html, body {
   margin:0;
   padding:0;
-  font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--fg);
+}
+a { color: inherit; text-decoration: none; }
+a:focus-visible, button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 10px; }
+@media (prefers-reduced-motion: no-preference){
+  :root { scroll-behavior: smooth; }
 }
 a { color: inherit; text-decoration: none; }
 .site-header, .site-footer {
@@ -55,10 +62,12 @@ a { color: inherit; text-decoration: none; }
   padding:6px 10px;
   border-radius:8px;
   cursor:pointer;
+  transition: transform .08s ease, background .2s ease;
 }
 .actions button:hover {
   background: var(--button-hover);
 }
+.actions button:active { transform: translateY(1px); }
 main { max-width:1100px; margin:0 auto; padding:16px; }
 .row { margin:24px 0; }
 .cards {
@@ -74,7 +83,9 @@ main { max-width:1100px; margin:0 auto; padding:16px; }
   overflow:hidden;
   display:flex;
   flex-direction:column;
+  transition: transform .12s ease, box-shadow .2s ease;
 }
+.card:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
 .card img { width:100%; height:140px; object-fit:cover; }
 .meta { padding:12px; }
 .title { display:flex; align-items:center; gap:6px; font-weight:600; }
@@ -92,7 +103,7 @@ main { max-width:1100px; margin:0 auto; padding:16px; }
   top:8px;
   left:-6px;
   transform:rotate(-15deg);
-  background:#e63946;
+  background: linear-gradient(90deg, #22d3ee, #8b5cf6);
   color:#fff;
   padding:2px 8px;
   font-size:12px;
@@ -126,5 +137,10 @@ main { max-width:1100px; margin:0 auto; padding:16px; }
   border-radius:12px;
   min-width:220px;
   text-align:center;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.45);
 }
 .pause-overlay button { margin:6px; }
+
+/* Utility badges/tags */
+.chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:rgba(255,255,255,0.04) }
+.chip .dot { width:8px; height:8px; border-radius:50%; background: var(--accent); }
