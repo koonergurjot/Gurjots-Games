@@ -26,7 +26,7 @@ export async function initEngine(){
   return readyPromise;
 }
 
-export async function requestBestMove(fen, {depth=10, skill=4}={}){
+export async function requestBestMove(fen, {depth=10, skill=4, movetime}={}){
   if (!worker) return { uci: null };
   await initEngine();
   return new Promise((resolve) => {
@@ -44,7 +44,7 @@ export async function requestBestMove(fen, {depth=10, skill=4}={}){
     };
     worker.addEventListener('message', onMsg);
     worker.postMessage({ type:'position', fen });
-    worker.postMessage({ type:'go', depth, skill });
+    worker.postMessage({ type:'go', depth, skill, movetime });
   });
 }
 

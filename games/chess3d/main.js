@@ -84,6 +84,14 @@ function updateStatus() {
   statusEl.textContent = text;
 }
 
+function difficultyToSearch(d){
+  const clamped = Math.min(8, Math.max(1, d|0));
+  const depth = 6 + clamped; // 7..14
+  const movetime = 200 + clamped * 200; // 400..1800ms
+  const skill = clamped; // 1..8
+  return { depth, movetime, skill };
+}
+
 async function maybeAIMove(){
   const mode = getMode();
   const turn = rules.turn();
@@ -92,7 +100,8 @@ async function maybeAIMove(){
   cancel();
   const token = ++searchToken;
   thinkingEl.hidden = false;
-  const { uci } = await requestBestMove(rules.fen(), { skill: getDifficulty(), depth: 8 + getDifficulty() });
+  const cfg = difficultyToSearch(getDifficulty());
+  const { uci } = await requestBestMove(rules.fen(), cfg);
   thinkingEl.hidden = true;
   if (token !== searchToken || !uci) return;
   const from = uci.slice(0,2);
@@ -167,6 +176,8 @@ async function boot(){
   await initEngine();
 
   const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0f1a);
+  scene.fog = new THREE.Fog(0x0b0f1a, 18, 36);
   const camera = new THREE.PerspectiveCamera(
     50,
     (stage.clientWidth || window.innerWidth) /
@@ -183,6 +194,10 @@ async function boot(){
   const width = stage.clientWidth || window.innerWidth;
   const height = stage.clientHeight || window.innerHeight;
   renderer.setSize(width, height);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
   stage.appendChild(renderer.domElement);
 
   window.addEventListener('resize', () => {
@@ -200,11 +215,18 @@ async function boot(){
 
   mountCameraPresets(document.getElementById('hud'), camera, controls);
 
-  const amb = new THREE.AmbientLight(0xffffff, 0.5);
+  const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.6);
   scene.add(amb);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.85);
   dir.position.set(8, 12, 6);
   dir.castShadow = true;
+  dir.shadow.mapSize.set(1024,1024);
+  dir.shadow.camera.near = 1;
+  dir.shadow.camera.far = 40;
+  dir.shadow.camera.left = -10;
+  dir.shadow.camera.right = 10;
+  dir.shadow.camera.top = 10;
+  dir.shadow.camera.bottom = -10;
   scene.add(dir);
 
   statusEl.textContent = 'Scene ready';
@@ -220,6 +242,16 @@ async function boot(){
   await createPieces(scene, THREE, helpers);
   await placeInitialPosition();
   mountThemePicker(document.getElementById('hud'));
+  // Eval bar
+  let evalBar;
+  import('./ui/evalBar.js').then(({ mountEvalBar })=>{
+    evalBar = mountEvalBar(document.getElementById('hud'));
+  });
+  // Last move arrow
+  let lastMoveHelper;
+  import('./ui/lastMove.js').then(({ initLastMove })=>{
+    lastMoveHelper = initLastMove(scene, helpers);
+  });
   mountInput({
     THREE,
     scene,
@@ -230,7 +262,17 @@ async function boot(){
     rulesApi: rules,
     onMove: async ({ from, to, promotion }) => {
       await movePieceByUci(from + to + (promotion ? '=' + promotion : ''));
+      try {
+        const inCheck = rules.inCheck();
+        if (inCheck) {
+          window.SFX?.seq?.([[880,0.08,0.25],[440,0.10,0.25]]);
+        } else {
+          window.SFX?.beep?.({ freq: 660, dur: 0.06, vol: 0.2 });
+        }
+      } catch(_){}
       updateStatus();
+      // show last move arrow if helper ready
+      try{ lastMoveHelper?.show(from,to); }catch(_){}
       maybeAIMove();
     },
   });
@@ -279,6 +321,22 @@ rules.move = function(opts){
     moveList?.setIndex(rules.historySAN().length);
     if (clockPaused){ clocks?.resume(); clockPaused = false; }
     clocks?.startTurn(rules.turn());
+    // update last move arrow and eval bar asynchronously
+    try{
+      const hist = rules.historySAN();
+      const fen = rules.fen();
+      if (lastMoveHelper && hist.length){
+        // We do not have from/to in SAN, but we can rely on animate hook in jump or use evaluation only
+      }
+      if (evalBar){
+        import('./ai/ai.js').then(({ evaluate })=>{
+          evaluate(fen,{ depth: 10 }).then(({ cp, mate, pv })=>{
+            const line = mate ? `Mate in ${mate}` : pv || '';
+            evalBar.update(cp, line);
+          });
+        });
+      }
+    }catch(_e){}
     if (rules.inCheckmate()) endGame(`${rules.turn()==='w'?'Black':'White'} wins by checkmate`);
     else if (rules.inStalemate()) endGame('Draw by stalemate');
   }
