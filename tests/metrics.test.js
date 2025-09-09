@@ -37,4 +37,21 @@ describe('metrics session timing', () => {
 
     expect(localStorage.getItem('time:only')).toBe('250');
   });
+
+  it('handles non-numeric stored values gracefully', () => {
+    let now = 0;
+    performance.now = () => now;
+
+    // preset invalid stored values
+    localStorage.setItem('time:only', 'NaN');
+    const dayKey = 'dayplays:' + new Date().toISOString().slice(0, 10);
+    localStorage.setItem(dayKey, 'bad');
+
+    startSessionTimer('only');
+    now = 100;
+    endSessionTimer('only');
+
+    expect(localStorage.getItem('time:only')).toBe('100');
+    expect(localStorage.getItem(dayKey)).toBe('1');
+  });
 });
