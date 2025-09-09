@@ -17,12 +17,15 @@ export function endSessionTimer(slug){
 
   const ms = performance.now() - session.start;
   const key = `time:${session.slug}`;
-  const prev = Number(localStorage.getItem(key) || 0);
+  // guard against invalid stored values (e.g. "NaN")
+  const prevRaw = Number(localStorage.getItem(key));
+  const prev = Number.isFinite(prevRaw) ? prevRaw : 0;
   localStorage.setItem(key, String(prev + Math.round(ms)));
 
   // daily plays aggregation
   const dkey = `dayplays:${today()}`;
-  const dprev = Number(localStorage.getItem(dkey) || 0);
+  const dprevRaw = Number(localStorage.getItem(dkey));
+  const dprev = Number.isFinite(dprevRaw) ? dprevRaw : 0;
   localStorage.setItem(dkey, String(dprev + 1));
   session = null;
 }
@@ -32,7 +35,9 @@ export function getTimeByGame(){
   for (const k of Object.keys(localStorage)) {
     if (k.startsWith('time:')) {
       const slug = k.split(':')[1];
-      rows.push({ slug, ms: Number(localStorage.getItem(k)||0) });
+      const msRaw = Number(localStorage.getItem(k));
+      const ms = Number.isFinite(msRaw) ? msRaw : 0;
+      rows.push({ slug, ms });
     }
   }
   return rows.sort((a,b)=> b.ms - a.ms);
@@ -42,7 +47,9 @@ export function getPlaysByDay(limit=14){
   const rows = [];
   for (const k of Object.keys(localStorage)) {
     if (k.startsWith('dayplays:')) {
-      rows.push({ day: k.split(':')[1], count: Number(localStorage.getItem(k)||0) });
+      const countRaw = Number(localStorage.getItem(k));
+      const count = Number.isFinite(countRaw) ? countRaw : 0;
+      rows.push({ day: k.split(':')[1], count });
     }
   }
   rows.sort((a,b)=> a.day.localeCompare(b.day));
