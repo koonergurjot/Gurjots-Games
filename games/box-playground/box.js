@@ -1,14 +1,31 @@
 (async () => {
   const CANNON = await import('https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js');
+  const { RGBELoader } = await import('https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/loaders/RGBELoader.js');
+  const { EffectComposer } = await import('https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/postprocessing/EffectComposer.js');
+  const { RenderPass } = await import('https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/postprocessing/RenderPass.js');
+  const { UnrealBloomPass } = await import('https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/postprocessing/UnrealBloomPass.js');
+  const { ShaderPass } = await import('https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/postprocessing/ShaderPass.js');
+  const { FXAAShader } = await import('https://cdn.jsdelivr.net/npm/three@0.159/examples/jsm/shaders/FXAAShader.js');
 
   const el = document.getElementById('scene');
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   el.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0f0a1f);
+
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const hdr = await new RGBELoader().loadAsync(
+    'https://cdn.jsdelivr.net/npm/three@0.159/examples/textures/equirectangular/venice_sunset_1k.hdr'
+  );
+  const envMap = pmrem.fromEquirectangular(hdr).texture;
+  scene.environment = envMap;
+  hdr.dispose();
+  pmrem.dispose();
 
   const camera = new THREE.PerspectiveCamera(
     60,
@@ -23,8 +40,26 @@
 
   const light = new THREE.DirectionalLight(0xffffff, 1.2);
   light.position.set(2, 3, 2);
+  light.castShadow = true;
+  light.shadow.mapSize.set(1024, 1024);
   scene.add(light);
   scene.add(new THREE.AmbientLight(0x7766ff, 0.4));
+
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    0.25,
+    0.4,
+    0.85
+  );
+  composer.addPass(bloomPass);
+  const fxaaPass = new ShaderPass(FXAAShader);
+  fxaaPass.material.uniforms.resolution.value.set(
+    1 / window.innerWidth,
+    1 / window.innerHeight
+  );
+  composer.addPass(fxaaPass);
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(12, 12),
@@ -32,10 +67,13 @@
       color: 0x141029,
       metalness: 0.2,
       roughness: 0.8,
+      envMapIntensity: 1,
     })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -0.75;
+  floor.receiveShadow = true;
+  floor.castShadow = false;
   scene.add(floor);
 
   // physics setup
@@ -52,8 +90,11 @@
       color: 0x8b5cf6,
       metalness: 0.5,
       roughness: 0.3,
+      envMapIntensity: 1,
     })
   );
+  cube.castShadow = true;
+  cube.receiveShadow = true;
   scene.add(cube);
 
   const line = new THREE.LineSegments(
@@ -87,6 +128,11 @@
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    fxaaPass.material.uniforms.resolution.value.set(
+      1 / window.innerWidth,
+      1 / window.innerHeight
+    );
   }
   window.addEventListener('resize', onResize);
 
@@ -103,7 +149,7 @@
     });
 
     controls.update();
-    renderer.render(scene, camera);
+    composer.render();
   }
   animate();
 
@@ -148,8 +194,10 @@
       const radius = 0.3;
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(radius, 24, 16),
-        new THREE.MeshStandardMaterial({ color: 0x22d3ee })
+        new THREE.MeshStandardMaterial({ color: 0x22d3ee, envMapIntensity: 1 })
       );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       scene.add(mesh);
 
       const body = new CANNON.Body({
@@ -170,8 +218,10 @@
       const height = 0.6;
       const mesh = new THREE.Mesh(
         new THREE.ConeGeometry(radius, height, 24),
-        new THREE.MeshStandardMaterial({ color: 0x8b5cf6 })
+        new THREE.MeshStandardMaterial({ color: 0x8b5cf6, envMapIntensity: 1 })
       );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       scene.add(mesh);
 
       const body = new CANNON.Body({ mass: 1 });
