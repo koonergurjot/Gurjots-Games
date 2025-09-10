@@ -3,8 +3,7 @@ import * as rules from "./engine/rules.js";
 import { mountInput } from "./input.js";
 import { createPieces, placeInitialPosition, movePieceByUci } from "./pieces.js";
 import { mountHUD } from "./ui/hud.js";
-import { initEngine, requestBestMove, cancel } from "./ai/ai.js";
-import { mountModeBar, getMode, getDifficulty } from "./ui/modeBar.js";
+import { bestMove, evaluate, cancel } from "./ai/simpleEngine.js";
 import { mountThemePicker } from "./ui/themePicker.js";
 import { mountCameraPresets } from "./ui/cameraPresets.js";
 
@@ -14,6 +13,7 @@ const stage = document.getElementById('stage');
 const statusEl = document.getElementById('status');
 const coordsEl = document.getElementById('coords');
 const thinkingEl = document.getElementById('thinking');
+const difficultyEl = document.getElementById('difficulty');
 stage.style.position = 'relative';
 stage.appendChild(coordsEl);
 coordsEl.style.position = 'absolute';
@@ -34,11 +34,9 @@ function handlePostMove(){
   try{ moveList?.refresh(); moveList?.setIndex(rules.historySAN().length); }catch(_){ }
   try{ if (clockPaused){ clocks?.resume(); clockPaused = false; } clocks?.startTurn(rules.turn()); }catch(_){ }
   try{
-    import('./ai/ai.js').then(({ evaluate })=>{
-      evaluate(rules.fen(),{ depth: 10 }).then(({ cp, mate, pv })=>{
-        const line = mate ? `Mate in ${mate}` : pv || '';
-        try{ evalBar?.update(cp, line); }catch(_){ }
-      });
+    evaluate(rules.fen(), { depth: getDepth() }).then(({ cp, mate, pv })=>{
+      const line = mate ? `Mate in ${mate}` : pv || '';
+      try{ evalBar?.update(cp, line); }catch(_){ }
     });
   }catch(_){ }
   if (rules.inCheckmate()) endGame(`${rules.turn()==='w'?'Black':'White'} wins by checkmate`);
@@ -112,31 +110,25 @@ function updateStatus() {
   statusEl.textContent = text;
 }
 
-function difficultyToSearch(d){
-  const clamped = Math.min(8, Math.max(1, d|0));
-  const depth = 6 + clamped; // 7..14
-  const movetime = 200 + clamped * 200; // 400..1800ms
-  const skill = clamped; // 1..8
-  return { depth, movetime, skill };
+function getDepth(){
+  const val = parseInt(difficultyEl?.value || '1', 10);
+  return Math.max(1, val);
 }
 
 async function maybeAIMove(){
-  const mode = getMode();
   const turn = rules.turn();
-  const aiTurn = (mode === 'aiw' && turn === 'b') || (mode === 'aib' && turn === 'w');
-  if (!aiTurn) return;
-  cancel();
+  if (turn !== 'b') return; // AI plays black
   const token = ++searchToken;
   thinkingEl.hidden = false;
-  const cfg = difficultyToSearch(getDifficulty());
-  const { uci } = await requestBestMove(rules.fen(), cfg);
+  const depth = getDepth();
+  const { uci } = await bestMove(rules.fen(), depth);
   thinkingEl.hidden = true;
   if (token !== searchToken || !uci) return;
   const from = uci.slice(0,2);
   const to = uci.slice(2,4);
   let promotion;
   if (uci.length > 4) {
-    promotion = uci.includes('=') ? uci.split('=')[1].toLowerCase() : 'q';
+    promotion = uci.slice(4).toLowerCase();
   }
   const res = rules.move({ from, to, promotion });
   if (res?.ok) {
@@ -182,13 +174,11 @@ mountHUD({
   onCoords: toggleCoords,
 });
 
-mountModeBar(document.getElementById('hud'), {
-  onChange: () => {
-    cancel();
-    searchToken++;
-    thinkingEl.hidden = true;
-    maybeAIMove();
-  }
+difficultyEl?.addEventListener('change', () => {
+  cancel();
+  searchToken++;
+  thinkingEl.hidden = true;
+  maybeAIMove();
 });
 
 async function boot(){
@@ -203,7 +193,6 @@ async function boot(){
   }
 
   statusEl.textContent = 'Initializing…';
-  await initEngine();
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0f1a);
