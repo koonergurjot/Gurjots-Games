@@ -6,10 +6,27 @@ import { emitEvent } from '../../shared/achievements.js';
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const DPR = Math.min(2, window.devicePixelRatio||1);
+
+// Parallax starfield layers
+const starLayers = [
+  { speed: 0.2, size: 1, count: 60, stars: [] },
+  { speed: 0.5, size: 2, count: 40, stars: [] },
+  { speed: 1, size: 3, count: 20, stars: [] },
+];
+function initStars(){
+  for (const layer of starLayers){
+    layer.stars = Array.from({length: layer.count}, ()=> ({
+      x: Math.random()*innerWidth,
+      y: Math.random()*innerHeight,
+    }));
+  }
+}
+let shake = 0;
 function resize(){
   canvas.width = innerWidth * DPR;
   canvas.height = innerHeight * DPR;
   ctx.setTransform(DPR,0,0,DPR,0,0);
+  initStars();
 }
 addEventListener('resize', resize); resize();
 
@@ -120,12 +137,16 @@ function shoot(spread=0, speedMul=1){
   beep(660,0.03);
 }
 
-function explode(x,y, n=20, col='#e11d48'){
+function explode(x,y, n=20, colors=['#e11d48'], shakeAmt=0){
+  colors = Array.isArray(colors) ? colors : [colors];
   for (let i=0;i<n;i++){
     const a = Math.random()*Math.PI*2;
     const s = Math.random()*4+1;
-    particles.push({ x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life: 30+Math.random()*20, col });
+    const life = 40+Math.random()*20;
+    const col = colors[Math.floor(Math.random()*colors.length)];
+    particles.push({ x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life, max:life, col, alpha:1 });
   }
+  if (shakeAmt>0) shake = Math.max(shake, shakeAmt);
   beep(220,0.09, 0.08);
 }
 
@@ -168,13 +189,22 @@ function loop(t){
 requestAnimationFrame(loop);
 
 function update(dt){
+  // Parallax starfield
+  for (const layer of starLayers){
+    for (const s of layer.stars){
+      s.x -= layer.speed * dt;
+      if (s.x < 0){ s.x += innerWidth; s.y = Math.random()*innerHeight; }
+    }
+  }
+  if (shake>0) shake *= 0.92;
+
   // Ship movement
   if (keys.has('arrowleft')) ship.angle -= 0.065;
   if (keys.has('arrowright')) ship.angle += 0.065;
   if (keys.has('arrowup')) {
     ship.vx += Math.cos(ship.angle) * (ship.thrust*1.05);
     ship.vy += Math.sin(ship.angle) * (ship.thrust*1.05);
-    particles.push({ x: ship.x - Math.cos(ship.angle)*12, y: ship.y - Math.sin(ship.angle)*12, vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5, life: 18, col: '#6ee7b7' });
+    particles.push({ x: ship.x - Math.cos(ship.angle)*12, y: ship.y - Math.sin(ship.angle)*12, vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5, life: 18, max:18, col: '#6ee7b7', alpha:1 });
   }
   ship.x += ship.vx; ship.y += ship.vy;
   ship.vx *= ship.drag; ship.vy *= ship.drag;
@@ -212,7 +242,7 @@ function update(dt){
       if (Math.hypot(b.x-r.x, b.y-r.y) < r.radius){
         bullets.splice(j,1);
         rocks.splice(i,1);
-        explode(r.x, r.y, 22, '#eab308');
+        explode(r.x, r.y, 22, ['#eab308','#fef08a'], r.size*2);
         score += (r.size===3? 20 : r.size===2? 50 : 100);
         // split
         if (r.size>1){
@@ -234,7 +264,7 @@ function update(dt){
     const s = saucers[i];
     for (let j=bullets.length-1;j>=0;j--){
       const b = bullets[j]; if (b.enemy) continue;
-      if (Math.hypot(b.x-s.x, b.y-s.y) < s.r){ bullets.splice(j,1); s.hp--; if (s.hp<=0){ saucers.splice(i,1); explode(s.x,s.y,28,'#f59e0b'); score += 150; updateHUD(); } break; }
+      if (Math.hypot(b.x-s.x, b.y-s.y) < s.r){ bullets.splice(j,1); s.hp--; if (s.hp<=0){ saucers.splice(i,1); explode(s.x,s.y,28,['#f59e0b','#fde68a'],5); score += 150; updateHUD(); } break; }
     }
   }
 
@@ -243,7 +273,7 @@ function update(dt){
     const r=rocks[i];
     if (ship.inv<=0 && Math.hypot(ship.x-r.x, ship.y-r.y) < r.radius+ship.radius*0.7){
       rocks.splice(i,1);
-      explode(ship.x, ship.y, 36, '#e11d48');
+      explode(ship.x, ship.y, 36, ['#e11d48','#f43f5e','#be123c'],8);
       lives--; ship.inv=90; ship.vx=ship.vy=0; // respawn invincibility
       updateHUD();
       if (lives<=0){
@@ -262,14 +292,14 @@ function update(dt){
     const b=bullets[j]; if(!b.enemy) continue; if (ship.inv>0) continue;
     if (Math.hypot(ship.x-b.x, ship.y-b.y) < ship.radius){
       bullets.splice(j,1);
-      explode(ship.x, ship.y, 24, '#e11d48');
+      explode(ship.x, ship.y, 24, ['#e11d48','#f43f5e'],6);
       lives--; ship.inv=90; ship.vx=ship.vy=0; updateHUD();
       if (lives<=0){ running=false; saveBestScore('asteroids', score); endSessionTimer('asteroids'); emitEvent({ type: 'game_over', slug: 'asteroids', value: score }); shareBtn.hidden=false; shareBtn.onclick=()=>shareScore('asteroids', score); }
     }
   }
 
   // Particles
-  for (const p of particles){ p.x+=p.vx; p.y+=p.vy; p.life--; }
+  for (const p of particles){ p.x+=p.vx; p.y+=p.vy; p.life--; p.alpha = p.life/p.max; }
   for (let i=particles.length-1;i>=0;i--) if (particles[i].life<=0) particles.splice(i,1);
 
   // Wave clear
@@ -282,17 +312,19 @@ function update(dt){
 function drawShip(x,y,a,inv=false){
   ctx.save();
   ctx.translate(x,y); ctx.rotate(a);
-  ctx.strokeStyle = inv && (Math.floor(performance.now()/120)%2===0) ? '#6ee7b7' : '#eaeaf2';
-  ctx.lineWidth = 2; ctx.beginPath();
+  const col = inv && (Math.floor(performance.now()/120)%2===0) ? '#6ee7b7' : '#94a3b8';
+  ctx.fillStyle = col;
+  ctx.beginPath();
   ctx.moveTo(16,0); ctx.lineTo(-12,-10); ctx.lineTo(-6,0); ctx.lineTo(-12,10); ctx.closePath();
-  ctx.stroke();
+  ctx.fill();
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 2; ctx.stroke();
   ctx.restore();
 }
 
 function drawRock(r){
   ctx.save();
   ctx.translate(r.x,r.y); ctx.rotate(r.angle);
-  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth=2;
+  ctx.fillStyle = '#475569';
   ctx.beginPath();
   for (let i=0;i<r.verts;i++){
     const ang = (i/r.verts)*Math.PI*2;
@@ -300,19 +332,25 @@ function drawRock(r){
     const px = Math.cos(ang)*rad, py = Math.sin(ang)*rad;
     if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
   }
-  ctx.closePath(); ctx.stroke();
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth=2; ctx.stroke();
   ctx.restore();
 }
 
 function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  // background stars (cheap)
-  ctx.globalAlpha = 0.2;
-  for (let i=0;i<30;i++){
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect((i*97 + performance.now()*0.02)%innerWidth, (i*53)%innerHeight, 2, 2);
+
+  // starfield layers
+  ctx.fillStyle = '#ffffff';
+  for (const layer of starLayers){
+    ctx.globalAlpha = 0.2 + layer.speed*0.1;
+    for (const s of layer.stars){ ctx.fillRect(s.x,s.y,layer.size,layer.size); }
   }
   ctx.globalAlpha = 1;
+
+  ctx.save();
+  if (shake>0) ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
 
   // ship
   drawShip(ship.x, ship.y, ship.angle, ship.inv>0);
@@ -335,8 +373,10 @@ function render(){
   for (const r of rocks){ drawRock(r); }
 
   // particles
-  for (const p of particles){ ctx.globalAlpha = Math.max(p.life/50,0); ctx.fillStyle = p.col; ctx.fillRect(p.x,p.y,2,2); }
+  for (const p of particles){ ctx.globalAlpha = Math.max(p.alpha,0); ctx.fillStyle = p.col; ctx.fillRect(p.x,p.y,2,2); }
   ctx.globalAlpha = 1;
+
+  ctx.restore();
 }
 
 // Session timing
