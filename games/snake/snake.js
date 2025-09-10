@@ -15,6 +15,7 @@ let snake = [
 let lastSnake = snake.map(s => ({ ...s }));
 let speedMs = 120;
 let score = 0;
+let bestScore = Number(localStorage.getItem('snake:best') || 0);
 let dead = false;
 let deadHandled = false;
 const GAME_ID = 'snake';
@@ -191,7 +192,7 @@ function render(time) {
   ctx.font = 'bold 20px Inter, system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText(`Score: ${score} • Lv ${level}`, 16, 28);
+  ctx.fillText(`Score: ${score} (Best: ${bestScore}) • Lv ${level}`, 16, 28);
 
   if (score > 0 && score % 10 === 0 && obstacles.length < Math.floor(score / 10) * (N / 2)) addObstacleRow();
 
@@ -230,6 +231,10 @@ function saveScore(s) {
   localStorage.setItem(key, JSON.stringify(top));
   const best = top[0]?.score || 0;
   GG.setMeta(GAME_ID, 'Best: ' + best);
+  if (s > bestScore) {
+    bestScore = s;
+    localStorage.setItem('snake:best', bestScore);
+  }
   if (window.LB) {
     LB.submitScore(GAME_ID, s, DAILY_MODE ? DAILY_SEED : null);
     try { renderScores(); } catch { }
