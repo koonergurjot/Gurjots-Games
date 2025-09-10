@@ -2,6 +2,7 @@
 const c=document.getElementById('board'), ctx=c.getContext('2d'); const S=60;
 const hud=HUD.create({title:'Chess', onPauseToggle:()=>{}, onRestart:()=>reset()});
 const statusEl=document.getElementById('status');
+const depthEl=document.getElementById('difficulty');
 const COLS=8, ROWS=8;
 const EMPTY = '.';
 // Simple FEN start
@@ -12,6 +13,22 @@ let lastMove=null; let premove=null;
 
 function reset(){ board = parseFEN(START); turn='w'; sel=null; moves=[]; over=false; draw(); status('White to move'); }
 function parseFEN(f){ const rows=f.split('/'); const b=[]; for(const r of rows){ const row=[]; for(const ch of r){ if(/[1-8]/.test(ch)){ for(let i=0;i<Number(ch);i++) row.push(EMPTY);} else row.push(ch);} b.push(row);} return b; }
+function boardToFEN(){
+  const rows=[];
+  for(const r of board){
+    let line=""; let count=0;
+    for(const p of r){
+      if(p===EMPTY){ count++; }
+      else {
+        if(count){ line+=count; count=0; }
+        line+=p;
+      }
+    }
+    if(count) line+=count;
+    rows.push(line);
+  }
+  return rows.join('/');
+}
 function pieceAt(x,y){ if(y<0||y>=8||x<0||x>=8) return null; return board[y][x]; }
 function colorOf(p){ if(!p||p===EMPTY) return null; return (p===p.toUpperCase())?'w':'b'; }
 function toUpper(p){return p.toUpperCase();}
@@ -69,7 +86,7 @@ function inCheck(side){
   for(let y=0;y<8;y++) for(let x=0;x<8;x++){
     const p=pieceAt(x,y); if(p===EMPTY || colorOf(p)===side) continue;
     const ms = genMovesNoFilter(x,y); // pseudo
-    if(ms.some(m=>m.x===k.x && m.y===k.y)) return True;
+    if(ms.some(m=>m.x===k.x && m.y===k.y)) return true;
   }
   return false;
 }
@@ -134,6 +151,22 @@ function draw(){
     ctx.fillText(g, x*S+S/2, y*S+S/2+2);
   }
 }
+
+function aiMove(){
+  if(over) return;
+  const depth=parseInt(depthEl.value,10)||1;
+  const fen=boardToFEN()+" "+turn;
+  const move=ai.bestMove(fen, depth);
+  if(!move) return;
+  board[move.to.y][move.to.x]=board[move.from.y][move.from.x];
+  board[move.from.y][move.from.x]=EMPTY;
+  lastMove={from:{x:move.from.x,y:move.from.y},to:{x:move.to.x,y:move.to.y}};
+  turn='w';
+  if(checkmate(turn)){ status('White in checkmate!'); over=true; }
+  else if(inCheck(turn)){ status('White to move — CHECK!'); }
+  else status('White to move');
+  draw();
+}
 c.addEventListener('click', (e)=>{
   if(over) return;
   const r=c.getBoundingClientRect();
@@ -144,20 +177,21 @@ c.addEventListener('click', (e)=>{
   } else {
     const m = moves.find(mm=>mm.x===x&&mm.y===y);
     if(m){
-      const from={x:sel.x,y:sel.y};
-      board[m.y][m.x]=board[sel.y][sel.x]; board[sel.y][sel.x]=EMPTY; lastMove={from,to:{x:m.x,y:m.y}};
-      sel=null; moves=[]; turn = (turn==='w'?'b':'w');
-      // if premove set and it's now your color, execute if legal
-      if(premove && colorOf(pieceAt(premove.from.x,premove.from.y))===turn){
+        const from={x:sel.x,y:sel.y};
+        board[m.y][m.x]=board[sel.y][sel.x]; board[sel.y][sel.x]=EMPTY; lastMove={from,to:{x:m.x,y:m.y}};
+        sel=null; moves=[]; turn = (turn==='w'?'b':'w');
+        // if premove set and it's now your color, execute if legal
+        if(premove && colorOf(pieceAt(premove.from.x,premove.from.y))===turn){
         const legal=genMoves(premove.from.x,premove.from.y).find(z=>z.x===premove.to.x&&z.y===premove.to.y);
         if(legal){ sel={x:premove.from.x,y:premove.from.y}; moves=[legal]; const fakeEvt={clientX:(legal.x+0.5)*S + r.left, clientY:(legal.y+0.5)*S + r.top}; // not used further
           board[legal.y][legal.x]=board[sel.y][sel.x]; board[sel.y][sel.x]=EMPTY; lastMove={from:{x:sel.x,y:sel.y},to:{x:legal.x,y:legal.y}}; sel=null; moves=[]; turn=(turn==='w'?'b':'w'); }
         premove=null;
       }
-      if (checkmate(turn)){ status((turn==='w'?'White':'Black')+' in checkmate!'); over=true; } 
-      else if (inCheck(turn)){ status((turn==='w'?'White':'Black')+' to move — CHECK!'); } 
-      else status((turn==='w'?'White':'Black')+' to move');
-      draw(); return;
+        if (checkmate(turn)){ status((turn==='w'?'White':'Black')+' in checkmate!'); over=true; draw(); return; }
+        if(turn==='b'){ draw(); status('AI thinking...'); setTimeout(aiMove,20); return; }
+        if (inCheck(turn)){ status('White to move — CHECK!'); }
+        else status('White to move');
+        draw(); return;
     } else { sel=null; moves=[]; draw(); }
   }
 });
