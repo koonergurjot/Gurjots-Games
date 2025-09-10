@@ -24,10 +24,14 @@ let holdM=null;
 let canHold=true;
 
 let cur=spawn();
+let ghost;
+let showGhost=localStorage.getItem('tetris:ghost')!=='0';
 let score=0, level=1, lines=0, over=false, dropMs=700, last=0, paused=false;
 let lockTimer=0; const LOCK_DELAY=0.5; let lastFrame=0;
 let clearAnim=0, clearRows=[];
 let bgShift=0;
+
+updateGhost();
 
 function spawn(){
   const m=nextM;
@@ -58,6 +62,12 @@ function merge(p){
   for(let y=0;y<p.m.length;y++)
     for(let x=0;x<p.m[y].length;x++)
       if(p.m[y][x]) grid[p.y+y][p.x+x]=p.m[y][x];
+}
+
+function updateGhost(){
+  ghost={m:cur.m.map(r=>r.slice()),x:cur.x,y:cur.y};
+  while(!collide(ghost)) ghost.y++;
+  ghost.y--;
 }
 
 function updateBest(){
@@ -110,12 +120,10 @@ function drawMatrix(m,ox,oy){
     }
 }
 function drawGhost(){
-  const g={m:cur.m.map(r=>r.slice()),x:cur.x,y:cur.y};
-  while(!collide(g)) g.y++;
-  g.y--;
-  for(let y=0;y<g.m.length;y++)
-    for(let x=0;x<g.m[y].length;x++)
-      if(g.m[y][x]) drawPieceCell(g.x+x,g.y+y,g.m[y][x],0.3);
+  if(!showGhost||!ghost) return;
+  for(let y=0;y<ghost.m.length;y++)
+    for(let x=0;x<ghost.m[y].length;x++)
+      if(ghost.m[y][x]) drawPieceCell(ghost.x+x,ghost.y+y,ghost.m[y][x],0.3);
 }
 function draw(){
   bgShift=(bgShift+0.5)%c.height;
@@ -201,12 +209,14 @@ function drop(){
   } else {
     lockTimer=0;
   }
+  updateGhost();
 }
 function hardDrop(){
   while(!collide(cur)) cur.y++;
   cur.y--;
   score+=2;
   updateBest();
+  updateGhost();
 }
 function hold(){
   if(!canHold) return;
@@ -218,9 +228,16 @@ function hold(){
     cur=spawn();
   }
   canHold=false;
+  updateGhost();
 }
 
 addEventListener('keydown',e=>{
+  if(e.key.toLowerCase()==='g'){
+    showGhost=!showGhost;
+    localStorage.setItem('tetris:ghost',showGhost?'1':'0');
+    updateGhost();
+    return;
+  }
   if(!started){
     if(e.code==='Space'){ started=true; return; }
     return;
@@ -230,6 +247,7 @@ addEventListener('keydown',e=>{
     cur=spawn();
     score=0; level=1; lines=0;
     over=false; started=false;
+    updateGhost();
     return;
   }
   if(e.key.toLowerCase()==='p'){ paused=!paused; return; }
@@ -238,12 +256,12 @@ addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft'){
     const nx=cur.x-1;
     const p={...cur,x:nx};
-    if(!collide(p)){ cur.x=nx; lockTimer=0; }
+    if(!collide(p)){ cur.x=nx; lockTimer=0; updateGhost(); }
   }
   if(e.key==='ArrowRight'){
     const nx=cur.x+1;
     const p={...cur,x:nx};
-    if(!collide(p)){ cur.x=nx; lockTimer=0; }
+    if(!collide(p)){ cur.x=nx; lockTimer=0; updateGhost(); }
   }
   if(e.key==='ArrowUp'){
     const R=rotate(cur.m);
@@ -256,6 +274,7 @@ addEventListener('keydown',e=>{
       cur=cand;
       SFX.beep({freq:500,dur:0.03});
       lockTimer=0;
+      updateGhost();
     }
   }
   if(e.key==='ArrowDown'){
@@ -271,6 +290,7 @@ addEventListener('keydown',e=>{
     cur=spawn();
     canHold=true;
     lockTimer=0;
+    updateGhost();
   }
   if(e.key.toLowerCase()==='c'){
     hold();
@@ -296,6 +316,7 @@ function loop(ts){
         cur=spawn();
         canHold=true;
         lockTimer=0;
+        updateGhost();
         if(collide(cur)){
           over=true;
           updateBest();
