@@ -2,6 +2,9 @@
 /**
  * Creates an 8x8 board at y=0. Provides helpers to map algebraic squares to positions.
  */
+import { woodDataUrl } from "./textures/wood.js";
+import { marbleDataUrl } from "./textures/marble.js";
+
 let tiles = [];
 let rim;
 let THREERef;
@@ -13,8 +16,24 @@ export async function createBoard(scene, THREE){
   const tileSize = 1;
   const half = 4 * tileSize;
 
-  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xb7c0d8, metalness: 0.15, roughness: 0.45 });
-  const blackMat = new THREE.MeshStandardMaterial({ color: 0x5a6373, metalness: 0.2, roughness: 0.5 });
+  // Load textures from data URLs
+  const loader = new THREE.TextureLoader();
+  let woodTex, marbleTex;
+  try {
+    [woodTex, marbleTex] = await Promise.all([
+      loader.loadAsync(woodDataUrl),
+      loader.loadAsync(marbleDataUrl),
+    ]);
+    try { woodTex.colorSpace = marbleTex.colorSpace = THREE.SRGBColorSpace; }
+    catch(_) { try { woodTex.encoding = marbleTex.encoding = THREE.sRGBEncoding; } catch(_){} }
+  } catch(_) {
+    woodTex = marbleTex = null;
+  }
+
+  const whiteMat = woodTex ? new THREE.MeshStandardMaterial({ map: woodTex, metalness: 0.15, roughness: 0.45 })
+                           : new THREE.MeshStandardMaterial({ color: 0xb7c0d8, metalness: 0.15, roughness: 0.45 });
+  const blackMat = marbleTex ? new THREE.MeshStandardMaterial({ map: marbleTex, metalness: 0.2, roughness: 0.5 })
+                             : new THREE.MeshStandardMaterial({ color: 0x5a6373, metalness: 0.2, roughness: 0.5 });
 
   const geom = new THREE.BoxGeometry(tileSize, 0.1, tileSize);
   for (let r=0;r<8;r++){

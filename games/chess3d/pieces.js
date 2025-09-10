@@ -2,12 +2,23 @@
 /**
  * Lightweight chess pieces using basic primitives.
  */
+import { envDataUrl } from "./textures/env.js";
+
 let THREERef, sceneRef, helpersRef;
 const pieces = new Map(); // id -> {mesh, square, type, color}
 let currentPieceStyle = 'classic';
+let pieceEnvMap;
 
 export async function createPieces(scene, THREE, helpers){
   THREERef = THREE; sceneRef = scene; helpersRef = helpers;
+  // Load environment map from data URL
+  try {
+    const loader = new THREE.TextureLoader();
+    pieceEnvMap = await loader.loadAsync(envDataUrl);
+    try { pieceEnvMap.mapping = THREE.EquirectangularReflectionMapping; } catch(_){}
+    try { pieceEnvMap.colorSpace = THREE.SRGBColorSpace; }
+    catch(_) { try { pieceEnvMap.encoding = THREE.sRGBEncoding; } catch(_){} }
+  } catch(_){ pieceEnvMap = null; }
 }
 
 export async function placeInitialPosition(){
@@ -112,6 +123,7 @@ function spawn(type, color, square){
 function buildMesh(type, color){
   const T = THREERef;
   const mat = (T.MeshPhysicalMaterial ? new T.MeshPhysicalMaterial({ color: color==='w' ? 0xe9edf5 : 0x20232a, metalness:0.35, roughness:0.35, reflectivity: 0.4, clearcoat: 0.4, clearcoatRoughness: 0.25 }) : new T.MeshStandardMaterial({ color: color==='w' ? 0xe9edf5 : 0x20232a, metalness:0.3, roughness:0.4 }));
+  if (pieceEnvMap){ mat.envMap = pieceEnvMap; mat.needsUpdate = true; }
   const h = {K:1.05,Q:0.95,R:0.78,B:0.78,N:0.78,P:0.62}[type] || 0.62;
 
   // Higher fidelity shape: beveled base + lathe body + type head
@@ -184,9 +196,21 @@ export function setPieceStyle(style){
   currentPieceStyle = style;
   const T = THREERef;
   const styles = {
-    classic: (c)=> new T.MeshPhysicalMaterial({ color: c==='w'?0xe9edf5:0x20232a, metalness:0.35, roughness:0.35, reflectivity: 0.4, clearcoat: 0.4, clearcoatRoughness: 0.25 }),
-    metal: (c)=> new T.MeshPhysicalMaterial({ color: c==='w'?0xdfe4ea:0x2a2e35, metalness:0.95, roughness:0.18, reflectivity: 0.9, clearcoat:0.6, clearcoatRoughness:0.15 }),
-    glass: (c)=> new T.MeshPhysicalMaterial({ color: c==='w'?0xffffff:0x9ad0ff, metalness:0.0, roughness:0.02, transparent:true, opacity:0.35, transmission:1, ior: 1.3, thickness: 0.35 })
+    classic: (c)=> {
+      const m = new T.MeshPhysicalMaterial({ color: c==='w'?0xe9edf5:0x20232a, metalness:0.35, roughness:0.35, reflectivity: 0.4, clearcoat: 0.4, clearcoatRoughness: 0.25 });
+      if (pieceEnvMap){ m.envMap = pieceEnvMap; }
+      return m;
+    },
+    metal: (c)=> {
+      const m = new T.MeshPhysicalMaterial({ color: c==='w'?0xdfe4ea:0x2a2e35, metalness:0.95, roughness:0.18, reflectivity: 0.9, clearcoat:0.6, clearcoatRoughness:0.15 });
+      if (pieceEnvMap){ m.envMap = pieceEnvMap; }
+      return m;
+    },
+    glass: (c)=> {
+      const m = new T.MeshPhysicalMaterial({ color: c==='w'?0xffffff:0x9ad0ff, metalness:0.0, roughness:0.02, transparent:true, opacity:0.35, transmission:1, ior: 1.3, thickness: 0.35 });
+      if (pieceEnvMap){ m.envMap = pieceEnvMap; }
+      return m;
+    }
   };
   for (const p of pieces.values()){
     const mat = (styles[style]||styles.classic)(p.color);
