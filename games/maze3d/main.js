@@ -5,10 +5,18 @@ recordLastPlayed('maze3d');
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e0f12);
+scene.fog = new THREE.Fog(0x0e0f12, 10, 60);
+
+const texLoader = new THREE.TextureLoader();
+const wallTexture = texLoader.load('https://threejs.org/examples/textures/brick_diffuse.jpg');
+wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
+wallTexture.repeat.set(1, 1);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 // minimap
 const mapRenderer = new THREE.WebGLRenderer({ antialias: false });
@@ -22,7 +30,12 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
 scene.add(hemi);
 const dir = new THREE.DirectionalLight(0xffffff, 0.8);
 dir.position.set(10, 20, 10);
+dir.castShadow = true;
 scene.add(dir);
+
+const playerLight = new THREE.PointLight(0xffffff, 1, 20, 2);
+playerLight.castShadow = true;
+scene.add(playerLight);
 
 const controls = new THREE.PointerLockControls(camera, renderer.domElement);
 
@@ -100,13 +113,15 @@ function buildMaze() {
   const rows = grid.length;
   const cols = grid[0].length;
   const wallGeo = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x27314b });
+  const wallMat = new THREE.MeshStandardMaterial({ map: wallTexture });
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       if (grid[y][x] === 1) {
         const mesh = new THREE.Mesh(wallGeo, wallMat);
         const [wx, wz] = cellToWorld(x, y, cols, rows);
         mesh.position.set(wx, wallHeight / 2, wz);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
         scene.add(mesh);
         const box = new THREE.Box3().setFromCenterAndSize(mesh.position, new THREE.Vector3(cellSize, wallHeight, cellSize));
         wallBoxes.push(box);
@@ -117,6 +132,7 @@ function buildMaze() {
   const floorMat = new THREE.MeshStandardMaterial({ color: 0x2a2f3a });
   floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
   scene.add(floor);
 
   // breadcrumb trail
@@ -128,6 +144,8 @@ function buildMaze() {
   const [ex, ez] = cellToWorld(cols - 2, rows - 2, cols, rows);
   exitMesh = new THREE.Mesh(new THREE.BoxGeometry(cellSize, wallHeight, cellSize), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
   exitMesh.position.set(ex, wallHeight / 2, ez);
+  exitMesh.castShadow = true;
+  exitMesh.receiveShadow = true;
   scene.add(exitMesh);
   exitBox = new THREE.Box3().setFromCenterAndSize(exitMesh.position, new THREE.Vector3(cellSize, wallHeight, cellSize));
 }
@@ -231,6 +249,8 @@ function loop() {
     timeEl.textContent = t.toFixed(2);
     update(dt);
   }
+  playerLight.position.copy(controls.getObject().position);
+  playerLight.position.y += 1.5;
   renderer.render(scene, camera);
   if (mapVisible) {
     // render minimap (orthographic top-down)
@@ -238,7 +258,10 @@ function loop() {
     miniCam.position.set(0, 80, 0);
     miniCam.lookAt(new THREE.Vector3(0,0,0));
     // simple overlay: draw player/trail using 2D context on top of mapRenderer after render
+    const oldFog = scene.fog;
+    scene.fog = null;
     mapRenderer.render(scene, miniCam);
+    scene.fog = oldFog;
     const ctx2 = mapRenderer.domElement.getContext('2d');
     ctx2.save();
     ctx2.globalAlpha = 0.9;
