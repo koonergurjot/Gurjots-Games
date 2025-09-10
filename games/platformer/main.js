@@ -42,6 +42,11 @@ const gravity = 2000;
 const jumpV = -900;
 let camX = 0;
 
+// Particle system
+const particles = [];
+const particlePool = [];
+const MAX_PARTICLES = 100;
+
 const keys = new Map();
 addEventListener('keydown', e => {
   keys.set(e.code, true);
@@ -123,6 +128,7 @@ function update(dt){
   }
 
   checkCollectibles();
+  updateParticles(dt);
 
   if (player.y > H + 100) gameOver(false); // fell
 
@@ -191,6 +197,7 @@ function checkCollectibles(){
         setTile(x, y, '0');
         state.score += 1;
         emitEvent({ type: 'score', slug: 'platformer', value: state.score });
+        spawnParticles(x * TILE + TILE/2, y * TILE + TILE/2, 8);
       } else if (t === '3'){
         gameOver(true);
       }
@@ -219,6 +226,44 @@ function setTile(x, y, v){
   map[y][x] = v;
 }
 
+function spawnParticles(x, y, count){
+  for (let i = 0; i < count; i++){
+    if (particles.length >= MAX_PARTICLES) break;
+    const p = particlePool.pop() || {};
+    p.x = x;
+    p.y = y;
+    p.vx = (Math.random() - 0.5) * 200;
+    p.vy = (Math.random() - 0.5) * 200;
+    p.life = 0.5 + Math.random() * 0.5;
+    particles.push(p);
+  }
+}
+
+function updateParticles(dt){
+  for (let i = particles.length - 1; i >= 0; i--){
+    const p = particles[i];
+    p.life -= dt;
+    if (p.life <= 0){
+      particles.splice(i, 1);
+      particlePool.push(p);
+      continue;
+    }
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 500 * dt;
+  }
+}
+
+function drawParticles(){
+  ctx.save();
+  ctx.fillStyle = '#ffd600';
+  for (const p of particles){
+    ctx.globalAlpha = p.life;
+    ctx.fillRect(p.x - camX, p.y, 4, 4);
+  }
+  ctx.restore();
+}
+
 function draw(){
   ctx.clearRect(0,0,W,H);
   const g = ctx.createLinearGradient(0,0,0,H);
@@ -244,6 +289,8 @@ function draw(){
       }
     }
   }
+
+  drawParticles();
 
   // player
   const px = player.x - camX;
