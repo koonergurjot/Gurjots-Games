@@ -2,9 +2,12 @@ const canvas = document.getElementById('game');
 fitCanvasToParent(canvas, 1100, 800, 24);
 addEventListener('resize', () => fitCanvasToParent(canvas, 1100, 800, 24));
 const ctx = canvas.getContext('2d');
+function ctxSave() { if (ctx.save) ctx.save(); }
+function ctxRestore() { if (ctx.restore) ctx.restore(); }
 
 let W = canvas.width, H = canvas.height;
 const PADDLE_W = 12, PADDLE_H = 110, BALL_R = 8;
+const PADDLE_COLOR = '#00f6ff', BALL_COLOR = '#ff00e6';
 
 let left = { x: 30, y: H / 2 - PADDLE_H / 2, vy: 0, score: 0 };
 let right = { x: W - 30 - PADDLE_W, y: H / 2 - PADDLE_H / 2, vy: 0, score: 0 };
@@ -158,15 +161,53 @@ function step() {
 }
 
 const trail = [];
+let gridOffset = 0;
 function draw() {
   trail.push({ x: ball.x, y: ball.y });
   if (trail.length > 12) trail.shift();
   ctx.clearRect(0, 0, canvas.width, canvas.height); W = canvas.width; H = canvas.height;
 
-  ctx.fillStyle = '#11162a'; ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.setLineDash([12, 18]); ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#e6e7ea'; ctx.fillRect(left.x, left.y, PADDLE_W, paddleHeight(left)); ctx.fillRect(right.x, right.y, PADDLE_W, paddleHeight(right));
-  ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#11162a';
+  ctx.fillRect(0, 0, W, H);
+
+  gridOffset = (gridOffset + 0.5) % 40;
+  ctxSave();
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  for (let x = -gridOffset; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = -gridOffset; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  ctxRestore();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.setLineDash([12, 18]);
+  ctx.beginPath();
+  ctx.moveTo(W / 2, 0);
+  ctx.lineTo(W / 2, H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctxSave();
+  trail.forEach((p, i) => {
+    const a = (i + 1) / trail.length;
+    ctx.fillStyle = `rgba(255,0,230,${a * 0.3})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, BALL_R, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctxRestore();
+
+  ctxSave();
+  ctx.fillStyle = PADDLE_COLOR; ctx.shadowColor = PADDLE_COLOR; ctx.shadowBlur = 10;
+  ctx.fillRect(left.x, left.y, PADDLE_W, paddleHeight(left));
+  ctx.fillRect(right.x, right.y, PADDLE_W, paddleHeight(right));
+  ctxRestore();
+
+  ctxSave();
+  ctx.fillStyle = BALL_COLOR; ctx.shadowColor = BALL_COLOR; ctx.shadowBlur = 20;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
+  ctx.fill();
+  ctxRestore();
   if (power) { ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(power.x, power.y, 10, 0, Math.PI * 2); ctx.fill(); }
   ctx.textAlign = 'center'; ctx.fillStyle = '#e6e7ea'; ctx.font = 'bold 42px Inter, system-ui, sans-serif'; ctx.fillText(`${left.score}`, W / 2 - 80, 60); ctx.fillText(`${right.score}`, W / 2 + 80, 60);
   if (paused) { ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#e6e7ea'; ctx.font = 'bold 34px Inter'; ctx.fillText('Paused — P to resume', W / 2, H / 2); }
