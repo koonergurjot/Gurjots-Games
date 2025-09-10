@@ -108,14 +108,17 @@ function restart(){
   left.score = right.score = 0;
   left.y = right.y = (FIELD.h-PADDLE.h)/2;
   ball = resetBall(1);
-  serveLock = true; running = true; status('Press Space/Enter to serve');
+  serveLock = true; running = true; status('Press Space/Enter to serve. AI adapts to score gap');
   emitEvent({ type: 'play', slug: 'pong' });
   shareBtn.hidden = true;
 }
 
 // AI behavior
 function aiSpeed(){
-  return diff==='easy'? 4 : diff==='med'? 6 : diff==='hard'? 7.5 : 9.5;
+  const base = diff==='easy'? 4 : diff==='med'? 6 : diff==='hard'? 7.5 : 9.5;
+  const lead = right.score - left.score; // positive when human leads
+  const adjust = clamp(lead * 0.3, -3, 3);
+  return base + adjust;
 }
 function updateAI(){
   // error band increases with ball distance; narrows when ball is close
@@ -123,7 +126,8 @@ function updateAI(){
   const err = clamp(dist/200, 0.5, 6.0) * (diff==='easy'?1.6:diff==='med'?1.0:diff==='hard'?0.7:0.5);
   const target = ball.y - PADDLE.h/2 + (Math.random()*err - err/2);
   const delta = target - right.y;
-  right.y += clamp(delta, -aiSpeed(), aiSpeed());
+  const speed = aiSpeed();
+  right.y += clamp(delta, -speed, speed);
 }
 
 // Game loop with fixed timestep
