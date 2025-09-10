@@ -7,10 +7,29 @@ import { getMission, updateMission, formatMission, clearMission } from '../../sh
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const DPR = Math.min(2, window.devicePixelRatio||1);
+
+let clouds=[],buildings=[],foreground=[];
+let particles=[];
+let wasGrounded=true;
+
+function initBackground(){
+  clouds=[];buildings=[];foreground=[];
+  for(let x=0;x<innerWidth+200;x+=120){
+    clouds.push({x,y:50+Math.random()*100,w:100,h:40});
+  }
+  for(let x=0;x<innerWidth+200;x+=80){
+    buildings.push({x,w:80,h:100+Math.random()*100});
+  }
+  for(let x=0;x<innerWidth+200;x+=40){
+    foreground.push({x,w:40,h:20+Math.random()*20});
+  }
+}
+
 function resize(){
   canvas.width = innerWidth * DPR;
   canvas.height = innerHeight * DPR;
   ctx.setTransform(DPR,0,0,DPR,0,0);
+  initBackground();
 }
 addEventListener('resize', resize); resize();
 
@@ -69,11 +88,25 @@ function spawn(){
     }
   }
 }
+
+function spawnDust(x,y){
+  for(let i=0;i<8;i++){
+    particles.push({x:x-10+Math.random()*20,y:y-5+Math.random()*10,vx:(Math.random()*2-1),vy:-Math.random()*2-1,life:20,max:20,color:'#d1d5db',type:'dust'});
+  }
+}
+
+function spawnSparks(x,y){
+  for(let i=0;i<15;i++){
+    particles.push({x,y,vx:(Math.random()*4-2),vy:-Math.random()*4,life:30,max:30,color:Math.random()<0.5?'#fbbf24':'#f87171',type:'spark'});
+  }
+}
 function restart(){
   player={x:80,y:0,w:30,h:50,vy:0,sliding:0};
-  score=0;obstacles=[];coins=[];powerups=[];tick=0;running=true;
+  score=0;obstacles=[];coins=[];powerups=[];tick=0;running=true;particles=[];
   speed=diff==='easy'?4:diff==='med'?5:6.5;
   active={speed:0,shield:0,magnet:0};
+  wasGrounded=true;
+  initBackground();
   if(mission?.completed) clearMission('runner');
   mission=getMission('runner');
   missionRewarded=mission?.completed||false;
@@ -106,11 +139,35 @@ function update(dt){
   if(active.speed>0) active.speed--;
   if(active.shield>0) active.shield--;
   if(active.magnet>0) active.magnet--;
+  // Background scrolling
+  clouds.forEach(c=>c.x-=curSpeed*0.2);
+  if(clouds.length&&clouds[0].x+clouds[0].w<0){
+    const last=clouds[clouds.length-1];
+    clouds.shift();
+    clouds.push({x:last.x+120,y:50+Math.random()*100,w:100,h:40});
+  }
+  buildings.forEach(b=>b.x-=curSpeed*0.5);
+  if(buildings.length&&buildings[0].x+buildings[0].w<0){
+    const last=buildings[buildings.length-1];
+    buildings.shift();
+    buildings.push({x:last.x+80,w:80,h:100+Math.random()*100});
+  }
+  foreground.forEach(f=>f.x-=curSpeed*0.8);
+  if(foreground.length&&foreground[0].x+foreground[0].w<0){
+    const last=foreground[foreground.length-1];
+    foreground.shift();
+    foreground.push({x:last.x+40,w:40,h:20+Math.random()*20});
+  }
   // Player physics
   player.vy+=gravity;
   player.y+=player.vy;
   if(player.y>0){player.y=0;player.vy=0;}
   if(player.sliding>0) player.sliding--;
+  const grounded=player.y===0;
+  if(!wasGrounded&&grounded){
+    spawnDust(player.x+player.w/2,innerHeight-GROUND);
+  }
+  wasGrounded=grounded;
   // Keys
   if(keys.has('arrowup')||keys.has(' ')) jumpBuffer = BUF_MAX;
   if(keys.has('arrowdown')) slideBuffer = BUF_MAX;
@@ -121,6 +178,8 @@ function update(dt){
   spawn();
   obstacles.forEach(o=>o.x-=curSpeed); coins.forEach(c=>c.x-=curSpeed); powerups.forEach(p=>p.x-=curSpeed);
   obstacles=obstacles.filter(o=>o.x>-60); coins=coins.filter(c=>c.x>-60); powerups=powerups.filter(p=>p.x>-60);
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=p.type==='dust'?0.2:0.1;p.life--;});
+  particles=particles.filter(p=>p.life>0);
   if(active.magnet>0){
     for(const c of coins){
       if(player.x-80< c.x+c.w && player.x+player.w+80>c.x && player.y+player.h+80>c.y && player.y-80<c.y+c.h){
@@ -134,6 +193,7 @@ function update(dt){
   // Collisions
   for(const o of obstacles){
     if(player.x<o.x+o.w&&player.x+player.w>o.x&&player.y+player.h>o.y&&player.y<o.y+o.h){
+      spawnSparks(o.x+o.w/2,o.y);
       if(active.shield>0){ o.x=-999; continue; }
       running=false;
       saveBestScore('runner',Math.floor(score));
@@ -170,6 +230,17 @@ function update(dt){
 
 function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  // Sky
+  ctx.fillStyle='#93c5fd';
+  ctx.fillRect(0,0,innerWidth,innerHeight);
+  ctx.fillStyle='#fff';
+  for(const c of clouds){ctx.beginPath();ctx.ellipse(c.x,c.y,c.w/2,c.h/2,0,0,Math.PI*2);ctx.fill();}
+  // Buildings
+  ctx.fillStyle='#6b7280';
+  for(const b of buildings){ctx.fillRect(b.x,innerHeight-GROUND-b.h,b.w,b.h);}
+  // Foreground
+  ctx.fillStyle='#374151';
+  for(const f of foreground){ctx.fillRect(f.x,innerHeight-GROUND-f.h,f.w,f.h);}
   // Ground
   ctx.fillStyle='#333'; ctx.fillRect(0,innerHeight-GROUND,innerWidth,GROUND);
   // Player
@@ -192,6 +263,18 @@ function render(){
     ctx.fillStyle=p.type==='speed'?'#3b82f6':p.type==='shield'?'#fbbf24':'#a78bfa';
     ctx.fillRect(p.x,p.y,p.w,p.h);
   }
+  // Particles
+  for(const p of particles){
+    ctx.globalAlpha=p.life/p.max;
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x,p.y,4,4);
+  }
+  ctx.globalAlpha=1;
+  // Day-night overlay
+  const cycle=(Math.sin(Date.now()/10000 - Math.PI/2)+1)/2;
+  ctx.fillStyle=`rgba(0,0,50,${0.5*cycle})`;
+  ctx.fillRect(0,0,innerWidth,innerHeight);
+  ctx.globalAlpha=1;
   // Score text already in HUD
 }
 
