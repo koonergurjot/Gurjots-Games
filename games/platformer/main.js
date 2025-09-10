@@ -30,7 +30,7 @@ const state = {
   hiscore: Number(localStorage.getItem('highscore:platformer') || 0),
 };
 
-const player = { x: 100, y: 0, w: 40, h: 48, vx: 0, vy: 0, onGround: false };
+const player = { x: 100, y: 0, w: 40, h: 48, vx: 0, vy: 0, onGround: false, dir: 1 };
 // Jump feel helpers
 let jumpBuffer = 0;        // seconds remaining to accept a buffered jump
 let coyoteTime = 0;        // seconds remaining to allow late jump after leaving ground
@@ -75,7 +75,7 @@ function restart(){
   document.getElementById('overlay').classList.remove('show');
   state.score = 0;
   map = levelData.map(r => r.split(''));
-  player.x = 100; player.y = 0; player.vx = 0; player.vy = 0; player.onGround = false;
+  player.x = 100; player.y = 0; player.vx = 0; player.vy = 0; player.onGround = false; player.dir = 1;
   camX = 0;
   emitEvent({ type: 'play', slug: 'platformer' });
 }
@@ -98,6 +98,7 @@ function update(dt){
   player.vx = 0;
   if (keys.get('ArrowLeft'))  player.vx = -moveSpeed;
   if (keys.get('ArrowRight')) player.vx =  moveSpeed;
+  if (player.vx !== 0) player.dir = player.vx > 0 ? 1 : -1;
 
   // horizontal movement
   player.x += player.vx * dt;
@@ -245,10 +246,22 @@ function draw(){
   }
 
   // player
-  ctx.fillStyle = '#e6eef9';
-  ctx.fillRect(player.x - camX, Math.round(player.y), player.w, player.h);
-  ctx.fillStyle = '#0a0d13';
-  ctx.fillRect(player.x - camX + player.w - 10, Math.round(player.y + 10), 4, 4);
+  const px = player.x - camX;
+  const py = Math.round(player.y);
+  ctx.save();
+  if (player.dir === -1) {
+    ctx.scale(-1, 1);
+    ctx.fillStyle = '#e6eef9';
+    ctx.fillRect(-px - player.w, py, player.w, player.h);
+    ctx.fillStyle = '#0a0d13';
+    ctx.fillRect(-(px + 10), py + 10, 4, 4);
+  } else {
+    ctx.fillStyle = '#e6eef9';
+    ctx.fillRect(px, py, player.w, player.h);
+    ctx.fillStyle = '#0a0d13';
+    ctx.fillRect(px + player.w - 10, py + 10, 4, 4);
+  }
+  ctx.restore();
 
   // HUD
   ctx.font = 'bold 20px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
