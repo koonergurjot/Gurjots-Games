@@ -5,7 +5,7 @@ import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postpro
 import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders/FXAAShader.js';
-import { Sky } from 'https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js';
+import { SSAOPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/SSAOPass.js';
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
@@ -26,7 +26,15 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0e0f12);
+const skybox = new THREE.CubeTextureLoader().load([
+  'https://threejs.org/examples/textures/cube/skyboxsun25deg/px.jpg',
+  'https://threejs.org/examples/textures/cube/skyboxsun25deg/nx.jpg',
+  'https://threejs.org/examples/textures/cube/skyboxsun25deg/py.jpg',
+  'https://threejs.org/examples/textures/cube/skyboxsun25deg/ny.jpg',
+  'https://threejs.org/examples/textures/cube/skyboxsun25deg/pz.jpg',
+  'https://threejs.org/examples/textures/cube/skyboxsun25deg/nz.jpg',
+]);
+scene.background = skybox;
 scene.fog = new THREE.FogExp2(0x0e0f12, 0.04);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -38,6 +46,10 @@ scene.add(player);
 const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
+
+const ssaoPass = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight);
+ssaoPass.kernelRadius = 16;
+composer.addPass(ssaoPass);
 
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
@@ -67,26 +79,7 @@ dir.shadow.bias = -0.0005;
 dir.shadow.normalBias = 0.05;
 scene.add(dir);
 
-const sky = new Sky();
-sky.scale.setScalar(450000);
-scene.add(sky);
-const sun = new THREE.Vector3();
-const skyUniforms = sky.material.uniforms;
-skyUniforms['turbidity'].value = 10;
-skyUniforms['rayleigh'].value = 2;
-skyUniforms['mieCoefficient'].value = 0.005;
-skyUniforms['mieDirectionalG'].value = 0.8;
-const tod = document.getElementById('tod');
-function updateSun(){
-  const t = parseFloat(tod.value);
-  const phi = THREE.MathUtils.degToRad(90 - t * 180);
-  sun.setFromSphericalCoords(1, phi, 0);
-  sky.material.uniforms['sunPosition'].value.copy(sun);
-  dir.position.copy(sun).multiplyScalar(15);
-  scene.fog.density = 0.04 + (1 - sun.y) * 0.008;
-}
-tod.addEventListener('input', updateSun);
-updateSun();
+
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(100, 100),
@@ -156,6 +149,7 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
   composer.setSize(innerWidth, innerHeight);
+  ssaoPass.setSize(innerWidth, innerHeight);
   fxaaPass.material.uniforms['resolution'].value.set(
     1 / innerWidth,
     1 / innerHeight
@@ -207,7 +201,11 @@ function update(dt){
     }
   }
 
-  if (pickup){ pickup.rotation.y += dt * 2; }
+  if (pickup){
+    pickup.rotation.y += dt * 2;
+    const s = 1 + Math.sin(clock.elapsedTime * 5) * 0.25;
+    pickup.scale.setScalar(s);
+  }
 }
 
 function animate(){
