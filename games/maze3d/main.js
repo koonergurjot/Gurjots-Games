@@ -46,6 +46,7 @@ const restartBtn = document.getElementById('restartBtn');
 const shareBtn = document.getElementById('shareBtn');
 const timeEl = document.getElementById('time');
 const bestEl = document.getElementById('best');
+const sizeSelect = document.getElementById('mazeSize');
 
 let running = false;
 let paused = true;
@@ -66,14 +67,22 @@ document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
 startBtn.addEventListener('click', () => start());
 restartBtn.addEventListener('click', () => restart());
+sizeSelect.addEventListener('change', () => restart());
 
 let wallBoxes = [];
 let exitBox = null;
 let floor = null;
 let exitMesh = null;
-const cellSize = 4;
 const wallHeight = 4;
-const MAZE_CELLS = 8;
+const BASE_CELLS = 8;
+const BASE_CELL_SIZE = 4;
+let MAZE_CELLS = BASE_CELLS;
+let cellSize = BASE_CELL_SIZE;
+
+function updateMazeParams() {
+  MAZE_CELLS = parseInt(sizeSelect.value, 10);
+  cellSize = (BASE_CELL_SIZE * BASE_CELLS) / MAZE_CELLS;
+}
 
 function generateMaze(width, height) {
   const cols = width * 2 + 1;
@@ -165,6 +174,7 @@ function restart() {
   running = false;
   paused = true;
   startTime = 0;
+  updateMazeParams();
   buildMaze();
   timeEl.textContent = '0.00';
   message.textContent = 'Click Start to play.';
