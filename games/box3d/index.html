@@ -15,7 +15,6 @@
     kbd { padding:1px 6px; border-radius:6px; border:1px solid #2f3542; background:#111319; color:#d3d7de; font-weight:600; font-size:12px; }
     a { color: #8cc8ff; text-decoration: none; }
     canvas{display:block}
-    #tod { position: fixed; top: 12px; right: 12px; }
 
     /* On-screen touch controls */
     #touch { position: fixed; bottom: 12px; left: 12px; display: none; user-select: none; }
@@ -43,8 +42,6 @@
     <div>Click to lock pointer. Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> • Jump: <kbd>Space</kbd> • Reset: <kbd>R</kbd></div>
     <div>Score: <span id="score">0</span> <button id="shareBtn" style="display:none">Share</button></div>
   </div>
-  <label for="tod" class="sr-only">Time of Day</label>
-  <input id="tod" name="tod" type="range" min="0" max="1" step="0.001" value="0.5" />
   <div id="touch">
     <div class="pad">
       <button class="up" data-k="KeyW">▲</button>
