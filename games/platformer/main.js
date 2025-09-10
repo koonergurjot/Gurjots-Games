@@ -104,13 +104,14 @@ function update(dt){
   resolveCollisions('x');
 
   // vertical movement
+  const wasOnGround = player.onGround;
   player.vy += gravity * dt;
   player.y += player.vy * dt;
   resolveCollisions('y');
 
   // if we just left ground, start coyote time window
-  if (!player.onGround && coyoteTime === 0) {
-    // Detect transition: handled in resolveCollisions; here, only refresh when leaving
+  if (wasOnGround && !player.onGround) {
+    coyoteTime = COYOTE_MAX;
   }
 
   // consume buffered jump if conditions met
@@ -164,10 +165,6 @@ function resolveCollisions(axis){
           }
           return;
         }
-      }
-      // left ground this frame
-      if (player.onGround) {
-        coyoteTime = COYOTE_MAX;
       }
       player.onGround = false;
     } else if (player.vy < 0){
