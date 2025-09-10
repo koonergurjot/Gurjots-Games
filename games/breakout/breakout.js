@@ -14,6 +14,9 @@ let powerups=[];function spawnPU(x,y){const types=['EXPAND','SLOW','MULTI','LASE
 function applyPU(p){if(p.type==='EXPAND'){paddle.w=Math.min(paddle.w*1.35,220)}if(p.type==='SLOW'){ball.vx*=0.7;ball.vy*=0.7}if(p.type==='MULTI'){const b1={x:ball.x,y:ball.y,vx:-Math.abs(ball.vx),vy:ball.vy,r:8,stuck:false,speed:ball.speed};const b2={x:ball.x,y:ball.y,vx: Math.abs(ball.vx),vy:-ball.vy,r:8,stuck:false,speed:ball.speed};multiBalls.push(b1,b2)}if(p.type==='LASER'){lasers.push({x:paddle.x+paddle.w*0.25,y:paddle.y,vy:-9});lasers.push({x:paddle.x+paddle.w*0.75,y:paddle.y,vy:-9})}SFX.seq([[900,0.05],[1200,0.06]])}
 function updatePU(){powerups.forEach(p=>{p.y+=p.v;if(p.y>c.height)p.dead=true;if(p.y>paddle.y-6&&p.x>paddle.x&&p.x<paddle.x+paddle.w){p.dead=true;applyPU(p)}});powerups=powerups.filter(p=>!p.dead)}
 let lasers=[]; let multiBalls=[];
+let particles=[];let bgT=0;
+function spawnParticles(x,y){for(let i=0;i<12;i++)particles.push({x,y,vx:Math.random()*4-2,vy:Math.random()*4-2,life:20})}
+function updateParticles(){particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.15;p.life--});particles=particles.filter(p=>p.life>0)}
 function step(){if(paused)return; if(ball.stuck)return;
   // normalize velocity to maintain constant speed with gradual ramp
   const sp = Math.max(5, ball.speed);
@@ -32,19 +35,24 @@ function step(){if(paused)return; if(ball.stuck)return;
     ball.speed = Math.min(14, ball.speed + 0.15); // gentle speed ramp
     SFX.beep({freq:520});
   }
-  for(const b of bricks){ if(b.hp<=0) continue; if(ball.x>b.x&&ball.x<b.x+b.w&&ball.y>b.y&&ball.y<b.y+b.h){ b.hp=0; score+=10; GG.addXP(1); ball.vy*=-1; if(Math.random()<0.15) spawnPU(ball.x, ball.y); SFX.beep({freq:700}); } }
+  for(const b of bricks){ if(b.hp<=0) continue; if(ball.x>b.x&&ball.x<b.x+b.w&&ball.y>b.y&&ball.y<b.y+b.h){ b.hp=0; score+=10; GG.addXP(1); ball.vy*=-1; spawnParticles(b.x+b.w/2,b.y+b.h/2); if(Math.random()<0.15) spawnPU(ball.x, ball.y); SFX.beep({freq:700}); } }
   if(ball.y>c.height+20){lives--; SFX.seq([[260,0.06],[200,0.08]]); resetBall(); if(lives<=0){ GG.addAch(GAME_ID,'Game Over'); }}
   if(bricks.every(b=>b.hp<=0)){level++;if(level>bestLevel){bestLevel=level;localStorage.setItem('gg:bestlvl:breakout',bestLevel)}resetLevel();ball.stuck=true;ball.x=paddle.x+paddle.w/2;ball.y=paddle.y-20}
   updatePU();
+  updateParticles();
   // lasers
   lasers.forEach(L=>{L.y+=L.vy}); lasers=lasers.filter(L=>L.y>-20);
-  for(const L of lasers){ for(const b of bricks){ if(b.hp>0 && L.x>b.x && L.x<b.x+b.w && L.y<b.y+b.h && L.y>b.y){ b.hp=0; score+=10; } } }
+  for(const L of lasers){ for(const b of bricks){ if(b.hp>0 && L.x>b.x && L.x<b.x+b.w && L.y<b.y+b.h && L.y>b.y){ b.hp=0; score+=10; spawnParticles(b.x+b.w/2,b.y+b.h/2); } } }
   // multiballs
-  for(const m of multiBalls){ const spm=Math.max(5,m.speed); const ln=Math.hypot(m.vx,m.vy)||1; m.vx=m.vx/ln*spm; m.vy=m.vy/ln*spm; m.x+=m.vx; m.y+=m.vy; if(m.x<m.r||m.x>c.width-m.r)m.vx*=-1; if(m.y<m.r)m.vy*=-1; if(m.y>paddle.y-m.r&&m.y<paddle.y+paddle.h+m.r&&m.x>paddle.x&&m.x<paddle.x+paddle.w&&m.vy>0){ const rel=(m.x-(paddle.x+paddle.w/2))/(paddle.w/2); const ang=(Math.PI*1.5)+rel*(Math.PI*0.75*0.25); m.vx=Math.cos(ang)*spm; m.vy=Math.sin(ang)*spm; } for(const b of bricks){ if(b.hp<=0) continue; if(m.x>b.x&&m.x<b.x+b.w&&m.y>b.y&&m.y<b.y+b.h){ b.hp=0; score+=10; m.vy*=-1; }} }
+  for(const m of multiBalls){ const spm=Math.max(5,m.speed); const ln=Math.hypot(m.vx,m.vy)||1; m.vx=m.vx/ln*spm; m.vy=m.vy/ln*spm; m.x+=m.vx; m.y+=m.vy; if(m.x<m.r||m.x>c.width-m.r)m.vx*=-1; if(m.y<m.r)m.vy*=-1; if(m.y>paddle.y-m.r&&m.y<paddle.y+paddle.h+m.r&&m.x>paddle.x&&m.x<paddle.x+paddle.w&&m.vy>0){ const rel=(m.x-(paddle.x+paddle.w/2))/(paddle.w/2); const ang=(Math.PI*1.5)+rel*(Math.PI*0.75*0.25); m.vx=Math.cos(ang)*spm; m.vy=Math.sin(ang)*spm; } for(const b of bricks){ if(b.hp<=0) continue; if(m.x>b.x&&m.x<b.x+b.w&&m.y>b.y&&m.y<b.y+b.h){ b.hp=0; score+=10; m.vy*=-1; spawnParticles(b.x+b.w/2,b.y+b.h/2); }} }
   multiBalls = multiBalls.filter(m=>m.y<=c.height+20);
 }
 function draw(){ // paddle glow
-  ctx.shadowColor='rgba(0,200,255,0.6)'; ctx.shadowBlur=12;ctx.fillStyle='#0f1320';ctx.fillRect(0,0,c.width,c.height);for(const b of bricks){if(b.hp>0){ctx.fillStyle='#8b5cf6';ctx.fillRect(b.x,b.y,b.w,b.h)}}ctx.fillStyle='#e6e7ea';ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#e6e7ea';ctx.font='bold 18px Inter';ctx.fillText(`Score ${score} • Lives ${lives} • Lv ${level}`,10,24);powerups.forEach(p=>{ctx.fillStyle=p.type==='EXPAND'?'#10b981':p.type==='SLOW'?'#38bdf8':p.type==='MULTI'?'#eab308':'#ef4444';ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);ctx.fill()});
+  ctx.shadowColor='rgba(0,200,255,0.6)'; ctx.shadowBlur=12;
+  bgT+=0.3;const bg=ctx.createLinearGradient(0,0,0,c.height);bg.addColorStop(0,`hsl(${bgT%360},40%,10%)`);bg.addColorStop(1,`hsl(${(bgT+60)%360},40%,5%)`);ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
+  for(const b of bricks){if(b.hp>0){const g=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);g.addColorStop(0,'#a78bfa');g.addColorStop(1,'#6d28d9');ctx.fillStyle=g;ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,4);ctx.fill();}}
+  ctx.save();ctx.shadowBlur=0;particles.forEach(p=>{ctx.globalAlpha=p.life/20;ctx.fillStyle='#a78bfa';ctx.fillRect(p.x,p.y,2,2);});ctx.restore();
+  ctx.fillStyle='#e6e7ea';ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#e6e7ea';ctx.font='bold 18px Inter';ctx.fillText(`Score ${score} • Lives ${lives} • Lv ${level}`,10,24);powerups.forEach(p=>{ctx.fillStyle=p.type==='EXPAND'?'#10b981':p.type==='SLOW'?'#38bdf8':p.type==='MULTI'?'#eab308':'#ef4444';ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);ctx.fill()});
   // lasers
   ctx.fillStyle='#ef4444'; for(const L of lasers){ ctx.fillRect(L.x-2,L.y-10,4,10); }
   // multiballs
