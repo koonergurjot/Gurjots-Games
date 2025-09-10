@@ -1,1 +1,33 @@
-<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Pong Classic</title><style>html,body{height:100%;margin:0;background:#0b0d12;color:#e6e7ea;font-family:Inter,system-ui,sans-serif}.wrap{display:grid;place-items:center;height:100%}canvas{background:#0f1320;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,.4)}.hud{position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);padding:10px 12px;border-radius:12px}</style></head><body><div class="hud">▲/▼ or W/S • First to 7 • Keys: 2P=2, AI 1/⇧2/3 • P pause</div><div class="wrap"><canvas id="game" width="900" height="600" data-basew="900" data-baseh="600"></canvas></div><script src="../../js/injectBackButton.js"></script><script src="../../js/resizeCanvas.global.js"></script><script src="../../js/gameUtil.js"></script><script src="../../js/sfx.js"></script><script src="./pong.js"></script></body></html>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Pong Classic</title>
+  <style>
+    html,body{height:100%;margin:0;background:#0b0d12;color:#e6e7ea;font-family:Inter,system-ui,sans-serif}
+    .wrap{display:grid;place-items:center;height:100%}
+    canvas{background:#0f1320;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,.4)}
+    .hud{position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);padding:10px 12px;border-radius:12px}
+  </style>
+</head>
+<body>
+  <div class="hud">
+    ▲/▼ or W/S • First to 7 • Keys: 2P=2 • P pause<br/>
+    Difficulty:
+    <select id="difficulty">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+    <span>Best: <span id="bestScore">0</span></span>
+  </div>
+  <div class="wrap"><canvas id="game" width="900" height="600" data-basew="900" data-baseh="600"></canvas></div>
+  <script src="../../js/injectBackButton.js"></script>
+  <script src="../../js/resizeCanvas.global.js"></script>
+  <script src="../../js/gameUtil.js"></script>
+  <script src="../../js/sfx.js"></script>
+  <script src="./pong.js"></script>
+</body>
+</html>
+
