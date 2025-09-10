@@ -6,6 +6,7 @@ import { mountHUD } from "./ui/hud.js";
 import { bestMove, evaluate, cancel } from "./ai/simpleEngine.js";
 import { mountThemePicker } from "./ui/themePicker.js";
 import { mountCameraPresets } from "./ui/cameraPresets.js";
+import { envDataUrl } from "./textures/env.js";
 
 console.log('[Chess3D] booting');
 
@@ -197,6 +198,15 @@ async function boot(){
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0b0f1a);
   scene.fog = new THREE.Fog(0x0b0f1a, 18, 36);
+  // Load environment texture from data URL
+  try {
+    const texLoader = new THREE.TextureLoader();
+    const envTex = await texLoader.loadAsync(envDataUrl);
+    try { envTex.mapping = THREE.EquirectangularReflectionMapping; } catch(_){}
+    try { envTex.colorSpace = THREE.SRGBColorSpace; }
+    catch(_) { try { envTex.encoding = THREE.sRGBEncoding; } catch(_){} }
+    scene.environment = envTex;
+  } catch(_) {}
   const camera = new THREE.PerspectiveCamera(
     50,
     (stage.clientWidth || window.innerWidth) /
