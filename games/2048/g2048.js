@@ -1,6 +1,18 @@
+
 (function(){
 const c=document.getElementById('board'), ctx=c.getContext('2d');
-const N=4, S=80, PAD=12;
+const PAD=12, S=80, GAP=10;
+const LS_SIZE='g2048.size';
+const sizeSel=document.getElementById('sizeSel');
+let N=parseInt(localStorage.getItem(LS_SIZE) || '4');
+if(sizeSel){
+  sizeSel.value=String(N);
+  sizeSel.addEventListener('change',()=>{
+    N=parseInt(sizeSel.value)||4;
+    localStorage.setItem(LS_SIZE,N);
+    reset();
+  });
+}
 const hud=HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset()});
 
 const MAX_UNDO=3;
@@ -37,6 +49,11 @@ if(isNaN(best)) best=0;
 
 let animating=false;
 
+function updateCanvas(){
+  c.width = 2*PAD + N*S + (N-1)*GAP;
+  c.height = 40 + N*S + (N-1)*GAP + 30;
+}
+
 function copyGrid(g){ return g.map(r=>r.slice()); }
 
 function applyTheme(){
@@ -46,11 +63,14 @@ function applyTheme(){
   c.style.borderColor=currentTheme==='dark'?'#243047':'#9ca3af';
   const hintBtn=document.getElementById('hintBtn');
   const themeBtn=document.getElementById('themeToggle');
+  const sizeSel=document.getElementById('sizeSel');
   if(hintBtn){ hintBtn.style.background=t.empty; hintBtn.style.color=t.text; hintBtn.style.borderColor=c.style.borderColor; }
   if(themeBtn){ themeBtn.style.background=t.empty; themeBtn.style.color=t.text; themeBtn.style.borderColor=c.style.borderColor; themeBtn.textContent=currentTheme==='dark'?'Light':'Dark'; }
+  if(sizeSel){ sizeSel.style.background=t.empty; sizeSel.style.color=t.text; sizeSel.style.borderColor=c.style.borderColor; }
 }
 
 function reset(keepUndo=false){
+  updateCanvas();
   grid=Array.from({length:N},()=>Array(N).fill(0));
   score=0; over=false; won=false; hintDir=null;
   addTile(); addTile();
@@ -254,15 +274,15 @@ function draw(anim){
   ctx.fillText(`Score: ${score} Best: ${best} Undo:${undoLeft}`,12,20);
   const base=anim?anim.base:grid;
   for(let y=0;y<N;y++) for(let x=0;x<N;x++){
-    const v=base[y][x]; const px=PAD + x*(S+10); const py=40 + y*(S+10);
+    const v=base[y][x]; const px=PAD + x*(S+GAP); const py=40 + y*(S+GAP);
     ctx.fillStyle=v?tileColor(v):theme.empty; ctx.strokeStyle=c.style.borderColor; ctx.lineWidth=1;
     roundRect(ctx,px,py,S,S,10,true,true);
     if(v){ ctx.fillStyle=(v<=4)?theme.tileTextDark:theme.tileTextLight; ctx.font=(v<100)?'28px Inter':'24px Inter'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(v,px+S/2,py+S/2+2); }
   }
   if(anim){
     for(const t of anim.tiles){
-      const px=PAD + (t.fromX + (t.toX - t.fromX)*anim.p)*(S+10);
-      const py=40 + (t.fromY + (t.toY - t.fromY)*anim.p)*(S+10);
+      const px=PAD + (t.fromX + (t.toX - t.fromX)*anim.p)*(S+GAP);
+      const py=40 + (t.fromY + (t.toY - t.fromY)*anim.p)*(S+GAP);
       const v=t.value;
       ctx.fillStyle=tileColor(v); ctx.strokeStyle=c.style.borderColor; ctx.lineWidth=1;
       roundRect(ctx,px,py,S,S,10,true,true);
@@ -310,8 +330,23 @@ function simulate(dir){
   let g=copyGrid(grid); let s=score; let moved=false;
   if(dir===0){ for(let y=0;y<N;y++){ const {row,gained}=slideSim(g[y]); if(JSON.stringify(g[y])!==JSON.stringify(row)) moved=true; g[y]=row; s+=gained; } }
   if(dir===2){ for(let y=0;y<N;y++){ const {row,gained}=slideSim(g[y].slice().reverse()); const rev=row.reverse(); if(JSON.stringify(g[y])!==JSON.stringify(rev)) moved=true; g[y]=rev; s+=gained; } }
-  if(dir===1){ for(let x=0;x<N;x++){ const col=[g[0][x],g[1][x],g[2][x],g[3][x]]; const {row,gained}=slideSim(col); for(let y=0;y<N;y++){ if(g[y][x]!==row[y]) moved=true; g[y][x]=row[y]; } s+=gained; } }
-  if(dir===3){ for(let x=0;x<N;x++){ const col=[g[3][x],g[2][x],g[1][x],g[0][x]]; const {row,gained}=slideSim(col); const rev=row.reverse(); for(let y=0;y<N;y++){ if(g[y][x]!==rev[y]) moved=true; g[y][x]=rev[y]; } s+=gained; } }
+  if(dir===1){
+    for(let x=0;x<N;x++){
+      const col=[]; for(let y=0;y<N;y++) col.push(g[y][x]);
+      const {row,gained}=slideSim(col);
+      for(let y=0;y<N;y++){ if(g[y][x]!==row[y]) moved=true; g[y][x]=row[y]; }
+      s+=gained;
+    }
+  }
+  if(dir===3){
+    for(let x=0;x<N;x++){
+      const col=[]; for(let y=0;y<N;y++) col.push(g[N-1-y][x]);
+      const {row,gained}=slideSim(col);
+      const rev=row.reverse();
+      for(let y=0;y<N;y++){ if(g[y][x]!==rev[y]) moved=true; g[y][x]=rev[y]; }
+      s+=gained;
+    }
+  }
   if(!moved) return null; return {grid:g, score:s, max:Math.max(...g.flat())};
 }
 
