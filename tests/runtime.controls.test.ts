@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import { test, expect, vi } from 'vitest';
-import { Controls } from '../src/runtime/controls.ts';
+import { Controls } from '../src/runtime/controls.js';
 
 test('touchstart listeners are non-passive', () => {
   const spy = vi.spyOn(HTMLElement.prototype, 'addEventListener');

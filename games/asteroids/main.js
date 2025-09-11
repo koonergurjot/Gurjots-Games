@@ -1,4 +1,4 @@
-import { Controls } from '../../src/runtime/controls.ts';
+import { Controls } from '../../src/runtime/controls.js';
 import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';

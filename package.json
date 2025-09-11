@@ -6,12 +6,15 @@
     "test": "vitest run",
     "sitemap": "node tools/generate-sitemap.mjs",
     "sw-manifest": "node tools/generate-sw-manifest.mjs",
-    "health": "node tools/healthcheck.mjs"
+    "health": "node tools/healthcheck.mjs",
+    "build": "tsc --allowJs src/router.ts --target ES2020 --module ES2020 --moduleResolution node --outDir scripts && tsc --allowJs src/runtime/controls.ts --target ES2020 --module ES2020 --moduleResolution node --outDir src/runtime && tsc --allowJs tools/reporters/console-signature.ts --target ES2020 --module ES2020 --moduleResolution node --outDir tools/reporters",
+    "start": "node server.js"
   },
   "devDependencies": {
     "acorn": "^8.15.0",
     "jsdom": "^24.0.0",
     "service-worker-mock": "^2.0.5",
+    "typescript": "^5.9.2",
     "vitest": "^1.6.0"
   },
   "dependencies": {

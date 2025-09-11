@@ -1,5 +1,5 @@
 // Stockfish-based AI helper for Chess3D.
-import { warn } from '../../../tools/reporters/console-signature.ts';
+import { warn } from '../../../tools/reporters/console-signature.js';
 
 let worker = null;
 let readyPromise = null;

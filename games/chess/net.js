@@ -22,7 +22,7 @@ const ChessNet = (() => {
           statusHandler(msg.message);
         }
       } catch(err) {
-        import('../../tools/reporters/console-signature.ts').then(({ error }) => {
+        import('../../tools/reporters/console-signature.js').then(({ error }) => {
           error('chess', 'Bad message', err);
         });
       }

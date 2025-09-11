@@ -1,4 +1,4 @@
-import { warn } from '../tools/reporters/console-signature.ts';
+import { warn } from '../tools/reporters/console-signature.js';
 
 export function registerSW() {
   if ('serviceWorker' in navigator) {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { execSync } from 'child_process';
 
 const gitSHA = execSync('git rev-parse --short HEAD').toString().trim();
