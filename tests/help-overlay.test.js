@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { attachHelpOverlay } from '../shared/ui.js';
 
-const steps = [{ objective: 'Win', controls: 'Arrows', tips: 'Good luck' }];
+const opts = { gameId: 'game1', objective: 'Win', controls: 'Arrows', tips: ['Good luck'], steps: ['Step'] };
 
 describe('attachHelpOverlay', () => {
   beforeEach(() => {
@@ -11,7 +11,7 @@ describe('attachHelpOverlay', () => {
   });
 
   it('shows overlay automatically on first run and sets localStorage flag', () => {
-    attachHelpOverlay({ gameId: 'game1', steps });
+    attachHelpOverlay(opts);
     const overlay = document.querySelector('.help-overlay');
     expect(overlay).toBeTruthy();
     expect(overlay.classList.contains('hidden')).toBe(false);
@@ -21,7 +21,7 @@ describe('attachHelpOverlay', () => {
 
   it('does not auto show when already seen', () => {
     localStorage.setItem('seenHints', JSON.stringify({ game1: true }));
-    attachHelpOverlay({ gameId: 'game1', steps });
+    attachHelpOverlay(opts);
     const overlay = document.querySelector('.help-overlay');
     expect(overlay).toBeTruthy();
     expect(overlay.classList.contains('hidden')).toBe(true);
@@ -30,7 +30,7 @@ describe('attachHelpOverlay', () => {
   it('hides on Escape and returns focus to help button', () => {
     document.body.innerHTML = '<button class="help-btn">?</button>';
     localStorage.setItem('seenHints', JSON.stringify({ game1: true }));
-    const { show } = attachHelpOverlay({ gameId: 'game1', steps });
+    const { show } = attachHelpOverlay(opts);
     show();
     const overlay = document.querySelector('.help-overlay');
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
@@ -41,7 +41,7 @@ describe('attachHelpOverlay', () => {
   it('closes when clicking backdrop', () => {
     document.body.innerHTML = '<button class="help-btn">?</button>';
     localStorage.setItem('seenHints', JSON.stringify({ game1: true }));
-    const { show } = attachHelpOverlay({ gameId: 'game1', steps });
+    const { show } = attachHelpOverlay(opts);
     show();
     const overlay = document.querySelector('.help-overlay');
     overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -49,7 +49,7 @@ describe('attachHelpOverlay', () => {
   });
 
   it('renders an accessible close icon', () => {
-    const { show } = attachHelpOverlay({ gameId: 'game1', steps });
+    const { show } = attachHelpOverlay(opts);
     show();
     const closeIcon = document.querySelector('.help-overlay .close-icon');
     expect(closeIcon).toBeTruthy();

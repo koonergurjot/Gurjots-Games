@@ -1,15 +1,10 @@
 import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { connect } from './net.js';
+import games from '../../games.json' assert { type: 'json' };
 
-const helpSteps = [
-  {
-    objective: 'Reach the maze exit',
-    controls: 'WASD move • Mouse look • P pause • R restart',
-    tips: 'Use the minimap for navigation'
-  }
-];
-injectHelpButton({ gameId: 'maze3d', steps: helpSteps });
+const help = games.find(g => g.id === 'maze3d')?.help || {};
+injectHelpButton({ gameId: 'maze3d', ...help });
 recordLastPlayed('maze3d');
 
 const scene = new THREE.Scene();

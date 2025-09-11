@@ -9,17 +9,12 @@ import { mountCameraPresets } from "./ui/cameraPresets.js";
 import { envDataUrl } from "./textures/env.js";
 import { log, warn } from '../../tools/reporters/console-signature.ts';
 import { injectHelpButton } from '../../shared/ui.js';
+import games from '../../games.json' assert { type: 'json' };
 
 log('chess3d', '[Chess3D] booting');
 
-const helpSteps = [
-  {
-    objective: 'Checkmate the opposing king',
-    controls: 'Drag pieces • Use presets for views',
-    tips: 'Adjust difficulty from the dropdown'
-  }
-];
-injectHelpButton({ gameId: 'chess3d', steps: helpSteps });
+const help = games.find(g => g.id === 'chess3d')?.help || {};
+injectHelpButton({ gameId: 'chess3d', ...help });
 
 const stage = document.getElementById('stage');
 const statusEl = document.getElementById('status');

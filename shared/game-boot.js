@@ -11,7 +11,7 @@ const urlSlug = pathSegments.slice(-1)[0];
 const slug = currentScript?.dataset?.slug || urlSlug || 'unknown';
 
 injectBackButton('/');
-injectHelpButton({ gameId: slug, steps: window.helpSteps || [] });
+injectHelpButton({ gameId: slug, ...(window.helpData || { steps: window.helpSteps || [] }) });
 recordLastPlayed(slug);
 
 async function track(){

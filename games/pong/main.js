@@ -1,6 +1,7 @@
 import { createGamepad } from '../../shared/controls.js';
 import { Controls } from '../../src/runtime/controls.ts';
 import { attachPauseOverlay, injectHelpButton, saveBestScore, shareScore } from '../../shared/ui.js';
+import games from '../../games.json' assert { type: 'json' };
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 
@@ -71,14 +72,8 @@ sndSel.onchange = ()=> { sounds = sndSel.value; };
 // Pause overlay
 const overlay = attachPauseOverlay({ onResume: ()=> running=true, onRestart: ()=> restart() });
 
-const helpSteps = [
-  {
-    objective: 'Score 11 points to win',
-    controls: 'W/S or ↑/↓ move • Space/Enter serve • P pause • R restart',
-    tips: 'Change difficulty from the menu'
-  }
-];
-injectHelpButton({ gameId: 'pong', steps: helpSteps });
+const help = games.find(g => g.id === 'pong')?.help || {};
+injectHelpButton({ gameId: 'pong', ...help });
 
 // Audio (synthesized with WebAudio)
 const AC = window.AudioContext ? new AudioContext() : null;

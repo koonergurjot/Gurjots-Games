@@ -5,6 +5,10 @@ import { emitEvent } from '../../shared/achievements.js';
 import * as net from './net.js';
 import { renderFallbackPanel } from '../../shared/fallback.js';
 import signature from 'console-signature';
+import games from '../../games.json' assert { type: 'json' };
+
+const help = games.find(g => g.id === 'asteroids')?.help || {};
+window.helpData = help;
 async function init(){
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
