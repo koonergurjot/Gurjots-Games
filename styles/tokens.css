@@ -1,17 +1,17 @@
 :root {
   /* Color tokens */
-  --bg: #f5f5f5;
+  --bg: #e0f2fe;
   --fg: #0b0b0f;
-  --header-bg: #ffffff;
+  --header-bg: #bae6fd;
   --border: #dddddd;
-  --button-bg: #e0e0e0;
+  --button-bg: #7dd3fc;
   --button-border: #cccccc;
   --button-hover: #d5d5d5;
   --card-bg: #ffffff;
   --tag-border: #cccccc;
   --panel-bg: #ffffff;
   --panel-fg: #000000;
-  --accent: #38bdf8;
+  --accent: #f43f5e;
   --focus: #93c5fd;
 
   /* Spacing scale */
@@ -48,18 +48,18 @@
 }
 
 [data-theme="dark"] {
-  --bg: #0b0b0f;
+  --bg: #082f49;
   --fg: #eaeaf2;
-  --header-bg: #12121a;
+  --header-bg: #0c4a6e;
   --border: #1f1f2a;
-  --button-bg: #1f1f2a;
+  --button-bg: #075985;
   --button-border: #2a2a36;
   --button-hover: #2a2a36;
   --card-bg: #14141d;
   --tag-border: #2a2a36;
   --panel-bg: #111111;
   --panel-fg: #ffffff;
-  --accent: #38bdf8;
+  --accent: #fb7185;
   --focus: #93c5fd;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.5);
