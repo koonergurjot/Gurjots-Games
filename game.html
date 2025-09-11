@@ -73,7 +73,7 @@
     initI18n();
 
     const params = new URLSearchParams(location.search);
-    const slug = params.get('slug');
+    const slug = params.get('slug') || params.get('id');
     const heroEl = document.getElementById('hero');
     const pageTitle = document.getElementById('pageTitle');
     if (!slug) {
@@ -91,7 +91,7 @@
         const res = await fetch('./games.json', { cache: 'no-store' });
         const data = await res.json();
         const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
-        const game = games.find(g => g.slug === slug);
+        const game = games.find(g => (g.slug || g.id) === slug);
         if (!game) throw new Error('not found');
         renderGame(game, games);
       } catch (e) {
