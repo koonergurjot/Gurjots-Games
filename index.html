@@ -11,22 +11,20 @@
 </head>
 <body>
   <header>
-    <a href="/" class="logo">Gurjot's Game</a>
-  </header>
-  <main>
-    <section>
-      <h2>Play Now</h2>
-      <div id="gameGrid" class="grid"></div>
-    </section>
-  </main>
-  <footer>
+    <a href="/" class="logo" data-link>Gurjot's Game</a>
     <nav>
-      <a href="README.md">About</a>
-      <a href="README.md#controls">Controls</a>
-      <a href="mailto:feedback@example.com">Feedback</a>
+      <a href="/" data-link>Home</a>
+      <a href="/games" data-link>All Games</a>
+      <a href="/categories" data-link>Categories</a>
+      <a href="/leaderboards" data-link>Leaderboards</a>
+      <a href="/about" data-link>About</a>
     </nav>
+  </header>
+  <main id="app"></main>
+  <footer>
+    <small>&copy; 2025 Gurjot's Game</small>
   </footer>
-  <script src="scripts/home.js" type="module"></script>
+  <script type="module" src="scripts/app.js"></script>
   <script type="module">
     import { registerSW } from './shared/sw.js';
     registerSW();

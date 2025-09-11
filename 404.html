@@ -1,1 +1,33 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Not found — Gurjot's Games</title><link rel="stylesheet" href="css/styles.css"><style>body{display:grid;place-items:center;height:100vh;}</style></head><body><div class="container"><div class="status error">That page wasn’t found. Taking you back to the hub…</div></div><script>setTimeout(()=>location.href="index.html",1200)</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gurjot's Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles/global.css" />
+</head>
+<body>
+  <header>
+    <a href="/" class="logo" data-link>Gurjot's Game</a>
+    <nav>
+      <a href="/" data-link>Home</a>
+      <a href="/games" data-link>All Games</a>
+      <a href="/categories" data-link>Categories</a>
+      <a href="/leaderboards" data-link>Leaderboards</a>
+      <a href="/about" data-link>About</a>
+    </nav>
+  </header>
+  <main id="app"></main>
+  <footer>
+    <small>&copy; 2025 Gurjot's Game</small>
+  </footer>
+  <script type="module" src="scripts/app.js"></script>
+  <script type="module">
+    import { registerSW } from './shared/sw.js';
+    registerSW();
+  </script>
+</body>
+</html>
