@@ -24,9 +24,18 @@ fetch('/data/games.json')
   .then(r => r.json())
   .then(data => {
     games = Array.isArray(data) ? data : [];
-    renderGrid();
-    renderRoute();
-  });
+    if (games.length) {
+      renderGrid();
+      renderRoute();
+    } else {
+      showError();
+    }
+  })
+  .catch(err => showError());
+
+function showError() {
+  grid.innerHTML = '<p class="error">No games available. Please try again later.</p>';
+}
 
 function renderGrid() {
   grid.innerHTML = '';
