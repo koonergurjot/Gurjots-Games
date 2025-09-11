@@ -3,7 +3,9 @@ import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.j
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 import * as net from './net.js';
-
+import { renderFallbackPanel } from '../../shared/fallback.js';
+import signature from 'console-signature';
+async function init(){
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const DPR = Math.min(2, window.devicePixelRatio||1);
@@ -430,3 +432,9 @@ function render(){
 // Session timing
 startSessionTimer('asteroids');
 window.addEventListener('beforeunload', ()=> endSessionTimer('asteroids'));
+}
+
+init().catch(e => {
+  signature(e);
+  renderFallbackPanel(e, 'asteroids');
+});
