@@ -7,7 +7,7 @@ import { ShaderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postpro
 import { FXAAShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders/FXAAShader.js';
 import { SSAOPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/SSAOPass.js';
 import { registerSW } from '../../shared/sw.js';
-import { injectBackButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
+import { injectBackButton, injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 
 const params = new URLSearchParams(location.search);
@@ -44,6 +44,14 @@ document.getElementById('exportBtn')?.style.setProperty('display', 'none');
 
 registerSW();
 injectBackButton();
+const helpSteps = [
+  {
+    objective: 'Collect the glowing orbs',
+    controls: 'WASD move • Mouse look • Space jump • R reset',
+    tips: 'Touch orbs to earn points'
+  }
+];
+injectHelpButton({ gameId: 'box3d', steps: helpSteps });
 recordLastPlayed('box3d');
 emitEvent({ type: 'play', slug: 'box3d' });
 

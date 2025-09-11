@@ -8,8 +8,18 @@ import { mountThemePicker } from "./ui/themePicker.js";
 import { mountCameraPresets } from "./ui/cameraPresets.js";
 import { envDataUrl } from "./textures/env.js";
 import { log, warn } from '../../tools/reporters/console-signature.ts';
+import { injectHelpButton } from '../../shared/ui.js';
 
 log('chess3d', '[Chess3D] booting');
+
+const helpSteps = [
+  {
+    objective: 'Checkmate the opposing king',
+    controls: 'Drag pieces • Use presets for views',
+    tips: 'Adjust difficulty from the dropdown'
+  }
+];
+injectHelpButton({ gameId: 'chess3d', steps: helpSteps });
 
 const stage = document.getElementById('stage');
 const statusEl = document.getElementById('status');

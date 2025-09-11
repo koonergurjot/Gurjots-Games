@@ -1,7 +1,15 @@
-import { recordLastPlayed, shareScore } from '../../shared/ui.js';
+import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { connect } from './net.js';
 
+const helpSteps = [
+  {
+    objective: 'Reach the maze exit',
+    controls: 'WASD move • Mouse look • P pause • R restart',
+    tips: 'Use the minimap for navigation'
+  }
+];
+injectHelpButton({ gameId: 'maze3d', steps: helpSteps });
 recordLastPlayed('maze3d');
 
 const scene = new THREE.Scene();

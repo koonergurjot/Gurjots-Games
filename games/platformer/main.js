@@ -1,7 +1,15 @@
-import { recordLastPlayed, shareScore } from '../../shared/ui.js';
+import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 import * as net from './net.js';
 
+const helpSteps = [
+  {
+    objective: 'Reach the end of the level',
+    controls: 'Arrow keys move • Space/Up jump • P pause • R restart',
+    tips: 'Collect items and avoid enemies'
+  }
+];
+injectHelpButton({ gameId: 'platformer', steps: helpSteps });
 recordLastPlayed('platformer');
 emitEvent({ type: 'play', slug: 'platformer' });
 
