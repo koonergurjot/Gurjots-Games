@@ -59,10 +59,19 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(request)
       .then(resp => {
-        const copy = resp.clone();
-        caches.open(VERSION).then(cache => cache.put(request, copy));
+        const url = new URL(request.url);
+        if (url.protocol.startsWith('http')) {
+          const copy = resp.clone();
+          caches.open(VERSION).then(cache => cache.put(request, copy));
+        }
         return resp;
       })
-      .catch(() => caches.match(request).then(r => r || offlineFallback(request)))
+      .catch(err => {
+        const url = new URL(request.url);
+        if (url.protocol.startsWith('http')) {
+          return caches.match(request).then(r => r || offlineFallback(request));
+        }
+        throw err;
+      })
   );
 });
