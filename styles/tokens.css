@@ -1,0 +1,67 @@
+:root {
+  /* Color tokens */
+  --bg: #f5f5f5;
+  --fg: #0b0b0f;
+  --header-bg: #ffffff;
+  --border: #dddddd;
+  --button-bg: #e0e0e0;
+  --button-border: #cccccc;
+  --button-hover: #d5d5d5;
+  --card-bg: #ffffff;
+  --tag-border: #cccccc;
+  --panel-bg: #ffffff;
+  --panel-fg: #000000;
+  --accent: #38bdf8;
+  --focus: #93c5fd;
+
+  /* Spacing scale */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.15);
+
+  /* Z-index */
+  --z-dropdown: 100;
+  --z-overlay: 400;
+  --z-modal: 1000;
+
+  /* Typography */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: monospace;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --line-height-base: 1.5;
+}
+
+[data-theme="dark"] {
+  --bg: #0b0b0f;
+  --fg: #eaeaf2;
+  --header-bg: #12121a;
+  --border: #1f1f2a;
+  --button-bg: #1f1f2a;
+  --button-border: #2a2a36;
+  --button-hover: #2a2a36;
+  --card-bg: #14141d;
+  --tag-border: #2a2a36;
+  --panel-bg: #111111;
+  --panel-fg: #ffffff;
+  --accent: #38bdf8;
+  --focus: #93c5fd;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.6);
+}

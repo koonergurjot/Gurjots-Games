@@ -1,3 +1,5 @@
+@import './tokens.css';
+
 /* Global styles for Gurjot's Game landing page */
 :root {
   --bg: #0a0a0a;

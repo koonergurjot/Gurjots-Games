@@ -24,6 +24,10 @@ flowchart TD
     B --> E[Server APIs]
 ```
 
+## Design Tokens
+
+Shared design tokens live in `styles/tokens.css`. The file defines color palettes for light and dark themes, spacing, radii, shadows, z-index layers, and typography. All style sheets import these variables, and dark mode is activated by setting `data-theme="dark"` on the root element.
+
 ## Installation
 
 ```bash

@@ -1,32 +1,4 @@
-:root {
-  --bg: #0b0b0f;
-  --fg: #eaeaf2;
-  --header-bg: #12121a;
-  --border: #1f1f2a;
-  --button-bg: #1f1f2a;
-  --button-border: #2a2a36;
-  --button-hover: #2a2a36;
-  --card-bg: #14141d;
-  --tag-border: #2a2a36;
-  --panel-bg: #111;
-  --panel-fg: #fff;
-  --accent: #38bdf8;
-  --focus: #93c5fd;
-}
-
-:root[data-theme="light"] {
-  --bg: #f5f5f5;
-  --fg: #0b0b0f;
-  --header-bg: #fff;
-  --border: #ddd;
-  --button-bg: #e0e0e0;
-  --button-border: #ccc;
-  --button-hover: #d5d5d5;
-  --card-bg: #fff;
-  --tag-border: #ccc;
-  --panel-bg: #fff;
-  --panel-fg: #000;
-}
+@import './styles/tokens.css';
 
 * { box-sizing: border-box; }
 html, body {
