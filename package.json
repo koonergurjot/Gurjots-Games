@@ -5,7 +5,8 @@
   "scripts": {
     "test": "vitest run",
     "sitemap": "node tools/generate-sitemap.mjs",
-    "sw-manifest": "node tools/generate-sw-manifest.mjs"
+    "sw-manifest": "node tools/generate-sw-manifest.mjs",
+    "health": "node tools/healthcheck.mjs"
   },
   "devDependencies": {
     "acorn": "^8.15.0",

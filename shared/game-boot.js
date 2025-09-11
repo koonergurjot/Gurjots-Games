@@ -2,6 +2,7 @@
 // Usage in a game page: <script type="module" src="../../shared/game-boot.js" data-slug="runner"></script>
 import { injectBackButton, recordLastPlayed } from './ui.js';
 import { recordPlay } from './quests.js';
+import { renderFallbackPanel } from './fallback.js';
 
 const currentScript = document.currentScript;
 const pathSegments = (new URL(location.href)).pathname.split('/').filter(Boolean);
@@ -25,3 +26,12 @@ async function track(){
 }
 
 track();
+
+function showFallback(e){
+  const err = e?.error || e?.reason || e;
+  if (!err) return;
+  renderFallbackPanel(err, slug);
+}
+
+window.addEventListener('error', showFallback);
+window.addEventListener('unhandledrejection', showFallback);
