@@ -1,4 +1,6 @@
 // Stockfish-based AI helper for Chess3D.
+import { warn } from '../../../tools/reporters/console-signature.ts';
+
 let worker = null;
 let readyPromise = null;
 let currentResolve = null;
@@ -19,7 +21,7 @@ export async function initEngine(){
       worker.addEventListener('message', onMsg);
     });
   }catch(e){
-    console.warn('[Chess3D] Stockfish worker not found. AI disabled.', e);
+    warn('chess3d', '[Chess3D] Stockfish worker not found. AI disabled.', e);
     worker = null;
     readyPromise = Promise.resolve();
   }

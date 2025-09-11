@@ -22,7 +22,9 @@ const ChessNet = (() => {
           statusHandler(msg.message);
         }
       } catch(err) {
-        console.error('Bad message', err);
+        import('../../tools/reporters/console-signature.ts').then(({ error }) => {
+          error('chess', 'Bad message', err);
+        });
       }
     };
     ws.onclose = () => statusHandler('Disconnected');

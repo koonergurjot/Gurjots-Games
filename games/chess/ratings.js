@@ -32,7 +32,9 @@ const Ratings = (() => {
       });
       return await res.json();
     } catch (err) {
-      console.warn('Rating sync failed', err);
+      import('../../tools/reporters/console-signature.ts').then(({ warn }) => {
+        warn('chess', 'Rating sync failed', err);
+      });
     }
   }
 
