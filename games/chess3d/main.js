@@ -7,8 +7,9 @@ import { bestMove, evaluate, cancel } from "./ai/simpleEngine.js";
 import { mountThemePicker } from "./ui/themePicker.js";
 import { mountCameraPresets } from "./ui/cameraPresets.js";
 import { envDataUrl } from "./textures/env.js";
+import { log, warn } from '../../tools/reporters/console-signature.ts';
 
-console.log('[Chess3D] booting');
+log('chess3d', '[Chess3D] booting');
 
 const stage = document.getElementById('stage');
 const statusEl = document.getElementById('status');
@@ -189,7 +190,7 @@ async function boot(){
     ({ OrbitControls: Controls } = await import('./lib/OrbitControls.js'));
   } catch (e) {
     statusEl.textContent = 'Three.js vendor files missing. Add them to games/chess3d/lib.';
-    console.warn('[Chess3D] missing vendor libs', e);
+    warn('chess3d', '[Chess3D] missing vendor libs', e);
     return;
   }
 

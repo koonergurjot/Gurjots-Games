@@ -13,7 +13,11 @@
       try{
         const msg=JSON.parse(e.data);
         handlers[msg.type]?.(msg);
-      }catch(err){ console.error(err); }
+      }catch(err){
+        import('../../tools/reporters/console-signature.ts').then(({ error }) => {
+          error('2048', err);
+        });
+      }
     });
   }
 
