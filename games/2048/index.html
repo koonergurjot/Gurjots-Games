@@ -7,21 +7,33 @@
   <link rel="stylesheet" href="../../css/styles.css?v=5.3">
 </head>
 <body style="margin:0;">
-  <div style="display:flex;justify-content:center;padding:16px 16px 20px;">
-    <canvas id="board" width="360" height="420" style="border:1px solid #243047;border-radius:12px;"></canvas>
+  <div id="lobby" style="text-align:center;padding:40px;">
+    <h2>2048 Multiplayer</h2>
+    <input id="roomInput" placeholder="Room code" style="padding:8px 12px;border:1px solid #243047;border-radius:6px;"/>
+    <button id="joinBtn" style="border:1px solid #243047;background:#111827;color:#e6e7ea;padding:8px 16px;border-radius:8px;margin-left:8px;cursor:pointer;">Join</button>
+    <button id="readyBtn" style="border:1px solid #243047;background:#111827;color:#e6e7ea;padding:8px 16px;border-radius:8px;margin-left:8px;cursor:pointer;display:none;">Ready</button>
+    <p id="lobbyStatus"></p>
   </div>
-  <div style="text-align:center;margin-bottom:60px;">
-    <button id="hintBtn" style="border:1px solid #243047;background:#111827;color:#e6e7ea;padding:8px 16px;border-radius:8px;cursor:pointer;">Hint</button>
-    <select id="sizeSel" style="border:1px solid #243047;background:#111827;color:#e6e7ea;padding:8px 16px;border-radius:8px;margin-left:8px;cursor:pointer;">
-      <option value="4">4×4</option>
-      <option value="5">5×5</option>
-      <option value="6">6×6</option>
-      <option value="7">7×7</option>
-      <option value="8">8×8</option>
-    </select>
-    <button id="themeToggle" style="border:1px solid #243047;background:#111827;color:#e6e7ea;padding:8px 16px;border-radius:8px;margin-left:8px;cursor:pointer;">Theme</button>
+  <div id="game" style="display:none;">
+    <div id="status" style="text-align:center;margin-top:8px;"></div>
+    <div style="display:flex;justify-content:center;padding:16px 16px 20px;">
+      <canvas id="board" width="360" height="420" style="border:1px solid #243047;border-radius:12px;"></canvas>
+      <canvas id="oppBoard" width="360" height="420" style="border:1px solid #243047;border-radius:12px;margin-left:16px;"></canvas>
+    </div>
+    <div style="text-align:center;margin-bottom:60px;">
+      <button id="hintBtn" style="border:1px solid #243047;background:#111827;color:#e6e7ea;padding:8px 16px;border-radius:8px;cursor:pointer;">Hint</button>
+      <select id="sizeSel" style="border:1px solid #243047;background:#111827;color:#e6e7ea;padding:8px 16px;border-radius:8px;margin-left:8px;cursor:pointer;">
+        <option value="4">4×4</option>
+        <option value="5">5×5</option>
+        <option value="6">6×6</option>
+        <option value="7">7×7</option>
+        <option value="8">8×8</option>
+      </select>
+      <button id="themeToggle" style="border:1px solid #243047;background:#111827;color:#e6e7ea;padding:8px 16px;border-radius:8px;margin-left:8px;cursor:pointer;">Theme</button>
+    </div>
   </div>
   <script src="../../js/hud.js?v=5.3"></script>
+  <script src="net.js?v=5.3"></script>
   <script src="g2048.js?v=5.3"></script>
   <script src="../../js/input.js?v=5.3"></script>
   <script src="../../js/remapUI.js?v=5.3"></script>

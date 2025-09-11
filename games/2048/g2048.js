@@ -1,6 +1,9 @@
 
 (function(){
 const c=document.getElementById('board'), ctx=c.getContext('2d');
+const oppC=document.getElementById('oppBoard'), oppCtx=oppC?.getContext('2d');
+const net=window.Net;
+let oppGrid=null, oppScore=0;
 const PAD=12, S=80, GAP=10;
 const LS_SIZE='g2048.size';
 const sizeSel=document.getElementById('sizeSel');
@@ -49,6 +52,33 @@ if(isNaN(best)) best=0;
 
 let animating=false;
 
+function updateStatus(){
+  const el=document.getElementById('status');
+  if(el) el.textContent=`You: ${score} Opponent: ${oppScore||0}`;
+}
+
+function drawOpponent(){
+  if(!oppCtx||!oppGrid) return;
+  const theme=themes[currentTheme];
+  oppCtx.fillStyle=theme.boardBg;
+  oppCtx.fillRect(0,0,oppC.width,oppC.height);
+  oppCtx.fillStyle=theme.text;
+  oppCtx.font='16px Inter,system-ui';
+  oppCtx.fillText(`Opponent: ${oppScore}`,12,20);
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    const v=oppGrid[y]?.[x]||0; const px=PAD + x*(S+GAP); const py=40 + y*(S+GAP);
+    oppCtx.fillStyle=v?tileColor(v):theme.empty; oppCtx.strokeStyle=oppC.style.borderColor; oppCtx.lineWidth=1;
+    roundRect(oppCtx,px,py,S,S,10,true,true);
+    if(v){ oppCtx.fillStyle=(v<=4)?theme.tileTextDark:theme.tileTextLight; oppCtx.font=(v<100)?'28px Inter':'24px Inter'; oppCtx.textAlign='center'; oppCtx.textBaseline='middle'; oppCtx.fillText(v,px+S/2,py+S/2+2); }
+  }
+}
+
+function injectGarbage(count){
+  for(let i=0;i<count;i++) addTile();
+  draw();
+  net?.send('move',{grid,score});
+}
+
 function updateCanvas(){
   c.width = 2*PAD + N*S + (N-1)*GAP;
   c.height = 40 + N*S + (N-1)*GAP + 30;
@@ -61,6 +91,7 @@ function applyTheme(){
   document.body.style.background=currentTheme==='dark'?'#0b1220':'#fafafa';
   document.body.style.color=t.text;
   c.style.borderColor=currentTheme==='dark'?'#243047':'#9ca3af';
+  if(oppC) oppC.style.borderColor=c.style.borderColor;
   const hintBtn=document.getElementById('hintBtn');
   const themeBtn=document.getElementById('themeToggle');
   const sizeSel=document.getElementById('sizeSel');
@@ -77,6 +108,7 @@ function reset(keepUndo=false){
   history=[{grid:copyGrid(grid), score:0}];
   if(!keepUndo){ undoLeft=MAX_UNDO; localStorage.setItem(LS_UNDO,undoLeft); }
   draw();
+  net?.send('move',{grid,score});
 }
 
 function addTile(){
@@ -110,6 +142,7 @@ function undoMove(){
     undoLeft--; localStorage.setItem(LS_UNDO,undoLeft);
     over=false; won=false; hintDir=null;
     draw();
+    net?.send('move',{grid,score});
   }
 }
 
@@ -221,6 +254,7 @@ function animateMove(anims, after){
       check();
       draw();
       animating=false;
+      net?.send('move',{grid,score});
     }
   }
   requestAnimationFrame(step);
@@ -233,6 +267,7 @@ function move(dir){
   if(!moved){ history.pop(); return; }
   score+=gained;
   if(score>best){ best=score; localStorage.setItem(LS_BEST,best); }
+  if(gained>=128) net?.send('garbage',{count:1});
   animateMove(animations, after);
 }
 
@@ -293,6 +328,8 @@ function draw(anim){
   if(hintDir!=null){ ctx.fillText('Hint: '+['Left','Up','Right','Down'][hintDir],12,c.height-12); }
   if(won){ overlay('You made 2048! Press R to restart'); }
   else if(over){ overlay('No moves left — Press R'); }
+  updateStatus();
+  drawOpponent();
 }
 
 function overlay(msg){
@@ -367,6 +404,16 @@ document.getElementById('themeToggle')?.addEventListener('click',()=>{
   draw();
 });
 
+net?.on('move',msg=>{ oppGrid=msg.grid; oppScore=msg.score; drawOpponent(); updateStatus(); });
+net?.on('garbage',msg=>injectGarbage(msg.count||1));
+net?.on('start',()=>{
+  document.getElementById('lobby')?.style.setProperty('display','none');
+  document.getElementById('game')?.style.removeProperty('display');
+  reset(true);
+  net?.send('move',{grid,score});
+});
+
 applyTheme();
 reset(true);
+net?.send('move',{grid,score});
 })();
