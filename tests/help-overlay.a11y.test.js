@@ -9,6 +9,8 @@ describe('help overlay accessibility', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
+    // axe-core uses canvas for color contrast calculations, which jsdom lacks.
+    HTMLCanvasElement.prototype.getContext = () => null;
   });
 
   it('has no critical axe violations', async () => {
