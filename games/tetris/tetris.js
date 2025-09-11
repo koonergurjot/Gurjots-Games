@@ -25,13 +25,23 @@ let started=false;
 let grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
 let bag=[];
 
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+}
+
 function nextFromBag(){
   if(mode==='replay'){
     const t=Replay.nextPiece();
     return {m:SHAPES[t].map(r=>r.slice()),t};
   }
-  if(bag.length===0) bag=Object.keys(SHAPES).sort(()=>Math.random()-0.5);
-  const t=bag.shift();
+  if(bag.length===0){
+    bag=Object.keys(SHAPES);
+    shuffle(bag);
+  }
+  const t=bag.pop();
   return {m:SHAPES[t].map(r=>r.slice()),t};
 }
 let nextM;
@@ -45,6 +55,8 @@ let score=0, level=1, lines=0, over=false, dropMs=700, last=0, paused=false;
 let lockTimer=0; const LOCK_DELAY=0.5; let lastFrame=0;
 let clearAnim=0, clearRows=[];
 let bgShift=0;
+let combo=-1;
+let rotated=false;
 
 function initGame(){
   nextM=nextFromBag();
@@ -56,10 +68,7 @@ function spawn(){
   const piece=nextM;
   nextM=nextFromBag();
   if(mode==='play') Replay.recordPiece(piece.t);
-  return {m:piece.m.map(r=>r.slice()), x:3, y:0, t:piece.t};
-}
-function rotate(m){
-  return m[0].map((_,i)=>m.map(r=>r[i]).reverse());
+  return {m:piece.m.map(r=>r.slice()), x:3, y:0, t:piece.t, o:0};
 }
 function collide(p){
   for(let y=0;y<p.m.length;y++)
@@ -70,14 +79,6 @@ function collide(p){
     }
   return false;
 }
-function tryKick(p,R){
-  const tests=[{x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:-2,y:0},{x:2,y:0}];
-  for(const t of tests){
-    const cand={m:R,x:p.x+t.x,y:p.y+t.y};
-    if(!collide(cand)) return cand;
-  }
-  return null;
-}
 function merge(p){
   for(let y=0;y<p.m.length;y++)
     for(let x=0;x<p.m[y].length;x++)
@@ -85,7 +86,7 @@ function merge(p){
 }
 
 function updateGhost(){
-  ghost={m:cur.m.map(r=>r.slice()),x:cur.x,y:cur.y};
+  ghost={m:cur.m.map(r=>r.slice()),x:cur.x,y:cur.y,o:cur.o,t:cur.t};
   while(!collide(ghost)) ghost.y++;
   ghost.y--;
 }
@@ -107,15 +108,45 @@ function clearLines(){
     if(grid[y].every(v=>v)) clearRows.push(y);
   if(clearRows.length){
     clearAnim=8;
-    const cleared=clearRows.length;
-    lines+=cleared;
-    score+=[0,100,300,500,800][cleared]||cleared*200;
-    GG.addXP(2*cleared);
-    if(lines>=level*LINES_PER_LEVEL){ level++; dropMs=Math.max(120,dropMs-60); }
-    updateBest();
-    GG.setMeta(GAME_ID,'Best lines: '+lines);
-    SFX.seq([[600,0.06],[800,0.06],[1000,0.06]].slice(0,cleared));
   }
+  return clearRows.length;
+}
+
+function isTSpin(p){
+  if(p.t!=='T' || !rotated) return false;
+  const corners=[[0,0],[2,0],[0,2],[2,2]];
+  let count=0;
+  for(const [dx,dy] of corners){
+    const nx=p.x+dx, ny=p.y+dy;
+    if(nx<0||nx>=COLS||ny>=ROWS || grid[ny][nx]) count++;
+  }
+  return count>=3;
+}
+
+function lockPiece(soft=0,hard=0){
+  merge(cur);
+  const tSpin=isTSpin(cur);
+  const cleared=clearLines();
+  let pts=soft + hard*2;
+  if(tSpin){
+    pts+=[0,800,1200,1600][cleared]||400;
+  }else{
+    pts+=[0,100,300,500,800][cleared]||0;
+  }
+  if(cleared>0){
+    combo++;
+    if(combo>0) pts+=combo*50;
+  }else{
+    combo=-1;
+  }
+  score+=pts;
+  lines+=cleared;
+  GG.addXP(2*cleared);
+  if(lines>=level*LINES_PER_LEVEL){ level++; dropMs=Math.max(120,dropMs-60); }
+  updateBest();
+  GG.setMeta(GAME_ID,'Best lines: '+lines);
+  if(cleared) SFX.seq([[600,0.06],[800,0.06],[1000,0.06]].slice(0,cleared));
+  rotated=false;
 }
 
 function drawCell(x,y,v){
@@ -190,6 +221,7 @@ function draw(){
   ctx.fillText(`Score ${score}`,8,20);
   ctx.fillText(`Level ${level}`,8,40);
   ctx.fillText(`Lines ${lines}`,8,60);
+  if(combo>0) ctx.fillText(`Combo ${combo}`,8,80);
   const ox=COLS*CELL+16;
   ctx.fillText('NEXT',ox,20);
   drawMatrix(nextM.m,ox,30);
@@ -212,12 +244,11 @@ function draw(){
   }
 }
 
-function drop(){
+function drop(manual=false){
   cur.y++;
   if(collide(cur)){
     cur.y--;
-    merge(cur);
-    clearLines();
+    lockPiece(manual?1:0,0);
     cur=spawn();
     canHold=true;
     lockTimer=0;
@@ -228,27 +259,39 @@ function drop(){
       if(mode==='play'){ Replay.stop(); Replay.download('tetris-replay-'+Date.now()+'.json'); }
     }
   } else {
+    if(manual){ score++; updateBest(); }
     lockTimer=0;
   }
   updateGhost();
 }
 function hardDrop(){
-  while(!collide(cur)) cur.y++;
+  let dist=0;
+  while(!collide(cur)){ cur.y++; dist++; }
   cur.y--;
-  score+=2;
+  lockPiece(0,dist);
+  cur=spawn();
+  canHold=true;
+  lockTimer=0;
   updateBest();
   updateGhost();
+  if(collide(cur)){
+    over=true;
+    updateBest();
+    GG.addAch(GAME_ID,'Stacked');
+    if(mode==='play'){ Replay.stop(); Replay.download('tetris-replay-'+Date.now()+'.json'); }
+  }
 }
 function hold(){
   if(!canHold) return;
   const temp=holdM;
   holdM={m:cur.m.map(r=>r.slice()),t:cur.t};
   if(temp){
-    cur={m:temp.m.map(r=>r.slice()),x:3,y:0,t:temp.t};
+    cur={m:temp.m.map(r=>r.slice()),x:3,y:0,t:temp.t,o:0};
   } else {
     cur=spawn();
   }
   canHold=false;
+  rotated=false;
   updateGhost();
 }
 
@@ -262,18 +305,14 @@ function applyAction(a){
     if(!collide(p)){ cur.x=nx; lockTimer=0; updateGhost(); }
   }
   if(a==='rotate'){
-    const R=rotate(cur.m); let cand={...cur,m:R};
-    if(collide(cand)){
-      const k=tryKick(cur,R); if(k && !collide(k)) cand=k;
-    }
-    if(!collide(cand)){ cur=cand; SFX.beep({freq:500,dur:0.03}); lockTimer=0; updateGhost(); }
+    const cand=TetrisEngine.rotate(cur,grid,1);
+    if(cand!==cur){ cur=cand; SFX.beep({freq:500,dur:0.03}); lockTimer=0; updateGhost(); rotated=true; }
   }
   if(a==='down'){
-    drop(); SFX.beep({freq:500,dur:0.03}); GG.addXP(1);
+    drop(true); SFX.beep({freq:500,dur:0.03}); GG.addXP(1);
   }
   if(a==='hardDrop'){
     hardDrop(); SFX.seq([[600,0.05],[700,0.05]]);
-    merge(cur); clearLines(); cur=spawn(); canHold=true; lockTimer=0; updateGhost();
   }
   if(a==='hold'){
     hold();
@@ -311,6 +350,12 @@ addEventListener('keydown',e=>{
   if(e.key.toLowerCase()==='c'){ applyAction('hold'); Replay.recordAction('hold'); }
 });
 
+document.getElementById('holdBtn')?.addEventListener('click',()=>{
+  if(mode!=='play' || paused || over || clearAnim) return;
+  applyAction('hold');
+  Replay.recordAction('hold');
+});
+
 function loop(ts){
   if(!last) last=ts;
   if(!lastFrame) lastFrame=ts;
@@ -330,8 +375,7 @@ function loop(ts){
     if(touching){
       lockTimer+=dt;
       if(lockTimer>=LOCK_DELAY){
-        merge(cur);
-        clearLines();
+        lockPiece();
         cur=spawn();
         canHold=true;
         lockTimer=0;
