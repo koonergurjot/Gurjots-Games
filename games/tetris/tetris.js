@@ -8,6 +8,17 @@ const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9'
 const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L:[[0,0,7],[7,7,7]]};
 const LINES_PER_LEVEL=10;
 
+const params=new URLSearchParams(location.search);
+const mode=params.has('spectate')?'spectate':(params.get('replay')?'replay':'play');
+const replayFile=params.get('replay');
+let bc=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('tetris'):null;
+if(bc && mode==='spectate'){
+  bc.onmessage=e=>{
+    ({grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost}=e.data);
+    updateGhost();
+  };
+}
+
 let bestScore=+(localStorage.getItem('tetris:bestScore')||0);
 let bestLines=+(localStorage.getItem('tetris:bestLines')||0);
 let started=false;
@@ -15,15 +26,19 @@ let grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
 let bag=[];
 
 function nextFromBag(){
+  if(mode==='replay'){
+    const t=Replay.nextPiece();
+    return {m:SHAPES[t].map(r=>r.slice()),t};
+  }
   if(bag.length===0) bag=Object.keys(SHAPES).sort(()=>Math.random()-0.5);
   const t=bag.shift();
-  return SHAPES[t].map(r=>r.slice());
+  return {m:SHAPES[t].map(r=>r.slice()),t};
 }
-let nextM=nextFromBag();
+let nextM;
 let holdM=null;
 let canHold=true;
 
-let cur=spawn();
+let cur;
 let ghost;
 let showGhost=localStorage.getItem('tetris:ghost')!=='0';
 let score=0, level=1, lines=0, over=false, dropMs=700, last=0, paused=false;
@@ -31,12 +46,17 @@ let lockTimer=0; const LOCK_DELAY=0.5; let lastFrame=0;
 let clearAnim=0, clearRows=[];
 let bgShift=0;
 
-updateGhost();
+function initGame(){
+  nextM=nextFromBag();
+  cur=spawn();
+  updateGhost();
+}
 
 function spawn(){
-  const m=nextM;
+  const piece=nextM;
   nextM=nextFromBag();
-  return {m, x:3, y:0};
+  if(mode==='play') Replay.recordPiece(piece.t);
+  return {m:piece.m.map(r=>r.slice()), x:3, y:0, t:piece.t};
 }
 function rotate(m){
   return m[0].map((_,i)=>m.map(r=>r[i]).reverse());
@@ -172,9 +192,9 @@ function draw(){
   ctx.fillText(`Lines ${lines}`,8,60);
   const ox=COLS*CELL+16;
   ctx.fillText('NEXT',ox,20);
-  drawMatrix(nextM,ox,30);
+  drawMatrix(nextM.m,ox,30);
   ctx.fillText('HOLD (C)',ox,120);
-  if(holdM) drawMatrix(holdM,ox,130);
+  if(holdM) drawMatrix(holdM.m,ox,130);
 
   if(over){
     ctx.fillStyle='rgba(0,0,0,.6)';
@@ -205,6 +225,7 @@ function drop(){
       over=true;
       updateBest();
       GG.addAch(GAME_ID,'Stacked');
+      if(mode==='play'){ Replay.stop(); Replay.download('tetris-replay-'+Date.now()+'.json'); }
     }
   } else {
     lockTimer=0;
@@ -221,14 +242,42 @@ function hardDrop(){
 function hold(){
   if(!canHold) return;
   const temp=holdM;
-  holdM=cur.m.map(r=>r.slice());
+  holdM={m:cur.m.map(r=>r.slice()),t:cur.t};
   if(temp){
-    cur={m:temp,x:3,y:0};
+    cur={m:temp.m.map(r=>r.slice()),x:3,y:0,t:temp.t};
   } else {
     cur=spawn();
   }
   canHold=false;
   updateGhost();
+}
+
+function applyAction(a){
+  if(a==='left'){
+    const nx=cur.x-1; const p={...cur,x:nx};
+    if(!collide(p)){ cur.x=nx; lockTimer=0; updateGhost(); }
+  }
+  if(a==='right'){
+    const nx=cur.x+1; const p={...cur,x:nx};
+    if(!collide(p)){ cur.x=nx; lockTimer=0; updateGhost(); }
+  }
+  if(a==='rotate'){
+    const R=rotate(cur.m); let cand={...cur,m:R};
+    if(collide(cand)){
+      const k=tryKick(cur,R); if(k && !collide(k)) cand=k;
+    }
+    if(!collide(cand)){ cur=cand; SFX.beep({freq:500,dur:0.03}); lockTimer=0; updateGhost(); }
+  }
+  if(a==='down'){
+    drop(); SFX.beep({freq:500,dur:0.03}); GG.addXP(1);
+  }
+  if(a==='hardDrop'){
+    hardDrop(); SFX.seq([[600,0.05],[700,0.05]]);
+    merge(cur); clearLines(); cur=spawn(); canHold=true; lockTimer=0; updateGhost();
+  }
+  if(a==='hold'){
+    hold();
+  }
 }
 
 addEventListener('keydown',e=>{
@@ -238,14 +287,15 @@ addEventListener('keydown',e=>{
     updateGhost();
     return;
   }
+  if(mode!=='play') return;
   if(!started){
-    if(e.code==='Space'){ started=true; return; }
+    if(e.code==='Space'){ started=true; Replay.start(); return; }
     return;
   }
   if(over && e.key.toLowerCase()==='r'){
     grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
-    cur=spawn();
-    score=0; level=1; lines=0;
+    bag=[]; initGame();
+    score=0; level=1; lines=0; holdM=null; canHold=true;
     over=false; started=false;
     updateGhost();
     return;
@@ -253,48 +303,12 @@ addEventListener('keydown',e=>{
   if(e.key.toLowerCase()==='p'){ paused=!paused; return; }
   if(paused || over || clearAnim) return;
 
-  if(e.key==='ArrowLeft'){
-    const nx=cur.x-1;
-    const p={...cur,x:nx};
-    if(!collide(p)){ cur.x=nx; lockTimer=0; updateGhost(); }
-  }
-  if(e.key==='ArrowRight'){
-    const nx=cur.x+1;
-    const p={...cur,x:nx};
-    if(!collide(p)){ cur.x=nx; lockTimer=0; updateGhost(); }
-  }
-  if(e.key==='ArrowUp'){
-    const R=rotate(cur.m);
-    let cand={...cur,m:R};
-    if(collide(cand)){
-      const k=tryKick(cur,R);
-      if(k && !collide(k)) cand=k;
-    }
-    if(!collide(cand)){
-      cur=cand;
-      SFX.beep({freq:500,dur:0.03});
-      lockTimer=0;
-      updateGhost();
-    }
-  }
-  if(e.key==='ArrowDown'){
-    drop();
-    SFX.beep({freq:500,dur:0.03});
-    GG.addXP(1);
-  }
-  if(e.code==='Space'){
-    hardDrop();
-    SFX.seq([[600,0.05],[700,0.05]]);
-    merge(cur);
-    clearLines();
-    cur=spawn();
-    canHold=true;
-    lockTimer=0;
-    updateGhost();
-  }
-  if(e.key.toLowerCase()==='c'){
-    hold();
-  }
+  if(e.key==='ArrowLeft'){ applyAction('left'); Replay.recordAction('left'); }
+  if(e.key==='ArrowRight'){ applyAction('right'); Replay.recordAction('right'); }
+  if(e.key==='ArrowUp'){ applyAction('rotate'); Replay.recordAction('rotate'); }
+  if(e.key==='ArrowDown'){ applyAction('down'); Replay.recordAction('down'); }
+  if(e.code==='Space'){ applyAction('hardDrop'); Replay.recordAction('hardDrop'); }
+  if(e.key.toLowerCase()==='c'){ applyAction('hold'); Replay.recordAction('hold'); }
 });
 
 function loop(ts){
@@ -302,11 +316,16 @@ function loop(ts){
   if(!lastFrame) lastFrame=ts;
   const dt=Math.min((ts-lastFrame)/1000,0.05);
   lastFrame=ts;
-  if(started && !paused && !over && clearAnim===0 && ts-last>dropMs){
+
+  if(mode==='replay' && started && !paused && !over){
+    const acts=Replay.tick(dt); acts.forEach(a=>applyAction(a));
+  }
+
+  if(mode!=='spectate' && started && !paused && !over && clearAnim===0 && ts-last>dropMs){
     drop();
     last=ts;
   }
-  if(started && !paused && !over && clearAnim===0){
+  if(mode!=='spectate' && started && !paused && !over && clearAnim===0){
     const touching=collide({...cur,y:cur.y+1});
     if(touching){
       lockTimer+=dt;
@@ -321,6 +340,7 @@ function loop(ts){
           over=true;
           updateBest();
           GG.addAch(GAME_ID,'Stacked');
+          if(mode==='play'){ Replay.stop(); Replay.download('tetris-replay-'+Date.now()+'.json'); }
         }
       }
     } else {
@@ -329,6 +349,14 @@ function loop(ts){
   }
   ctx.clearRect(0,0,c.width,c.height);
   draw();
+  if(bc && mode==='play') bc.postMessage({grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost});
   requestAnimationFrame(loop);
 }
-requestAnimationFrame(loop);
+
+if(mode==='replay'){
+  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;requestAnimationFrame(loop);});
+}else{
+  initGame();
+  if(mode==='spectate') started=true;
+  requestAnimationFrame(loop);
+}
