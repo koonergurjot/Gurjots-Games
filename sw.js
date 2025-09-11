@@ -1,6 +1,6 @@
 // v1.1 service worker (safe, minimal).
 // CACHE_VERSION bumped to force users to receive the new landing right away.
-const CACHE_VERSION = 'gg-v3-20250911162413';
+const CACHE_VERSION = 'gg-v4-20250911172711';
 const PRECACHE = 'precache-' + CACHE_VERSION;
 const RUNTIME = 'runtime-' + CACHE_VERSION;
 
@@ -21,7 +21,7 @@ self.addEventListener('activate', (event) => {
     await self.clients.claim();
     // Clean up old caches
     const names = await caches.keys();
-    await Promise.all(names.map(n => (n.includes('gg-v3-') || n.includes(CACHE_VERSION)) ? null : caches.delete(n)));
+    await Promise.all(names.map(n => n.includes(CACHE_VERSION) ? null : caches.delete(n)));
   })());
 });
 
