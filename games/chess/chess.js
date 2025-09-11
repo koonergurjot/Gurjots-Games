@@ -13,6 +13,10 @@ let board=[], turn='w', sel=null, moves=[], over=false;
 let lastMove=null; let premove=null;
 let puzzleIndex=-1, puzzleStep=0;
 let anim=null;
+let castleRights={w:{K:true,Q:true},b:{K:true,Q:true}};
+let epTarget=null; // {x,y} square available for en passant capture
+let repTable={};
+let overMsg=null;
 
 // piece sprites encoded as base64 data URIs to avoid external binary assets
 const pieceSrcs={
@@ -59,12 +63,19 @@ if(puzzleSelect && window.puzzles){
 
 function reset(){
   if(puzzleIndex>=0){ loadPuzzle(puzzleIndex); return; }
-  board = parseFEN(START); turn='w'; sel=null; moves=[]; over=false; draw(); status('White to move');
+  board = parseFEN(START); turn='w'; sel=null; moves=[]; over=false; overMsg=null;
+  castleRights={w:{K:true,Q:true},b:{K:true,Q:true}};
+  epTarget=null;
+  repTable={};
+  recordPosition();
+  draw(); status('White to move');
 }
 function loadPuzzle(i){
   puzzleIndex=i; puzzleStep=0;
   const p=window.puzzles[i];
-  board=parseFEN(p.fen); turn='w'; sel=null; moves=[]; over=false;
+  board=parseFEN(p.fen); turn='w'; sel=null; moves=[]; over=false; overMsg=null;
+  castleRights={w:{K:true,Q:true},b:{K:true,Q:true}};
+  epTarget=null; repTable={}; recordPosition();
   status('Puzzle '+(i+1)+': White to move');
   draw();
   if(puzzleSelect) puzzleSelect.value=i;
@@ -86,6 +97,37 @@ function boardToFEN(){
   }
   return rows.join('/');
 }
+function castleStr(){
+  let s='';
+  if(castleRights.w.K) s+='K';
+  if(castleRights.w.Q) s+='Q';
+  if(castleRights.b.K) s+='k';
+  if(castleRights.b.Q) s+='q';
+  return s||'-';
+}
+function recordPosition(){
+  const key=boardToFEN()+" "+turn+" "+castleStr()+" "+(epTarget?coordToSquare(epTarget.x,epTarget.y):'-');
+  repTable[key]=(repTable[key]||0)+1;
+}
+function threefold(){
+  return Object.values(repTable).some(v=>v>=3);
+}
+function stalemate(side){
+  if(inCheck(side)) return false;
+  for(let y=0;y<8;y++) for(let x=0;x<8;x++){
+    const p=pieceAt(x,y); if(p===EMPTY||colorOf(p)!==side) continue;
+    if(genMoves(x,y).length) return false;
+  }
+  return true;
+}
+function squareAttacked(x,y,by){
+  for(let yy=0;yy<8;yy++) for(let xx=0;xx<8;xx++){
+    const p=pieceAt(xx,yy); if(p===EMPTY||colorOf(p)!==by) continue;
+    const ms=genMovesNoFilter(xx,yy);
+    if(ms.some(m=>m.x===x&&m.y===y)) return true;
+  }
+  return false;
+}
 function pieceAt(x,y){ if(y<0||y>=8||x<0||x>=8) return null; return board[y][x]; }
 function colorOf(p){ if(!p||p===EMPTY) return null; return (p===p.toUpperCase())?'w':'b'; }
 function toUpper(p){return p.toUpperCase();}
@@ -97,21 +139,36 @@ function strToMove(s){ return {from:{x:'abcdefgh'.indexOf(s[0]),y:8-parseInt(s[1
 function genMoves(x,y){
   const p=pieceAt(x,y); if(!p||p===EMPTY) return [];
   const isW = colorOf(p)==='w';
-  const capdir = isW? -1: 1;
   const res=[]; const P=toUpper(p);
-  function push(nx,ny,capOnly=false,quietOnly=false){
+  function push(nx,ny,capOnly=false,quietOnly=false,extra={}){
     const t=pieceAt(nx,ny); if(nx<0||nx>=8||ny<0||ny>=8) return;
     if(t!==EMPTY && colorOf(t)===colorOf(p)) return;
     if(capOnly && (t===EMPTY)) return;
     if(quietOnly && (t!==EMPTY)) return;
-    res.push({x:nx,y:ny});
+    res.push(Object.assign({x:nx,y:ny},extra));
   }
   if(P==='P'){
     const dir = isW? -1: +1;
-    push(x, y+dir, false, true);
-    if((isW&&y===6) || (!isW&&y===1)){ if(pieceAt(x,y+dir)===EMPTY && pieceAt(x,y+2*dir)===EMPTY) push(x,y+2*dir,false,true); }
-    push(x-1, y+dir, true, false);
-    push(x+1, y+dir, true, false);
+    // forward
+    if(pieceAt(x,y+dir)===EMPTY){
+      if(y+dir===0||y+dir===7) push(x,y+dir,false,true,{promo:true});
+      else push(x, y+dir, false, true);
+      if((isW&&y===6)||(!isW&&y===1)){
+        if(pieceAt(x,y+2*dir)===EMPTY) push(x,y+2*dir,false,true);
+      }
+    }
+    // captures
+    [x-1,x+1].forEach(nx=>{
+      const ty=y+dir; const t=pieceAt(nx,ty);
+      if(t!==EMPTY && colorOf(t)!==colorOf(p)){
+        if(ty===0||ty===7) push(nx,ty,true,false,{promo:true});
+        else push(nx,ty,true,false);
+      }
+    });
+    // en passant
+    if(epTarget && epTarget.y===y+dir && Math.abs(epTarget.x-x)===1 && pieceAt(epTarget.x,y)=== (isW?'p':'P')){
+      push(epTarget.x, epTarget.y, true, false, {ep:true});
+    }
   } else if(P==='N'){
     [[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]].forEach(d=>push(x+d[0], y+d[1]));
   } else if(P in {'B':1,'R':1,'Q':1}){
@@ -127,14 +184,49 @@ function genMoves(x,y){
     }
   } else if(P==='K'){
     for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){ if(dx||dy) push(x+dx,y+dy); }
+    const rights=castleRights[isW?'w':'b'];
+    const enemy=isW?'b':'w';
+    if(!inCheck(isW?'w':'b')){
+      // kingside
+      if(rights.K && pieceAt(x+1,y)===EMPTY && pieceAt(x+2,y)===EMPTY && !squareAttacked(x+1,y,enemy) && !squareAttacked(x+2,y,enemy) && toUpper(pieceAt(7,y))==='R' && colorOf(pieceAt(7,y))===colorOf(p)){
+        push(x+2,y,false,true,{castle:'K'});
+      }
+      // queenside
+      if(rights.Q && pieceAt(x-1,y)===EMPTY && pieceAt(x-2,y)===EMPTY && pieceAt(x-3,y)===EMPTY && !squareAttacked(x-1,y,enemy) && !squareAttacked(x-2,y,enemy) && toUpper(pieceAt(0,y))==='R' && colorOf(pieceAt(0,y))===colorOf(p)){
+        push(x-2,y,false,true,{castle:'Q'});
+      }
+    }
   }
   // Filter out moves that leave own king in check (basic legality)
   const legal=[];
   for(const m of res){
-    const saved = board[m.y][m.x]; const from = board[y][x];
-    board[m.y][m.x]=board[y][x]; board[y][x]=EMPTY;
-    if(!inCheck(colorOf(from))) legal.push(m);
-    board[y][x]=from; board[m.y][m.x]=saved;
+    const fromPiece=board[y][x];
+    let captured, rookFrom, rookTo, epCap;
+    if(m.ep){
+      epCap=board[y][m.x];
+      board[m.y][m.x]=fromPiece;
+      board[y][m.x]=EMPTY;
+      board[y][x]=EMPTY;
+    } else if(m.castle){
+      board[m.y][m.x]=fromPiece; board[y][x]=EMPTY;
+      if(m.castle==='K'){ rookFrom={x:7,y}; rookTo={x:5,y}; }
+      else { rookFrom={x:0,y}; rookTo={x:3,y}; }
+      board[rookTo.y][rookTo.x]=board[rookFrom.y][rookFrom.x];
+      board[rookFrom.y][rookFrom.x]=EMPTY;
+    } else {
+      captured=board[m.y][m.x];
+      board[m.y][m.x]=fromPiece; board[y][x]=EMPTY;
+    }
+    if(!inCheck(colorOf(fromPiece))) legal.push(m);
+    if(m.ep){
+      board[y][x]=fromPiece; board[m.y][m.x]=EMPTY; board[y][m.x]=epCap;
+    } else if(m.castle){
+      board[y][x]=fromPiece; board[m.y][m.x]=EMPTY;
+      board[rookFrom.y][rookFrom.x]=board[rookTo.y][rookTo.x];
+      board[rookTo.y][rookTo.x]=EMPTY;
+    } else {
+      board[y][x]=fromPiece; board[m.y][m.x]=captured;
+    }
   }
   return legal;
 }
@@ -212,6 +304,16 @@ function draw(){
     const img=pieceImgs[color+type];
     if(img.complete) ctx.drawImage(img,x,y,S,S);
   }
+  if(overMsg){ overlay(overMsg); }
+}
+
+function overlay(msg){
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle='#fff';
+  ctx.font='24px Inter';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(msg,c.width/2,c.height/2);
 }
 
 function animateMove(from,to,piece,cb){
@@ -230,19 +332,71 @@ function animateMove(from,to,piece,cb){
   requestAnimationFrame(step);
 }
 
+function movePiece(from,to,opts={}){
+  const piece=board[from.y][from.x];
+  const color=colorOf(piece);
+  if(toUpper(piece)==='K'){
+    castleRights[color].K=false; castleRights[color].Q=false;
+  }
+  if(toUpper(piece)==='R'){
+    if(color==='w'){
+      if(from.x===0&&from.y===7) castleRights.w.Q=false;
+      if(from.x===7&&from.y===7) castleRights.w.K=false;
+    } else {
+      if(from.x===0&&from.y===0) castleRights.b.Q=false;
+      if(from.x===7&&from.y===0) castleRights.b.K=false;
+    }
+  }
+  const target=board[to.y][to.x];
+  if(toUpper(target)==='R'){
+    const tColor=colorOf(target);
+    if(tColor==='w'){
+      if(to.x===0&&to.y===7) castleRights.w.Q=false;
+      if(to.x===7&&to.y===7) castleRights.w.K=false;
+    } else {
+      if(to.x===0&&to.y===0) castleRights.b.Q=false;
+      if(to.x===7&&to.y===0) castleRights.b.K=false;
+    }
+  }
+  if(opts.ep){
+    const dir=color==='w'?-1:1;
+    board[to.y-dir][to.x]=EMPTY;
+  }
+  board[to.y][to.x]=piece;
+  board[from.y][from.x]=EMPTY;
+  if(opts.castle==='K'){
+    board[to.y][to.x-1]=board[to.y][to.x+1];
+    board[to.y][to.x+1]=EMPTY;
+  } else if(opts.castle==='Q'){
+    board[to.y][to.x+1]=board[to.y][to.x-2];
+    board[to.y][to.x-2]=EMPTY;
+  }
+  if(toUpper(piece)==='P' && (to.y===0||to.y===7)){
+    board[to.y][to.x]=color==='w'?'Q':'q';
+  }
+  epTarget=null;
+  if(toUpper(piece)==='P' && Math.abs(to.y-from.y)===2){
+    epTarget={x:from.x,y:(from.y+to.y)/2};
+  }
+  lastMove={from:{x:from.x,y:from.y},to:{x:to.x,y:to.y}};
+}
+
 function aiMove(){
   if(over) return;
   const depth=parseInt(depthEl.value,10)||1;
   const fen=boardToFEN()+" "+turn;
   const move=ai.bestMove(fen, depth);
   if(!move) return;
-  const piece=board[move.from.y][move.from.x];
-  board[move.to.y][move.to.x]=piece;
-  board[move.from.y][move.from.x]=EMPTY;
-  lastMove={from:{x:move.from.x,y:move.from.y},to:{x:move.to.x,y:move.to.y}};
-  animateMove(lastMove.from,lastMove.to,piece,()=>{
+  const from={x:move.from.x,y:move.from.y};
+  const to={x:move.to.x,y:move.to.y};
+  const piece=board[from.y][from.x];
+  movePiece(from,to,{});
+  animateMove(from,to,piece,()=>{
     turn='w';
-    if(checkmate(turn)){ status('White in checkmate!'); over=true; }
+    recordPosition();
+    if(checkmate(turn)){ status('White in checkmate!'); over=true; overMsg='Black wins'; }
+    else if(stalemate(turn)){ status('Stalemate'); over=true; overMsg='Stalemate'; }
+    else if(threefold()){ status('Draw by repetition'); over=true; overMsg='Draw by repetition'; }
     else if(inCheck(turn)){ status('White to move — CHECK!'); }
     else status('White to move');
     draw();
@@ -261,7 +415,7 @@ c.addEventListener('click', (e)=>{
         const from={x:sel.x,y:sel.y};
         const to={x:m.x,y:m.y};
         const piece=board[sel.y][sel.x];
-        board[to.y][to.x]=piece; board[from.y][from.x]=EMPTY; lastMove={from,to};
+        movePiece(from,to,m);
         sel=null; moves=[];
         animateMove(from,to,piece,()=>{
           if(puzzleIndex>=0){
@@ -276,9 +430,7 @@ c.addEventListener('click', (e)=>{
               } else {
                 const reply=strToMove(sol[puzzleStep]);
                 const rp=board[reply.from.y][reply.from.x];
-                board[reply.to.y][reply.to.x]=rp;
-                board[reply.from.y][reply.from.x]=EMPTY;
-                lastMove={from:reply.from,to:reply.to};
+                movePiece(reply.from,reply.to,{});
                 animateMove(reply.from,reply.to,rp,()=>{ puzzleStep++; draw(); });
               }
             } else {
@@ -289,19 +441,21 @@ c.addEventListener('click', (e)=>{
             return;
           }
           turn = (turn==='w'?'b':'w');
+          recordPosition();
           if(premove && colorOf(pieceAt(premove.from.x,premove.from.y))===turn){
             const legal=genMoves(premove.from.x,premove.from.y).find(z=>z.x===premove.to.x&&z.y===premove.to.y);
             if(legal){
               const p2=pieceAt(premove.from.x,premove.from.y);
-              board[legal.y][legal.x]=p2;
-              board[premove.from.y][premove.from.x]=EMPTY;
-              lastMove={from:{x:premove.from.x,y:premove.from.y},to:{x:legal.x,y:legal.y}};
+              movePiece({x:premove.from.x,y:premove.from.y},{x:legal.x,y:legal.y},legal);
               animateMove({x:premove.from.x,y:premove.from.y},{x:legal.x,y:legal.y},p2,()=>{});
               turn=(turn==='w'?'b':'w');
+              recordPosition();
             }
             premove=null;
           }
-          if (checkmate(turn)){ status((turn==='w'?'White':'Black')+' in checkmate!'); over=true; draw(); return; }
+          if (checkmate(turn)){ status((turn==='w'?'White':'Black')+' in checkmate!'); over=true; overMsg=(turn==='w'?'Black wins':'White wins'); draw(); return; }
+          if (stalemate(turn)){ status('Stalemate'); over=true; overMsg='Stalemate'; draw(); return; }
+          if (threefold()){ status('Draw by repetition'); over=true; overMsg='Draw by repetition'; draw(); return; }
           if(turn==='b'){ status('AI thinking...'); setTimeout(aiMove,20); return; }
           if (inCheck(turn)){ status('White to move — CHECK!'); }
           else status('White to move');
