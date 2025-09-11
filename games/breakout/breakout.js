@@ -5,12 +5,15 @@ let paddle={w:120,h:14,x:c.width/2-60,y:c.height-40};
 let ball={x:c.width/2,y:c.height-60,vx:4,vy:-6,r:8,stuck:true,speed:7};
 let bricks=[];let score=0,lives=3;let level=1;let bestLevel=parseInt(localStorage.getItem('gg:bestlvl:breakout')||'1');
 let paused=false;function togglePause(){paused=!paused}addEventListener('keydown',e=>{if(e.key.toLowerCase()==='p')togglePause()});
-function resetLevel(){bricks=[];const layout=LEVELS[(level-1)%LEVELS.length];const pad=20,top=60;const cols=Math.max(...layout.map(r=>r.length));const bw=(c.width-pad*2-(cols-1)*8)/cols;for(let r=0;r<layout.length;r++)for(let i=0;i<layout[r].length;i++){const hp=layout[r][i];if(hp>0)bricks.push({x:pad+i*(bw+8),y:top+r*26,w:bw,h:20,hp})}ball.speed=7+(level-1)*.5}resetLevel();
+let runStart=performance.now(),endTime=null,submitted=false;
+function rng(seed){let s=0;seed=(seed||Date.now()).toString();for(let i=0;i<seed.length;i++)s=(s*31+seed.charCodeAt(i))>>>0;return function(){s^=s<<13;s^=s>>>17;s^=s<<5;return(s>>>0)/4294967296;}}
+function generateLevel(seed){bricks=[];const rand=rng(seed);const pad=20,top=60;const cols=6+((rand()*5)|0);const rows=3+((rand()*3)|0)+level;const bw=(c.width-pad*2-(cols-1)*8)/cols;const base=1+Math.floor((level-1)/2);const types=['EXPAND','SLOW','MULTI','LASER'];for(let r=0;r<rows;r++)for(let i=0;i<cols;i++){if(rand()<0.1)continue;const hp=base+(rand()<0.25?1:0);let pu=null;if(rand()<0.15)pu=types[(rand()*types.length)|0];bricks.push({x:pad+i*(bw+8),y:top+r*26,w:bw,h:20,hp,pu})}}
+generateLevel();resetBall();
 c.addEventListener('mousemove',e=>{const r=c.getBoundingClientRect();const mx=e.clientX-r.left;paddle.x=Math.max(0,Math.min(c.width-paddle.w,mx-paddle.w/2));if(ball.stuck){ball.x=paddle.x+paddle.w/2}});
 c.addEventListener('click',()=>{if(ball.stuck)ball.stuck=false});
-addEventListener('keydown',e=>{if(e.key==='ArrowLeft')paddle.x=Math.max(0,paddle.x-24);if(e.key==='ArrowRight')paddle.x=Math.min(c.width-paddle.w,paddle.x+24);if(e.key.toLowerCase()==='r'&&lives<=0){score=0;lives=3;level=1;resetLevel();resetBall()}});
-function resetBall(){ball={x:paddle.x+paddle.w/2,y:paddle.y-20,vx:4*(Math.random()<0.5?-1:1),vy:-6,r:8,stuck:true,speed:7}}
-let powerups=[];function spawnPU(x,y){const types=['EXPAND','SLOW','MULTI','LASER'];const t=types[(Math.random()*types.length)|0];powerups.push({x,y,v:2,type:t,dead:false})}
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft')paddle.x=Math.max(0,paddle.x-24);if(e.key==='ArrowRight')paddle.x=Math.min(c.width-paddle.w,paddle.x+24);if(e.key.toLowerCase()==='r'&&lives<=0){score=0;lives=3;level=1;generateLevel();resetBall();runStart=performance.now();endTime=null;submitted=false}});
+function resetBall(){ball={x:paddle.x+paddle.w/2,y:paddle.y-20,vx:4*(Math.random()<0.5?-1:1),vy:-6,r:8,stuck:true,speed:7+(level-1)*.5}}
+let powerups=[];function spawnPU(x,y,type){const types=['EXPAND','SLOW','MULTI','LASER'];const t=type||types[(Math.random()*types.length)|0];powerups.push({x,y,v:2,type:t,dead:false})}
 function applyPU(p){if(p.type==='EXPAND'){paddle.w=Math.min(paddle.w*1.35,220)}if(p.type==='SLOW'){ball.vx*=0.7;ball.vy*=0.7}if(p.type==='MULTI'){const b1={x:ball.x,y:ball.y,vx:-Math.abs(ball.vx),vy:ball.vy,r:8,stuck:false,speed:ball.speed};const b2={x:ball.x,y:ball.y,vx: Math.abs(ball.vx),vy:-ball.vy,r:8,stuck:false,speed:ball.speed};multiBalls.push(b1,b2)}if(p.type==='LASER'){lasers.push({x:paddle.x+paddle.w*0.25,y:paddle.y,vy:-9});lasers.push({x:paddle.x+paddle.w*0.75,y:paddle.y,vy:-9})}SFX.seq([[900,0.05],[1200,0.06]])}
 function updatePU(){powerups.forEach(p=>{p.y+=p.v;if(p.y>c.height)p.dead=true;if(p.y>paddle.y-6&&p.x>paddle.x&&p.x<paddle.x+paddle.w){p.dead=true;applyPU(p)}});powerups=powerups.filter(p=>!p.dead)}
 let lasers=[]; let multiBalls=[];
@@ -35,9 +38,9 @@ function step(){if(paused)return; if(ball.stuck)return;
     ball.speed = Math.min(14, ball.speed + 0.15); // gentle speed ramp
     SFX.beep({freq:520});
   }
-  for(const b of bricks){ if(b.hp<=0) continue; if(ball.x>b.x&&ball.x<b.x+b.w&&ball.y>b.y&&ball.y<b.y+b.h){ b.hp=0; score+=10; GG.addXP(1); ball.vy*=-1; spawnParticles(b.x+b.w/2,b.y+b.h/2); if(Math.random()<0.15) spawnPU(ball.x, ball.y); SFX.beep({freq:700}); } }
-  if(ball.y>c.height+20){lives--; SFX.seq([[260,0.06],[200,0.08]]); resetBall(); if(lives<=0){ GG.addAch(GAME_ID,'Game Over'); }}
-  if(bricks.every(b=>b.hp<=0)){level++;if(level>bestLevel){bestLevel=level;localStorage.setItem('gg:bestlvl:breakout',bestLevel)}resetLevel();ball.stuck=true;ball.x=paddle.x+paddle.w/2;ball.y=paddle.y-20}
+    for(const b of bricks){ if(b.hp<=0) continue; if(ball.x>b.x&&ball.x<b.x+b.w&&ball.y>b.y&&ball.y<b.y+b.h){ b.hp=0; score+=10; GG.addXP(1); ball.vy*=-1; spawnParticles(b.x+b.w/2,b.y+b.h/2); if(b.pu) spawnPU(ball.x, ball.y, b.pu); SFX.beep({freq:700}); } }
+    if(ball.y>c.height+20){lives--; SFX.seq([[260,0.06],[200,0.08]]); resetBall(); if(lives<=0){ GG.addAch(GAME_ID,'Game Over'); if(!submitted&&window.LB){LB.submitScore(GAME_ID,score);submitted=true;} if(!endTime)endTime=performance.now(); }}
+    if(bricks.every(b=>b.hp<=0)){level++;if(level>bestLevel){bestLevel=level;localStorage.setItem('gg:bestlvl:breakout',bestLevel)}generateLevel();resetBall()}
   updatePU();
   updateParticles();
   // lasers
@@ -52,10 +55,10 @@ function draw(){ // paddle glow
   bgT+=0.3;const bg=ctx.createLinearGradient(0,0,0,c.height);bg.addColorStop(0,`hsl(${bgT%360},40%,10%)`);bg.addColorStop(1,`hsl(${(bgT+60)%360},40%,5%)`);ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
   for(const b of bricks){if(b.hp>0){const g=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);g.addColorStop(0,'#a78bfa');g.addColorStop(1,'#6d28d9');ctx.fillStyle=g;ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,4);ctx.fill();}}
   ctx.save();ctx.shadowBlur=0;particles.forEach(p=>{ctx.globalAlpha=p.life/20;ctx.fillStyle='#a78bfa';ctx.fillRect(p.x,p.y,2,2);});ctx.restore();
-  ctx.fillStyle='#e6e7ea';ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#e6e7ea';ctx.font='bold 18px Inter';ctx.fillText(`Score ${score} • Lives ${lives} • Lv ${level}`,10,24);powerups.forEach(p=>{ctx.fillStyle=p.type==='EXPAND'?'#10b981':p.type==='SLOW'?'#38bdf8':p.type==='MULTI'?'#eab308':'#ef4444';ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);ctx.fill()});
+  ctx.fillStyle='#e6e7ea';ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();ctx.fillStyle='#e6e7ea';ctx.font='bold 18px Inter';const rt=(( (endTime||performance.now())-runStart)/1000).toFixed(1);ctx.fillText(`Score ${score} • Lives ${lives} • Lv ${level} • Time ${rt}s`,10,24);powerups.forEach(p=>{ctx.fillStyle=p.type==='EXPAND'?'#10b981':p.type==='SLOW'?'#38bdf8':p.type==='MULTI'?'#eab308':'#ef4444';ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);ctx.fill()});
   // lasers
   ctx.fillStyle='#ef4444'; for(const L of lasers){ ctx.fillRect(L.x-2,L.y-10,4,10); }
   // multiballs
   ctx.fillStyle='#e6e7ea'; for(const m of multiBalls){ ctx.beginPath(); ctx.arc(m.x,m.y,m.r,0,Math.PI*2); ctx.fill(); }
-  const best=parseInt(localStorage.getItem('gg:best:breakout')||'0');if(score>best)localStorage.setItem('gg:best:breakout',score);GG.setMeta(GAME_ID,'Best score: '+Math.max(best,score)+' • Best level: '+bestLevel);if(lives<=0){ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='#e6e7ea';ctx.font='bold 30px Inter';ctx.fillText('Game Over — Press R',c.width/2-150,c.height/2)} if(paused){ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='#e6e7ea';ctx.font='bold 28px Inter';ctx.fillText('Paused — P to resume', c.width/2-120, c.height/2);} }
+  const best=parseInt(localStorage.getItem('gg:best:breakout')||'0');if(score>best)localStorage.setItem('gg:best:breakout',score);GG.setMeta(GAME_ID,'Best score: '+Math.max(best,score)+' • Best level: '+bestLevel);if(lives<=0){ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='#e6e7ea';ctx.font='bold 30px Inter';const rt=(( (endTime||performance.now())-runStart)/1000).toFixed(1);ctx.fillText(`Game Over — ${rt}s — Press R`,c.width/2-170,c.height/2)} if(paused){ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='#e6e7ea';ctx.font='bold 28px Inter';ctx.fillText('Paused — P to resume', c.width/2-120, c.height/2);} }
 function loop(){step();draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
