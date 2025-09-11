@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Play</title>
+  <meta name="description" content="Play a game" />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.themes.css" />
+  <style>
+    html,body{height:100%}
+    body{margin:0;display:flex;min-height:100%;background:var(--bg);color:var(--fg)}
+    #game-root{flex:1;display:block;min-height:100vh}
+  </style>
+</head>
+<body>
+  <!-- Mount point for all games -->
+  <div id="game-root" aria-live="polite" style="display:block;min-height:100vh"></div>
+
+  <!-- Shim first (creates #game / <canvas> and a tiny window.GG if missing) -->
+  <script src="/js/compat-shim.js"></script>
+
+  <!-- Universal loader (reads games.json and boots ?id=<slug>) -->
+  <script src="/js/game-loader.js"></script>
+</body>
+</html>
