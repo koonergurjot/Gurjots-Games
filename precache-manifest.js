@@ -1,4 +1,7 @@
 self.__PRECACHE_MANIFEST = [
+  "/index.html?v=gg-v7",
+  "/css/landing.css?v=gg-v7",
+  "/js/landing.js?v=gg-v7",
   "/games/asteroids/index.html",
   "/games/asteroids/main.js",
   "/games/asteroids/thumb.png",

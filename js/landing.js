@@ -1,10 +1,13 @@
-// Landing page bootstrapping. Safe: it only reads games.json and links to game.html?id=...
+// Landing page bootstrapping. Safe: it only reads games.json and links to game.html?slug=...
 // No impact to existing game engines or routes.
 const GRID = document.getElementById('gg-grid');
 const STATUS = document.getElementById('gg-status');
 const SEARCH = document.getElementById('gg-search');
 const CLEAR = document.getElementById('gg-clear');
 const FILTERS = document.getElementById('gg-filters');
+
+// game.html reads URLSearchParams('slug') so we must match that param here
+const PLAY_PARAM = 'slug';
 
 let allGames = [];
 let activeTag = 'All';
@@ -43,29 +46,28 @@ function placeholderSVG(label='GG'){
 }
 
 function card(game){
-  const id = game.id || game.slug || game.name?.toLowerCase().replace(/\s+/g,'-');
-  const title = game.title || game.name || id;
-  const tags = game.tags || game.genres || [];
-  const short = game.description || '';
+  const { id, title, tags, description, thumb } = game;
   const badge = Array.isArray(tags) && tags[0] ? prettyTag(tags[0]) : 'Game';
+  const shot = thumb ? `<img src="${thumb}" alt="${title} thumbnail" loading="lazy" onerror="this.remove()">`
+                      : placeholderSVG(title.slice(0, 14));
 
   return `
   <article class="gg-card" tabindex="0" role="article" aria-label="${title} card">
     <div class="gg-shot">
       <div class="gg-badge">${badge}</div>
-      ${placeholderSVG(title.slice(0, 14))}
+      ${shot}
     </div>
     <div class="gg-card-body">
       <div class="gg-card-title">${title}</div>
       <div class="gg-card-meta">
         ${Array.isArray(tags) ? tags.slice(0,3).map(t=>`<span>${prettyTag(t)}</span>`).join('') : ''}
       </div>
-      ${short ? `<div class="gg-card-desc">${short}</div>` : ''}
+      ${description ? `<div class="gg-card-desc">${description}</div>` : ''}
       <div class="gg-card-actions">
-        <a class="gg-btn gg-primary" href="game.html?id=${encodeURIComponent(id)}" aria-label="Play ${title} now">
+        <a class="gg-btn gg-primary" href="game.html?${PLAY_PARAM}=${encodeURIComponent(id)}" aria-label="Play ${title} now">
           ▶ Play
         </a>
-        <a class="gg-btn" href="game.html?id=${encodeURIComponent(id)}#about" aria-label="Open ${title} details">
+        <a class="gg-btn" href="game.html?${PLAY_PARAM}=${encodeURIComponent(id)}#about" aria-label="Open ${title} details">
           ℹ Details
         </a>
       </div>
@@ -81,10 +83,10 @@ function render(list){
 function filterAndSearch(){
   const q = toQuery(SEARCH.value || '');
   const filtered = allGames.filter(g => {
-    const inTag = activeTag === 'All' || (g.tags||g.genres||[]).map(toQuery).includes(toQuery(activeTag));
+    const inTag = activeTag === 'All' || g.tags.map(toQuery).includes(toQuery(activeTag));
     if (!inTag) return false;
     if (!q) return true;
-    const blob = [g.id, g.title, g.name, g.description, ...(g.tags||g.genres||[])].join(' ').toLowerCase();
+    const blob = [g.id, g.title, g.description, ...g.tags].join(' ').toLowerCase();
     return blob.includes(q);
   });
   render(filtered);
@@ -106,24 +108,34 @@ async function boot(){
     const res = await fetch('./games.json', {cache:'no-cache'});
     if (!res.ok) throw new Error('Failed to load games.json');
     const data = await res.json();
-    // Support either array or object {games:[...]}
+    // Schema normalization: id := (id||slug||name), title := (title||name), tags := (tags||genres||[])
     const list = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
     allGames = list.map(g => ({
       id: g.id || g.slug || g.name,
       title: g.title || g.name,
       description: g.description || '',
-      tags: g.tags || g.genres || []
+      tags: g.tags || g.genres || [],
+      thumb: g.thumbnail || g.thumb || g.image || g.cover || ''
     })).filter(g => g.id && g.title);
 
+    if (!allGames.length){
+      STATUS.textContent = '0 games. Check games.json format.';
+      return;
+    }
+
     // Build filters from tags present
-    const tags = allGames.flatMap(g => g.tags).map(t => t && (t[0].toUpperCase()+t.slice(1)));
+    const tags = allGames.flatMap(g => g.tags);
     buildFilterChips(tags);
 
     render(allGames);
     STATUS.focus?.();
   }catch(err){
     console.error(err);
-    STATUS.textContent = 'Could not load games. Check games.json in the repo root.';
+    STATUS.innerHTML = 'Could not load games. <button class="gg-btn" id="gg-retry">Retry</button>';
+    document.getElementById('gg-retry').addEventListener('click', () => {
+      STATUS.textContent = 'Loading games…';
+      boot();
+    }, {once:true});
   }
 }
 
