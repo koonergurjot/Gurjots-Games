@@ -10,6 +10,8 @@ const W = cvs.width, H = cvs.height;
 const scoreEl = document.getElementById('score');
 const bestEl  = document.getElementById('best');
 const shareBtn = document.getElementById('shareBtn');
+const powerEl = document.getElementById('power');
+const shieldEl = document.getElementById('shield');
 
 injectBackButton();
 const help = games.find(g => g.id === 'shooter')?.help || {};
@@ -21,9 +23,14 @@ const state = {
   running: true,
   score: 0,
   hiscore: Number(localStorage.getItem('highscore:shooter') || 0),
-  lives: 3
+  lives: 3,
+  power: null,
+  powerTimer: 0,
+  shield: 0
 };
 bestEl.textContent = state.hiscore;
+powerEl.textContent = 'None';
+shieldEl.textContent = '0';
 
 class Player {
   constructor(){
@@ -45,18 +52,28 @@ class Player {
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
     ctx.fill();
+    if(state.shield > 0){
+      ctx.strokeStyle = '#60a5fa';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r + 4, 0, Math.PI*2);
+      ctx.stroke();
+    }
   }
 }
 
 class Bullet {
-  constructor(x, y, vx = 0, vy = -500){
+  constructor(){
+    this.r = 4;
+    this.reset(0,0,0,-500);
+  }
+  reset(x, y, vx = 0, vy = -500){
     this.x = x;
     this.y = y;
     this.prevX = x;
     this.prevY = y;
     this.vx = vx;
     this.vy = vy;
-    this.r = 4;
   }
   update(dt){
     this.prevX = this.x;
@@ -81,15 +98,15 @@ class Bullet {
 }
 
 class Enemy {
-  constructor(){
+  constructor(level = 1){
     this.r = 16;
     const edge = Math.floor(Math.random()*4);
     if(edge===0){ this.x = Math.random()*W; this.y = -this.r; }
     else if(edge===1){ this.x = W + this.r; this.y = Math.random()*H; }
     else if(edge===2){ this.x = Math.random()*W; this.y = H + this.r; }
     else { this.x = -this.r; this.y = Math.random()*H; }
-    this.speed = 80 + Math.random()*70;
-    this.elite = Math.random() < 0.15; // 15% elites
+    this.speed = (80 + Math.random()*70) * (1 + level*0.1);
+    this.elite = Math.random() < 0.1 + level*0.02;
     if (this.elite){ this.speed *= 1.6; this.r = 18; }
     this.hitFlash = 0;
   }
@@ -139,10 +156,17 @@ class MuzzleFlash {
 }
 
 class Explosion {
-  constructor(x, y){
+  constructor(){
+    this.particles = [];
+    this.debris = [];
+    this.x = 0;
+    this.y = 0;
+    this.light = 0;
+  }
+  reset(x, y){
     this.x = x;
     this.y = y;
-    this.particles = [];
+    this.particles.length = 0;
     for(let i=0;i<20;i++){
       const ang = Math.random()*Math.PI*2;
       const spd = 80 + Math.random()*120;
@@ -154,7 +178,7 @@ class Explosion {
         r: 2 + Math.random()*2
       });
     }
-    this.debris = [];
+    this.debris.length = 0;
     for(let i=0;i<6;i++){
       const ang = Math.random()*Math.PI*2;
       const spd = 40 + Math.random()*60;
@@ -238,7 +262,7 @@ class Turret {
       const dy = target.y - this.y;
       const d = Math.hypot(dx, dy) || 1;
       const spd = 400;
-      bullets.push(new Bullet(this.x, this.y, dx/d*spd, dy/d*spd));
+      spawnBullet(this.x, this.y, dx/d*spd, dy/d*spd);
       flashes.push(new MuzzleFlash(this.x, this.y));
       this.cool = 0.8;
     }
@@ -286,16 +310,64 @@ class Loot {
   }
 }
 
+class PowerUp {
+  constructor(x, y, type){
+    this.reset(x, y, type);
+  }
+  reset(x, y, type){
+    this.x = x;
+    this.y = y;
+    this.type = type;
+    this.vx = (Math.random()-0.5)*60;
+    this.vy = (Math.random()-0.5)*60;
+    this.r = 6;
+    this.life = 10;
+  }
+  update(dt){
+    this.x += this.vx*dt;
+    this.y += this.vy*dt;
+    this.life -= dt;
+  }
+  draw(ctx){
+    ctx.fillStyle = this.type === 'shield' ? '#22c55e' : '#60a5fa';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+class WaveManager {
+  constructor(){
+    this.wave = 1;
+    this.timer = 2;
+  }
+  update(dt){
+    this.timer -= dt;
+    if(this.timer <= 0){
+      this.spawnWave();
+      this.wave++;
+      this.timer = Math.max(0.5, 2 - this.wave*0.1);
+    }
+  }
+  spawnWave(){
+    const count = Math.min(2 + this.wave, 8);
+    for(let i=0;i<count;i++) enemies.push(new Enemy(this.wave));
+  }
+}
+
 const player = new Player();
+const bulletPool = [];
+const explosionPool = [];
 let bullets = [];
 let enemies = [];
+let powerups = [];
 let flashes = [];
 let explosions = [];
 let turrets = [];
 let walls = [];
 let loot = [];
-let spawnTimer = 0;
 let shakeTime = 0;
+const waveManager = new WaveManager();
 
 const keys = new Map();
 addEventListener('keydown', e => {
@@ -310,8 +382,29 @@ addEventListener('keyup', e => keys.set(e.code, false));
 
 document.getElementById('restartBtn').addEventListener('click', () => restart());
 
+function spawnBullet(x, y, vx, vy){
+  const b = bulletPool.pop() || new Bullet();
+  b.reset(x, y, vx, vy);
+  bullets.push(b);
+}
+
+function spawnExplosion(x, y){
+  const ex = explosionPool.pop() || new Explosion();
+  ex.reset(x, y);
+  explosions.push(ex);
+}
+
 function fire(){
-  bullets.push(new Bullet(player.x, player.y - player.r));
+  const speed = 500;
+  if(state.power === 'spread'){
+    [-0.2, 0, 0.2].forEach(a => {
+      const vx = Math.sin(a)*speed;
+      const vy = -Math.cos(a)*speed;
+      spawnBullet(player.x, player.y - player.r, vx, vy);
+    });
+  }else{
+    spawnBullet(player.x, player.y - player.r, 0, -speed);
+  }
   flashes.push(new MuzzleFlash(player.x, player.y - player.r));
   shakeTime = 0.1;
 }
@@ -331,7 +424,10 @@ function restart(){
   state.lives = 3;
   bestEl.textContent = state.hiscore;
   player.x = W/2; player.y = H/2;
-  bullets = []; enemies = []; flashes = []; explosions = []; spawnTimer = 0; shakeTime = 0;
+  bullets = []; enemies = []; powerups = []; flashes = []; explosions = []; shakeTime = 0;
+  waveManager.wave = 1; waveManager.timer = 2;
+  state.power = null; state.powerTimer = 0; state.shield = 0;
+  powerEl.textContent = 'None'; shieldEl.textContent = '0';
   emitEvent({ type: 'play', slug: 'shooter' });
 }
 
@@ -347,26 +443,36 @@ function loop(ts){
 
 function update(dt){
   player.update(dt, keys);
-
-  bullets.forEach(b => b.update(dt));
-  bullets = bullets.filter(b => b.y + b.r > 0 && b.y - b.r < H && b.x + b.r > 0 && b.x - b.r < W);
+  for(let i=bullets.length-1; i>=0; i--){
+    const b = bullets[i];
+    b.update(dt);
+    if(b.y + b.r <= 0 || b.y - b.r >= H || b.x + b.r <= 0 || b.x - b.r >= W){
+      bullets.splice(i,1);
+      bulletPool.push(b);
+    }
+  }
 
   flashes.forEach(f => f.update(dt));
   flashes = flashes.filter(f => f.life > 0);
 
-  explosions.forEach(ex => ex.update(dt));
-  explosions = explosions.filter(ex => !ex.isDone());
+  for(let i=explosions.length-1; i>=0; i--){
+    const ex = explosions[i];
+    ex.update(dt);
+    if(ex.isDone()){
+      explosions.splice(i,1);
+      explosionPool.push(ex);
+    }
+  }
 
   turrets.forEach(t => t.update(dt));
 
   loot.forEach(l => l.update(dt));
   loot = loot.filter(l => l.life > 0);
 
-  spawnTimer -= dt;
-  if(spawnTimer <= 0){
-    spawnTimer = 1 + Math.random()*1.5;
-    enemies.push(new Enemy());
-  }
+  powerups.forEach(p => p.update(dt));
+  powerups = powerups.filter(p => p.life > 0);
+
+  waveManager.update(dt);
   enemies.forEach(e => e.update(dt, player));
 
   if(shakeTime > 0) shakeTime -= dt;
@@ -378,11 +484,15 @@ function update(dt){
       const e = enemies[j];
       const dx = b.x - e.x, dy = b.y - e.y;
       if(dx*dx + dy*dy < (b.r + e.r)*(b.r + e.r)){
-        bullets.splice(i,1);
+        bullets.splice(i,1); bulletPool.push(b);
         e.hitFlash = 1;
         enemies.splice(j,1);
-        explosions.push(new Explosion(e.x, e.y));
-        for(let k=0;k<3;k++) loot.push(new Loot(e.x, e.y));
+        spawnExplosion(e.x, e.y);
+        if(Math.random() < 0.1){
+          powerups.push(new PowerUp(e.x, e.y, Math.random() < 0.5 ? 'spread' : 'shield'));
+        }else{
+          for(let k=0;k<3;k++) loot.push(new Loot(e.x, e.y));
+        }
         break;
       }
     }
@@ -398,15 +508,51 @@ function update(dt){
     }
   }
 
+  for(let i=powerups.length-1; i>=0; i--){
+    const p = powerups[i];
+    const dx = player.x - p.x, dy = player.y - p.y;
+    if(dx*dx + dy*dy < (player.r + p.r)*(player.r + p.r)){
+      powerups.splice(i,1);
+      if(p.type === 'spread'){
+        state.power = 'spread';
+        state.powerTimer = 8;
+        powerEl.textContent = 'Spread';
+      }else{
+        state.shield = 5;
+        shieldEl.textContent = Math.ceil(state.shield);
+      }
+    }
+  }
+
+  if(state.powerTimer > 0){
+    state.powerTimer -= dt;
+    if(state.powerTimer <= 0){
+      state.power = null;
+      powerEl.textContent = 'None';
+    }
+  }
+  if(state.shield > 0){
+    state.shield -= dt;
+    if(state.shield <= 0){
+      state.shield = 0;
+      shieldEl.textContent = '0';
+    }else{
+      shieldEl.textContent = Math.ceil(state.shield);
+    }
+  }
+
   // enemy vs player
   for(let i=enemies.length-1; i>=0; i--){
     const e = enemies[i];
     const dx = player.x - e.x, dy = player.y - e.y;
     if(dx*dx + dy*dy < (player.r + e.r)*(player.r + e.r)){
       enemies.splice(i,1);
-      state.lives--;
-      if(state.lives <= 0){
-        return gameOver();
+      spawnExplosion(e.x, e.y);
+      if(state.shield <= 0){
+        state.lives--;
+        if(state.lives <= 0){
+          return gameOver();
+        }
       }
     }
   }
@@ -446,6 +592,7 @@ function draw(){
   enemies.forEach(e => e.draw(ctx));
   walls.forEach(w => w.draw(ctx));
   turrets.forEach(t => t.draw(ctx));
+  powerups.forEach(p => p.draw(ctx));
   loot.forEach(l => l.draw(ctx));
   flashes.forEach(f => f.draw(ctx));
   explosions.forEach(ex => ex.draw(ctx));
