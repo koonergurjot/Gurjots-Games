@@ -178,6 +178,7 @@ export function attachHelpOverlay({ gameId, steps }) {
   overlay.setAttribute('aria-modal', 'true');
   overlay.innerHTML = `
     <div class="panel">
+      <button class="close-icon" aria-label="Close">\u00d7</button>
       <div class="step-content"></div>
       <div class="footer">
         <span class="step-indicator"></span>
@@ -200,11 +201,17 @@ export function attachHelpOverlay({ gameId, steps }) {
     overlay.querySelector('.step-indicator').textContent = `${index + 1}/${steps.length}`;
   };
 
-  const hide = () => overlay.classList.add('hidden');
+  const onKeyDown = e => { if (e.key === 'Escape') hide(); };
+  const hide = () => {
+    overlay.classList.add('hidden');
+    document.removeEventListener('keydown', onKeyDown);
+    document.querySelector('.help-btn')?.focus();
+  };
   const show = () => {
     index = 0;
     render();
     overlay.classList.remove('hidden');
+    document.addEventListener('keydown', onKeyDown);
     try {
       const raw = localStorage.getItem('seenHints') || '{}';
       const obj = JSON.parse(raw);
@@ -213,6 +220,7 @@ export function attachHelpOverlay({ gameId, steps }) {
     } catch {}
   };
 
+  overlay.addEventListener('click', e => { if (e.target === overlay) hide(); });
   overlay.querySelector('.next-btn').onclick = () => {
     if (index < steps.length - 1) {
       index++;
@@ -222,6 +230,7 @@ export function attachHelpOverlay({ gameId, steps }) {
     }
   };
   overlay.querySelector('.close-btn').onclick = hide;
+  overlay.querySelector('.close-icon').onclick = hide;
 
   let seen = false;
   try {

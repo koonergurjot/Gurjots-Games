@@ -26,4 +26,33 @@ describe('attachHelpOverlay', () => {
     expect(overlay).toBeTruthy();
     expect(overlay.classList.contains('hidden')).toBe(true);
   });
+
+  it('hides on Escape and returns focus to help button', () => {
+    document.body.innerHTML = '<button class="help-btn">?</button>';
+    localStorage.setItem('seenHints', JSON.stringify({ game1: true }));
+    const { show } = attachHelpOverlay({ gameId: 'game1', steps });
+    show();
+    const overlay = document.querySelector('.help-overlay');
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(overlay.classList.contains('hidden')).toBe(true);
+    expect(document.activeElement.classList.contains('help-btn')).toBe(true);
+  });
+
+  it('closes when clicking backdrop', () => {
+    document.body.innerHTML = '<button class="help-btn">?</button>';
+    localStorage.setItem('seenHints', JSON.stringify({ game1: true }));
+    const { show } = attachHelpOverlay({ gameId: 'game1', steps });
+    show();
+    const overlay = document.querySelector('.help-overlay');
+    overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(overlay.classList.contains('hidden')).toBe(true);
+  });
+
+  it('renders an accessible close icon', () => {
+    const { show } = attachHelpOverlay({ gameId: 'game1', steps });
+    show();
+    const closeIcon = document.querySelector('.help-overlay .close-icon');
+    expect(closeIcon).toBeTruthy();
+    expect(closeIcon.getAttribute('aria-label')).toBe('Close');
+  });
 });
