@@ -20,9 +20,71 @@ let dead = false;
 let deadHandled = false;
 const GAME_ID = 'snake';
 GG.incPlays();
-const FRUITS = ['🍎', '🍌', '🍇', '🍒', '🍊', '🍉'];
+let FRUITS = ['🍎', '🍌', '🍇', '🍒', '🍊', '🍉'];
+const PROGRESS_KEY = 'snake:progress';
+const SKIN_KEY = 'snake:skin';
+let progress = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{"plays":0,"best":0}');
+function saveProgress() { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); }
+progress.plays++;
+saveProgress();
+let selected = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
+let snakeSkinId = selected.snake || 'default';
+let fruitSkinId = selected.fruit || 'classic';
+let boardSkinId = selected.board || 'dark';
+function ensureUnlocked(id, arr) {
+  const s = arr.find(t => t.id === id);
+  return s && s.unlock(progress) ? id : arr[0].id;
+}
+snakeSkinId = ensureUnlocked(snakeSkinId, SNAKE_SKINS);
+fruitSkinId = ensureUnlocked(fruitSkinId, FRUIT_SKINS);
+boardSkinId = ensureUnlocked(boardSkinId, BOARD_THEMES);
+function saveSkinSelection() {
+  localStorage.setItem(SKIN_KEY, JSON.stringify({ snake: snakeSkinId, fruit: fruitSkinId, board: boardSkinId }));
+}
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+let boardColors = ['#111623', '#0f1320'];
+let snakeColorHead = '#8b5cf6';
+let snakeColorRGB = { r: 139, g: 92, b: 246 };
+let fruitColor = '#22d3ee';
 let obstacles = [];
 let fruitIcon = '🍎';
+function applySkin() {
+  const s = SNAKE_SKINS.find(t => t.id === snakeSkinId);
+  const f = FRUIT_SKINS.find(t => t.id === fruitSkinId);
+  const b = BOARD_THEMES.find(t => t.id === boardSkinId);
+  boardColors = b.colors;
+  snakeColorHead = s.color;
+  snakeColorRGB = hexToRgb(s.color);
+  FRUITS = f.icons;
+  fruitColor = f.color;
+  fruitIcon = FRUITS[Math.floor(rand() * FRUITS.length)];
+  saveSkinSelection();
+}
+function populateSkinSelects() {
+  const ss = document.getElementById('snakeSkin');
+  const fs = document.getElementById('fruitSkin');
+  const bs = document.getElementById('boardSkin');
+  function fill(sel, arr, cur, set) {
+    if (!sel) return;
+    sel.innerHTML = '';
+    arr.forEach(t => {
+      const opt = document.createElement('option');
+      const unlocked = t.unlock(progress);
+      opt.value = t.id;
+      opt.textContent = t.name + (unlocked ? '' : ' (locked)');
+      opt.disabled = !unlocked;
+      if (t.id === cur) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.onchange = () => { set(sel.value); applySkin(); populateSkinSelects(); };
+  }
+  fill(ss, SNAKE_SKINS, snakeSkinId, v => snakeSkinId = v);
+  fill(fs, FRUIT_SKINS, fruitSkinId, v => fruitSkinId = v);
+  fill(bs, BOARD_THEMES, boardSkinId, v => boardSkinId = v);
+}
 let paused = false;
 let level = 1;
 
@@ -40,6 +102,9 @@ if (DAILY_MODE) {
   };
   window.SNAKE_SEED = DAILY_SEED;
 }
+
+applySkin();
+populateSkinSelects();
 
 let food = spawnFood();
 let fruitSpawnTime = performance.now();
@@ -141,7 +206,7 @@ function render(time) {
   // background with alternating tints
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
-      ctx.fillStyle = (x + y) % 2 ? '#111623' : '#0f1320';
+      ctx.fillStyle = (x + y) % 2 ? boardColors[0] : boardColors[1];
       ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
     }
   }
@@ -152,7 +217,7 @@ function render(time) {
     p.x += p.vx; p.y += p.vy; p.life--;
     if (p.life <= 0) { particles.splice(i, 1); continue; }
     ctx.globalAlpha = p.life / p.max;
-    ctx.fillStyle = '#22d3ee';
+    ctx.fillStyle = fruitColor;
     ctx.fillRect(p.x, p.y, 2, 2);
     ctx.globalAlpha = 1;
   }
@@ -163,7 +228,7 @@ function render(time) {
   ctx.translate((food.x + 0.5) * CELL, (food.y + 0.5) * CELL);
   ctx.scale(ft, ft);
   ctx.globalAlpha = ft;
-  ctx.fillStyle = '#22d3ee';
+  ctx.fillStyle = fruitColor;
   ctx.fillRect(-CELL / 2, -CELL / 2, CELL, CELL);
   ctx.font = '24px serif';
   ctx.textAlign = 'center';
@@ -179,7 +244,7 @@ function render(time) {
     const x = (prev.x + (s.x - prev.x) * t) * CELL;
     const y = (prev.y + (s.y - prev.y) * t) * CELL;
     const fade = 0.8 - (idx / snake.length) * 0.5;
-    ctx.fillStyle = idx === 0 ? '#8b5cf6' : `rgba(139,92,246,${fade})`;
+    ctx.fillStyle = idx === 0 ? snakeColorHead : `rgba(${snakeColorRGB.r},${snakeColorRGB.g},${snakeColorRGB.b},${fade})`;
     ctx.fillRect(x, y, CELL, CELL);
   });
 
@@ -235,6 +300,9 @@ function saveScore(s) {
     bestScore = s;
     localStorage.setItem('snake:best', bestScore);
   }
+  progress.best = Math.max(progress.best, s);
+  saveProgress();
+  populateSkinSelects();
   if (window.LB) {
     LB.submitScore(GAME_ID, s, DAILY_MODE ? DAILY_SEED : null);
     try { renderScores(); } catch { }
@@ -258,6 +326,9 @@ document.addEventListener('keydown', e => {
     deadHandled = false;
     level = 1;
     lastTickTime = performance.now();
+    progress.plays++;
+    saveProgress();
+    populateSkinSelects();
     setTimeout(tick, speedMs);
     return;
   }
