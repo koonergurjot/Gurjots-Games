@@ -11,6 +11,7 @@ const DPR = Math.min(2, window.devicePixelRatio||1);
 let clouds=[],buildings=[],foreground=[];
 let particles=[];
 let wasGrounded=true;
+let levelData=null;
 
 function initBackground(){
   clouds=[];buildings=[];foreground=[];
@@ -65,6 +66,12 @@ let mission=getMission('runner');
 let missionRewarded=mission?.completed||false;
 missionEl.textContent=formatMission(mission);
 
+function loadLevel(data){
+  levelData=data;
+  restart();
+}
+window.loadRunnerLevel=loadLevel;
+
 // Touch controls
 const touchL=document.createElement('div');touchL.className='zone left';
 const touchR=document.createElement('div');touchR.className='zone right';
@@ -75,6 +82,7 @@ touchL.addEventListener('click',()=>slide()); touchR.addEventListener('click',()
 function jump(){ if(player.y<=0&&player.sliding<=0){ player.vy=-jumpVel; return true; } return false; }
 function slide(){ if(player.y<=0&&player.sliding<=0){ player.sliding=slideDur; return true; } return false; }
 function spawn(){
+  if(levelData) return;
   if(tick%Math.floor(120/speed)===0){
     const r=Math.random();
     if(r<0.6){ // obstacle
@@ -107,6 +115,14 @@ function restart(){
   active={speed:0,shield:0,magnet:0};
   wasGrounded=true;
   initBackground();
+  if(levelData){
+    if(levelData.background){
+      clouds = levelData.background.clouds||[];
+      buildings = levelData.background.buildings||[];
+      foreground = levelData.background.foreground||[];
+    }
+    obstacles = (levelData.obstacles||[]).map(o=>({...o}));
+  }
   if(mission?.completed) clearMission('runner');
   mission=getMission('runner');
   missionRewarded=mission?.completed||false;

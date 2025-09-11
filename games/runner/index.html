@@ -15,6 +15,10 @@
     .touch{position:absolute;inset:0;pointer-events:none}
     .touch .zone{position:absolute;width:50%;height:100%;top:0;pointer-events:auto}
     .touch .left{left:0}.touch .right{right:0}
+    .editor{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:6px;}
+    .palette{display:flex;gap:4px;}
+    .palette .item{width:24px;height:24px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:grab;}
+    .editor button,.editor select{background:rgba(255,255,255,0.08);color:var(--fg);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:4px 8px;}
   </style>
 </head>
 <body>
@@ -33,9 +37,22 @@
       </select>
     </label>
   </div>
+  <div class="editor">
+    <div class="palette">
+      <div class="item" data-type="obstacle">⬛</div>
+      <div class="item" data-type="cloud">☁️</div>
+      <div class="item" data-type="building">🏢</div>
+      <div class="item" data-type="foreground">🌳</div>
+    </div>
+    <button id="saveLevelBtn">Save</button>
+    <button id="importLevelBtn">Import</button>
+    <input type="file" id="importLevelInput" accept="application/json" hidden />
+    <select id="communitySelect"><option value="">Community Levels</option></select>
+  </div>
   <footer>Controls — ↑/Space: Jump • ↓: Slide • Mobile: Tap Left=Slide, Right=Jump</footer>
 
   <script type="module" src="./main.js"></script>
+  <script type="module" src="./editor.js"></script>
   <script type="module" src="../../shared/game-boot.js" data-slug="runner"></script>
 </body>
 </html>
