@@ -1,4 +1,4 @@
-import { keyState } from '../../shared/controls.js';
+import { Controls } from '../../src/runtime/controls.ts';
 import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
@@ -45,7 +45,17 @@ function beep(freq=440, dur=0.05, vol=0.04){
 }
 
 // Game state
-const keys = keyState();
+const controls = new Controls({
+  map: {
+    left: 'ArrowLeft',
+    right: 'ArrowRight',
+    up: 'ArrowUp',
+    a: 'Space',
+    pause: 'KeyP'
+  }
+});
+controls.on('a', () => fire());
+controls.on('pause', () => pause());
 let running = true;
 let score = 0;
 let lives = 3;
@@ -209,11 +219,6 @@ function updateHUD(){
   net.sendStats(score, lives);
 }
 
-addEventListener('keydown', (e)=>{
-  if (e.key === ' ') fire();
-  if (e.key.toLowerCase() === 'p') pause();
-});
-
 // Init
 restart();
 
@@ -240,9 +245,9 @@ function update(dt){
   if (shake>0) shake *= 0.92;
 
   // Ship movement
-  if (keys.has('arrowleft')) ship.angle -= 0.065;
-  if (keys.has('arrowright')) ship.angle += 0.065;
-  if (keys.has('arrowup')) {
+  if (controls.isDown('left')) ship.angle -= 0.065;
+  if (controls.isDown('right')) ship.angle += 0.065;
+  if (controls.isDown('up')) {
     ship.vx += Math.cos(ship.angle) * (ship.thrust*1.05);
     ship.vy += Math.sin(ship.angle) * (ship.thrust*1.05);
     particles.push({ x: ship.x - Math.cos(ship.angle)*12, y: ship.y - Math.sin(ship.angle)*12, vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5, life: 18, max:18, col: '#6ee7b7', alpha:1 });
@@ -406,7 +411,7 @@ function render(){
   }
 
   // thrust glow
-  if (keys.has('arrowup')){
+  if (controls.isDown('up')){
     ctx.globalAlpha = 0.25;
     ctx.beginPath(); ctx.arc(ship.x - Math.cos(ship.angle)*16, ship.y - Math.sin(ship.angle)*16, 10, 0, Math.PI*2); ctx.fill();
     ctx.globalAlpha = 1;

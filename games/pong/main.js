@@ -1,4 +1,5 @@
-import { createGamepad, keyState } from '../../shared/controls.js';
+import { createGamepad } from '../../shared/controls.js';
+import { Controls } from '../../src/runtime/controls.ts';
 import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
@@ -35,29 +36,27 @@ let rScoreEl = document.getElementById('rScore');
 const shareBtn = document.getElementById('shareBtn');
 
 // Inputs
-const keys = keyState();
+const controls = new Controls({
+  map: {
+    up: 'KeyW',
+    down: 'KeyS',
+    p2_up: 'ArrowUp',
+    p2_down: 'ArrowDown',
+    a: ['Space', 'Enter'],
+    pause: 'KeyP',
+    restart: 'KeyR'
+  }
+});
+controls.on('pause', () => pause());
+controls.on('restart', () => restart());
+controls.on('a', () => { serveLock = false; status(''); });
+
 const pad = createGamepad((gp)=> {
   // Right paddle uses primary gamepad left stick Y
   const y = gp.axes?.[1] ?? 0;
   if (Math.abs(y) > 0.2) right.y += y * PADDLE.speed * 1.2;
 });
-// Touch zones
-const lZone = document.getElementById('leftZone');
-const rZone = document.getElementById('rightZone');
-function bindTouch(zone, side) {
-  let active = false, lastY = 0;
-  const onDown = (e)=>{ active = true; lastY = (e.touches?e.touches[0].clientY:e.clientY); };
-  const onMove = (e)=>{
-    if (!active) return;
-    const y = (e.touches?e.touches[0].clientY:e.clientY);
-    const dy = y - lastY; lastY = y;
-    if (side==='L') left.y += dy*0.25; else right.y += dy*0.25;
-  };
-  const onUp = ()=> active = false;
-  zone.addEventListener('touchstart', onDown); zone.addEventListener('touchmove', onMove); zone.addEventListener('touchend', onUp);
-  zone.addEventListener('mousedown', onDown); zone.addEventListener('mousemove', onMove); zone.addEventListener('mouseup', onUp);
-}
-bindTouch(lZone, 'L'); bindTouch(rZone, 'R');
+
 
 // UI controls
 document.getElementById('pauseBtn').onclick = ()=> pause();
@@ -71,13 +70,6 @@ sndSel.onchange = ()=> { sounds = sndSel.value; };
 
 // Pause overlay
 const overlay = attachPauseOverlay({ onResume: ()=> running=true, onRestart: ()=> restart() });
-
-// Keyboard binds
-window.addEventListener('keydown', (e)=>{
-  const k = e.key.toLowerCase();
-  if (k === 'p') { pause(); }
-  if (k === ' ' || k === 'enter') { serveLock = false; status(''); }
-});
 
 // Audio (synthesized with WebAudio)
 const AC = window.AudioContext ? new AudioContext() : null;
@@ -148,13 +140,13 @@ function tick(dt){
   if (!running) return;
   // Move paddles
   if (mode==='p2'){
-    if (keys.has('w')) left.y -= PADDLE.speed;
-    if (keys.has('s')) left.y += PADDLE.speed;
+    if (controls.isDown('up')) left.y -= PADDLE.speed;
+    if (controls.isDown('down')) left.y += PADDLE.speed;
   } else {
     updateAI();
   }
-  if (keys.has('arrowup')) right.y -= PADDLE.speed;
-  if (keys.has('arrowdown')) right.y += PADDLE.speed;
+  if (controls.isDown('p2_up')) right.y -= PADDLE.speed;
+  if (controls.isDown('p2_down')) right.y += PADDLE.speed;
 
   left.y = clamp(left.y, 0, FIELD.h - PADDLE.h);
   right.y = clamp(right.y, 0, FIELD.h - PADDLE.h);
