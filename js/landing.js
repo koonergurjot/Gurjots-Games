@@ -118,7 +118,7 @@ async function loadGamesJson(){
   allGames = list.map(g => ({ 
       id: g.id || g.slug || g.name,
       title: g.title || g.name,
-      description: g.description || g.desc || '',
+      description: g.description || g.desc || '', // fallback for legacy desc
       tags: g.tags || g.genres || [],
       thumbnail: g.thumbnail || g.image || g.cover || null
   })).filter(g => g.id && g.title);
