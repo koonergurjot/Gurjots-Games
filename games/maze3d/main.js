@@ -1,6 +1,7 @@
 import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { connect } from './net.js';
+import { generateMaze, seedRandom } from './generator.js';
 import games from '../../games.json' assert { type: 'json' };
 
 const help = games.find(g => g.id === 'maze3d')?.help || {};
@@ -52,6 +53,7 @@ const timeEl = document.getElementById('time');
 const oppTimeEl = document.getElementById('oppTime');
 const bestEl = document.getElementById('best');
 const sizeSelect = document.getElementById('mazeSize');
+const enemySelect = document.getElementById('enemyCount');
 const roomInput = document.getElementById('roomInput');
 const connectBtn = document.getElementById('connectBtn');
 const rematchBtn = document.getElementById('rematchBtn');
@@ -84,6 +86,7 @@ document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 startBtn.addEventListener('click', () => start());
 restartBtn.addEventListener('click', () => restart());
 sizeSelect.addEventListener('change', () => restart());
+enemySelect.addEventListener('change', () => restart());
 connectBtn?.addEventListener('click', connectMatch);
 rematchBtn?.addEventListener('click', () => { opponentFinish = myFinish = null; restart(); start(); rematchBtn.style.display='none'; });
 
@@ -96,44 +99,16 @@ const BASE_CELLS = 8;
 const BASE_CELL_SIZE = 4;
 let MAZE_CELLS = BASE_CELLS;
 let cellSize = BASE_CELL_SIZE;
+let ENEMY_COUNT = 0;
+let enemies = [];
+let mazeGrid = [];
+let mazeCols = 0;
+let mazeRows = 0;
 
 function updateMazeParams() {
   MAZE_CELLS = parseInt(sizeSelect.value, 10);
+  ENEMY_COUNT = parseInt(enemySelect.value, 10);
   cellSize = (BASE_CELL_SIZE * BASE_CELLS) / MAZE_CELLS;
-}
-
-function seedRandom(seed) {
-  let s = seed % 2147483647;
-  if (s <= 0) s += 2147483646;
-  return function() {
-    s = s * 16807 % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-}
-
-function generateMaze(width, height, seed) {
-  const rand = seed !== undefined ? seedRandom(seed) : Math.random;
-  const cols = width * 2 + 1;
-  const rows = height * 2 + 1;
-  const grid = Array.from({ length: rows }, () => Array(cols).fill(1));
-  function carve(x, y) {
-    grid[y][x] = 0;
-    const dirs = [ [2,0], [-2,0], [0,2], [0,-2] ];
-    for (let i = dirs.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1));
-      [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
-    }
-    for (const [dx, dy] of dirs) {
-      const nx = x + dx, ny = y + dy;
-      if (nx > 0 && nx < cols - 1 && ny > 0 && ny < rows - 1 && grid[ny][nx] === 1) {
-        grid[y + dy/2][x + dx/2] = 0;
-        carve(nx, ny);
-      }
-    }
-  }
-  carve(1,1);
-  grid[rows - 2][cols - 2] = 0;
-  return grid;
 }
 
 function cellToWorld(x, y, cols, rows) {
@@ -142,13 +117,89 @@ function cellToWorld(x, y, cols, rows) {
   return [x * cellSize - offsetX + cellSize / 2, y * cellSize - offsetZ + cellSize / 2];
 }
 
+function worldToCell(x, z, cols, rows) {
+  const offsetX = cols * cellSize / 2;
+  const offsetZ = rows * cellSize / 2;
+  const cx = Math.floor((x + offsetX) / cellSize);
+  const cy = Math.floor((z + offsetZ) / cellSize);
+  return [cx, cy];
+}
+
+function findPath(start, goal, grid) {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const open = [];
+  const closed = new Set();
+  function key(x,y){return x+','+y;}
+  function heuristic(a,b){return Math.abs(a[0]-b[0]) + Math.abs(a[1]-b[1]);}
+  open.push({x:start[0], y:start[1], g:0, h:heuristic(start,goal), parent:null});
+  while(open.length){
+    open.sort((a,b)=>(a.g+a.h)-(b.g+b.h));
+    const current = open.shift();
+    if(current.x===goal[0] && current.y===goal[1]){
+      const path=[]; let c=current; while(c){path.unshift([c.x,c.y]); c=c.parent;} return path;
+    }
+    closed.add(key(current.x,current.y));
+    const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+    for(const [dx,dy] of dirs){
+      const nx=current.x+dx, ny=current.y+dy;
+      if(nx<0||ny<0||nx>=cols||ny>=rows) continue;
+      if(grid[ny][nx]===1) continue;
+      const k=key(nx,ny);
+      if(closed.has(k)) continue;
+      const g=current.g+1;
+      let node=open.find(n=>n.x===nx && n.y===ny);
+      const h=heuristic([nx,ny],goal);
+      if(!node){open.push({x:nx,y:ny,g,h,parent:current});}
+      else if(g<node.g){node.g=g; node.parent=current;}
+    }
+  }
+  return null;
+}
+
+function updateEnemies(dt) {
+  if (!enemies.length) return;
+  const playerPos = controls.getObject().position;
+  const playerCell = worldToCell(playerPos.x, playerPos.z, mazeCols, mazeRows);
+  for (const enemy of enemies) {
+    const pos = enemy.mesh.position;
+    const enemyCell = worldToCell(pos.x, pos.z, mazeCols, mazeRows);
+    const path = findPath(enemyCell, playerCell, mazeGrid);
+    if (path && path.length > 1) {
+      const [nx, ny] = path[1];
+      const [wx, wz] = cellToWorld(nx, ny, mazeCols, mazeRows);
+      const dir = new THREE.Vector3(wx - pos.x, 0, wz - pos.z);
+      const dist = dir.length();
+      if (dist > 0.01) {
+        dir.normalize();
+        const step = 3 * dt;
+        if (step < dist) pos.add(dir.multiplyScalar(step));
+        else pos.set(wx, pos.y, wz);
+      }
+    }
+    if (pos.distanceTo(playerPos) < 0.6) {
+      restart(currentSeed);
+      message.textContent = 'Caught by enemy!';
+      overlay.classList.remove('hidden');
+      break;
+    }
+  }
+}
+
 function buildMaze(seed) {
   if (floor) scene.remove(floor);
   if (exitMesh) scene.remove(exitMesh);
+  for (const e of enemies) scene.remove(e.mesh);
+  enemies = [];
   wallBoxes = [];
-  const grid = generateMaze(MAZE_CELLS, MAZE_CELLS, seed);
-  const rows = grid.length;
-  const cols = grid[0].length;
+  const rand = seedRandom(seed);
+  const algorithm = rand() < 0.5 ? 'prim' : 'backtracker';
+  mazeGrid = generateMaze(MAZE_CELLS, MAZE_CELLS, { algorithm, seed });
+  const grid = mazeGrid;
+  mazeRows = grid.length;
+  mazeCols = grid[0].length;
+  const rows = mazeRows;
+  const cols = mazeCols;
   const wallGeo = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
   const wallMat = new THREE.MeshStandardMaterial({ map: wallTexture });
   for (let y = 0; y < rows; y++) {
@@ -185,6 +236,28 @@ function buildMaze(seed) {
   exitMesh.receiveShadow = true;
   scene.add(exitMesh);
   exitBox = new THREE.Box3().setFromCenterAndSize(exitMesh.position, new THREE.Vector3(cellSize, wallHeight, cellSize));
+
+  // spawn enemies
+  const open = [];
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      if (grid[y][x] === 0 && !(x === 1 && y === 1) && !(x === cols - 2 && y === rows - 2)) {
+        open.push([x, y]);
+      }
+    }
+  }
+  for (let i = 0; i < ENEMY_COUNT && open.length; i++) {
+    const idx = Math.floor(rand() * open.length);
+    const [cx, cy] = open.splice(idx, 1)[0];
+    const [wx, wz] = cellToWorld(cx, cy, cols, rows);
+    const geo = new THREE.SphereGeometry(0.4, 16, 16);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.position.set(wx, 1.5, wz);
+    scene.add(mesh);
+    enemies.push({ mesh });
+  }
 }
 
 function start(syncTime) {
@@ -332,6 +405,7 @@ function update(dt) {
     timeEl.textContent = time.toFixed(2);
     finish(time);
   }
+  updateEnemies(dt);
 }
 
 function loop() {
