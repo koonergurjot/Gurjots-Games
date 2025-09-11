@@ -1,12 +1,53 @@
 import { GameEngine } from '../../shared/gameEngine.js';
+import { createParticleSystem } from '../../shared/fx/canvasFx.js';
+import getThemeTokens from '../../shared/skins/index.js';
+import '../../shared/ui/hud.js';
+
+const hud = document.querySelector('.hud');
+hud.innerHTML = `Arrows/WASD or swipe • R restart • P pause
+  <label><input type="checkbox" id="dailyToggle"/> Daily</label>
+  <ol id="dailyScores" style="margin:4px 0 0 0;padding-left:20px;font-size:14px"></ol>
+  <label>Snake <select id="snakeSkin"></select></label>
+  <label>Fruit <select id="fruitSkin"></select></label>
+  <label>Board <select id="boardSkin"></select></label>
+  <label>Size <select id="sizeSel">
+      <option value="16">16×16</option>
+      <option value="24">24×24</option>
+      <option value="32">32×32</option>
+    </select></label>
+  <label>Boundary <select id="wrapSel">
+      <option value="1">Wrap</option>
+      <option value="0">No Wrap</option>
+    </select></label>
+`;
+
+const params = new URLSearchParams(location.search);
+const DAILY_SEED = new Date().toISOString().slice(0, 10);
+const DAILY_MODE = params.get('daily') === '1';
+const toggle = document.getElementById('dailyToggle');
+toggle.checked = DAILY_MODE;
+function renderScores(){
+  const box = document.getElementById('dailyScores');
+  if(!DAILY_MODE){ box.style.display = 'none'; return; }
+  const scores = LB.getTopScores('snake', DAILY_SEED, 5);
+  box.innerHTML = scores.map(s=>`<li>${s.score}</li>`).join('');
+}
+window.renderScores = renderScores;
+renderScores();
+toggle.onchange = ()=>{ params.set('daily', toggle.checked ? '1':'0'); location.search = params.toString(); };
+const sizeSel = document.getElementById('sizeSel');
+const wrapSel = document.getElementById('wrapSel');
+const N = parseInt(params.get('size') || '32');
+const WRAP = params.get('wrap') !== '0';
+sizeSel.value = String(N);
+wrapSel.value = WRAP ? '1' : '0';
+sizeSel.onchange = ()=>{ params.set('size', sizeSel.value); location.search = params.toString(); };
+wrapSel.onchange = ()=>{ params.set('wrap', wrapSel.value); location.search = params.toString(); };
 
 const c = document.getElementById('c');
 fitCanvasToParent(c, 900, 900, 24);
 addEventListener('resize', () => fitCanvasToParent(c, 900, 900, 24));
 const ctx = c.getContext('2d');
-
-const N = window.BOARD_SIZE || 32;
-const WRAP = window.WRAP_MODE !== false;
 let CELL = c.width / N;
 let dir = { x: 1, y: 0 };
 let lastDir = { x: 1, y: 0 };
@@ -23,6 +64,20 @@ let dead = false;
 let deadHandled = false;
 const GAME_ID = 'snake';
 GG.incPlays();
+const tokens = getThemeTokens('snake');
+const SNAKE_SKINS = [
+  { id: 'default', name: 'Purple', color: tokens['snake-purple'] || '#8b5cf6', unlock: p => true },
+  { id: 'gold', name: 'Gold', color: tokens['snake-gold'] || '#fcd34d', unlock: p => p.best >= 10 },
+  { id: 'emerald', name: 'Emerald', color: tokens['snake-emerald'] || '#10b981', unlock: p => p.plays >= 5 }
+];
+const FRUIT_SKINS = [
+  { id: 'classic', name: 'Classic', icons: ['🍎','🍌','🍇','🍒','🍊','🍉'], color: tokens['fruit-classic'] || '#22d3ee', unlock: p => true },
+  { id: 'gems', name: 'Gems', icons: ['💎','🔶','🔷'], color: tokens['fruit-gems'] || '#eab308', unlock: p => p.best >= 15 }
+];
+const BOARD_THEMES = [
+  { id: 'dark', name: 'Dark', colors: [tokens['board-dark1'] || '#111623', tokens['board-dark2'] || '#0f1320'], unlock: p => true },
+  { id: 'light', name: 'Light', colors: [tokens['board-light1'] || '#f3f4f6', tokens['board-light2'] || '#e5e7eb'], unlock: p => p.plays >= 3 }
+];
 let FRUITS = ['🍎', '🍌', '🍇', '🍒', '🍊', '🍉'];
 const PROGRESS_KEY = 'snake:progress';
 const SKIN_KEY = 'snake:skin';
@@ -93,8 +148,6 @@ function populateSkinSelects() {
 let paused = false;
 let level = 1;
 
-const DAILY_MODE = window.DAILY_MODE;
-const DAILY_SEED = window.DAILY_SEED || (new Date()).toISOString().slice(0, 10);
 let rand = Math.random;
 if (DAILY_MODE) {
   let s = 0;
@@ -165,15 +218,13 @@ function maybeLevelUp() {
   GG.setMeta(GAME_ID, 'Best: ' + best + ' • Lv ' + level);
 }
 
-let particles = [];
+const fx = createParticleSystem(ctx);
 let lastTickTime = performance.now();
 let moveAcc = 0;
 
 function spawnFruitBurst(x, y, color) {
   for (let i = 0; i < 20; i++) {
-    const a = rand() * Math.PI * 2;
-    const s = rand() * 2 + 1;
-    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 20, max: 20, color });
+    fx.add(x, y, { speed: rand() * 2 + 1, direction: rand() * Math.PI * 2, color, life: 20 });
   }
 }
 
@@ -230,16 +281,8 @@ function render() {
     }
   }
 
-  // particles
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.x += p.vx; p.y += p.vy; p.life--;
-    if (p.life <= 0) { particles.splice(i, 1); continue; }
-    ctx.globalAlpha = p.life / p.max;
-    ctx.fillStyle = p.color;
-    ctx.fillRect(p.x, p.y, 2, 2);
-    ctx.globalAlpha = 1;
-  }
+  fx.update();
+  fx.draw();
 
   // fruit with spawn animation
   const ft = Math.min((time - fruitSpawnTime) / 300, 1);
@@ -375,3 +418,4 @@ engine.update = dt => {
 };
 engine.render = render;
 engine.start();
+if (typeof reportReady === 'function') reportReady('snake');
