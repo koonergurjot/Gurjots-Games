@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "test:smoke": "playwright test tests/smoke --reporter=line",
     "sitemap": "node tools/generate-sitemap.mjs",
     "sw-manifest": "node tools/generate-sw-manifest.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.0",
     "jsdom": "^24.0.0",
     "service-worker-mock": "^2.0.5",
     "vitest": "^1.6.0"
