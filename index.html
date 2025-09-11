@@ -4,39 +4,38 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Gurjot's Game</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles/global.css" />
-  <link rel="stylesheet" href="styles/components.css" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.themes.css" />
+  <link rel="stylesheet" href="styles/home.css" />
 </head>
 <body>
-  <header>
-    <a href="/" class="logo" data-link>
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 32" role="img" aria-label="Gurjot’s Game logo">
-        <title>Gurjot’s Game</title>
-        <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="4">
-          <path stroke="var(--accent)" d="M16 4h12a12 12 0 1 1 0 24H16V16h8" />
-          <path stroke="var(--accent2)" d="M64 4h12a12 12 0 1 1 0 24H64V16h8" />
-        </g>
-      </svg>
-    </a>
+  <header class="site-header">
+    <a href="#/" class="logo">Gurjot's Game</a>
     <nav>
-      <a href="/" data-link>Home</a>
-      <a href="/games" data-link>All Games</a>
-      <a href="/categories" data-link>Categories</a>
-      <a href="/leaderboards" data-link>Leaderboards</a>
-      <a href="/about" data-link>About</a>
+      <a href="#/">Home</a>
+      <a href="#/games">All Games</a>
+      <a href="#/about">About</a>
     </nav>
+    <button id="themeToggle" class="btn" aria-label="Toggle theme">🌓</button>
   </header>
-  <main id="app"></main>
-  <footer>
-    <small>&copy; 2025 Gurjot's Game</small>
+  <main>
+    <section class="hero">
+      <h1>Classic Web Games</h1>
+      <p>Jump into retro fun directly in your browser.</p>
+      <a href="#games" class="btn cta">Browse Games</a>
+    </section>
+    <section id="games" aria-label="Games">
+      <div id="gamesGrid" class="grid"></div>
+    </section>
+    <section id="playArea" hidden></section>
+  </main>
+  <footer class="site-footer">
+    <nav>
+      <a href="#/privacy">Privacy</a>
+      <a href="#/terms">Terms</a>
+    </nav>
   </footer>
-  <script type="module" src="scripts/app.js"></script>
-  <script type="module">
-    import { registerSW } from './shared/sw.js';
-    registerSW();
-  </script>
+  <script type="module" src="scripts/home.js"></script>
 </body>
 </html>
+
