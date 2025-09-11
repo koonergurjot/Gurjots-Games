@@ -54,6 +54,45 @@ export function injectBackButton(href = '../../') {
   a.href = href;
 }
 
+export function injectHelpButton(opts) {
+  // ensure styles are injected once
+  if (!document.head.querySelector('style[data-help-btn]')) {
+    const style = document.createElement('style');
+    style.setAttribute('data-help-btn', '');
+    style.textContent = `
+      .help-btn {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        background: var(--button-bg);
+        color: var(--fg);
+        border-radius: 50%;
+        border: 1px solid var(--button-border);
+        z-index: 1000;
+        cursor: pointer;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  let btn = document.querySelector('.help-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.className = 'help-btn';
+    btn.textContent = '?';
+    document.body.appendChild(btn);
+  }
+
+  let overlay;
+  btn.onclick = () => {
+    overlay = overlay || attachHelpOverlay(opts || { gameId: 'unknown', steps: [] });
+    overlay.show();
+  };
+}
+
 export function recordLastPlayed(slug) {
   try {
     const raw = localStorage.getItem('lastPlayed');

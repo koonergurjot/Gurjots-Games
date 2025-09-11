@@ -1,6 +1,6 @@
 // shared/game-boot.js
 // Usage in a game page: <script type="module" src="../../shared/game-boot.js" data-slug="runner"></script>
-import { injectBackButton, recordLastPlayed } from './ui.js';
+import { injectBackButton, injectHelpButton, recordLastPlayed } from './ui.js';
 import { recordPlay } from './quests.js';
 import { renderFallbackPanel } from './fallback.js';
 
@@ -11,6 +11,7 @@ const urlSlug = pathSegments.slice(-1)[0];
 const slug = currentScript?.dataset?.slug || urlSlug || 'unknown';
 
 injectBackButton('/');
+injectHelpButton({ gameId: slug, steps: window.helpSteps || [] });
 recordLastPlayed(slug);
 
 async function track(){
