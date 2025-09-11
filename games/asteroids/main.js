@@ -1,20 +1,30 @@
 import { Controls } from '../../src/runtime/controls.ts';
-import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
+import { attachPauseOverlay, saveBestScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 import * as net from './net.js';
 import GameEngine from '../../shared/gameEngine.js';
 import { Saucer, Boss } from './enemies.js';
 import { renderFallbackPanel } from '../../shared/fallback.js';
+import { createParticleSystem, drawGlow } from '../../shared/fx/canvasFx.js';
+import { createFpsMonitor } from '../../shared/util/fps.js';
+import { installErrorReporter } from '../../shared/debug/error-reporter.js';
+import { postReady } from '../../shared/debug/post-ready.js';
 import signature from 'console-signature';
 import games from '../../games.json' assert { type: 'json' };
 
 const help = games.find(g => g.id === 'asteroids')?.help || {};
 window.helpData = help;
+
+installErrorReporter();
+const fpsMon = createFpsMonitor();
+let currentFps = 0;
+function reportReady(slug){ postReady({ slug }); }
 async function init(){
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const DPR = Math.min(2, window.devicePixelRatio||1);
+particles = createParticleSystem(ctx);
 
 // Parallax starfield layers
 const starLayers = [
@@ -57,11 +67,16 @@ const controls = new Controls({
     right: 'ArrowRight',
     up: 'ArrowUp',
     a: 'Space',
-    pause: 'KeyP'
+    pause: 'KeyP',
+    fireMode: 'KeyF'
   }
 });
 controls.on('a', () => fire());
-controls.on('pause', () => pause());
+controls.on('pause', () => {
+  if (running) { pause(); hud.setPaused(true); }
+  else { running = true; overlay.hide(); hud.setPaused(false); }
+});
+controls.on('fireMode', () => cycleFireMode());
 let running = true;
 let score = 0;
 let lives = 3;
@@ -79,7 +94,7 @@ const ship = {
 
 const bullets = [];
 const rocks = [];
-const particles = [];
+let particles;
 const enemies = [];
 let saucerSpawned = false;
 let bossSpawned = false;
@@ -91,44 +106,34 @@ net.onShip((id, shipData)=>{
 });
 net.onShot((id, b)=>{ bullets.push({ ...b, remote:true }); });
 net.onRocks(arr=>{ rocks.length=0; for(const r of arr) rocks.push(r); });
-net.onPlayers(()=> updateHUD());
+net.onPlayers(()=> updateStats());
 net.onEnemy(e=>{
   if (e.type === 'saucer') enemies.push(new Saucer(e.x, e.y, e.dir));
   else if (e.type === 'boss') enemies.push(new Boss(e.x, e.y, e.dir));
 });
 
-let fireMode = 'single'; // 'single' | 'burst' | 'rapid'
-const HUD = {
-  score: document.getElementById('score'),
-  lives: document.getElementById('lives'),
-  wave: document.getElementById('wave'),
-  fireSel: document.getElementById('fireSel')
-};
-const shareBtn = document.getElementById('shareBtn');
-const coopBtn = document.getElementById('coopBtn');
-let coopActive = false;
-if (coopBtn){
-  coopBtn.onclick = ()=>{
-    if (coopActive){
-      net.disconnect();
-      coopActive = false;
-      coopBtn.textContent = 'Co-op Campaign';
-      for (const id in others) delete others[id];
-      updateHUD();
-    } else {
-      net.connect();
-      coopActive = true;
-      coopBtn.textContent = 'Leave Co-op';
-      updateHUD();
-    }
-  };
+const fireModes = ['single','burst','rapid'];
+let fireModeIndex = 0;
+let fireMode = fireModes[fireModeIndex];
+function cycleFireMode(){
+  fireModeIndex = (fireModeIndex + 1) % fireModes.length;
+  fireMode = fireModes[fireModeIndex];
 }
+let coopActive = false;
 
-document.getElementById('pauseBtn').onclick = ()=> pause();
-document.getElementById('restartBtn').onclick = ()=> restart();
-HUD.fireSel.onchange = ()=> fireMode = HUD.fireSel.value;
-
-const overlay = attachPauseOverlay({ onResume: ()=> running = true, onRestart: ()=> restart() });
+let hud;
+const overlay = attachPauseOverlay({
+  onResume: ()=> { running = true; hud?.setPaused(false); },
+  onRestart: ()=> { restart(); hud?.setPaused(false); }
+});
+hud = HUD.create({
+  title: 'Asteroids Pro',
+  onPauseToggle: () => {
+    if (running) { pause(); hud.setPaused(true); }
+    else { running = true; overlay.hide(); hud.setPaused(false); }
+  },
+  onRestart: () => restart()
+});
 
 function spawnSaucer(boss=false){
   const y = 60 + Math.random()*(innerHeight-120);
@@ -197,11 +202,14 @@ function shoot(spread=0, speedMul=1){
 function explode(x,y, n=20, colors=['#e11d48'], shakeAmt=0){
   colors = Array.isArray(colors) ? colors : [colors];
   for (let i=0;i<n;i++){
-    const a = Math.random()*Math.PI*2;
-    const s = Math.random()*4+1;
-    const life = 40+Math.random()*20;
-    const col = colors[Math.floor(Math.random()*colors.length)];
-    particles.push({ x,y, vx:Math.cos(a)*s, vy:Math.sin(a)*s, life, max:life, col, alpha:1 });
+    const color = colors[Math.floor(Math.random()*colors.length)];
+    particles.add(x, y, {
+      direction: Math.random()*Math.PI*2,
+      speed: Math.random()*4+1,
+      life: 40+Math.random()*20,
+      size: 2,
+      color
+    });
   }
   if (shakeAmt>0) shake = Math.max(shake, shakeAmt);
   beep(220,0.09, 0.08);
@@ -211,20 +219,15 @@ function pause(){ running=false; overlay.show(); }
 function restart(){
   running=true; score=0; lives=3; wave=1;
   ship.x=innerWidth/2; ship.y=innerHeight/2; ship.vx=ship.vy=0; ship.angle=-Math.PI/2; ship.inv=60;
-  bullets.length=0; rocks.length=0; particles.length=0; enemies.length=0;
+  bullets.length=0; rocks.length=0; particles.particles.length=0; enemies.length=0;
   saucerSpawned = false; bossSpawned = false;
   spawnWave(4);
-  updateHUD();
+  updateStats();
   emitEvent({ type: 'play', slug: 'asteroids' });
-  shareBtn.hidden = true;
 }
 
-function updateHUD(){
+function updateStats(){
   const teamScore = score + Object.values(net.players).reduce((a,p)=>a+(p.score||0),0);
-  const teamLives = lives + Object.values(net.players).reduce((a,p)=>a+(p.lives||0),0);
-  HUD.score.textContent = teamScore;
-  HUD.lives.textContent = teamLives;
-  HUD.wave.textContent = wave;
   emitEvent({ type: 'score', slug: 'asteroids', value: teamScore });
   net.sendStats(score, lives);
 }
@@ -237,6 +240,7 @@ const engine = new GameEngine();
 engine.update = (dt) => { if (running) update(dt); };
 engine.render = () => render();
 engine.start();
+reportReady('asteroids');
 
 function update(dt){
   const mul = dt * 60;
@@ -255,7 +259,11 @@ function update(dt){
   if (controls.isDown('up')) {
     ship.vx += Math.cos(ship.angle) * (ship.thrust*1.05*mul);
     ship.vy += Math.sin(ship.angle) * (ship.thrust*1.05*mul);
-    particles.push({ x: ship.x - Math.cos(ship.angle)*12, y: ship.y - Math.sin(ship.angle)*12, vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5, life: 18, max:18, col: '#6ee7b7', alpha:1 });
+    particles.add(
+      ship.x - Math.cos(ship.angle)*12,
+      ship.y - Math.sin(ship.angle)*12,
+      { vx:(Math.random()-0.5)*1.5, vy:(Math.random()-0.5)*1.5, life:18, size:2, color:'#6ee7b7' }
+    );
   }
   ship.x += ship.vx * mul; ship.y += ship.vy * mul;
   ship.vx *= ship.drag ** mul; ship.vy *= ship.drag ** mul;
@@ -299,7 +307,7 @@ function update(dt){
             rocks.push(child);
           }
         }
-        updateHUD();
+        updateStats();
         net.sendRocks(rocks);
         break;
       }
@@ -318,7 +326,7 @@ function update(dt){
           enemies.splice(i,1);
           explode(e.x,e.y, e.type==='boss'?48:28, ['#f59e0b','#fde68a'], e.type==='boss'?8:5);
           score += e.type==='boss'?300:150;
-          updateHUD();
+          updateStats();
         }
         break;
       }
@@ -332,15 +340,13 @@ function update(dt){
       rocks.splice(i,1);
       explode(ship.x, ship.y, 36, ['#e11d48','#f43f5e','#be123c'],8);
       lives--; ship.inv=90; ship.vx=ship.vy=0; // respawn invincibility
-      updateHUD();
+      updateStats();
       net.sendRocks(rocks);
       if (lives<=0){
         running=false;
         saveBestScore('asteroids', score);
         endSessionTimer('asteroids');
         emitEvent({ type: 'game_over', slug: 'asteroids', value: score });
-        shareBtn.hidden = false;
-        shareBtn.onclick = () => shareScore('asteroids', score);
       }
     }
   }
@@ -351,19 +357,18 @@ function update(dt){
     if (Math.hypot(ship.x-b.x, ship.y-b.y) < ship.radius){
       bullets.splice(j,1);
       explode(ship.x, ship.y, 24, ['#e11d48','#f43f5e'],6);
-      lives--; ship.inv=90; ship.vx=ship.vy=0; updateHUD();
-      if (lives<=0){ running=false; saveBestScore('asteroids', score); endSessionTimer('asteroids'); emitEvent({ type: 'game_over', slug: 'asteroids', value: score }); shareBtn.hidden=false; shareBtn.onclick=()=>shareScore('asteroids', score); }
+      lives--; ship.inv=90; ship.vx=ship.vy=0; updateStats();
+      if (lives<=0){ running=false; saveBestScore('asteroids', score); endSessionTimer('asteroids'); emitEvent({ type: 'game_over', slug: 'asteroids', value: score }); }
     }
   }
 
   // Particles
-  for (const p of particles){ p.x+=p.vx*mul; p.y+=p.vy*mul; p.life-=mul; p.alpha = p.life/p.max; }
-  for (let i=particles.length-1;i>=0;i--) if (particles[i].life<=0) particles.splice(i,1);
+  particles.update();
 
   // Wave clear
   if (rocks.length===0){
     if (!coopActive || Object.keys(net.players).length===0){
-      wave++; updateHUD();
+      wave++; updateStats();
       spawnWave(3 + wave); // increasing difficulty
     }
   }
@@ -399,6 +404,7 @@ function drawRock(r){
 }
 
 function render(){
+  currentFps = fpsMon.frame();
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   // starfield layers
@@ -421,9 +427,7 @@ function render(){
 
   // thrust glow
   if (controls.isDown('up')){
-    ctx.globalAlpha = 0.25;
-    ctx.beginPath(); ctx.arc(ship.x - Math.cos(ship.angle)*16, ship.y - Math.sin(ship.angle)*16, 10, 0, Math.PI*2); ctx.fill();
-    ctx.globalAlpha = 1;
+    drawGlow(ctx, ship.x - Math.cos(ship.angle)*16, ship.y - Math.sin(ship.angle)*16, 10, 'rgba(110,231,183,0.3)');
   }
 
   // bullets
@@ -445,10 +449,20 @@ function render(){
   for (const r of rocks){ drawRock(r); }
 
   // particles
-  for (const p of particles){ ctx.globalAlpha = Math.max(p.alpha,0); ctx.fillStyle = p.col; ctx.fillRect(p.x,p.y,2,2); }
-  ctx.globalAlpha = 1;
+  particles.draw();
 
   ctx.restore();
+
+  // HUD text
+  ctx.fillStyle = '#eaeaf2';
+  ctx.font = '16px Inter,system-ui';
+  const teamScore = score + Object.values(net.players).reduce((a,p)=>a+(p.score||0),0);
+  const teamLives = lives + Object.values(net.players).reduce((a,p)=>a+(p.lives||0),0);
+  ctx.fillText(`Score: ${teamScore}`, 20, 30);
+  ctx.fillText(`Lives: ${teamLives}`, 20, 50);
+  ctx.fillText(`Wave: ${wave}`, 20, 70);
+  ctx.fillText(`FPS: ${currentFps.toFixed(0)}`, 20, 90);
+  ctx.fillText(`Fire: ${fireMode}`, 20, 110);
 }
 
 // Session timing

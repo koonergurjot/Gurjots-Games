@@ -7,33 +7,12 @@
   <style>
     :root{ --fg:#eaeaf2; --bg:#0b0b0f; --muted:#9aa0a6; --accent:#6ee7b7; }
     html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
-    header{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:12px;background:rgba(0,0,0,0.35);padding:6px 10px;border-radius:12px;border:1px solid rgba(255,255,255,0.08)}
-    header .stat{font-weight:700}
-    header button, header select{background:rgba(255,255,255,0.06);color:var(--fg);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:4px 8px}
-    footer{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:12px;opacity:.8}
     canvas{width:100%;height:100%;display:block;background:radial-gradient(50% 50% at 50% 50%, rgba(110,231,183,0.06), transparent 60%)}
   </style>
 </head>
 <body>
-  <header>
-    <span class="stat">Score: <span id="score">0</span></span>
-    <span class="stat">Lives: <span id="lives">3</span></span>
-    <span class="stat">Wave: <span id="wave">1</span></span>
-    <button id="pauseBtn">⏸️</button>
-    <button id="restartBtn">⟲</button>
-    <button id="shareBtn" hidden>🔗</button>
-    <button id="coopBtn">Co-op Campaign</button>
-    <label>Fire:
-      <select id="fireSel" name="fireSel">
-        <option value="single" selected>Single</option>
-        <option value="burst">Burst</option>
-        <option value="rapid">Rapid</option>
-      </select>
-    </label>
-  </header>
   <canvas id="game"></canvas>
-  <footer>Controls — ←/→ Rotate • ↑ Thrust • Space Fire • P Pause • Mute: toggle in browser tab</footer>
-
+  <script src="../../js/hud.js"></script>
   <script type="module" src="./main.js"></script>
   <script type="module" src="../../shared/game-boot.js" data-slug="asteroids"></script>
 </body>
