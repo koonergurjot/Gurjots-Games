@@ -1,4 +1,4 @@
-import * as ChessModule from "../engine/chess.min.js";
+import * as ChessModule from "../../chess/engine/chess.min.js";
 
 const Chess = ChessModule.default || ChessModule.Chess || ChessModule;
 

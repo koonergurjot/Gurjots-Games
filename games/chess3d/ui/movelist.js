@@ -1,4 +1,4 @@
-import * as rules from '../engine/rules.js';
+import * as rules from '../../chess/engine/rules.js';
 export function mountMoveList(container,{onJump}={}){
   const wrap=document.createElement('div');
   wrap.style.display='flex';

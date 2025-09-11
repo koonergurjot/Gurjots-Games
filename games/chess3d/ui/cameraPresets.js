@@ -17,15 +17,17 @@ function tweenCamera(camera, controls, pos, instant=false){
   const start = { x: camera.position.x, y: camera.position.y, z: camera.position.z };
   const end = { x, y, z };
   const dur = 500;
+  const ease = t => (t<0.5) ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2;
   const t0 = performance.now();
   function step(t){
-    const k = Math.min(1, (t - t0) / dur);
+    const p = Math.min(1, (t - t0) / dur);
+    const k = ease(p);
     camera.position.x = start.x + (end.x - start.x) * k;
     camera.position.y = start.y + (end.y - start.y) * k;
     camera.position.z = start.z + (end.z - start.z) * k;
     camera.lookAt(0,0,0);
     controls?.update();
-    if (k < 1) requestAnimationFrame(step);
+    if (p < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }

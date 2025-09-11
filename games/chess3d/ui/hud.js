@@ -1,5 +1,5 @@
 
-export function mountHUD({ onNew, onFlip, onCoords }) {
+export function mountHUD({ onNew, onFlip, onCoords, onRotate }) {
   const hud = document.getElementById('hud');
   hud.innerHTML = '';
 
@@ -21,9 +21,23 @@ export function mountHUD({ onNew, onFlip, onCoords }) {
     if (onCoords) onCoords(show);
   };
 
+  const btnRotate = document.createElement('button');
+  btnRotate.textContent = 'Auto Rotate';
+  let auto = localStorage.getItem('chess3d.rotate') === '1';
+  btnRotate.style.opacity = auto ? '1' : '0.8';
+  btnRotate.onclick = () => {
+    auto = !auto;
+    btnRotate.style.opacity = auto ? '1' : '0.8';
+    localStorage.setItem('chess3d.rotate', auto ? '1' : '0');
+    if (onRotate) onRotate(auto);
+  };
+
   hud.appendChild(btnNew);
   hud.appendChild(btnFlip);
   hud.appendChild(btnCoords);
+  hud.appendChild(btnRotate);
+
+  if (onRotate) onRotate(auto);
 }
 
 export function addGameButtons({ onResign, onDraw } = {}) {
