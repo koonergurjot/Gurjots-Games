@@ -1,16 +1,30 @@
 import { GameEngine } from '../../shared/gameEngine.js';
 import { LEVELS } from './levels.js';
 import { PowerUpEngine } from './powerups.js';
+import { installErrorReporter } from '../../shared/debug/error-reporter.js';
+import { showToast, showModal, clearHud } from '../../shared/ui/hud.js';
+import { createParticleSystem } from '../../shared/fx/canvasFx.js';
 
 const GAME_ID='breakout';GG.incPlays();
 const c=document.getElementById('b');fitCanvasToParent(c,1000,800,24);addEventListener('resize',()=>fitCanvasToParent(c,1000,800,24));
 const ctx=c.getContext('2d');
+installErrorReporter();
 
 const paddleBaseW=120;
 let paddle={w:paddleBaseW,h:14,x:c.width/2-paddleBaseW/2,y:c.height-40};
 let ball={x:c.width/2,y:c.height-60,vx:240,vy:-360,r:8,stuck:true,speed:420};
 let bricks=[];let score=0,lives=3,level=1;let bestLevel=parseInt(localStorage.getItem('gg:bestlvl:breakout')||'1');
-let paused=false;function togglePause(){paused=!paused}addEventListener('keydown',e=>{if(e.key.toLowerCase()==='p')togglePause()});
+let paused=false;let pauseToast=null;let gameOverShown=false;
+function togglePause(){
+  paused=!paused;
+  if(paused){
+    pauseToast=showToast('Paused — P to resume');
+  }else if(pauseToast){
+    pauseToast.remove();
+    pauseToast=null;
+  }
+}
+addEventListener('keydown',e=>{if(e.key.toLowerCase()==='p')togglePause()});
 let runStart=performance.now(),endTime=null,submitted=false;
 
 const powerEngine=new PowerUpEngine();
@@ -48,13 +62,13 @@ function resetBall(){
 loadLevel();
 resetBall();
 
-c.addEventListener('mousemove',e=>{
+c.addEventListener('pointermove',e=>{
   const r=c.getBoundingClientRect();
   const mx=e.clientX-r.left;
   paddle.x=Math.max(0,Math.min(c.width-paddle.w,mx-paddle.w/2));
   if(ball.stuck){ball.x=paddle.x+paddle.w/2;}
 });
-c.addEventListener('click',()=>{if(ball.stuck)ball.stuck=false});
+c.addEventListener('pointerdown',()=>{if(ball.stuck)ball.stuck=false});
 addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft')paddle.x=Math.max(0,paddle.x-24);
   if(e.key==='ArrowRight')paddle.x=Math.min(c.width-paddle.w,paddle.x+24);
@@ -62,6 +76,7 @@ addEventListener('keydown',e=>{
     score=0;lives=3;level=1;
     loadLevel();resetBall();
     runStart=performance.now();endTime=null;submitted=false;
+    clearHud();gameOverShown=false;
   }
 });
 
@@ -102,18 +117,21 @@ function updatePU(dt){
   powerups=powerups.filter(p=>!p.dead);
 }
 
-let particles=[];let bgT=0;
+const particleSystem=createParticleSystem(ctx);let bgT=0;
 function spawnParticles(x,y){
-  for(let i=0;i<12;i++)particles.push({x,y,vx:(Math.random()*4-2)*60,vy:(Math.random()*4-2)*60,life:0.33});
-}
-function updateParticles(dt){
-  for(const p of particles){
-    p.x+=p.vx*dt;
-    p.y+=p.vy*dt;
-    p.vy+=9*dt;
-    p.life-=dt;
+  for(let i=0;i<12;i++){
+    particleSystem.add(x,y,{
+      vx:(Math.random()*4-2),
+      vy:(Math.random()*4-2),
+      life:20,
+      size:2,
+      color:'#a78bfa',
+      decay:0.92
+    });
   }
-  particles=particles.filter(p=>p.life>0);
+}
+function updateParticles(){
+  particleSystem.update();
 }
 
 function step(dt){
@@ -151,7 +169,7 @@ function step(dt){
     loadLevel();resetBall();
   }
   updatePU(dt);
-  updateParticles(dt);
+  updateParticles();
   if(laserActive>0){
     laserTimer-=dt;
     if(laserTimer<=0){
@@ -203,7 +221,7 @@ function draw(){
     }
   }
   ctx.save();ctx.shadowBlur=0;
-  particles.forEach(p=>{ctx.globalAlpha=p.life/0.33;ctx.fillStyle='#a78bfa';ctx.fillRect(p.x,p.y,2,2);});
+  particleSystem.draw();
   ctx.restore();
   ctx.fillStyle='#e6e7ea';ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
   ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();
@@ -219,16 +237,10 @@ function draw(){
   const best=parseInt(localStorage.getItem('gg:best:breakout')||'0');
   if(score>best)localStorage.setItem('gg:best:breakout',score);
   GG.setMeta(GAME_ID,'Best score: '+Math.max(best,score)+' • Best level: '+bestLevel);
-  if(lives<=0){
-    ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,0,c.width,c.height);
-    ctx.fillStyle='#e6e7ea';ctx.font='bold 30px Inter';
+  if(lives<=0 && !gameOverShown){
     const rt2=((endTime||performance.now())-runStart)/1000;
-    ctx.fillText(`Game Over — ${rt2.toFixed(1)}s — Press R`,c.width/2-170,c.height/2);
-  }
-  if(paused){
-    ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(0,0,c.width,c.height);
-    ctx.fillStyle='#e6e7ea';ctx.font='bold 28px Inter';
-    ctx.fillText('Paused — P to resume',c.width/2-120,c.height/2);
+    showModal(`<p>Game Over — ${rt2.toFixed(1)}s — Press R</p>`,{closeButton:false});
+    gameOverShown=true;
   }
 }
 
@@ -236,4 +248,5 @@ const engine=new GameEngine();
 engine.update=step;
 engine.render=draw;
 engine.start();
+if(window.reportReady) window.reportReady('breakout');
 
