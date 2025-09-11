@@ -1,4 +1,5 @@
 import { createRouter } from './router.js';
+import { toggleTheme, toggleMotion } from './theme.js';
 
 const outlet = document.getElementById('app');
 const router = createRouter(outlet);
@@ -23,3 +24,6 @@ router.resolve(location.pathname);
 window.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('loaded');
 });
+
+window.toggleTheme = toggleTheme;
+window.toggleMotion = toggleMotion;
