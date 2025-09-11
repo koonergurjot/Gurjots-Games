@@ -1,1 +1,52 @@
-<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Snake</title><style>html,body{height:100%;margin:0;background:#0b0d12;color:#e6e7ea;font-family:Inter,system-ui,sans-serif}.wrap{display:grid;place-items:center;height:100%}canvas{background:#0f1320;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,.4)}.hud{position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);padding:10px 12px;border-radius:12px}</style></head><body><div class="hud">Arrows/WASD or swipe • R restart • P pause<label style="display:block;margin-top:4px"><input type="checkbox" id="dailyToggle"/> Daily</label><ol id="dailyScores" style="margin:4px 0 0 0;padding-left:20px;font-size:14px"></ol></div><div class="wrap"><canvas id="c" width="640" height="640" data-basew="640" data-baseh="640"></canvas></div><script src="../../js/injectBackButton.js"></script><script src="../../js/resizeCanvas.global.js"></script><script src="../../js/gameUtil.js"></script><script src="../../js/sfx.js"></script><script src="../../shared/leaderboard.js"></script><script>const seed=new Date().toISOString().slice(0,10);const params=new URLSearchParams(location.search);const daily=params.get('daily')==='1';const toggle=document.getElementById('dailyToggle');toggle.checked=daily;window.DAILY_MODE=daily;window.DAILY_SEED=seed;function renderScores(){const box=document.getElementById('dailyScores');if(!daily){box.style.display='none';return;}const scores=LB.getTopScores('snake',seed,5);box.innerHTML=scores.map((s,i)=>`<li>${s.score}</li>`).join('');}window.renderScores=renderScores;renderScores();toggle.onchange=()=>{params.set('daily',toggle.checked?'1':'0');location.search=params.toString();};</script><script src="./snake.js"></script></body></html>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Snake</title>
+  <style>
+    html,body{height:100%;margin:0;background:#0b0d12;color:#e6e7ea;font-family:Inter,system-ui,sans-serif}
+    .wrap{display:grid;place-items:center;height:100%}
+    canvas{background:#0f1320;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,.4)}
+    .hud{position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);padding:10px 12px;border-radius:12px}
+    .hud label{display:block;margin-top:4px;font-size:14px}
+    .hud select{background:#111827;color:#e6e7ea;border:1px solid #243047;border-radius:6px;margin-left:4px}
+  </style>
+</head>
+<body>
+  <div class="hud">
+    Arrows/WASD or swipe • R restart • P pause
+    <label><input type="checkbox" id="dailyToggle"/> Daily</label>
+    <ol id="dailyScores" style="margin:4px 0 0 0;padding-left:20px;font-size:14px"></ol>
+    <label>Snake <select id="snakeSkin"></select></label>
+    <label>Fruit <select id="fruitSkin"></select></label>
+    <label>Board <select id="boardSkin"></select></label>
+  </div>
+  <div class="wrap"><canvas id="c" width="640" height="640" data-basew="640" data-baseh="640"></canvas></div>
+  <script src="../../js/injectBackButton.js"></script>
+  <script src="../../js/resizeCanvas.global.js"></script>
+  <script src="../../js/gameUtil.js"></script>
+  <script src="../../js/sfx.js"></script>
+  <script src="../../shared/leaderboard.js"></script>
+  <script>
+    const seed = new Date().toISOString().slice(0,10);
+    const params = new URLSearchParams(location.search);
+    const daily = params.get('daily')==='1';
+    const toggle = document.getElementById('dailyToggle');
+    toggle.checked = daily;
+    window.DAILY_MODE = daily;
+    window.DAILY_SEED = seed;
+    function renderScores(){
+      const box=document.getElementById('dailyScores');
+      if(!daily){box.style.display='none';return;}
+      const scores=LB.getTopScores('snake',seed,5);
+      box.innerHTML=scores.map(s=>`<li>${s.score}</li>`).join('');
+    }
+    window.renderScores = renderScores;
+    renderScores();
+    toggle.onchange=()=>{params.set('daily',toggle.checked?'1':'0');location.search=params.toString();};
+  </script>
+  <script src="./skins.js"></script>
+  <script src="./snake.js"></script>
+</body>
+</html>
