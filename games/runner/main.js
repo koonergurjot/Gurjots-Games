@@ -1,4 +1,4 @@
-import { keyState } from '../../shared/controls.js';
+import { Controls } from '../../src/runtime/controls.ts';
 import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
@@ -51,7 +51,16 @@ let active={speed:0,shield:0,magnet:0};
 let tick=0;
 let running=true;
 let diff='med';
-const keys=keyState();
+const controls = new Controls({
+  map: {
+    a: ['ArrowUp','Space'],
+    b: 'ArrowDown',
+    pause: 'KeyP',
+    restart: 'KeyR'
+  }
+});
+controls.on('pause', () => pause());
+controls.on('restart', () => restart());
 
 // UI
 const scoreEl=document.getElementById('score');
@@ -71,12 +80,6 @@ function loadLevel(data){
   restart();
 }
 window.loadRunnerLevel=loadLevel;
-
-// Touch controls
-const touchL=document.createElement('div');touchL.className='zone left';
-const touchR=document.createElement('div');touchR.className='zone right';
-document.body.appendChild(Object.assign(document.createElement('div'),{className:'touch'})).append(touchL,touchR);
-touchL.addEventListener('click',()=>slide()); touchR.addEventListener('click',()=>jump());
 
 // Functions
 function jump(){ if(player.y<=0&&player.sliding<=0){ player.vy=-jumpVel; return true; } return false; }
@@ -185,8 +188,8 @@ function update(dt){
   }
   wasGrounded=grounded;
   // Keys
-  if(keys.has('arrowup')||keys.has(' ')) jumpBuffer = BUF_MAX;
-  if(keys.has('arrowdown')) slideBuffer = BUF_MAX;
+  if(controls.isDown('a')) jumpBuffer = BUF_MAX;
+  if(controls.isDown('b')) slideBuffer = BUF_MAX;
   // consume buffers when eligible
   if(jumpBuffer>0 && player.y<=0 && player.sliding<=0){ if(jump()) jumpBuffer=0; }
   if(slideBuffer>0 && player.y<=0 && player.sliding<=0){ if(slide()) slideBuffer=0; }
