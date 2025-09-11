@@ -73,7 +73,7 @@
     initI18n();
 
     const params = new URLSearchParams(location.search);
-    const slug = params.get('slug') || params.get('id');
+    const slug = params.get('slug') || params.get('id') || params.get('game');
     const heroEl = document.getElementById('hero');
     const pageTitle = document.getElementById('pageTitle');
     if (!slug) {
@@ -90,8 +90,8 @@
       try {
         const res = await fetch('./games.json', { cache: 'no-store' });
         const data = await res.json();
-        const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
-        const game = games.find(g => (g.slug || g.id) === slug);
+        const games = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
+        const game = games.find(g => normalizeId(g) === slug);
         if (!game) throw new Error('not found');
         renderGame(game, games);
       } catch (e) {
@@ -113,11 +113,23 @@
       el.setAttribute('content', content);
     }
 
+    function slugify(str){
+      return String(str || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    }
+
+    function normalizeId(g){
+      return g.slug || g.id || slugify(g.name || g.title || '');
+    }
+
     function card(g){
-      const best = getBestScore(g.slug);
+      const id = normalizeId(g);
+      const best = getBestScore(id);
       const bestBadge = Number.isFinite(best) ? `<span class="badge best">${t('best')} ${best}</span>` : '';
       return `
-        <a class="card" href="./game.html?slug=${g.slug}">
+        <a class="card" href="./game.html?slug=${id}">
           ${g.isNew ? `<span class="ribbon">${t('new')}</span>` : ''}
           ${g.thumb ? `<img src="${g.thumb}" alt="${g.title||g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
           <div class="meta">
@@ -129,14 +141,15 @@
     }
 
     async function renderGame(game, allGames){
+      const id = normalizeId(game);
       document.title = game.title;
       pageTitle.textContent = game.title;
       updateMeta('description', game.blurb || '');
       updateMeta('og:title', game.title, true);
       updateMeta('og:description', game.blurb || '', true);
       if (game.thumb) updateMeta('og:image', new URL(game.thumb, location.href).href, true);
-      const best = getBestScore(slug);
-      const playHref = (game.path || `./games/${game.slug}/`).replace(/\?.*$/, '');
+      const best = getBestScore(id);
+      const playHref = (game.path || `./games/${id}/`).replace(/\?.*$/, '');
       heroEl.innerHTML = `
         ${game.thumb ? `<img src="${game.thumb}" alt="${game.title} thumbnail" onerror="this.remove()">` : ''}
         <div class="info">
@@ -170,12 +183,12 @@
       document.getElementById('controls').textContent = controls.length ? controls.join(', ') : t('unknown');
 
       // Leaderboard
-      const board = getLocalLeaderboard(slug);
+      const board = getLocalLeaderboard(id);
       const lbEl = document.getElementById('leaderboard');
       lbEl.innerHTML = board.length ? `<ol>${board.map(e=>`<li>${e.name}: ${e.score}</li>`).join('')}</ol>` : `<p class="muted">${t('noScoresYet')}</p>`;
 
       // Related games
-      const related = allGames.filter(g => g.slug !== game.slug && g.tags && game.tags && g.tags.some(t => game.tags.includes(t)));
+      const related = allGames.filter(g => normalizeId(g) !== id && g.tags && game.tags && g.tags.some(t => game.tags.includes(t)));
       if (!related.length) document.getElementById('relatedSection').hidden = true;
       else document.getElementById('relatedCards').innerHTML = related.map(card).join('');
     }
