@@ -149,7 +149,7 @@
       updateMeta('og:description', game.blurb || '', true);
       if (game.thumb) updateMeta('og:image', new URL(game.thumb, location.href).href, true);
       const best = getBestScore(id);
-      const playHref = (game.path || `./games/${id}/`).replace(/\?.*$/, '');
+      const playHref = `./play.html?id=${id}`;
       heroEl.innerHTML = `
         ${game.thumb ? `<img src="${game.thumb}" alt="${game.title} thumbnail" onerror="this.remove()">` : ''}
         <div class="info">
