@@ -135,6 +135,17 @@ export function getBestScore(slug) {
   }
 }
 
+// Convenience helper to render the best score for a game
+// Accepts the game slug and an optional DOM element whose
+// textContent will be updated with the retrieved score.
+// Returns the numeric best score (or null if none stored).
+export function showBestScore(slug, el) {
+  const best = getBestScore(slug);
+  if (el && best !== null) el.textContent = String(best);
+  else if (el) el.textContent = '0';
+  return best;
+}
+
 // Retrieve a sorted array of local leaderboard entries
 // Each entry is { name: string, score: number }
 // Data is stored in localStorage under `leaderboard:${slug}`

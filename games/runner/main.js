@@ -1,9 +1,10 @@
 import { Controls } from '../../src/runtime/controls.ts';
-import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
+import { attachPauseOverlay, saveBestScore, shareScore, showBestScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { getMission, updateMission, formatMission, clearMission } from '../../shared/missions.js';
 import { renderFallbackPanel } from '../../shared/fallback.js';
+import { GameEngine } from '../../shared/gameEngine.js';
 import signature from 'console-signature';
 import games from '../../games.json' assert { type: 'json' };
 
@@ -18,6 +19,7 @@ let clouds=[],buildings=[],foreground=[];
 let particles=[];
 let wasGrounded=true;
 let levelData=null;
+const engine = new GameEngine();
 
 function initBackground(){
   clouds=[];buildings=[];foreground=[];
@@ -51,11 +53,12 @@ const slideDur = 20;
 
 // State
 let player = {x:80,y:0,w:30,h:50,vy:0,sliding:0};
-let score = 0;
+let distance = 0;
+let pickups = 0;
 let obstacles=[]; let coins=[]; let powerups=[];
 let active={speed:0,shield:0,magnet:0};
-let tick=0;
-let running=true;
+let elapsed=0;
+let nextPattern=0;
 let diff='med';
 const controls = new Controls({
   map: {
@@ -76,7 +79,13 @@ diffSel.onchange=()=>{diff=diffSel.value;};
 document.getElementById('pauseBtn').onclick=()=>pause();
 document.getElementById('restartBtn').onclick=()=>restart();
 const shareBtn=document.getElementById('shareBtn');
-const overlay=attachPauseOverlay({onResume:()=>running=true,onRestart:()=>restart()});
+const overlay=attachPauseOverlay({onResume:()=>engine.start(),onRestart:()=>restart()});
+const hud=document.querySelector('.hud');
+const bestWrap=document.createElement('span');
+bestWrap.innerHTML=`Best: <span id="bestScore">0</span> m`;
+hud.insertBefore(bestWrap, missionEl);
+const bestEl=bestWrap.querySelector('#bestScore');
+showBestScore('runner', bestEl);
 let mission=getMission('runner');
 let missionRewarded=mission?.completed||false;
 missionEl.textContent=formatMission(mission);
@@ -90,20 +99,28 @@ window.loadRunnerLevel=loadLevel;
 // Functions
 function jump(){ if(player.y<=0&&player.sliding<=0){ player.vy=-jumpVel; return true; } return false; }
 function slide(){ if(player.y<=0&&player.sliding<=0){ player.sliding=slideDur; return true; } return false; }
-function spawn(){
+const patterns=[
+  [{type:'obstacle',dx:0}],
+  [{type:'obstacle',dx:0},{type:'coin',dx:60}],
+  [{type:'coin',dx:0},{type:'coin',dx:30},{type:'coin',dx:60}],
+  [{type:'obstacle',dx:0},{type:'obstacle',dx:40}]
+];
+
+function spawnPattern(){
   if(levelData) return;
-  if(tick%Math.floor(120/speed)===0){
-    const r=Math.random();
-    if(r<0.6){ // obstacle
-      obstacles.push({x:innerWidth+40,y:innerHeight-GROUND-30,w:30,h:30});
-    } else if(r<0.9){ // coin
-      coins.push({x:innerWidth+40,y:innerHeight-GROUND-80,w:20,h:20});
-    } else { // powerup
-      const types=['speed','shield','magnet'];
-      const type=types[Math.floor(Math.random()*types.length)];
-      powerups.push({x:innerWidth+40,y:innerHeight-GROUND-80,w:20,h:20,type});
-    }
+  const pat=patterns[Math.floor(Math.random()*patterns.length)];
+  const base=innerWidth+40;
+  for(const item of pat){
+    const x=base+item.dx;
+    if(item.type==='obstacle') obstacles.push({x,y:innerHeight-GROUND-30,w:30,h:30});
+    if(item.type==='coin') coins.push({x,y:innerHeight-GROUND-80,w:20,h:20});
   }
+  if(Math.random()<0.2){
+    const types=['speed','shield','magnet'];
+    const type=types[Math.floor(Math.random()*types.length)];
+    powerups.push({x:base+80,y:innerHeight-GROUND-80,w:20,h:20,type});
+  }
+  nextPattern=elapsed+Math.max(0.8,2-speed*0.1);
 }
 
 function spawnDust(x,y){
@@ -118,10 +135,12 @@ function spawnSparks(x,y){
   }
 }
 function restart(){
+  engine.stop();
   player={x:80,y:0,w:30,h:50,vy:0,sliding:0};
-  score=0;obstacles=[];coins=[];powerups=[];tick=0;running=true;particles=[];
+  distance=0;pickups=0;obstacles=[];coins=[];powerups=[];particles=[];
   speed=diff==='easy'?4:diff==='med'?5:6.5;
   active={speed:0,shield:0,magnet:0};
+  elapsed=0;nextPattern=0;
   wasGrounded=true;
   initBackground();
   if(levelData){
@@ -138,121 +157,105 @@ function restart(){
   missionEl.textContent=formatMission(mission);
   emitEvent({ type: 'play', slug: 'runner' });
   shareBtn.hidden=true;
+  scoreEl.textContent='0';
+  showBestScore('runner', bestEl);
+  engine.start();
 }
-
-// Game loop
-let last=performance.now();
-function loop(t){
-  requestAnimationFrame(loop);
-  const dt=(t-last)/16; last=t;
-  if(running){
-    update(dt); render();
-  }
-}
-requestAnimationFrame(loop);
 
 function update(dt){
-  tick++;
-  mission=updateMission('runner',{time:dt/60});
+  elapsed += dt;
+  mission=updateMission('runner',{time:dt});
   missionEl.textContent=formatMission(mission);
-  // decay buffers
-  if(jumpBuffer>0) jumpBuffer=Math.max(0,jumpBuffer-dt*0.016);
-  if(slideBuffer>0) slideBuffer=Math.max(0,slideBuffer-dt*0.016);
-  // difficulty scaling
-  speed += 0.0005;
+  if(jumpBuffer>0) jumpBuffer=Math.max(0,jumpBuffer-dt);
+  if(slideBuffer>0) slideBuffer=Math.max(0,slideBuffer-dt);
+  speed += 0.03*dt;
   const curSpeed = speed + (active.speed>0?2:0);
-  if(active.speed>0) active.speed--;
-  if(active.shield>0) active.shield--;
-  if(active.magnet>0) active.magnet--;
-  // Background scrolling
-  clouds.forEach(c=>c.x-=curSpeed*0.2);
+  if(active.speed>0) active.speed-=dt;
+  if(active.shield>0) active.shield-=dt;
+  if(active.magnet>0) active.magnet-=dt;
+  clouds.forEach(c=>c.x-=curSpeed*0.2*60*dt);
   if(clouds.length&&clouds[0].x+clouds[0].w<0){
     const last=clouds[clouds.length-1];
     clouds.shift();
     clouds.push({x:last.x+120,y:50+Math.random()*100,w:100,h:40});
   }
-  buildings.forEach(b=>b.x-=curSpeed*0.5);
+  buildings.forEach(b=>b.x-=curSpeed*0.5*60*dt);
   if(buildings.length&&buildings[0].x+buildings[0].w<0){
     const last=buildings[buildings.length-1];
     buildings.shift();
     buildings.push({x:last.x+80,w:80,h:100+Math.random()*100});
   }
-  foreground.forEach(f=>f.x-=curSpeed*0.8);
+  foreground.forEach(f=>f.x-=curSpeed*60*dt);
   if(foreground.length&&foreground[0].x+foreground[0].w<0){
     const last=foreground[foreground.length-1];
     foreground.shift();
     foreground.push({x:last.x+40,w:40,h:20+Math.random()*20});
   }
-  // Player physics
-  player.vy+=gravity;
-  player.y+=player.vy;
-  if(player.y>0){player.y=0;player.vy=0;}
-  if(player.sliding>0) player.sliding--;
-  const grounded=player.y===0;
-  if(!wasGrounded&&grounded){
-    spawnDust(player.x+player.w/2,innerHeight-GROUND);
+  player.vy+=gravity*60*dt;
+  player.y+=player.vy*60*dt;
+  const grounded=player.y<=0;
+  if(grounded){
+    if(!wasGrounded) spawnDust(player.x+player.w/2,innerHeight-GROUND);
+    player.y=0;player.vy=0;
   }
   wasGrounded=grounded;
-  // Keys
+  if(player.sliding>0) player.sliding=Math.max(0,player.sliding-60*dt);
   if(controls.isDown('a')) jumpBuffer = BUF_MAX;
   if(controls.isDown('b')) slideBuffer = BUF_MAX;
-  // consume buffers when eligible
   if(jumpBuffer>0 && player.y<=0 && player.sliding<=0){ if(jump()) jumpBuffer=0; }
   if(slideBuffer>0 && player.y<=0 && player.sliding<=0){ if(slide()) slideBuffer=0; }
-  // Spawn obstacles/coins
-  spawn();
-  obstacles.forEach(o=>o.x-=curSpeed); coins.forEach(c=>c.x-=curSpeed); powerups.forEach(p=>p.x-=curSpeed);
+  if(elapsed>=nextPattern) spawnPattern();
+  const move=curSpeed*60*dt;
+  obstacles.forEach(o=>o.x-=move); coins.forEach(c=>c.x-=move); powerups.forEach(p=>p.x-=move);
   obstacles=obstacles.filter(o=>o.x>-60); coins=coins.filter(c=>c.x>-60); powerups=powerups.filter(p=>p.x>-60);
-  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=p.type==='dust'?0.2:0.1;p.life--;});
+  particles.forEach(p=>{p.x+=p.vx*60*dt;p.y+=p.vy*60*dt;p.vy+=p.type==='dust'?0.2*60*dt:0.1*60*dt;p.life-=60*dt;});
   particles=particles.filter(p=>p.life>0);
   if(active.magnet>0){
     for(const c of coins){
       if(player.x-80< c.x+c.w && player.x+player.w+80>c.x && player.y+player.h+80>c.y && player.y-80<c.y+c.h){
-        score+=10;
+        pickups++;
         c.x=-999;
         mission=updateMission('runner',{coins:1});
         missionEl.textContent=formatMission(mission);
       }
     }
   }
-  // Collisions
   for(const o of obstacles){
     if(player.x<o.x+o.w&&player.x+player.w>o.x&&player.y+player.h>o.y&&player.y<o.y+o.h){
       spawnSparks(o.x+o.w/2,o.y);
       if(active.shield>0){ o.x=-999; continue; }
-      running=false;
-      saveBestScore('runner',Math.floor(score));
+      engine.stop();
+      saveBestScore('runner',Math.floor(distance));
       endSessionTimer('runner');
-      emitEvent({ type: 'game_over', slug: 'runner', value: Math.floor(score) });
+      emitEvent({ type: 'game_over', slug: 'runner', value: Math.floor(distance) });
       shareBtn.hidden=false;
-      shareBtn.onclick=()=>shareScore('runner',Math.floor(score));
+      shareBtn.onclick=()=>shareScore('runner',Math.floor(distance));
+      showBestScore('runner', bestEl);
     }
   }
   for(const p of powerups){
     if(player.x< p.x+p.w&&player.x+player.w>p.x&&player.y+player.h>p.y&&player.y<p.y+p.h){
-      if(p.type==='speed') active.speed=300;
-      if(p.type==='shield') active.shield=300;
-      if(p.type==='magnet') active.magnet=300;
+      if(p.type==='speed') active.speed=5;
+      if(p.type==='shield') active.shield=5;
+      if(p.type==='magnet') active.magnet=5;
       p.x=-999;
     }
   }
   for(const c of coins){
     if(player.x< c.x+c.w&&player.x+player.w>c.x&&player.y+player.h>c.y&&player.y<c.y+c.h){
-      score+=10;
+      pickups++;
       c.x=-999;
       mission=updateMission('runner',{coins:1});
       missionEl.textContent=formatMission(mission);
     }
   }
   if(mission.completed && !missionRewarded){
-    score+=mission.score;
     missionRewarded=true;
     missionEl.textContent=formatMission(mission);
   }
-  score+=curSpeed*0.1;
-  scoreEl.textContent=Math.floor(score);
+  distance+=curSpeed*0.1*60*dt;
+  scoreEl.textContent=Math.floor(distance);
 }
-
 function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   // Sky
@@ -303,7 +306,12 @@ function render(){
   // Score text already in HUD
 }
 
-function pause(){running=false;overlay.show();}
+engine.update=update;
+engine.render=render;
+
+restart();
+
+function pause(){engine.stop();overlay.show();}
 
 // Session timing
 startSessionTimer('runner');
