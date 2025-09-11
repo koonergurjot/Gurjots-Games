@@ -42,6 +42,11 @@ npm start
 
 Open `http://localhost:3000` in a browser and enjoy.
 
+## Branding & Theming
+
+Reusable component styles live in [styles/components.css](styles/components.css) and draw colors and spacing from the global tokens. Apply classes like `.btn`, `.card`, `.chip`, `.toolbar`, `.panel`, `.kbd`, and `.grid` to build accessible, high-contrast UI with large tap targets and visible focus outlines.
+
+
 ## Roadmap
 
 - Additional classic games
