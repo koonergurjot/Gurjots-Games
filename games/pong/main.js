@@ -4,6 +4,7 @@ import { attachPauseOverlay, injectHelpButton, saveBestScore, shareScore } from 
 import games from '../../games.json' assert { type: 'json' };
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
+import { GameEngine } from '../../shared/gameEngine.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -126,18 +127,6 @@ function updateAI(){
   right.y += clamp(delta, -speed, speed);
 }
 
-// Game loop with fixed timestep
-let last = performance.now(), acc = 0, dt = 1000/60;
-function loop(t){
-  requestAnimationFrame(loop);
-  acc += t-last; last = t;
-  while (acc >= dt){
-    tick(dt/1000);
-    acc -= dt;
-  }
-  render();
-}
-requestAnimationFrame(loop);
 
 // Tick/update
 function tick(dt){
@@ -257,6 +246,11 @@ function render(){
     ctx.globalAlpha = 1;
   }
 }
+
+const engine = new GameEngine();
+engine.update = tick;
+engine.render = render;
+engine.start();
 
 // Session timing
 startSessionTimer('pong');
