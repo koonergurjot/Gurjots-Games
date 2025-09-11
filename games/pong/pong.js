@@ -1,11 +1,18 @@
 const canvas = document.getElementById('game');
-fitCanvasToParent(canvas, 1100, 800, 24);
-addEventListener('resize', () => fitCanvasToParent(canvas, 1100, 800, 24));
 const ctx = canvas.getContext('2d');
 function ctxSave() { if (ctx.save) ctx.save(); }
 function ctxRestore() { if (ctx.restore) ctx.restore(); }
 
-let W = canvas.width, H = canvas.height;
+let W = 0, H = 0;
+const loop = createCanvasLoop(canvas, () => { step(); draw(); }, {
+  onResize: (w, h, dpr) => {
+    W = w;
+    H = h;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+});
+window.pong = loop;
+loop.start();
 const PADDLE_W = 12, PADDLE_H = 110, BALL_R = 8;
 const COS_KEY = 'gg:pong:cosmetics';
 let cosmetics = {};
@@ -273,7 +280,6 @@ function draw() {
   }
 }
 
-(function loop() { step(); draw(); requestAnimationFrame(loop); })();
 
 // Difficulty selector hookup
 const diffSel = document.getElementById('difficulty');

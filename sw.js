@@ -6,6 +6,7 @@ const CORE = [
   '/js/app.js',
   '/js/injectBackButton.js',
   '/js/resizeCanvas.global.js',
+  '/js/canvasLoop.global.js',
   '/js/gameUtil.js',
   '/js/sfx.js',
   '/assets/logo.svg',
