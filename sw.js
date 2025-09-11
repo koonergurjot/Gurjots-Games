@@ -1,1 +1,66 @@
-const VERSION='gg-v5';const CORE=['/','/index.html','/css/styles.css','/js/app.js','/js/injectBackButton.js','/js/resizeCanvas.global.js','/js/gameUtil.js','/js/sfx.js','/assets/logo.svg','/assets/favicon.png','/games.json','/404.html'];self.addEventListener('install',e=>{e.waitUntil(caches.open(VERSION).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()))});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==VERSION).map(k=>caches.delete(k)))));self.clients.claim()});self.addEventListener('fetch',e=>{const req=e.request;const u=new URL(req.url);if(u.pathname.endsWith('/games.json')){e.respondWith(fetch(req).then(r=>{const copy=r.clone();caches.open(VERSION).then(c=>c.put(req,copy));return r}).catch(()=>caches.match(req)))}else{e.respondWith(caches.match(req).then(ca=>ca||fetch(req).catch(()=>caches.match('/index.html'))))}});
+const VERSION = 'gg-v6';
+const CORE = [
+  '/',
+  '/index.html',
+  '/css/styles.css',
+  '/js/app.js',
+  '/js/injectBackButton.js',
+  '/js/resizeCanvas.global.js',
+  '/js/gameUtil.js',
+  '/js/sfx.js',
+  '/assets/logo.svg',
+  '/assets/favicon.png',
+  '/games.json',
+  '/404.html'
+];
+
+try {
+  importScripts('precache-manifest.js');
+} catch (e) {
+  // ignore if manifest can't be loaded
+}
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(VERSION).then(cache => {
+      const assets = CORE.concat(self.__PRECACHE_MANIFEST || []);
+      return cache.addAll(assets);
+    }).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.map(k => (k !== VERSION ? caches.delete(k) : undefined)))
+    ).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('message', event => {
+  const data = event.data || {};
+  if (data.type === 'PRECACHE') {
+    caches.open(VERSION).then(cache => cache.addAll(data.assets || []));
+  }
+});
+
+function offlineFallback(req) {
+  if (req.mode === 'navigate') {
+    return caches.match('/index.html');
+  }
+  return caches.match('/404.html');
+}
+
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  if (request.method !== 'GET') return;
+  event.respondWith(
+    fetch(request)
+      .then(resp => {
+        const copy = resp.clone();
+        caches.open(VERSION).then(cache => cache.put(request, copy));
+        return resp;
+      })
+      .catch(() => caches.match(request).then(r => r || offlineFallback(request)))
+  );
+});

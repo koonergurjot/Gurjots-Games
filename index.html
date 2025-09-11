@@ -38,6 +38,8 @@
           <option value="minimal">Theme: Minimal White</option>
         </select>
       </div>
+      <div id="profileInfo" class="profile"></div>
+      <div id="connectionStatus" class="status"></div>
     </div>
   </header>
 
@@ -67,10 +69,17 @@
   </footer>
 
   <script src="js/app.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js'));
-    }
+  <script type="module">
+    import { registerSW } from './shared/sw.js';
+    import { initProfileUI, onConnectionChange, syncAchievements } from './shared/profile.js';
+    registerSW();
+    initProfileUI(document.getElementById('profileInfo'));
+    onConnectionChange(isOnline => {
+      const el = document.getElementById('connectionStatus');
+      el.textContent = isOnline ? 'Online' : 'Offline';
+      el.className = 'status ' + (isOnline ? 'success' : 'error');
+      if (isOnline) syncAchievements();
+    });
   </script>
 </body>
 </html>
