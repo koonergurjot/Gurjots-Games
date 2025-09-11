@@ -1,6 +1,13 @@
+import { drawGlow } from '../../shared/fx/canvasFx.js';
+import '../../shared/ui/hud.js';
+import getThemeTokens from '../../shared/skins/index.js';
+import { installErrorReporter } from '../../shared/debug/error-reporter.js';
+
+installErrorReporter();
+getThemeTokens();
+
 (function(){
-const c=document.getElementById('board'), ctx=c.getContext('2d'); const S=60;
-const hud=HUD.create({title:'Chess', onPauseToggle:()=>{}, onRestart:()=>reset()});
+const c=document.getElementById('board'), ctx=c.getContext('2d'); const fx=document.getElementById('fx'), fxCtx=fx.getContext('2d'); const S=60;
 const statusEl=document.getElementById('status');
 const depthEl=document.getElementById('difficulty');
 const puzzleSelect=document.getElementById('puzzle-select');
@@ -278,16 +285,19 @@ function genMovesNoFilter(x,y){ // like genMoves but no legality filter
 }
 
 function status(t){ statusEl.textContent=t; }
+function highlightSquare(x,y,color){ drawGlow(fxCtx, x*S+S/2, y*S+S/2, S*0.6, color); }
 function draw(){
   ctx.clearRect(0,0,c.width,c.height);
+  fxCtx.clearRect(0,0,fx.width,fx.height);
   ctx.drawImage(boardTex,0,0);
   if(sel){
-    ctx.fillStyle='rgba(80,200,255,.25)';
-    ctx.fillRect(sel.x*S, sel.y*S, S,S);
-    ctx.fillStyle='rgba(80,200,255,.25)';
-    moves.forEach(m=>{ ctx.beginPath(); ctx.arc(m.x*S+S/2, m.y*S+S/2, 10, 0, Math.PI*2); ctx.fill(); });
+    highlightSquare(sel.x, sel.y, 'rgba(80,200,255,0.25)');
+    moves.forEach(m=> highlightSquare(m.x, m.y, 'rgba(80,200,255,0.15)'));
   }
-  if(lastMove){ ctx.fillStyle='rgba(255,230,0,0.18)'; ctx.fillRect(lastMove.from.x*S,lastMove.from.y*S,S,S); ctx.fillRect(lastMove.to.x*S,lastMove.to.y*S,S,S); }
+  if(lastMove){
+    highlightSquare(lastMove.from.x, lastMove.from.y, 'rgba(255,230,0,0.25)');
+    highlightSquare(lastMove.to.x, lastMove.to.y, 'rgba(255,230,0,0.25)');
+  }
   for(let y=0;y<8;y++) for(let x=0;x<8;x++){
     if(anim && anim.progress<1 && anim.to.x===x && anim.to.y===y) continue;
     const p=pieceAt(x,y); if(p===EMPTY) continue;
@@ -478,4 +488,5 @@ function checkmate(side){
 }
 addEventListener('keydown', e=>{ if(e.key==='r'||e.key==='R') reset(); });
 reset();
+if (typeof reportReady === 'function') reportReady('chess');
 })();
