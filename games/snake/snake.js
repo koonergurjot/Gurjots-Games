@@ -1,9 +1,12 @@
+import { GameEngine } from '../../shared/gameEngine.js';
+
 const c = document.getElementById('c');
 fitCanvasToParent(c, 900, 900, 24);
 addEventListener('resize', () => fitCanvasToParent(c, 900, 900, 24));
 const ctx = c.getContext('2d');
 
-const N = 32;
+const N = window.BOARD_SIZE || 32;
+const WRAP = window.WRAP_MODE !== false;
 let CELL = c.width / N;
 let dir = { x: 1, y: 0 };
 let lastDir = { x: 1, y: 0 };
@@ -50,7 +53,10 @@ let snakeColorHead = '#8b5cf6';
 let snakeColorRGB = { r: 139, g: 92, b: 246 };
 let fruitColor = '#22d3ee';
 let obstacles = [];
-let fruitIcon = '🍎';
+const SPECIAL_FOOD = [
+  { icon: '⭐', color: '#fbbf24', points: 5, chance: 0.1 },
+  { icon: '💎', color: '#60a5fa', points: 10, chance: 0.03 }
+];
 function applySkin() {
   const s = SNAKE_SKINS.find(t => t.id === snakeSkinId);
   const f = FRUIT_SKINS.find(t => t.id === fruitSkinId);
@@ -60,7 +66,6 @@ function applySkin() {
   snakeColorRGB = hexToRgb(s.color);
   FRUITS = f.icons;
   fruitColor = f.color;
-  fruitIcon = FRUITS[Math.floor(rand() * FRUITS.length)];
   saveSkinSelection();
 }
 function populateSkinSelects() {
@@ -132,11 +137,20 @@ document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') tog
 })();
 
 function spawnFood() {
-  fruitIcon = FRUITS[Math.floor(rand() * FRUITS.length)];
+  const r = rand();
+  let type = null;
+  let acc = 0;
+  for (const t of SPECIAL_FOOD) {
+    acc += t.chance;
+    if (r < acc) { type = t; break; }
+  }
+  if (!type) {
+    type = { icon: FRUITS[Math.floor(rand() * FRUITS.length)], color: fruitColor, points: 1 };
+  }
   while (true) {
     const f = { x: (rand() * N) | 0, y: (rand() * N) | 0 };
     if (!snake.some(s => s.x === f.x && s.y === f.y) &&
-        !obstacles.some(o => o.x === f.x && o.y === f.y)) return f;
+        !obstacles.some(o => o.x === f.x && o.y === f.y)) return { ...f, ...type };
   }
 }
 
@@ -146,28 +160,24 @@ function addObstacleRow() {
 }
 
 function maybeLevelUp() {
-  if (score && score % 5 === 0) {
-    level = 1 + Math.floor(score / 5);
-    speedMs = Math.max(60, 120 - level * 5);
-    const best = JSON.parse(localStorage.getItem('gg:lb:' + GAME_ID) || '[]')[0]?.score || score;
-    GG.setMeta(GAME_ID, 'Best: ' + best + ' • Lv ' + level);
-  }
+  level = 1 + Math.floor(score / 5);
+  const best = JSON.parse(localStorage.getItem('gg:lb:' + GAME_ID) || '[]')[0]?.score || score;
+  GG.setMeta(GAME_ID, 'Best: ' + best + ' • Lv ' + level);
 }
 
 let particles = [];
 let lastTickTime = performance.now();
+let moveAcc = 0;
 
-function spawnFruitBurst(x, y) {
+function spawnFruitBurst(x, y, color) {
   for (let i = 0; i < 20; i++) {
     const a = rand() * Math.PI * 2;
     const s = rand() * 2 + 1;
-    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 20, max: 20 });
+    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 20, max: 20, color });
   }
 }
 
-function tick() {
-  if (dead) return;
-  if (paused) { setTimeout(tick, speedMs); return; }
+function step() {
   if (turnBuffer.length) {
     const next = turnBuffer.shift();
     if (!(next.x === -lastDir.x && next.y === -lastDir.y)) dir = next;
@@ -175,21 +185,30 @@ function tick() {
   lastSnake = snake.map(s => ({ ...s }));
   const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
   lastDir = { ...dir };
-  if (head.x < 0) head.x = N - 1;
-  if (head.x >= N) head.x = 0;
-  if (head.y < 0) head.y = N - 1;
-  if (head.y >= N) head.y = 0;
-  if (obstacles.some(o => o.x === head.x && o.y === head.y) ||
-      snake.some((s, i) => i > 0 && s.x === head.x && s.y === head.y)) {
+  if (WRAP) {
+    if (head.x < 0) head.x = N - 1;
+    if (head.x >= N) head.x = 0;
+    if (head.y < 0) head.y = N - 1;
+    if (head.y >= N) head.y = 0;
+  } else {
+    if (head.x < 0 || head.x >= N || head.y < 0 || head.y >= N) {
+      dead = true;
+      deadHandled = false;
+    }
+  }
+  if (!dead && (obstacles.some(o => o.x === head.x && o.y === head.y) ||
+      snake.some((s, i) => i > 0 && s.x === head.x && s.y === head.y))) {
     dead = true;
     deadHandled = false;
   }
+  if (dead) return;
   snake.unshift(head);
   if (head.x === food.x && head.y === food.y) {
-    score++;
-    GG.addXP(1);
+    score += food.points;
+    GG.addXP(food.points);
     SFX.beep({ freq: 660, dur: 0.05 });
-    spawnFruitBurst((food.x + 0.5) * CELL, (food.y + 0.5) * CELL);
+    spawnFruitBurst((food.x + 0.5) * CELL, (food.y + 0.5) * CELL, food.color);
+    speedMs = Math.max(60, speedMs - food.points * 2);
     food = spawnFood();
     fruitSpawnTime = performance.now();
     maybeLevelUp();
@@ -197,10 +216,10 @@ function tick() {
     snake.pop();
   }
   lastTickTime = performance.now();
-  if (!dead) setTimeout(tick, speedMs);
 }
 
-function render(time) {
+function render() {
+  const time = performance.now();
   CELL = c.width / N;
 
   // background with alternating tints
@@ -217,7 +236,7 @@ function render(time) {
     p.x += p.vx; p.y += p.vy; p.life--;
     if (p.life <= 0) { particles.splice(i, 1); continue; }
     ctx.globalAlpha = p.life / p.max;
-    ctx.fillStyle = fruitColor;
+    ctx.fillStyle = p.color;
     ctx.fillRect(p.x, p.y, 2, 2);
     ctx.globalAlpha = 1;
   }
@@ -228,12 +247,12 @@ function render(time) {
   ctx.translate((food.x + 0.5) * CELL, (food.y + 0.5) * CELL);
   ctx.scale(ft, ft);
   ctx.globalAlpha = ft;
-  ctx.fillStyle = fruitColor;
+  ctx.fillStyle = food.color;
   ctx.fillRect(-CELL / 2, -CELL / 2, CELL, CELL);
   ctx.font = '24px serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(fruitIcon, 0, 4);
+  ctx.fillText(food.icon, 0, 4);
   ctx.restore();
   ctx.globalAlpha = 1;
 
@@ -284,7 +303,6 @@ function render(time) {
     ctx.fillText('You crashed! Press R', c.width / 2, c.height / 2);
   }
 
-  requestAnimationFrame(render);
 }
 
 function saveScore(s) {
@@ -329,7 +347,7 @@ document.addEventListener('keydown', e => {
     progress.plays++;
     saveProgress();
     populateSkinSelects();
-    setTimeout(tick, speedMs);
+    moveAcc = 0;
     return;
   }
   const map = {
@@ -346,5 +364,14 @@ document.addEventListener('keydown', e => {
   }
 });
 
-requestAnimationFrame(render);
-setTimeout(tick, speedMs);
+const engine = new GameEngine();
+engine.update = dt => {
+  if (dead || paused) return;
+  moveAcc += dt * 1000;
+  while (moveAcc >= speedMs) {
+    moveAcc -= speedMs;
+    step();
+  }
+};
+engine.render = render;
+engine.start();
