@@ -28,6 +28,12 @@ flowchart TD
 
 Shared design tokens live in `styles/tokens.css`. The file defines color palettes for light and dark themes, spacing, radii, shadows, z-index layers, and typography. All style sheets import these variables, and dark mode is activated by setting `data-theme="dark"` on the root element.
 
+## Theme and Motion Preferences
+
+Token variables power the design system and are reused throughout the app for color, spacing, and typography.
+The interface includes a dark-mode toggle that flips the `data-theme` attribute on the root element and stores the choice in `localStorage`.
+Animations honor the user's `prefers-reduced-motion` setting, reducing transitions when motion should be minimized.
+
 ## Installation
 
 ```bash
