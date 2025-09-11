@@ -1,6 +1,9 @@
 const THEME_KEY = 'gg.theme';
 const MOTION_KEY = 'gg.motion';
 
+// expose app state bucket
+window.gg = window.gg || {};
+
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 const reduceQuery = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -8,6 +11,8 @@ function applyTheme(theme) {
   let t = theme || localStorage.getItem(THEME_KEY) || 'system';
   const mode = t === 'system' ? (darkQuery.matches ? 'dark' : 'light') : t;
   document.documentElement.dataset.theme = mode;
+  // keep track of user preference
+  window.gg.theme = t;
   return t;
 }
 
