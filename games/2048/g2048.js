@@ -1,5 +1,7 @@
 
-(function(){
+import { GameEngine } from '../../shared/gameEngine.js';
+import { copyGrid, computeMove, pushState, undo as undoState, getHint as engineHint, canMove } from './engine.js';
+
 const c=document.getElementById('board'), ctx=c.getContext('2d');
 const oppC=document.getElementById('oppBoard'), oppCtx=oppC?.getContext('2d');
 const net=window.Net;
@@ -7,6 +9,7 @@ let oppGrid=null, oppScore=0;
 const PAD=12, S=80, GAP=10;
 const LS_SIZE='g2048.size';
 const sizeSel=document.getElementById('sizeSel');
+const diffSel=document.getElementById('diffSel');
 let N=parseInt(localStorage.getItem(LS_SIZE) || '4');
 if(sizeSel){
   sizeSel.value=String(N);
@@ -16,6 +19,10 @@ if(sizeSel){
     reset();
   });
 }
+let hintDepth=parseInt(diffSel?.value||'1');
+diffSel?.addEventListener('change',()=>{
+  hintDepth=parseInt(diffSel.value)||1;
+});
 const hud=HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset()});
 
 const MAX_UNDO=3;
@@ -50,7 +57,7 @@ let best=parseInt(localStorage.getItem(LS_BEST) ?? 0);
 if(isNaN(undoLeft)) undoLeft=MAX_UNDO;
 if(isNaN(best)) best=0;
 
-let animating=false;
+let anim=null;
 
 function updateStatus(){
   const el=document.getElementById('status');
@@ -95,19 +102,20 @@ function applyTheme(){
   const hintBtn=document.getElementById('hintBtn');
   const themeBtn=document.getElementById('themeToggle');
   const sizeSel=document.getElementById('sizeSel');
+  const diffSel=document.getElementById('diffSel');
   if(hintBtn){ hintBtn.style.background=t.empty; hintBtn.style.color=t.text; hintBtn.style.borderColor=c.style.borderColor; }
   if(themeBtn){ themeBtn.style.background=t.empty; themeBtn.style.color=t.text; themeBtn.style.borderColor=c.style.borderColor; themeBtn.textContent=currentTheme==='dark'?'Light':'Dark'; }
   if(sizeSel){ sizeSel.style.background=t.empty; sizeSel.style.color=t.text; sizeSel.style.borderColor=c.style.borderColor; }
+  if(diffSel){ diffSel.style.background=t.empty; diffSel.style.color=t.text; diffSel.style.borderColor=c.style.borderColor; }
 }
 
 function reset(keepUndo=false){
   updateCanvas();
   grid=Array.from({length:N},()=>Array(N).fill(0));
-  score=0; over=false; won=false; hintDir=null;
+  score=0; over=false; won=false; hintDir=null; anim=null;
   addTile(); addTile();
   history=[{grid:copyGrid(grid), score:0}];
   if(!keepUndo){ undoLeft=MAX_UNDO; localStorage.setItem(LS_UNDO,undoLeft); }
-  draw();
   net?.send('move',{grid,score});
 }
 
@@ -119,168 +127,33 @@ function addTile(){
   grid[y][x]=Math.random()<0.9?2:4;
 }
 
-function slideSim(row){
-  const a=row.filter(v=>v); let gained=0;
-  for(let i=0;i<a.length-1;i++){
-    if(a[i]===a[i+1]){ a[i]*=2; gained+=a[i]; a.splice(i+1,1); }
-  }
-  while(a.length<N) a.push(0);
-  return {row:a,gained};
-}
-
-function saveState(){
-  history.push({grid:copyGrid(grid), score});
-  if(history.length>10) history.shift();
-}
-
 function undoMove(){
-  if(animating) return;
-  if(undoLeft>0 && history.length>1){
-    history.pop();
-    const prev=history[history.length-1];
-    grid=copyGrid(prev.grid); score=prev.score;
-    undoLeft--; localStorage.setItem(LS_UNDO,undoLeft);
-    over=false; won=false; hintDir=null;
-    draw();
-    net?.send('move',{grid,score});
-  }
-}
-
-function computeMove(dir){
-  const after=Array.from({length:N},()=>Array(N).fill(0));
-  const animations=[];
-  let moved=false; let gained=0;
-  if(dir===0){
-    for(let y=0;y<N;y++){
-      let target=0, lastMerge=-1;
-      for(let x=0;x<N;x++){
-        const v=grid[y][x]; if(!v) continue;
-        if(after[y][target]===0){
-          after[y][target]=v;
-          if(target!==x) moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:target,toY:y});
-        }else if(after[y][target]===v && lastMerge!==target){
-          after[y][target]+=v; gained+=after[y][target];
-          lastMerge=target; moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:target,toY:y});
-        }else{
-          target++; after[y][target]=v;
-          if(target!==x) moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:target,toY:y});
-        }
-      }
-    }
-  }else if(dir===2){
-    for(let y=0;y<N;y++){
-      let target=0, lastMerge=-1;
-      for(let x=0;x<N;x++){
-        const v=grid[y][N-1-x]; if(!v) continue;
-        const fromX=N-1-x, toX=N-1-target;
-        if(after[y][toX]===0){
-          after[y][toX]=v;
-          if(fromX!==toX) moved=true;
-          animations.push({value:v,fromX,fromY:y,toX,toY:y});
-        }else if(after[y][toX]===v && lastMerge!==target){
-          after[y][toX]+=v; gained+=after[y][toX];
-          lastMerge=target; moved=true;
-          animations.push({value:v,fromX,fromY:y,toX,toY:y});
-        }else{
-          target++; const nx=N-1-target;
-          after[y][nx]=v;
-          if(fromX!==nx) moved=true;
-          animations.push({value:v,fromX,fromY:y,toX:nx,toY:y});
-        }
-      }
-    }
-  }else if(dir===1){
-    for(let x=0;x<N;x++){
-      let target=0, lastMerge=-1;
-      for(let y=0;y<N;y++){
-        const v=grid[y][x]; if(!v) continue;
-        if(after[target][x]===0){
-          after[target][x]=v;
-          if(target!==y) moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:x,toY:target});
-        }else if(after[target][x]===v && lastMerge!==target){
-          after[target][x]+=v; gained+=after[target][x];
-          lastMerge=target; moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:x,toY:target});
-        }else{
-          target++; after[target][x]=v;
-          if(target!==y) moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:x,toY:target});
-        }
-      }
-    }
-  }else if(dir===3){
-    for(let x=0;x<N;x++){
-      let target=0, lastMerge=-1;
-      for(let y=0;y<N;y++){
-        const v=grid[N-1-y][x]; if(!v) continue;
-        const fromY=N-1-y, toY=N-1-target;
-        if(after[toY][x]===0){
-          after[toY][x]=v;
-          if(fromY!==toY) moved=true;
-          animations.push({value:v,fromX:x,fromY,toX:x,toY});
-        }else if(after[toY][x]===v && lastMerge!==target){
-          after[toY][x]+=v; gained+=after[toY][x];
-          lastMerge=target; moved=true;
-          animations.push({value:v,fromX:x,fromY,toX:x,toY});
-        }else{
-          target++; const ny=N-1-target;
-          after[ny][x]=v;
-          if(fromY!==ny) moved=true;
-          animations.push({value:v,fromX:x,fromY,toX:x,toY:ny});
-        }
-      }
-    }
-  }
-  return {after, animations, moved, gained};
-}
-
-function animateMove(anims, after){
-  animating=true;
-  const base=copyGrid(grid);
-  anims.forEach(a=>{ base[a.fromY][a.fromX]=0; });
-  let start=null;
-  function step(ts){
-    if(start==null) start=ts;
-    const p=Math.min((ts-start)/ANIM_TIME,1);
-    draw({base, tiles:anims, p});
-    if(p<1) requestAnimationFrame(step);
-    else{
-      grid=after;
-      addTile();
-      check();
-      draw();
-      animating=false;
+  if(anim) return;
+  if(undoLeft>0){
+    const res=undoState(history);
+    if(res){
+      ({grid,score,history}=res);
+      undoLeft--; localStorage.setItem(LS_UNDO,undoLeft);
+      over=false; won=false; hintDir=null;
       net?.send('move',{grid,score});
     }
   }
-  requestAnimationFrame(step);
 }
 
 function move(dir){
-  if(over||won||animating) return;
-  saveState();
-  const {after, animations, moved, gained}=computeMove(dir);
-  if(!moved){ history.pop(); return; }
+  if(over||won||anim) return;
+  history = pushState(history, grid, score);
+  const {after, animations, moved, gained}=computeMove(grid,dir);
+  if(!moved){ history = history.slice(0,-1); return; }
   score+=gained;
   if(score>best){ best=score; localStorage.setItem(LS_BEST,best); }
   if(gained>=128) net?.send('garbage',{count:1});
-  animateMove(animations, after);
+  const base=copyGrid(grid);
+  animations.forEach(a=>{ base[a.fromY][a.fromX]=0; });
+  anim={base, tiles:animations, after, p:0};
 }
 
-function check(){ won = won || grid.flat().some(v=>v>=2048); over = !won && !canMove(); }
-
-function canMove(){
-  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
-    if(grid[y][x]===0) return true;
-    if(x+1<N && grid[y][x]===grid[y][x+1]) return true;
-    if(y+1<N && grid[y][x]===grid[y+1][x]) return true;
-  }
-  return false;
-}
+function check(){ won = won || grid.flat().some(v=>v>=2048); over = !won && !canMove(grid); }
 
 addEventListener('keydown', e=>{
   if(e.key==='ArrowLeft') move(0);
@@ -363,40 +236,26 @@ function roundRect(ctx,x,y,w,h,r,fill,stroke){
   if(stroke) ctx.stroke();
 }
 
-function simulate(dir){
-  let g=copyGrid(grid); let s=score; let moved=false;
-  if(dir===0){ for(let y=0;y<N;y++){ const {row,gained}=slideSim(g[y]); if(JSON.stringify(g[y])!==JSON.stringify(row)) moved=true; g[y]=row; s+=gained; } }
-  if(dir===2){ for(let y=0;y<N;y++){ const {row,gained}=slideSim(g[y].slice().reverse()); const rev=row.reverse(); if(JSON.stringify(g[y])!==JSON.stringify(rev)) moved=true; g[y]=rev; s+=gained; } }
-  if(dir===1){
-    for(let x=0;x<N;x++){
-      const col=[]; for(let y=0;y<N;y++) col.push(g[y][x]);
-      const {row,gained}=slideSim(col);
-      for(let y=0;y<N;y++){ if(g[y][x]!==row[y]) moved=true; g[y][x]=row[y]; }
-      s+=gained;
-    }
-  }
-  if(dir===3){
-    for(let x=0;x<N;x++){
-      const col=[]; for(let y=0;y<N;y++) col.push(g[N-1-y][x]);
-      const {row,gained}=slideSim(col);
-      const rev=row.reverse();
-      for(let y=0;y<N;y++){ if(g[y][x]!==rev[y]) moved=true; g[y][x]=rev[y]; }
-      s+=gained;
-    }
-  }
-  if(!moved) return null; return {grid:g, score:s, max:Math.max(...g.flat())};
-}
-
 function getHint(){
-  let bestDir=null, bestVal=-1;
-  for(let d=0;d<4;d++){
-    const sim=simulate(d);
-    if(sim && sim.max>bestVal){ bestVal=sim.max; bestDir=d; }
-  }
-  hintDir=bestDir; draw();
+  hintDir=engineHint(grid,hintDepth);
 }
 
-document.getElementById('hintBtn')?.addEventListener('click',getHint);
+const gameLoop=new GameEngine();
+gameLoop.update=dt=>{
+  if(anim){
+    anim.p+=dt*1000/ANIM_TIME;
+    if(anim.p>=1){
+      grid=anim.after;
+      anim=null;
+      addTile();
+      check();
+      net?.send('move',{grid,score});
+    }
+  }
+};
+gameLoop.render=()=>{ draw(anim?{base:anim.base,tiles:anim.tiles,p:Math.min(anim.p,1)}:null); };
+
+document.getElementById('hintBtn')?.addEventListener('click',()=>{ getHint(); });
 document.getElementById('themeToggle')?.addEventListener('click',()=>{
   currentTheme=currentTheme==='dark'?'light':'dark';
   localStorage.setItem(LS_THEME,currentTheme);
@@ -415,5 +274,5 @@ net?.on('start',()=>{
 
 applyTheme();
 reset(true);
+gameLoop.start();
 net?.send('move',{grid,score});
-})();
