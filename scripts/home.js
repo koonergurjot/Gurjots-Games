@@ -8,6 +8,15 @@ const hero = document.querySelector('.hero');
 const gamesSection = document.getElementById('games');
 const playArea = document.getElementById('playArea');
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const navLinks = document.querySelectorAll('header nav a');
+
+function setActiveLink(){
+  const current = location.hash || '#/';
+  navLinks.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === current);
+  });
+}
+setActiveLink();
 
 let games = [];
 
@@ -53,6 +62,7 @@ function ripple(e) {
 
 function renderRoute() {
   const hash = location.hash;
+  setActiveLink();
   if (hash.startsWith('#/game/')) {
     const id = hash.split('/')[2];
     const game = games.find(g => g.id === id);
