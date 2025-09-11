@@ -4,18 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Gurjot’s Games — Play Instantly</title>
-  <meta name="description" content="Gurjot’s Games: a fast, fun, single‑player arcade hub. Click a game to play instantly." />
+  <meta name="description" content="Gurjot’s Games: a fast, fun, single-player arcade hub. Click a game to play instantly." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
-  <!-- Keep your site-wide CSS if present; landing.css is scoped and safe -->
-  <link rel="stylesheet" href="css/landing.css?v=gg-v7">
+  <link rel="stylesheet" href="css/landing.css?v=20250911162413">
 </head>
 <body>
   <header class="gg-topbar">
     <div class="gg-container gg-topbar-inner">
       <a class="gg-brand" href="./" aria-label="Gurjot’s Games home">
-        <!-- Inline SVG logo so we don't require binary assets -->
         <svg class="gg-logo" viewBox="0 0 512 512" role="img" aria-label="Gurjot’s Games">
           <defs>
             <linearGradient id="ggrad" x1="0" x2="1" y1="0" y2="1">
@@ -32,7 +30,6 @@
         </svg>
         <span class="gg-title">Gurjot’s Games</span>
       </a>
-
       <nav class="gg-actions">
         <a class="gg-link" href="achievements.html">Achievements</a>
         <a class="gg-link" href="stats.html">Stats</a>
@@ -52,9 +49,7 @@
             <input id="gg-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
             <button id="gg-clear" type="button" title="Clear search">✕</button>
           </form>
-          <div id="gg-filters" class="gg-filters" aria-label="Filter by category" role="tablist">
-            <!-- dynamically populated from tags in games.json -->
-          </div>
+          <div id="gg-filters" class="gg-filters" aria-label="Filter by category" role="tablist"></div>
         </div>
         <div class="gg-hero-art" aria-hidden="true">
           <div class="gg-orb orb-1"></div>
@@ -85,12 +80,11 @@
   </footer>
 
   <script>
-    // Keep year fresh
-    document.addEventListener('DOMContentLoaded', () => {
-      const y = document.getElementById('gg-year');
-      if (y) y.textContent = new Date().getFullYear();
-    });
+    document.addEventListener('DOMContentLoaded', function() {{ 
+      var y = document.getElementById('gg-year'); 
+      if (y) y.textContent = new Date().getFullYear(); 
+    }});
   </script>
-  <script src="js/landing.js?v=gg-v7" type="module"></script>
+  <script type="module" src="js/landing.js?v=20250911162413"></script>
 </body>
 </html>

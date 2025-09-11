@@ -1,92 +1,65 @@
-// CACHE_VERSION bumped to ensure updated landing page is served immediately
-const CACHE_VERSION = 'gg-v7';
-const INDEX_HTML = `/index.html?v=${CACHE_VERSION}`;
-const LANDING_CSS = `/css/landing.css?v=${CACHE_VERSION}`;
-const LANDING_JS = `/js/landing.js?v=${CACHE_VERSION}`;
-const CORE = [
-  '/',
-  INDEX_HTML,
-  LANDING_CSS,
-  LANDING_JS,
-  '/css/styles.css',
-  '/js/app.js',
-  '/js/injectBackButton.js',
-  '/js/resizeCanvas.global.js',
-  '/js/canvasLoop.global.js',
-  '/js/gameUtil.js',
-  '/js/sfx.js',
-  '/assets/logo.svg',
-  '/assets/favicon.png',
-  '/games.json',
-  '/data/games.json',
-  '/404.html'
-];
+// v1.1 service worker (safe, minimal).
+// CACHE_VERSION bumped to force users to receive the new landing right away.
+const CACHE_VERSION = 'gg-v3-20250911162413';
+const PRECACHE = 'precache-' + CACHE_VERSION;
+const RUNTIME = 'runtime-' + CACHE_VERSION;
 
-try {
-  importScripts('precache-manifest.js');
-} catch (e) {
-  // ignore if manifest can't be loaded
-}
-
-self.addEventListener('install', event => {
+// This manifest is generated/edited separately; imported below.
+self.addEventListener('install', (event) => {
+  self.skipWaiting(); // ensure new SW activates immediately
   event.waitUntil(
-    caches.open(CACHE_VERSION).then(cache => {
-      const assets = CORE.concat(self.__PRECACHE_MANIFEST || []);
-      // cache.addAll would reject if any single asset fails; add individually instead
-      return Promise.all(assets.map(a => cache.add(a).catch(() => {})));
-    }).then(() => self.skipWaiting())
+    caches.open(PRECACHE).then(async (cache) => {
+      const urls = (self.__GG_PRECACHE_MANIFEST || []);
+      await cache.addAll(urls);
+    })
   );
 });
 
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.map(k => (k !== CACHE_VERSION ? caches.delete(k) : undefined)))
-    ).then(() => self.clients.claim())
-  );
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    // Claim clients so the updated SW controls pages without reload
+    await self.clients.claim();
+    // Clean up old caches
+    const names = await caches.keys();
+    await Promise.all(names.map(n => (n.includes('gg-v3-') || n.includes(CACHE_VERSION)) ? null : caches.delete(n)));
+  })());
 });
 
-self.addEventListener('message', event => {
-  const data = event.data || {};
-  if (data.type === 'PRECACHE') {
-    caches.open(CACHE_VERSION).then(cache => cache.addAll(data.assets || []));
-  }
-});
-
-function offlineFallback(req) {
+// network-first for navigations (index.html), cache-first for others
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
   if (req.mode === 'navigate') {
-    return caches.match(INDEX_HTML);
-  }
-  return caches.match('/404.html');
-}
-
-self.addEventListener('fetch', event => {
-  const { request } = event;
-  if (request.method !== 'GET') return;
-  const url = new URL(request.url);
-
-  // Network-first for the landing page to avoid stale HTML
-  if (request.mode === 'navigate' && (url.pathname === '/' || url.pathname === '/index.html')) {
-    event.respondWith(
-      fetch(INDEX_HTML, { cache: 'no-store' }).catch(() => caches.match(INDEX_HTML))
-    );
+    event.respondWith((async () => {
+      try {
+        const net = await fetch(req);
+        const cache = await caches.open(RUNTIME);
+        cache.put(req, net.clone());
+        return net;
+      } catch (e) {
+        const cache = await caches.open(PRECACHE);
+        const cached = await cache.match(req) || await cache.match('/index.html');
+        return cached || Response.error();
+      }
+    })());
     return;
   }
 
-  event.respondWith(
-    fetch(request)
-      .then(resp => {
-        if (url.protocol.startsWith('http')) {
-          const copy = resp.clone();
-          caches.open(CACHE_VERSION).then(cache => cache.put(request, copy));
-        }
-        return resp;
-      })
-      .catch(() => {
-        if (url.protocol.startsWith('http')) {
-          return caches.match(request).then(r => r || offlineFallback(request));
-        }
-        return offlineFallback(request);
-      })
-  );
+  // cache-first for static assets
+  event.respondWith((async () => {
+    const cache = await caches.open(RUNTIME);
+    const cached = await cache.match(req);
+    if (cached) return cached;
+    try {
+      const net = await fetch(req);
+      // only cache same-origin GET requests
+      if (req.method === 'GET' && new URL(req.url).origin === location.origin) {
+        cache.put(req, net.clone());
+      }
+      return net;
+    } catch (e) {
+      const precache = await caches.open(PRECACHE);
+      const fallback = await precache.match(req);
+      return fallback || Response.error();
+    }
+  })());
 });

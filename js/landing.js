@@ -1,19 +1,26 @@
-// Landing page bootstrapping. Safe: it only reads games.json and links to game.html?slug=...
-// No impact to existing game engines or routes.
+// v1.1 Landing boot
 const GRID = document.getElementById('gg-grid');
 const STATUS = document.getElementById('gg-status');
 const SEARCH = document.getElementById('gg-search');
 const CLEAR = document.getElementById('gg-clear');
 const FILTERS = document.getElementById('gg-filters');
 
-// game.html reads URLSearchParams('slug') so we must match that param here
-const PLAY_PARAM = 'slug';
-
 let allGames = [];
 let activeTag = 'All';
+let gameParam = 'id'; // default, will auto-detect below
+
+// Try to auto-detect which query param game.html expects by scanning its source.
+async function detectParamName() {
+  try {
+    const html = await (await fetch('game.html?v=20250911162413', { cache: 'no-cache' })).text();
+    // Look for URLSearchParams(...).get("param")
+    const m = html.match(/URLSearchParams\([^)]*\)\.get\(["'](\w+)["']\)/);
+    if (m && m[1]) gameParam = m[1];
+  } catch (e) { /* ignore; fallback to 'id' */ }
+}
 
 const prettyTag = (t) => t?.charAt(0).toUpperCase() + t?.slice(1);
-const toQuery = (s) => s.trim().toLowerCase();
+const toQuery = (s) => (s||'').trim().toLowerCase();
 
 function placeholderSVG(label='GG'){
   return `
@@ -46,30 +53,29 @@ function placeholderSVG(label='GG'){
 }
 
 function card(game){
-  const { id, title, tags, description, thumb } = game;
+  const id = game.id || game.slug || (game.name||'').toLowerCase().replace(/\s+/g,'-');
+  const title = game.title || game.name || id;
+  const tags = game.tags || game.genres || [];
+  const short = game.description || '';
   const badge = Array.isArray(tags) && tags[0] ? prettyTag(tags[0]) : 'Game';
-  const shot = thumb ? `<img src="${thumb}" alt="${title} thumbnail" loading="lazy" onerror="this.remove()">`
-                      : placeholderSVG(title.slice(0, 14));
+  const thumb = game.thumbnail || game.image || game.cover || null;
+  const href = `game.html?${encodeURIComponent(gameParam)}=${encodeURIComponent(id)}`;
 
   return `
   <article class="gg-card" tabindex="0" role="article" aria-label="${title} card">
     <div class="gg-shot">
       <div class="gg-badge">${badge}</div>
-      ${shot}
+      ${thumb ? `<img loading="lazy" decoding="async" alt="${title} thumbnail" src="${thumb}">` : placeholderSVG(title.slice(0, 14))}
     </div>
     <div class="gg-card-body">
       <div class="gg-card-title">${title}</div>
       <div class="gg-card-meta">
         ${Array.isArray(tags) ? tags.slice(0,3).map(t=>`<span>${prettyTag(t)}</span>`).join('') : ''}
       </div>
-      ${description ? `<div class="gg-card-desc">${description}</div>` : ''}
+      ${short ? `<div class="gg-card-desc">${short}</div>` : ''}
       <div class="gg-card-actions">
-        <a class="gg-btn gg-primary" href="game.html?${PLAY_PARAM}=${encodeURIComponent(id)}" aria-label="Play ${title} now">
-          ▶ Play
-        </a>
-        <a class="gg-btn" href="game.html?${PLAY_PARAM}=${encodeURIComponent(id)}#about" aria-label="Open ${title} details">
-          ℹ Details
-        </a>
+        <a class="gg-btn gg-primary" href="${href}" aria-label="Play ${title} now">▶ Play</a>
+        <a class="gg-btn" href="${href}#about" aria-label="Open ${title} details">ℹ Details</a>
       </div>
     </div>
   </article>`;
@@ -81,12 +87,12 @@ function render(list){
 }
 
 function filterAndSearch(){
-  const q = toQuery(SEARCH.value || '');
+  const q = toQuery(SEARCH?.value || '');
   const filtered = allGames.filter(g => {
-    const inTag = activeTag === 'All' || g.tags.map(toQuery).includes(toQuery(activeTag));
+    const inTag = activeTag === 'All' || (g.tags||g.genres||[]).map(toQuery).includes(toQuery(activeTag));
     if (!inTag) return false;
     if (!q) return true;
-    const blob = [g.id, g.title, g.description, ...g.tags].join(' ').toLowerCase();
+    const blob = [g.id, g.title, g.name, g.description, ...(g.tags||g.genres||[])].join(' ').toLowerCase();
     return blob.includes(q);
   });
   render(filtered);
@@ -103,39 +109,41 @@ function buildFilterChips(tags){
   }, {passive:true});
 }
 
-async function boot(){
-  try{
-    const res = await fetch('./games.json', {cache:'no-cache'});
-    if (!res.ok) throw new Error('Failed to load games.json');
-    const data = await res.json();
-    // Schema normalization: id := (id||slug||name), title := (title||name), tags := (tags||genres||[])
-    const list = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
-    allGames = list.map(g => ({
+async function loadGamesJson(){
+  const url = './games.json?v=20250911162413';
+  const res = await fetch(url, { cache: 'no-cache' });
+  if (!res.ok) throw new Error('Failed to load games.json');
+  const data = await res.json();
+  const list = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
+  allGames = list.map(g => ({ 
       id: g.id || g.slug || g.name,
       title: g.title || g.name,
       description: g.description || '',
       tags: g.tags || g.genres || [],
-      thumb: g.thumbnail || g.thumb || g.image || g.cover || ''
-    })).filter(g => g.id && g.title);
+      thumbnail: g.thumbnail || g.image || g.cover || null
+  })).filter(g => g.id && g.title);
+  const tags = allGames.flatMap(g => g.tags).map(t => t && (t[0].toUpperCase()+t.slice(1)));
+  buildFilterChips(tags);
+  render(allGames);
+}
 
-    if (!allGames.length){
-      STATUS.textContent = '0 games. Check games.json format.';
-      return;
-    }
+function showError(msg){
+  STATUS.textContent = msg + ' ';
+  const btn = document.createElement('button');
+  btn.textContent = 'Retry';
+  btn.className = 'gg-btn';
+  btn.onclick = boot;
+  STATUS.appendChild(btn);
+}
 
-    // Build filters from tags present
-    const tags = allGames.flatMap(g => g.tags);
-    buildFilterChips(tags);
-
-    render(allGames);
+async function boot(){
+  try {
+    await detectParamName(); // detect URL param expected by game.html
+    await loadGamesJson();
     STATUS.focus?.();
-  }catch(err){
+  } catch (err) {
     console.error(err);
-    STATUS.innerHTML = 'Could not load games. <button class="gg-btn" id="gg-retry">Retry</button>';
-    document.getElementById('gg-retry').addEventListener('click', () => {
-      STATUS.textContent = 'Loading games…';
-      boot();
-    }, {once:true});
+    showError('Could not load games. Check games.json in the repo root.');
   }
 }
 
