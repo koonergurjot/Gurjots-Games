@@ -3,6 +3,8 @@ import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.j
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 import * as net from './net.js';
+import GameEngine from '../../shared/gameEngine.js';
+import { Saucer, Boss } from './enemies.js';
 import { renderFallbackPanel } from '../../shared/fallback.js';
 import signature from 'console-signature';
 import games from '../../games.json' assert { type: 'json' };
@@ -78,7 +80,7 @@ const ship = {
 const bullets = [];
 const rocks = [];
 const particles = [];
-const saucers = [];
+const enemies = [];
 let saucerSpawned = false;
 let bossSpawned = false;
 const others = {}; // remote players
@@ -90,6 +92,10 @@ net.onShip((id, shipData)=>{
 net.onShot((id, b)=>{ bullets.push({ ...b, remote:true }); });
 net.onRocks(arr=>{ rocks.length=0; for(const r of arr) rocks.push(r); });
 net.onPlayers(()=> updateHUD());
+net.onEnemy(e=>{
+  if (e.type === 'saucer') enemies.push(new Saucer(e.x, e.y, e.dir));
+  else if (e.type === 'boss') enemies.push(new Boss(e.x, e.y, e.dir));
+});
 
 let fireMode = 'single'; // 'single' | 'burst' | 'rapid'
 const HUD = {
@@ -127,10 +133,10 @@ const overlay = attachPauseOverlay({ onResume: ()=> running = true, onRestart: (
 function spawnSaucer(boss=false){
   const y = 60 + Math.random()*(innerHeight-120);
   const dir = Math.random()<0.5? 1 : -1;
-  const speed = boss? 3 : 2.2;
-  const r = boss? 20 : 12;
-  const hp = boss? 8 : 2;
-  saucers.push({ x: dir<0? innerWidth+40 : -40, y, vx: dir*speed, vy: 0, r, fire: 0, hp, boss });
+  const x = dir<0? innerWidth+40 : -40;
+  const enemy = boss ? new Boss(x, y, dir) : new Saucer(x, y, dir);
+  enemies.push(enemy);
+  net.sendEnemy({ type: boss ? 'boss' : 'saucer', x, y, dir });
 }
 
 function spawnWave(n){
@@ -205,7 +211,7 @@ function pause(){ running=false; overlay.show(); }
 function restart(){
   running=true; score=0; lives=3; wave=1;
   ship.x=innerWidth/2; ship.y=innerHeight/2; ship.vx=ship.vy=0; ship.angle=-Math.PI/2; ship.inv=60;
-  bullets.length=0; rocks.length=0; particles.length=0; saucers.length=0;
+  bullets.length=0; rocks.length=0; particles.length=0; enemies.length=0;
   saucerSpawned = false; bossSpawned = false;
   spawnWave(4);
   updateHUD();
@@ -226,62 +232,51 @@ function updateHUD(){
 // Init
 restart();
 
-// Loop
-let last=performance.now();
-function loop(t){
-  requestAnimationFrame(loop);
-  const dt = (t-last)/16; last=t;
-  if (running) {
-    update(dt);
-    render();
-  }
-}
-requestAnimationFrame(loop);
+// Game loop via shared engine
+const engine = new GameEngine();
+engine.update = (dt) => { if (running) update(dt); };
+engine.render = () => render();
+engine.start();
 
 function update(dt){
+  const mul = dt * 60;
   // Parallax starfield
   for (const layer of starLayers){
     for (const s of layer.stars){
-      s.x -= layer.speed * dt;
+      s.x -= layer.speed * mul;
       if (s.x < 0){ s.x += innerWidth; s.y = Math.random()*innerHeight; }
     }
   }
-  if (shake>0) shake *= 0.92;
+  if (shake>0) shake *= 0.92 ** mul;
 
   // Ship movement
-  if (controls.isDown('left')) ship.angle -= 0.065;
-  if (controls.isDown('right')) ship.angle += 0.065;
+  if (controls.isDown('left')) ship.angle -= 0.065 * mul;
+  if (controls.isDown('right')) ship.angle += 0.065 * mul;
   if (controls.isDown('up')) {
-    ship.vx += Math.cos(ship.angle) * (ship.thrust*1.05);
-    ship.vy += Math.sin(ship.angle) * (ship.thrust*1.05);
+    ship.vx += Math.cos(ship.angle) * (ship.thrust*1.05*mul);
+    ship.vy += Math.sin(ship.angle) * (ship.thrust*1.05*mul);
     particles.push({ x: ship.x - Math.cos(ship.angle)*12, y: ship.y - Math.sin(ship.angle)*12, vx: (Math.random()-0.5)*1.5, vy: (Math.random()-0.5)*1.5, life: 18, max:18, col: '#6ee7b7', alpha:1 });
   }
-  ship.x += ship.vx; ship.y += ship.vy;
-  ship.vx *= ship.drag; ship.vy *= ship.drag;
+  ship.x += ship.vx * mul; ship.y += ship.vy * mul;
+  ship.vx *= ship.drag ** mul; ship.vy *= ship.drag ** mul;
   wrap(ship);
-  if (ship.inv>0) ship.inv--;
+  if (ship.inv>0){ ship.inv -= mul; if (ship.inv<0) ship.inv=0; }
   net.sendShip({ x: ship.x, y: ship.y, angle: ship.angle, inv: ship.inv });
 
   // Bullets
-  for (const b of bullets){ b.x+=b.vx; b.y+=b.vy; b.life--; wrap(b); }
+  for (const b of bullets){ b.x+=b.vx*mul; b.y+=b.vy*mul; b.life-=mul; wrap(b); }
   for (let i=bullets.length-1;i>=0;i--) if (bullets[i].life<=0) bullets.splice(i,1);
 
   // Rocks
-  for (const r of rocks){ r.x+=r.vx; r.y+=r.vy; r.angle+=r.rot; wrap(r); }
+  for (const r of rocks){ r.x+=r.vx*mul; r.y+=r.vy*mul; r.angle+=r.rot*mul; wrap(r); }
 
-  // Saucer and boss spawn (once per wave)
-  if (!saucerSpawned){ spawnSaucer(); saucerSpawned = true; }
-  if (!bossSpawned && wave % 5 === 0){ spawnSaucer(true); bossSpawned = true; }
-  for (const s of saucers){
-    s.x += s.vx; s.y += s.vy; wrap(s);
-    s.fire -= dt*0.016;
-    if (s.fire<=0){
-      s.fire = 1.2 + Math.random()*0.8;
-      const dx = ship.x - s.x, dy = ship.y - s.y; const a = Math.atan2(dy,dx);
-      const noise = (Math.random()-0.5) * (Math.hypot(dx,dy)/innerWidth) * 0.6;
-      const ang = a + noise; const sp = 4.5;
-      bullets.push({ x:s.x, y:s.y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, life: 180, enemy:true });
-    }
+  // Enemy spawn (once per wave)
+  const isHost = !coopActive || Object.keys(net.players).length === 0;
+  if (!saucerSpawned && isHost){ spawnSaucer(); saucerSpawned = true; }
+  if (!bossSpawned && wave % 5 === 0 && isHost){ spawnSaucer(true); bossSpawned = true; }
+  for (const e of enemies){
+    e.update(dt, ship, bullets);
+    wrap(e);
   }
 
   // Collisions: bullets vs rocks
@@ -311,12 +306,22 @@ function update(dt){
     }
   }
 
-  // Collisions: bullets vs saucers
-  for (let i=saucers.length-1;i>=0;i--){
-    const s = saucers[i];
+  // Collisions: bullets vs enemies
+  for (let i=enemies.length-1;i>=0;i--){
+    const e = enemies[i];
     for (let j=bullets.length-1;j>=0;j--){
       const b = bullets[j]; if (b.enemy || b.remote) continue;
-      if (Math.hypot(b.x-s.x, b.y-s.y) < s.r){ bullets.splice(j,1); s.hp--; if (s.hp<=0){ saucers.splice(i,1); explode(s.x,s.y,28,['#f59e0b','#fde68a'],5); score += 150; updateHUD(); } break; }
+      if (Math.hypot(b.x-e.x, b.y-e.y) < e.r){
+        bullets.splice(j,1);
+        e.hp--;
+        if (e.hp<=0){
+          enemies.splice(i,1);
+          explode(e.x,e.y, e.type==='boss'?48:28, ['#f59e0b','#fde68a'], e.type==='boss'?8:5);
+          score += e.type==='boss'?300:150;
+          updateHUD();
+        }
+        break;
+      }
     }
   }
 
@@ -352,7 +357,7 @@ function update(dt){
   }
 
   // Particles
-  for (const p of particles){ p.x+=p.vx; p.y+=p.vy; p.life--; p.alpha = p.life/p.max; }
+  for (const p of particles){ p.x+=p.vx*mul; p.y+=p.vy*mul; p.life-=mul; p.alpha = p.life/p.max; }
   for (let i=particles.length-1;i>=0;i--) if (particles[i].life<=0) particles.splice(i,1);
 
   // Wave clear
@@ -425,8 +430,16 @@ function render(){
   ctx.fillStyle = '#eaeaf2';
   for (const b of bullets){ ctx.fillRect(b.x-2,b.y-2,4,4); }
 
-  // saucers
-  ctx.fillStyle = '#f59e0b'; for (const s of saucers){ ctx.fillRect(s.x-12, s.y-6, 24, 12); }
+  // enemies
+  for (const e of enemies){
+    if (e.type === 'boss'){
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(e.x-20, e.y-10, 40, 20);
+    } else {
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(e.x-12, e.y-6, 24, 12);
+    }
+  }
 
   // rocks
   for (const r of rocks){ drawRock(r); }
