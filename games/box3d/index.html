@@ -41,6 +41,15 @@
     <div><strong>3D Box Playground</strong></div>
     <div>Click to lock pointer. Move: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> • Jump: <kbd>Space</kbd> • Reset: <kbd>R</kbd></div>
     <div>Score: <span id="score">0</span> <button id="shareBtn" style="display:none">Share</button></div>
+    <div id="editorUI" style="margin-top:6px;">
+      Level:
+      <select id="levelSelect">
+        <option value="levels/demo.json">Demo</option>
+      </select>
+      <button id="importBtn">Import</button>
+      <button id="exportBtn">Export</button>
+      <button id="modeBtn">Edit</button>
+    </div>
   </div>
   <div id="touch">
     <div class="pad">
