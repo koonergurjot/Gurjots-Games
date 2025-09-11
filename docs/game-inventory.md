@@ -3,7 +3,7 @@
 | slug | title | entry file | main files | shared utils | input methods | current known issues | suggested quick wins |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | pong | Pong Classic | games/pong/index.html | pong.js, career.js | injectBackButton.js, canvasLoop.global.js, gameUtil.js, sfx.js | keyboard, touch | Pause only via **P**, no unified overlay | Pilot global pause overlay with ESC |
-| snake | Snake | games/snake/index.html | snake.js, skins.js | injectBackButton.js, resizeCanvas.global.js, gameUtil.js, sfx.js, shared/leaderboard.js | keyboard, touch | `setTimeout` game loop; no game‑over screen | Move loop to `requestAnimationFrame` and add restart overlay |
+| snake | Snake | games/snake/index.html | snake.js | injectBackButton.js, resizeCanvas.global.js, gameUtil.js, sfx.js, shared/leaderboard.js, shared/ui/hud.js, shared/skins/index.js, shared/fx/canvasFx.js | keyboard, touch | `setTimeout` game loop; no game‑over screen | Move loop to `requestAnimationFrame` and add restart overlay |
 | tetris | Tetris | games/tetris/play.html | tetris.js, replay.js | injectBackButton.js, resizeCanvas.global.js, gameUtil.js, sfx.js | keyboard | No touch controls; update loop not delta‑based | Add swipe controls and separate update vs. render |
 | breakout | Breakout | games/breakout/index.html | breakout.js, levels.js | injectBackButton.js, resizeCanvas.global.js, gameUtil.js, sfx.js, shared/leaderboard.js | keyboard, mouse | Lacks touch controls; pause only via **P** | Add touch paddle and ESC pause |
 | chess | Chess (2D) | games/chess/index.html | chess.js, ai.js, net.js, puzzles.js, ratings.js | hud.js, sfx.js | mouse, minimal keyboard | No touch support | Use pointer events for touch play |
