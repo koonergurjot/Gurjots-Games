@@ -28,12 +28,13 @@
       <a href="/leaderboards" data-link>Leaderboards</a>
       <a href="/about" data-link>About</a>
     </nav>
-    <button id="theme-toggle" class="btn" type="button" aria-label="Toggle theme" onclick="toggleTheme()">🌓</button>
+    <button id="theme-toggle" class="btn" type="button" aria-label="Toggle theme" aria-pressed="false">🌓</button>
   </header>
   <main id="app"></main>
   <footer>
     <small>&copy; 2025 Gurjot's Game</small>
   </footer>
+  <script type="module" src="scripts/theme.js"></script>
   <script type="module" src="scripts/app.js"></script>
   <script type="module">
     import { registerSW } from './shared/sw.js';
