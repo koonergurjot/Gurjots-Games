@@ -1,4 +1,4 @@
-import { readFile, access } from 'node:fs/promises';
+import { readFile, access, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { JSDOM } from 'jsdom';
@@ -9,11 +9,11 @@ async function exists(p){
 }
 
 async function checkGame(root, game){
-  const result = { Game: game.id, Status: 'OK', Reason: '' };
+  const result = { id: game.id, status: 'ok', reason: '' };
   const indexPath = path.join(root, game.path);
   if (!(await exists(indexPath))){
-    result.Status = 'Fail';
-    result.Reason = 'missing index.html';
+    result.status = 'fail';
+    result.reason = 'missing index.html';
     return result;
   }
   const html = await readFile(indexPath, 'utf8');
@@ -23,8 +23,8 @@ async function checkGame(root, game){
     const mainSrc = moduleScripts[0].getAttribute('src');
     const mainPath = path.join(path.dirname(indexPath), mainSrc);
     if (!(await exists(mainPath))){
-      result.Status = 'Fail';
-      result.Reason = `missing ${mainSrc}`;
+      result.status = 'fail';
+      result.reason = `missing ${mainSrc}`;
       return result;
     }
     try{
@@ -36,16 +36,16 @@ async function checkGame(root, game){
           global.document = env.window.document;
           await mod.init();
         } catch(err){
-          result.Status = 'Fail';
-          result.Reason = `init(): ${err.message}`;
+          result.status = 'fail';
+          result.reason = `init(): ${err.message}`;
         } finally {
           delete global.window;
           delete global.document;
         }
       }
     } catch(err){
-      result.Status = 'Fail';
-      result.Reason = `import failed: ${err.message}`;
+      result.status = 'fail';
+      result.reason = `import failed: ${err.message}`;
     }
   }
   return result;
@@ -58,7 +58,8 @@ async function main(){
   for (const game of data){
     results.push(await checkGame(root, game));
   }
-  console.table(results.map(r => ({ Game: r.Game, Status: r.Status, Reason: r.Reason })));
+  await writeFile(path.join(root, 'healthcheck.json'), JSON.stringify(results, null, 2));
+  console.table(results.map(r => ({ Game: r.id, Status: r.status, Reason: r.reason })));
 }
 
 main().catch(err => { console.error(err); process.exit(1); });
