@@ -1,5 +1,4 @@
-import { createGamepad } from '../../shared/controls.js';
-import { Controls } from '../../src/runtime/controls.ts';
+import { Controls, createGamepad } from '../../src/runtime/controls.ts';
 import { attachPauseOverlay, injectHelpButton, saveBestScore, shareScore } from '../../shared/ui.js';
 import games from '../../games.json' assert { type: 'json' };
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
