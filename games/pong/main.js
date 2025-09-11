@@ -4,9 +4,57 @@ import games from '../../games.json' assert { type: 'json' };
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { GameEngine } from '../../shared/gameEngine.js';
+import '../../shared/fx/canvasFx.js';
+import '../../shared/skins/index.js';
+import * as ErrorReporter from '../../shared/debug/error-reporter.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+
+// Build HUD UI
+const hudRoot = document.createElement('div');
+hudRoot.className = 'hud';
+document.body.appendChild(hudRoot);
+
+const hudStyle = document.createElement('style');
+hudStyle.textContent = `
+  .hud-ui{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:12px;padding:6px 12px;background:rgba(0,0,0,0.35);border-radius:12px;align-items:center;pointer-events:auto;}
+  .hud-ui select,.hud-ui button{background:rgba(255,255,255,0.08);color:var(--fg);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:4px 8px;}
+  .hud-ui span{font-weight:700;}
+`;
+document.head.appendChild(hudStyle);
+
+hudRoot.innerHTML = `
+  <div class="hud-ui">
+    <span id="status"></span>
+    <span><span id="lScore">0</span> - <span id="rScore">0</span></span>
+    <span>Series <span id="lWins">0</span>-<span id="rWins">0</span></span>
+    <button id="pauseBtn">⏸️</button>
+    <button id="restartBtn">⟲</button>
+    <button id="shareBtn" hidden>🔗</button>
+    <label>Mode:
+      <select id="modeSel"><option value="ai" selected>AI</option><option value="p2">2P</option></select>
+    </label>
+    <label>Difficulty:
+      <select id="diffSel">
+        <option value="easy">Easy</option>
+        <option value="med" selected>Medium</option>
+        <option value="hard">Hard</option>
+        <option value="insane">Insane</option>
+      </select>
+    </label>
+    <label>Sound:
+      <select id="sndSel"><option value="on" selected>On</option><option value="off">Off</option></select>
+    </label>
+    <label>Series:
+      <select id="seriesSel">
+        <option value="1">1</option>
+        <option value="3">3</option>
+        <option value="5">5</option>
+      </select>
+    </label>
+  </div>
+`;
 const DPR = Math.min(2, window.devicePixelRatio || 1);
 function resize() {
   const { clientWidth:w, clientHeight:h } = canvas;
@@ -308,4 +356,5 @@ engine.start();
 // Session timing
 startSessionTimer('pong');
 emitEvent({ type: 'play', slug: 'pong' });
+ ErrorReporter.reportReady?.('pong');
 window.addEventListener('beforeunload', ()=> endSessionTimer('pong'));
