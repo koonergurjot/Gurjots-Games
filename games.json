@@ -38,7 +38,7 @@
   {
     "title": "2048",
     "slug": "g2048",
-    "entry": "/games/2048/2048.js",
+    "entry": "/games/2048/index.js",
     "module": false
   },
   {
