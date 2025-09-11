@@ -1,3 +1,4 @@
+@import "../styles/tokens.css";
 :root{--bg:#0b0d12;--bg-soft:#10131a;--text:#e6e7ea;--muted:#9aa2b1;--brand:linear-gradient(135deg,#8b5cf6,#22d3ee);--card:#131827;--card-border:rgba(255,255,255,.06);--chip:rgba(255,255,255,.08);--shadow:0 10px 30px rgba(0,0,0,.35)}
 body.theme-retro{--bg:#0b0f06;--bg-soft:#0f1409;--text:#c2ffc2;--muted:#90b990;--brand:linear-gradient(135deg,#9be15d,#00e3ae);--card:#0d1208;--card-border:rgba(146,255,172,.18);--chip:rgba(155,225,93,.15)}
 body.theme-neon{--bg:#07050c;--bg-soft:#0b0812;--text:#f5f3ff;--muted:#c4b5fd;--brand:linear-gradient(135deg,#f472b6,#8b5cf6);--card:#0f0a1f;--card-border:rgba(139,92,246,.2);--chip:rgba(139,92,246,.18)}
