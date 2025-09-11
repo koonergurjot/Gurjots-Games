@@ -23,18 +23,39 @@ const BALL = { r: 7, speed: 6, max: 13 };
 const WIN_SCORE = 11;
 
 // State
-let left = { y: (FIELD.h-PADDLE.h)/2, score:0 };
-let right = { y: (FIELD.h-PADDLE.h)/2, score:0 };
+let left = { y: (FIELD.h-PADDLE.h)/2, score:0, vy:0 };
+let right = { y: (FIELD.h-PADDLE.h)/2, score:0, vy:0 };
 let ball = resetBall(1);
 let running = true;
 let mode = 'ai';   // 'ai' | 'p2'
 let diff = 'med';  // easy | med | hard | insane
 let sounds = 'on';
 let serveLock = true; // require key to serve
+// Elo-like rating
+const ELO_KEY = 'pong:elo';
+let playerElo = parseInt(localStorage.getItem(ELO_KEY) || '1200', 10);
+let aiElo = 1200;
+
+// Best-of series scoreboard
+const SERIES_KEY = 'pong:series';
+let series = { left:0, right:0, bestOf:1 };
+try { Object.assign(series, JSON.parse(localStorage.getItem(SERIES_KEY)) || {}); } catch {}
+let seriesTarget = Math.ceil(series.bestOf/2);
 let statusEl = document.getElementById('status');
 let lScoreEl = document.getElementById('lScore');
 let rScoreEl = document.getElementById('rScore');
+let lWinsEl = document.getElementById('lWins');
+let rWinsEl = document.getElementById('rWins');
 const shareBtn = document.getElementById('shareBtn');
+
+function updateWins(){
+  lWinsEl.textContent = series.left;
+  rWinsEl.textContent = series.right;
+}
+function saveSeries(){
+  localStorage.setItem(SERIES_KEY, JSON.stringify(series));
+}
+updateWins();
 
 // Inputs
 const controls = new Controls({
@@ -65,9 +86,16 @@ document.getElementById('restartBtn').onclick = ()=> restart();
 const modeSel = document.getElementById('modeSel');
 const diffSel = document.getElementById('diffSel');
 const sndSel = document.getElementById('sndSel');
+const seriesSel = document.getElementById('seriesSel');
 modeSel.onchange = ()=> { mode = modeSel.value; restart(); };
 diffSel.onchange = ()=> { diff = diffSel.value; };
 sndSel.onchange = ()=> { sounds = sndSel.value; };
+seriesSel.value = String(series.bestOf);
+seriesSel.onchange = ()=> {
+  series.bestOf = Number(seriesSel.value);
+  series.left = 0; series.right = 0; seriesTarget = Math.ceil(series.bestOf/2);
+  saveSeries(); updateWins(); restart();
+};
 
 // Pause overlay
 const overlay = attachPauseOverlay({ onResume: ()=> running=true, onRestart: ()=> restart() });
@@ -104,16 +132,28 @@ function restart(){
   left.score = right.score = 0;
   left.y = right.y = (FIELD.h-PADDLE.h)/2;
   ball = resetBall(1);
-  serveLock = true; running = true; status('Press Space/Enter to serve. AI adapts to score gap');
+  lScoreEl.textContent = left.score;
+  rScoreEl.textContent = right.score;
+  serveLock = true; running = true; status('Press Space/Enter to serve');
   emitEvent({ type: 'play', slug: 'pong' });
   shareBtn.hidden = true;
+}
+
+function expected(a, b){ return 1 / (1 + 10 ** ((b - a) / 400)); }
+function updateRating(playerWon){
+  const k = 32;
+  const res = playerWon ? 1 : 0;
+  const exp = expected(playerElo, aiElo);
+  playerElo = Math.round(playerElo + k * (res - exp));
+  aiElo = Math.round(aiElo + k * (exp - res));
+  localStorage.setItem(ELO_KEY, playerElo);
 }
 
 // AI behavior
 function aiSpeed(){
   const base = diff==='easy'? 4 : diff==='med'? 6 : diff==='hard'? 7.5 : 9.5;
-  const lead = right.score - left.score; // positive when human leads
-  const adjust = clamp(lead * 0.3, -3, 3);
+  const ratingDiff = playerElo - aiElo;
+  const adjust = clamp(ratingDiff / 100, -3, 3);
   return base + adjust;
 }
 function updateAI(){
@@ -130,6 +170,8 @@ function updateAI(){
 // Tick/update
 function tick(dt){
   if (!running) return;
+  const prevLeftY = left.y;
+  const prevRightY = right.y;
   // Move paddles
   if (mode==='p2'){
     if (controls.isDown('up')) left.y -= PADDLE.speed;
@@ -142,6 +184,8 @@ function tick(dt){
 
   left.y = clamp(left.y, 0, FIELD.h - PADDLE.h);
   right.y = clamp(right.y, 0, FIELD.h - PADDLE.h);
+  left.vy = left.y - prevLeftY;
+  right.vy = right.y - prevRightY;
 
   // Serve lock
   if (serveLock) return;
@@ -150,7 +194,7 @@ function tick(dt){
   ball.x += ball.vx; ball.y += ball.vy + ball.spin*0.1;
   ball.vx = clamp(ball.vx, -BALL.max, BALL.max);
   ball.vy = clamp(ball.vy, -BALL.max, BALL.max);
-  ball.spin *= 0.98;
+  ball.spin *= Math.exp(-1.2 * dt);
 
   // Wall collisions
   if (ball.y < BALL.r){ ball.y = BALL.r; ball.vy *= -1; beep(660,0.03); }
@@ -166,7 +210,7 @@ function tick(dt){
     ball.vx = Math.min(ball.vx, BALL.max);
     ball.vx = Math.abs(ball.vx); // to the right
     ball.vy += rel * 3.2;
-    ball.spin = rel * 2.0;
+    ball.spin += left.vy * 0.3;
     beep(520,0.03);
   }
 
@@ -178,7 +222,7 @@ function tick(dt){
     ball.vx *= 1.03;
     ball.vx = Math.max(ball.vx, -BALL.max);
     ball.vy += rel * 3.2;
-    ball.spin = rel * -2.0;
+    ball.spin += right.vy * 0.3;
     beep(520,0.03);
   }
 
@@ -203,8 +247,18 @@ function score(side){
   // End/win
   if (left.score >= WIN_SCORE || right.score >= WIN_SCORE){
     running = false;
+    const playerWon = right.score > left.score;
     const winner = left.score > right.score ? 'Left' : 'Right';
-    status(`${winner} wins! Press Restart.`);
+    updateRating(playerWon);
+    if (playerWon) series.right++; else series.left++;
+    saveSeries(); updateWins();
+    let seriesMsg = '';
+    if (series.right >= seriesTarget || series.left >= seriesTarget){
+      const seriesWinner = series.right > series.left ? 'Right' : 'Left';
+      seriesMsg = ` Series to ${series.bestOf} won by ${seriesWinner}!`;
+      series.left = 0; series.right = 0; saveSeries(); updateWins();
+    }
+    status(`${winner} wins!${seriesMsg} Press Restart.`);
     // Persist best score (use Right player points as "your" score in single mode)
     saveBestScore('pong', right.score);
     endSessionTimer('pong');
