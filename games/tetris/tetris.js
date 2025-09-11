@@ -1,3 +1,9 @@
+import '../../shared/fx/canvasFx.js';
+import '../../shared/skins/index.js';
+import { installErrorReporter } from '../../shared/debug/error-reporter.js';
+
+installErrorReporter();
+
 const GAME_ID='tetris';GG.incPlays();
 const c=document.getElementById('t');
 fitCanvasToParent(c,420,840,24);
@@ -350,11 +356,24 @@ addEventListener('keydown',e=>{
   if(e.key.toLowerCase()==='c'){ applyAction('hold'); Replay.recordAction('hold'); }
 });
 
-document.getElementById('holdBtn')?.addEventListener('click',()=>{
+
+let touchX=null,touchY=null;
+function handleAction(a){
   if(mode!=='play' || paused || over || clearAnim) return;
-  applyAction('hold');
-  Replay.recordAction('hold');
+  applyAction(a);
+  Replay.recordAction(a);
+}
+c.addEventListener('pointerdown',e=>{touchX=e.clientX;touchY=e.clientY;});
+c.addEventListener('pointerup',e=>{
+  if(touchX==null||touchY==null) return;
+  const dx=e.clientX-touchX,dy=e.clientY-touchY;
+  const adx=Math.abs(dx),ady=Math.abs(dy);
+  if(Math.max(adx,ady)<10){handleAction('rotate');}
+  else if(adx>ady){handleAction(dx>0?'right':'left');}
+  else{handleAction(dy>0?'hardDrop':'hold');}
+  touchX=touchY=null;
 });
+
 
 function loop(ts){
   if(!last) last=ts;
@@ -398,9 +417,10 @@ function loop(ts){
 }
 
 if(mode==='replay'){
-  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;requestAnimationFrame(loop);});
+  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;requestAnimationFrame(loop);reportReady('tetris');});
 }else{
   initGame();
   if(mode==='spectate') started=true;
   requestAnimationFrame(loop);
+  reportReady('tetris');
 }
