@@ -3,7 +3,9 @@ import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.j
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { getMission, updateMission, formatMission, clearMission } from '../../shared/missions.js';
-
+import { renderFallbackPanel } from '../../shared/fallback.js';
+import signature from 'console-signature';
+async function init(){
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const DPR = Math.min(2, window.devicePixelRatio||1);
@@ -300,3 +302,9 @@ function pause(){running=false;overlay.show();}
 startSessionTimer('runner');
 emitEvent({ type: 'play', slug: 'runner' });
 window.addEventListener('beforeunload',()=>endSessionTimer('runner'));
+}
+
+init().catch(e => {
+  signature(e);
+  renderFallbackPanel(e, 'runner');
+});
