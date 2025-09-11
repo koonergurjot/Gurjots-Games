@@ -1,76 +1,65 @@
-# Game Library
+# Gurjot's Games — Loader & SW Patch Bundle
 
-[![Build Status](https://github.com/<org>/<repo>/actions/workflows/badges.yml/badge.svg)](https://github.com/<org>/<repo>/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+This bundle adds:
+- A universal **game loader with on-screen diagnostics** (`js/game-loader.js`).
+- A **network-first rule for JavaScript** in `sw.js`, so stale caches stop breaking fresh game code.
+- A safe **patch script** that injects the minimal changes into your existing repo (with `.bak` backups).
 
-## Play classic games in your browser
+## What this fixes
+- Clicking a game but nothing starts (bad slug / wrong entry path / missing export).
+- Works locally but not on Netlify (case/caching/path issues).
+- Games load with stale code after deploy (service worker cache).
 
-Explore a collection of accessible web games. This project showcases a lightweight architecture and modern JavaScript tooling.
-
-## Features
-
-- Responsive design that works on any device
-- Progressive web app support for offline play
-- Clean separation between game logic and UI components
-- Automated tests with [Vitest](https://vitest.dev)
-
-## Architecture
-
-```mermaid
-flowchart TD
-    A[Player] -->|Interaction| B[Game UI]
-    B --> C[Game Logic]
-    C --> D[(State Store)]
-    B --> E[Server APIs]
+## Files in this bundle
+```
+scripts/apply-patches.js   # Node script to patch your repo files in-place (creates .bak backups)
+js/game-loader.js          # New loader with friendly error panel & module/classic support
+README.md
 ```
 
-## Design Tokens
+## How to use (2 minutes)
 
-Shared design tokens live in `styles/tokens.css`. The file defines color palettes for light and dark themes, spacing, radii, shadows, z-index layers, and typography. All style sheets import these variables, and dark mode is activated by setting `data-theme="dark"` on the root element.
+1. **Download & unzip** this bundle at the root of your `Game` repo (same folder where `game.html` and `sw.js` live).
 
-## Theme and Motion Preferences
-
-Token variables power the design system and are reused throughout the app for color, spacing, and typography.
-The interface includes a dark-mode toggle that flips the `data-theme` attribute on the root element and stores the choice in `localStorage`.
-Animations honor the user's `prefers-reduced-motion` setting, reducing transitions when motion should be minimized.
-
-## Installation
-
+2. **Run the patch script** (requires Node 16+):
 ```bash
-npm install
+# from the repo root
+node scripts/apply-patches.js
+# (optional dry run)
+DRY=1 node scripts/apply-patches.js
 ```
 
-## Configuration
+What it does:
+- Copies `js/game-loader.js` into your repo.
+- Updates `game.html` to ensure:
+  - `<meta name="viewport" ...>` exists.
+  - A `<div id="game-root">` mount is present.
+  - `<script src="/js/game-loader.js"></script>` is included before `</body>`.
+- Appends a network-first JS fetch handler to `sw.js` (if one isn’t already present).
+- Creates backups as `game.html.bak` and `sw.js.bak` before writing.
 
-Set environment variables to customize behavior. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for details.
-
-## Usage
-
+3. **Run locally** (any static server):
 ```bash
-npm start
+npx serve .
+# then open: http://localhost:3000/game.html?id=<slug>
 ```
 
-Open `http://localhost:3000` in a browser and enjoy.
+4. **Deploy (Netlify)** and hard-refresh once so the updated Service Worker activates.
 
-## Roadmap
+## Notes
+- The loader supports **both** `module` (`type="module"` imports) and classic scripts with globals. In `games.json`, set `"module": true` for ES modules; omit/false for globals.
+- If a game doesn’t expose a recognizable boot function, add one of:
+  - `export default (ctx) => {...}` **or** `export function init(ctx){...}` for modules
+  - `window.GameInit = (ctx) => {...}` **or** `window.startGame = (ctx) => {...}` for classic scripts
 
-- Additional classic games
-- Accessibility enhancements
-- Cloud deployment guide
+## Rollback
+Use the `.bak` files to restore originals:
+```bash
+mv game.html.bak game.html
+mv sw.js.bak sw.js
+rm -f js/game-loader.js
+```
 
-## Contributing
+---
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
-## FAQ
-
-**Why use this project?**
-: It offers a clean foundation for building browser games with modern tooling.
-
-**Where can I report issues?**
-: Use the [issue tracker](https://github.com/<org>/<repo>/issues).
-
-## License
-
-This project is available under the MIT License. See the [LICENSE](LICENSE) file for more information.
-
+**Tip:** After this patch, when a game fails to start you’ll see a red diagnostic panel at the bottom with the exact cause (bad slug, 404 entry, missing export, etc.).
