@@ -12,6 +12,7 @@ const CORE = [
   '/assets/logo.svg',
   '/assets/favicon.png',
   '/games.json',
+  '/data/games.json',
   '/404.html'
 ];
 

@@ -1,21 +1,17 @@
 import { loadStyle } from '../utils.js';
+import { createGameCard } from '../components/game-card.js';
 
 export default async function(outlet){
   loadStyle('styles/pages/home.css');
-  const res = await fetch('/games.json');
+  loadStyle('styles/components/game-grid.css');
+  const res = await fetch('/data/games.json');
   const games = await res.json();
   const section = document.createElement('section');
   section.innerHTML = '<h2>Play Now</h2>';
   const grid = document.createElement('div');
   grid.className = 'grid';
   games.forEach(g => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <h3>${g.title}</h3>
-      <p>${g.desc || ''}</p>
-      <a href="/game/${g.id}">Play</a>
-    `;
+    const card = createGameCard(g);
     grid.appendChild(card);
   });
   section.appendChild(grid);
