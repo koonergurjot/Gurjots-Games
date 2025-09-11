@@ -7,20 +7,19 @@ const FILTERS = document.getElementById('gg-filters');
 
 let allGames = [];
 let activeTag = 'All';
-let gameParam = 'id'; // default, will auto-detect below
 
-// Try to auto-detect which query param game.html expects by scanning its source.
-async function detectParamName() {
-  try {
-    const html = await (await fetch('game.html?v=20250911162413', { cache: 'no-cache' })).text();
-    // Look for URLSearchParams(...).get("param")
-    const m = html.match(/URLSearchParams\([^)]*\)\.get\(["'](\w+)["']\)/);
-    if (m && m[1]) gameParam = m[1];
-  } catch (e) { /* ignore; fallback to 'id' */ }
-}
+// derive build version from script tag for cache-busting fetches
+const VERSION = new URL(import.meta.url).searchParams.get('v') || '';
 
 const prettyTag = (t) => t?.charAt(0).toUpperCase() + t?.slice(1);
 const toQuery = (s) => (s||'').trim().toLowerCase();
+
+function slugify(str){
+  return String(str || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
 function placeholderSVG(label='GG'){
   return `
@@ -53,13 +52,13 @@ function placeholderSVG(label='GG'){
 }
 
 function card(game){
-  const id = game.id || game.slug || (game.name||'').toLowerCase().replace(/\s+/g,'-');
-  const title = game.title || game.name || id;
+  const normalizedId = game.slug || game.id || slugify(game.name);
+  const title = game.title || game.name || normalizedId;
   const tags = game.tags || game.genres || [];
   const short = game.description || '';
   const badge = Array.isArray(tags) && tags[0] ? prettyTag(tags[0]) : 'Game';
   const thumb = game.thumbnail || game.image || game.cover || null;
-  const href = `game.html?${encodeURIComponent(gameParam)}=${encodeURIComponent(id)}`;
+  const href = `game.html?slug=${encodeURIComponent(normalizedId)}`;
 
   return `
   <article class="gg-card" tabindex="0" role="article" aria-label="${title} card">
@@ -92,7 +91,7 @@ function filterAndSearch(){
     const inTag = activeTag === 'All' || (g.tags||g.genres||[]).map(toQuery).includes(toQuery(activeTag));
     if (!inTag) return false;
     if (!q) return true;
-    const blob = [g.id, g.title, g.name, g.description, ...(g.tags||g.genres||[])].join(' ').toLowerCase();
+    const blob = [g.id, g.slug, g.title, g.name, g.description, ...(g.tags||g.genres||[])].join(' ').toLowerCase();
     return blob.includes(q);
   });
   render(filtered);
@@ -110,13 +109,15 @@ function buildFilterChips(tags){
 }
 
 async function loadGamesJson(){
-  const url = './games.json?v=20250911162413';
+  const url = `./games.json?v=${VERSION}`;
   const res = await fetch(url, { cache: 'no-cache' });
   if (!res.ok) throw new Error('Failed to load games.json');
   const data = await res.json();
   const list = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
-  allGames = list.map(g => ({ 
+  allGames = list.map(g => ({
       id: g.id || g.slug || g.name,
+      slug: g.slug || null,
+      name: g.name || null,
       title: g.title || g.name,
       description: g.description || g.desc || '', // fallback for legacy desc
       tags: g.tags || g.genres || [],
@@ -138,7 +139,6 @@ function showError(msg){
 
 async function boot(){
   try {
-    await detectParamName(); // detect URL param expected by game.html
     await loadGamesJson();
     STATUS.focus?.();
   } catch (err) {
