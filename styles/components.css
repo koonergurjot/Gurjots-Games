@@ -1,0 +1,10 @@
+/* Component styles */
+
+/* Logo */
+header .logo svg {
+  height: 1.5rem;
+  width: auto;
+  display: block;
+  filter: drop-shadow(0 0 2px var(--accent)) drop-shadow(0 0 4px var(--accent))
+          drop-shadow(0 0 2px var(--accent2)) drop-shadow(0 0 4px var(--accent2));
+}

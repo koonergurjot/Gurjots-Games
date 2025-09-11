@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 32" role="img" aria-label="Gurjot’s Game logo">
+  <title>Gurjot’s Game</title>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="4">
+    <path stroke="var(--accent)" d="M16 4h12a12 12 0 1 1 0 24H16V16h8" />
+    <path stroke="var(--accent2)" d="M64 4h12a12 12 0 1 1 0 24H64V16h8" />
+  </g>
+</svg>
