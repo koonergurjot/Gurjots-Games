@@ -1,5 +1,5 @@
 import { createBoard } from "./board.js";
-import * as rules from "./engine/rules.js";
+import * as rules from "../chess/engine/rules.js";
 import { mountInput } from "./input.js";
 import { createPieces, placeInitialPosition, movePieceByUci } from "./pieces.js";
 import { mountHUD } from "./ui/hud.js";
@@ -35,7 +35,7 @@ let currentCamera;
 let searchToken = 0;
 let evalBar;
 let lastMoveHelper;
-const origRulesMove = rules.move;
+let autoRotate = localStorage.getItem('chess3d.rotate') === '1';
 
 function handlePostMove(){
   try{ moveList?.refresh(); moveList?.setIndex(rules.historySAN().length); }catch(_){ }
@@ -48,17 +48,9 @@ function handlePostMove(){
   }catch(_){ }
   if (rules.inCheckmate()) endGame(`${rules.turn()==='w'?'Black':'White'} wins by checkmate`);
   else if (rules.inStalemate()) endGame('Draw by stalemate');
+  if (autoRotate) flipCamera();
 }
 
-function applyMove(opts){
-  if (gameOver) return { ok: false };
-  if (rebuilding) return origRulesMove(opts);
-  const res = origRulesMove(opts);
-  if (res?.ok){
-    handlePostMove();
-  }
-  return res;
-}
 
 function toggleCoords(show) {
   localStorage.setItem('chess3d.coords', show ? '1' : '0');
@@ -179,6 +171,7 @@ mountHUD({
   },
   onFlip: flipCamera,
   onCoords: toggleCoords,
+  onRotate: (val) => { autoRotate = val; },
 });
 
 difficultyEl?.addEventListener('change', () => {
@@ -341,7 +334,6 @@ async function boot(){
 boot();
 
 let gameOver = false;
-let rebuilding = false;
 let clockPaused = false;
 let clocks;
 let moveList;
@@ -365,13 +357,12 @@ maybeAIMove = async function(){
 // Do not mutate ESM exports; call handlePostMove() at call sites instead
 
 async function jumpToPly(ply){
-  rebuilding = true;
   clockPaused = true;
   clocks?.pause();
   cancel();
   searchToken++;
   thinkingEl.hidden = true;
-  const mod = await import('./engine/chess.min.js');
+  const mod = await import('../chess/engine/chess.min.js');
   const ChessCtor = mod.default || mod.Chess || mod;
   const temp = new ChessCtor();
   const moves = rules.historySAN();
@@ -380,13 +371,12 @@ async function jumpToPly(ply){
   for (let i = 0; i < ply; i++) {
     const m = temp.move(moves[i]);
     if (!m) break;
-    origRulesMove({ from: m.from, to: m.to, promotion: m.promotion });
+    rules.move({ from: m.from, to: m.to, promotion: m.promotion });
     await movePieceByUci(m.from + m.to + (m.promotion || ''));
   }
   updateStatus();
   moveList?.setIndex(ply);
   moveList?.refresh();
-  rebuilding = false;
   gameOver = false;
   stage.style.pointerEvents = 'auto';
 }

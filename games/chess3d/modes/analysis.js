@@ -1,6 +1,6 @@
 import { evaluate, cancel } from "../ai/ai.js";
-import * as rules from "../engine/rules.js";
-import Chess from "../engine/chess.min.js";
+import * as rules from "../../chess/engine/rules.js";
+import Chess from "../../chess/engine/chess.min.js";
 
 export function mountAnalysis(container,{clocks}={}){
   const btn=document.createElement('button');
