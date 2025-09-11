@@ -21,6 +21,15 @@
     <label>Snake <select id="snakeSkin"></select></label>
     <label>Fruit <select id="fruitSkin"></select></label>
     <label>Board <select id="boardSkin"></select></label>
+    <label>Size <select id="sizeSel">
+      <option value="16">16×16</option>
+      <option value="24">24×24</option>
+      <option value="32">32×32</option>
+    </select></label>
+    <label>Boundary <select id="wrapSel">
+      <option value="1">Wrap</option>
+      <option value="0">No Wrap</option>
+    </select></label>
   </div>
   <div class="wrap"><canvas id="c" width="640" height="640" data-basew="640" data-baseh="640"></canvas></div>
   <script src="../../js/injectBackButton.js"></script>
@@ -36,6 +45,17 @@
     toggle.checked = daily;
     window.DAILY_MODE = daily;
     window.DAILY_SEED = seed;
+
+    const sizeSel=document.getElementById('sizeSel');
+    const wrapSel=document.getElementById('wrapSel');
+    const size=parseInt(params.get('size')||'32');
+    const wrap=params.get('wrap')!=='0';
+    sizeSel.value=String(size);
+    wrapSel.value=wrap?'1':'0';
+    window.BOARD_SIZE=size;
+    window.WRAP_MODE=wrap;
+    sizeSel.onchange=()=>{params.set('size',sizeSel.value);location.search=params.toString();};
+    wrapSel.onchange=()=>{params.set('wrap',wrapSel.value);location.search=params.toString();};
     function renderScores(){
       const box=document.getElementById('dailyScores');
       if(!daily){box.style.display='none';return;}
@@ -47,6 +67,6 @@
     toggle.onchange=()=>{params.set('daily',toggle.checked?'1':'0');location.search=params.toString();};
   </script>
   <script src="./skins.js"></script>
-  <script src="./snake.js"></script>
+  <script type="module" src="./snake.js"></script>
 </body>
 </html>
