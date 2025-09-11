@@ -3,43 +3,94 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Play classic web games directly in your browser." />
-  <meta property="og:title" content="Gurjot's Games" />
-  <meta property="og:description" content="Play classic web games directly in your browser." />
-  <meta property="og:image" content="assets/favicon.png" />
-  <title>Gurjot's Games</title>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="styles.themes.css" />
-  <link rel="stylesheet" href="styles/home.css" />
+  <title>Gurjot’s Games — Play Instantly</title>
+  <meta name="description" content="Gurjot’s Games: a fast, fun, single‑player arcade hub. Click a game to play instantly." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+  <!-- Keep your site-wide CSS if present; landing.css is scoped and safe -->
+  <link rel="stylesheet" href="css/landing.css">
 </head>
 <body>
-  <header class="site-header">
-    <a href="#/" class="logo">Gurjot's Games</a>
-    <nav>
-      <a href="#/">Home</a>
-      <a href="#/games">All Games</a>
-      <a href="#/about">About</a>
-    </nav>
-    <button id="themeToggle" class="btn" aria-label="Toggle theme">🌓</button>
+  <header class="gg-topbar">
+    <div class="gg-container gg-topbar-inner">
+      <a class="gg-brand" href="./" aria-label="Gurjot’s Games home">
+        <!-- Inline SVG logo so we don't require binary assets -->
+        <svg class="gg-logo" viewBox="0 0 512 512" role="img" aria-label="Gurjot’s Games">
+          <defs>
+            <linearGradient id="ggrad" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#6EE7F9"/>
+              <stop offset="1" stop-color="#A78BFA"/>
+            </linearGradient>
+          </defs>
+          <rect x="16" y="16" width="480" height="480" rx="88" fill="url(#ggrad)" />
+          <g fill="white">
+            <path d="M170 200h60v-40h-60a60 60 0 100 120h60v-40h-60a20 20 0 110-40z"/>
+            <circle cx="340" cy="220" r="20"/>
+            <rect x="300" y="260" width="120" height="40" rx="12"/>
+          </g>
+        </svg>
+        <span class="gg-title">Gurjot’s Games</span>
+      </a>
+
+      <nav class="gg-actions">
+        <a class="gg-link" href="achievements.html">Achievements</a>
+        <a class="gg-link" href="stats.html">Stats</a>
+        <a class="gg-link" href="quests.html">Quests</a>
+        <a class="gg-link" href="cabinet.html">Cabinet</a>
+      </nav>
+    </div>
   </header>
+
   <main>
-    <section class="hero">
-      <h1>Classic Web Games</h1>
-      <p>Jump into retro fun directly in your browser.</p>
-      <a href="#games" class="btn cta">Browse Games</a>
+    <section class="gg-hero">
+      <div class="gg-container gg-hero-inner">
+        <div class="gg-hero-copy">
+          <h1>Play instantly. No logins. Just <em>fun</em>.</h1>
+          <p>Pick a game and we’ll launch it on a dedicated page with all UI loaded and ready.</p>
+          <form class="gg-search" role="search" aria-label="Search games" onsubmit="return false;">
+            <input id="gg-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
+            <button id="gg-clear" type="button" title="Clear search">✕</button>
+          </form>
+          <div id="gg-filters" class="gg-filters" aria-label="Filter by category" role="tablist">
+            <!-- dynamically populated from tags in games.json -->
+          </div>
+        </div>
+        <div class="gg-hero-art" aria-hidden="true">
+          <div class="gg-orb orb-1"></div>
+          <div class="gg-orb orb-2"></div>
+          <div class="gg-orb orb-3"></div>
+          <div class="gg-grid"></div>
+        </div>
+      </div>
     </section>
-    <section id="games" aria-label="Games">
-      <div id="gamesGrid" class="grid"></div>
+
+    <section class="gg-grid-wrap">
+      <div class="gg-container">
+        <div id="gg-status" class="gg-status" role="status" aria-live="polite">Loading games…</div>
+        <div id="gg-grid" class="gg-grid" aria-label="Game list"></div>
+      </div>
     </section>
-    <section id="playArea" hidden></section>
   </main>
-  <footer class="site-footer">
-    <nav>
-      <a href="#/privacy">Privacy</a>
-      <a href="#/terms">Terms</a>
-    </nav>
+
+  <footer class="gg-footer">
+    <div class="gg-container gg-footer-inner">
+      <p>© <span id="gg-year"></span> Gurjot’s Games. Built for speed & fun.</p>
+      <div class="gg-footer-links">
+        <a href="sitemap.xml">Sitemap</a>
+        <a href="404.html">404</a>
+        <a href="robots.txt">Robots</a>
+      </div>
+    </div>
   </footer>
-  <script type="module" src="scripts/home.js"></script>
+
+  <script>
+    // Keep year fresh
+    document.addEventListener('DOMContentLoaded', () => {
+      const y = document.getElementById('gg-year');
+      if (y) y.textContent = new Date().getFullYear();
+    });
+  </script>
+  <script src="js/landing.js" type="module"></script>
 </body>
 </html>
-
