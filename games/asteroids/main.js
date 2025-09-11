@@ -2,6 +2,7 @@ import { keyState } from '../../shared/controls.js';
 import { attachPauseOverlay, saveBestScore, shareScore } from '../../shared/ui.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
+import * as net from './net.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -62,6 +63,17 @@ const bullets = [];
 const rocks = [];
 const particles = [];
 const saucers = [];
+let saucerSpawned = false;
+let bossSpawned = false;
+const others = {}; // remote players
+
+net.onShip((id, shipData)=>{
+  if(!others[id]) others[id] = { ship:{}, bullets:[] };
+  Object.assign(others[id].ship, shipData);
+});
+net.onShot((id, b)=>{ bullets.push({ ...b, remote:true }); });
+net.onRocks(arr=>{ rocks.length=0; for(const r of arr) rocks.push(r); });
+net.onPlayers(()=> updateHUD());
 
 let fireMode = 'single'; // 'single' | 'burst' | 'rapid'
 const HUD = {
@@ -71,6 +83,24 @@ const HUD = {
   fireSel: document.getElementById('fireSel')
 };
 const shareBtn = document.getElementById('shareBtn');
+const coopBtn = document.getElementById('coopBtn');
+let coopActive = false;
+if (coopBtn){
+  coopBtn.onclick = ()=>{
+    if (coopActive){
+      net.disconnect();
+      coopActive = false;
+      coopBtn.textContent = 'Co-op Campaign';
+      for (const id in others) delete others[id];
+      updateHUD();
+    } else {
+      net.connect();
+      coopActive = true;
+      coopBtn.textContent = 'Leave Co-op';
+      updateHUD();
+    }
+  };
+}
 
 document.getElementById('pauseBtn').onclick = ()=> pause();
 document.getElementById('restartBtn').onclick = ()=> restart();
@@ -78,21 +108,24 @@ HUD.fireSel.onchange = ()=> fireMode = HUD.fireSel.value;
 
 const overlay = attachPauseOverlay({ onResume: ()=> running = true, onRestart: ()=> restart() });
 
-// Saucer enemy spawn timer
-let saucerTimer = 8;
-function spawnSaucer(){
+function spawnSaucer(boss=false){
   const y = 60 + Math.random()*(innerHeight-120);
   const dir = Math.random()<0.5? 1 : -1;
-  saucers.push({ x: dir<0? innerWidth+40 : -40, y, vx: dir*2.2, vy: 0, r: 12, fire: 0, hp: 2 });
+  const speed = boss? 3 : 2.2;
+  const r = boss? 20 : 12;
+  const hp = boss? 8 : 2;
+  saucers.push({ x: dir<0? innerWidth+40 : -40, y, vx: dir*speed, vy: 0, r, fire: 0, hp, boss });
 }
 
 function spawnWave(n){
+  saucerSpawned = false; bossSpawned = false;
   for (let i=0;i<n;i++){
     let x = Math.random()*innerWidth, y = Math.random()*innerHeight;
     // avoid spawning too close to ship
     if (Math.hypot(x-ship.x, y-ship.y) < 120) { i--; continue; }
     rocks.push(makeRock(x,y, 3)); // size 3 = big
   }
+  net.sendRocks(rocks);
 }
 
 function makeRock(x, y, size=3){
@@ -133,8 +166,10 @@ function shoot(spread=0, speedMul=1){
   const angle = ship.angle + (spread||0);
   const vx = Math.cos(angle)*speed + ship.vx*0.2;
   const vy = Math.sin(angle)*speed + ship.vy*0.2;
-  bullets.push({ x: ship.x + Math.cos(angle)*ship.radius, y: ship.y + Math.sin(angle)*ship.radius, vx, vy, life: 60, enemy:false });
+  const bullet = { x: ship.x + Math.cos(angle)*ship.radius, y: ship.y + Math.sin(angle)*ship.radius, vx, vy, life: 60, enemy:false };
+  bullets.push(bullet);
   beep(660,0.03);
+  net.sendShot(bullet);
 }
 
 function explode(x,y, n=20, colors=['#e11d48'], shakeAmt=0){
@@ -154,7 +189,8 @@ function pause(){ running=false; overlay.show(); }
 function restart(){
   running=true; score=0; lives=3; wave=1;
   ship.x=innerWidth/2; ship.y=innerHeight/2; ship.vx=ship.vy=0; ship.angle=-Math.PI/2; ship.inv=60;
-  bullets.length=0; rocks.length=0; particles.length=0; saucers.length=0; saucerTimer=6;
+  bullets.length=0; rocks.length=0; particles.length=0; saucers.length=0;
+  saucerSpawned = false; bossSpawned = false;
   spawnWave(4);
   updateHUD();
   emitEvent({ type: 'play', slug: 'asteroids' });
@@ -162,10 +198,13 @@ function restart(){
 }
 
 function updateHUD(){
-  HUD.score.textContent = score;
-  HUD.lives.textContent = lives;
+  const teamScore = score + Object.values(net.players).reduce((a,p)=>a+(p.score||0),0);
+  const teamLives = lives + Object.values(net.players).reduce((a,p)=>a+(p.lives||0),0);
+  HUD.score.textContent = teamScore;
+  HUD.lives.textContent = teamLives;
   HUD.wave.textContent = wave;
-  emitEvent({ type: 'score', slug: 'asteroids', value: score });
+  emitEvent({ type: 'score', slug: 'asteroids', value: teamScore });
+  net.sendStats(score, lives);
 }
 
 addEventListener('keydown', (e)=>{
@@ -210,6 +249,7 @@ function update(dt){
   ship.vx *= ship.drag; ship.vy *= ship.drag;
   wrap(ship);
   if (ship.inv>0) ship.inv--;
+  net.sendShip({ x: ship.x, y: ship.y, angle: ship.angle, inv: ship.inv });
 
   // Bullets
   for (const b of bullets){ b.x+=b.vx; b.y+=b.vy; b.life--; wrap(b); }
@@ -218,9 +258,9 @@ function update(dt){
   // Rocks
   for (const r of rocks){ r.x+=r.vx; r.y+=r.vy; r.angle+=r.rot; wrap(r); }
 
-  // Saucer spawn + behavior
-  saucerTimer -= dt*0.016;
-  if (saucers.length===0 && saucerTimer<=0){ spawnSaucer(); saucerTimer = 10 + Math.random()*8; }
+  // Saucer and boss spawn (once per wave)
+  if (!saucerSpawned){ spawnSaucer(); saucerSpawned = true; }
+  if (!bossSpawned && wave % 5 === 0){ spawnSaucer(true); bossSpawned = true; }
   for (const s of saucers){
     s.x += s.vx; s.y += s.vy; wrap(s);
     s.fire -= dt*0.016;
@@ -238,7 +278,7 @@ function update(dt){
     const r = rocks[i];
     for (let j=bullets.length-1;j>=0;j--){
       const b = bullets[j];
-      if (b.enemy) continue;
+      if (b.enemy || b.remote) continue;
       if (Math.hypot(b.x-r.x, b.y-r.y) < r.radius){
         bullets.splice(j,1);
         rocks.splice(i,1);
@@ -254,6 +294,7 @@ function update(dt){
           }
         }
         updateHUD();
+        net.sendRocks(rocks);
         break;
       }
     }
@@ -263,7 +304,7 @@ function update(dt){
   for (let i=saucers.length-1;i>=0;i--){
     const s = saucers[i];
     for (let j=bullets.length-1;j>=0;j--){
-      const b = bullets[j]; if (b.enemy) continue;
+      const b = bullets[j]; if (b.enemy || b.remote) continue;
       if (Math.hypot(b.x-s.x, b.y-s.y) < s.r){ bullets.splice(j,1); s.hp--; if (s.hp<=0){ saucers.splice(i,1); explode(s.x,s.y,28,['#f59e0b','#fde68a'],5); score += 150; updateHUD(); } break; }
     }
   }
@@ -276,6 +317,7 @@ function update(dt){
       explode(ship.x, ship.y, 36, ['#e11d48','#f43f5e','#be123c'],8);
       lives--; ship.inv=90; ship.vx=ship.vy=0; // respawn invincibility
       updateHUD();
+      net.sendRocks(rocks);
       if (lives<=0){
         running=false;
         saveBestScore('asteroids', score);
@@ -304,8 +346,10 @@ function update(dt){
 
   // Wave clear
   if (rocks.length===0){
-    wave++; updateHUD();
-    spawnWave(3 + wave); // increasing difficulty
+    if (!coopActive || Object.keys(net.players).length===0){
+      wave++; updateHUD();
+      spawnWave(3 + wave); // increasing difficulty
+    }
   }
 }
 
@@ -354,6 +398,10 @@ function render(){
 
   // ship
   drawShip(ship.x, ship.y, ship.angle, ship.inv>0);
+  for (const id in others){
+    const os = others[id].ship;
+    if (os) drawShip(os.x, os.y, os.angle||0, os.inv>0);
+  }
 
   // thrust glow
   if (keys.has('arrowup')){
