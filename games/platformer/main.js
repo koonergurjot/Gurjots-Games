@@ -2,6 +2,7 @@ import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.
 import { emitEvent } from '../../shared/achievements.js';
 import * as net from './net.js';
 import games from '../../games.json' assert { type: 'json' };
+import { TILE, levels, isSolid, isSlope, maskFor } from './tiles.js';
 
 const help = games.find(g => g.id === 'platformer')?.help || {};
 injectHelpButton({ gameId: 'platformer', ...help });
@@ -11,22 +12,9 @@ emitEvent({ type: 'play', slug: 'platformer' });
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
 const W = cvs.width, H = cvs.height;
-const TILE = 50;
 
-// level definition: 40x9 tiles
-const levelData = [
-  "0000000000000000000000000000000000000000",
-  "0000000000000000000000000000000000000000",
-  "0000000000000000000000000000000000000000",
-  "0000000000000000011100000000000000000000",
-  "0000000000200000000000000000000020000000",
-  "0011111000000000111110000000001111100000",
-  "0000000000000000000000000000000000000000",
-  "0000000000000000000000000000000000030000",
-  "1111111111111111111111111111111111111111",
-];
-
-let map = levelData.map(r => r.split(''));
+let map = [];
+let currentLevel = 0;
 
 const state = {
   running: true,
@@ -89,23 +77,49 @@ net.on('collect', d => {
 net.on('enemy', e => { enemies.push(e); });
 net.on('assist', () => { jump(); });
 
+async function loadLevel(idx){
+  const res = await fetch(new URL(levels[idx], import.meta.url));
+  const data = await res.json();
+  map = data.tiles.map(r => r.split(''));
+}
+
 function jump(){
   player.vy = jumpV;
   player.onGround = false;
 }
 
-function restart(){
-  state.running = true;
+async function restart(){
+  state.running = false;
   document.getElementById('overlay').classList.remove('show');
   state.score = 0;
-  map = levelData.map(r => r.split(''));
+  await loadLevel(currentLevel);
   player.x = 100; player.y = 0; player.vx = 0; player.vy = 0; player.onGround = false; player.dir = 1;
   camX = 0;
+  enemyTimer = 3;
+  state.running = true;
   emitEvent({ type: 'play', slug: 'platformer' });
 }
 
+async function nextLevel(){
+  currentLevel++;
+  if (currentLevel >= levels.length){
+    gameOver(true);
+    return;
+  }
+  state.running = false;
+  await loadLevel(currentLevel);
+  player.x = 100; player.y = 0; player.vx = 0; player.vy = 0; player.onGround = false; player.dir = 1;
+  camX = 0;
+  enemyTimer = 3;
+  state.running = true;
+}
+
 let last = 0;
-requestAnimationFrame(loop);
+start();
+async function start(){
+  await restart();
+  requestAnimationFrame(loop);
+}
 function loop(ts){
   const dt = Math.min((ts - last)/1000, 0.05);
   last = ts;
@@ -126,13 +140,13 @@ function update(dt){
 
   // horizontal movement
   player.x += player.vx * dt;
-  resolveCollisions('x');
+  resolveCollisions(player, 'x');
 
   // vertical movement
   const wasOnGround = player.onGround;
   player.vy += gravity * dt;
   player.y += player.vy * dt;
-  resolveCollisions('y');
+  resolveCollisions(player, 'y');
 
   // if we just left ground, start coyote time window
   if (wasOnGround && !player.onGround) {
@@ -168,51 +182,72 @@ function update(dt){
   // camera follows players
   const centerX = net.isConnected() ? (player.x + buddy.x) / 2 : player.x;
   camX = centerX + player.w/2 - W/2;
-  const worldW = levelData[0].length * TILE;
+  const worldW = map[0].length * TILE;
   camX = Math.max(0, Math.min(camX, worldW - W));
 }
 
-function resolveCollisions(axis){
-  const left = Math.floor(player.x / TILE);
-  const right = Math.floor((player.x + player.w - 1) / TILE);
-  const top = Math.floor(player.y / TILE);
-  const bottom = Math.floor((player.y + player.h - 1) / TILE);
+function resolveCollisions(ent, axis){
+  const left = Math.floor(ent.x / TILE);
+  const right = Math.floor((ent.x + ent.w - 1) / TILE);
+  const top = Math.floor(ent.y / TILE);
+  const bottom = Math.floor((ent.y + ent.h - 1) / TILE);
 
   if (axis === 'x'){
-    if (player.vx > 0){
+    if (ent.vx > 0){
       for (let y = top; y <= bottom; y++){
-        if (getTile(right, y) === '1'){
-          player.x = right * TILE - player.w;
-          player.vx = 0; break;
+        const t = getTile(right, y);
+        if (isSolid(t)){
+          ent.x = right * TILE - ent.w;
+          ent.vx = 0;
+          break;
         }
       }
-    } else if (player.vx < 0){
+    } else if (ent.vx < 0){
       for (let y = top; y <= bottom; y++){
-        if (getTile(left, y) === '1'){
-          player.x = (left + 1) * TILE;
-          player.vx = 0; break;
+        const t = getTile(left, y);
+        if (isSolid(t)){
+          ent.x = (left + 1) * TILE;
+          ent.vx = 0;
+          break;
         }
       }
     }
-  } else { // y axis
-    if (player.vy > 0){
+  } else {
+    if (ent.vy > 0){
+      let landed = false;
       for (let x = left; x <= right; x++){
-        if (getTile(x, bottom) === '1'){
-          player.y = bottom * TILE - player.h;
-          player.vy = 0;
-          if (!player.onGround) {
-            // just landed; allow immediate jump consumption but reset timers
-            player.onGround = true;
+        const t = getTile(x, bottom);
+        if (!isSolid(t)) continue;
+        if (isSlope(t)){
+          const mask = maskFor(t);
+          const localX = Math.floor((ent.x + ent.w/2) - x * TILE);
+          const h = mask[Math.max(0, Math.min(TILE-1, localX))];
+          const ground = bottom * TILE + h;
+          if (ent.y + ent.h > ground){
+            ent.y = ground - ent.h;
+            ent.vy = 0;
+            if ('onGround' in ent) ent.onGround = true;
+            landed = true;
           }
-          return;
+        } else {
+          if (ent.y + ent.h > bottom * TILE){
+            ent.y = bottom * TILE - ent.h;
+            ent.vy = 0;
+            if ('onGround' in ent) ent.onGround = true;
+            landed = true;
+          }
         }
       }
-      player.onGround = false;
-    } else if (player.vy < 0){
+      if (!landed && 'onGround' in ent) ent.onGround = false;
+    } else if (ent.vy < 0){
       for (let x = left; x <= right; x++){
-        if (getTile(x, top) === '1'){
-          player.y = (top + 1) * TILE;
-          player.vy = 0; break;
+        const t = getTile(x, top);
+        if (isSolid(t) && !isSlope(t)){
+          if (ent.y < (top + 1) * TILE){
+            ent.y = (top + 1) * TILE;
+            ent.vy = 0;
+            break;
+          }
         }
       }
     }
@@ -234,7 +269,8 @@ function checkCollectibles(){
         spawnParticles(x * TILE + TILE/2, y * TILE + TILE/2, 8);
         net.sendCollect({ x, y, score: state.score });
       } else if (t === '3'){
-        gameOver(true);
+        setTile(x, y, '0');
+        nextLevel();
       }
     }
   }
@@ -275,7 +311,7 @@ function spawnParticles(x, y, count){
 }
 
 function spawnEnemy(){
-  const e = { x: camX + W + 50, y: 350, w: 40, h: 40, vx: -80 };
+  const e = { x: camX + W + 50, y: 350, w: 40, h: 40, vx: -80, vy: 0, onGround: false };
   enemies.push(e);
   return e;
 }
@@ -283,7 +319,11 @@ function spawnEnemy(){
 function updateEnemies(dt){
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
+    e.vy += gravity * dt;
     e.x += e.vx * dt;
+    resolveCollisions(e, 'x');
+    e.y += e.vy * dt;
+    resolveCollisions(e, 'y');
     if (e.x < -50) { enemies.splice(i,1); continue; }
     if (collides(player, e) || (net.isConnected() && collides(buddy, e))) {
       gameOver(false);
@@ -342,6 +382,20 @@ function draw(){
       if (t === '1'){
         ctx.fillStyle = '#8cc8ff';
         ctx.fillRect(x * TILE - camX, y * TILE, TILE, TILE);
+      } else if (t === '4'){
+        ctx.fillStyle = '#8cc8ff';
+        ctx.beginPath();
+        ctx.moveTo(x * TILE - camX, (y + 1) * TILE);
+        ctx.lineTo((x + 1) * TILE - camX, y * TILE);
+        ctx.lineTo((x + 1) * TILE - camX, (y + 1) * TILE);
+        ctx.fill();
+      } else if (t === '5'){
+        ctx.fillStyle = '#8cc8ff';
+        ctx.beginPath();
+        ctx.moveTo(x * TILE - camX, y * TILE);
+        ctx.lineTo(x * TILE - camX, (y + 1) * TILE);
+        ctx.lineTo((x + 1) * TILE - camX, (y + 1) * TILE);
+        ctx.fill();
       } else if (t === '2'){
         const cx = x * TILE + TILE/2 - camX;
         const cy = y * TILE + TILE/2;
