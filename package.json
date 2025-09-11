@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "vitest run",
+    "test": "npm run health && vitest run",
     "sitemap": "node tools/generate-sitemap.mjs",
     "sw-manifest": "node tools/generate-sw-manifest.mjs",
     "health": "node tools/healthcheck.mjs"

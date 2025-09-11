@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Game Healthcheck</title>
+  <style>
+    body { font-family: sans-serif; }
+    li.ok { color: green; }
+    li.fail { color: red; }
+  </style>
+</head>
+<body>
+  <h1>Game Health</h1>
+  <ul id="results"></ul>
+  <script type="module">
+    async function init(){
+      const res = await fetch('../games.json');
+      const games = await res.json();
+      const results = document.getElementById('results');
+      const frames = new Map();
+      for (const g of games){
+        const li = document.createElement('li');
+        li.textContent = `${g.id}: loading`;
+        results.appendChild(li);
+        const iframe = document.createElement('iframe');
+        iframe.src = '../' + g.path;
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        frames.set(iframe.contentWindow, { id: g.id, li });
+      }
+      window.addEventListener('message', e => {
+        if (e.data === 'loaded' && frames.has(e.source)){
+          const { id, li } = frames.get(e.source);
+          li.textContent = `${id}: ok`;
+          li.className = 'ok';
+          frames.delete(e.source);
+        }
+      });
+      setTimeout(() => {
+        for (const { id, li } of frames.values()){
+          li.textContent = `${id}: fail`;
+          li.className = 'fail';
+        }
+        frames.clear();
+      }, 10000);
+    }
+    init();
+  </script>
+</body>
+</html>

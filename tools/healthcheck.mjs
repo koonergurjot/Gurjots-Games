@@ -51,16 +51,25 @@ async function checkGame(root, game){
   return result;
 }
 
-async function main(){
-  const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+
+export async function runHealthcheck(){
   const data = JSON.parse(await readFile(path.join(root, 'games.json'), 'utf8'));
   const results = [];
   for (const game of data){
     results.push(await checkGame(root, game));
   }
-  await writeFile(path.join(root, 'healthcheck.json'), JSON.stringify(results, null, 2));
-  console.table(results.map(r => ({ Game: r.id, Status: r.status, Reason: r.reason })));
+  return results;
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+async function main(){
+  const results = await runHealthcheck();
+  await writeFile(path.join(root, 'healthcheck.json'), JSON.stringify(results, null, 2));
+  console.table(results.map(r => ({ Game: r.id, Status: r.status, Reason: r.reason })));
+  return results.every(r => r.status === 'ok');
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().then(ok => process.exit(ok ? 0 : 1)).catch(err => { console.error(err); process.exit(1); });
+}
 
