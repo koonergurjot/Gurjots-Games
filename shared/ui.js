@@ -132,6 +132,69 @@ export function attachPauseOverlay({ onResume, onRestart }) {
   return { show, hide };
 }
 
+export function attachHelpOverlay({ gameId, steps }) {
+  const overlay = document.createElement('div');
+  overlay.className = 'help-overlay hidden';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML = `
+    <div class="panel">
+      <div class="step-content"></div>
+      <div class="footer">
+        <span class="step-indicator"></span>
+        <div class="actions">
+          <button class="btn next-btn">Next</button>
+          <button class="btn close-btn">Close</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  let index = 0;
+
+  const render = () => {
+    const step = steps[index] || {};
+    overlay.querySelector('.step-content').innerHTML = `
+      <section><h4>Objective</h4><p>${step.objective || ''}</p></section>
+      <section><h4>Controls</h4><p>${step.controls || ''}</p></section>
+      <section><h4>Tips</h4><p>${step.tips || ''}</p></section>`;
+    overlay.querySelector('.step-indicator').textContent = `${index + 1}/${steps.length}`;
+  };
+
+  const hide = () => overlay.classList.add('hidden');
+  const show = () => {
+    index = 0;
+    render();
+    overlay.classList.remove('hidden');
+    try {
+      const raw = localStorage.getItem('seenHints') || '{}';
+      const obj = JSON.parse(raw);
+      obj[gameId] = true;
+      localStorage.setItem('seenHints', JSON.stringify(obj));
+    } catch {}
+  };
+
+  overlay.querySelector('.next-btn').onclick = () => {
+    if (index < steps.length - 1) {
+      index++;
+      render();
+    } else {
+      hide();
+    }
+  };
+  overlay.querySelector('.close-btn').onclick = hide;
+
+  let seen = false;
+  try {
+    const raw = localStorage.getItem('seenHints');
+    const obj = raw ? JSON.parse(raw) : {};
+    seen = !!obj[gameId];
+  } catch {}
+  if (!seen) show();
+
+  return { show, hide };
+}
+
 export function toggleFullscreen(el = document.documentElement) {
   if (!document.fullscreenElement) return el.requestFullscreen?.();
   return document.exitFullscreen?.();
