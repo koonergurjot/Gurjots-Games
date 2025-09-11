@@ -3,37 +3,37 @@
     "title": "Pong Classic",
     "slug": "pong",
     "entry": "/games/pong/main.js",
-    "module": false
+    "module": true
   },
   {
     "title": "Snake",
     "slug": "snake",
     "entry": "/games/snake/snake.js",
-    "module": false
+    "module": true
   },
   {
     "title": "Tetris",
     "slug": "tetris",
     "entry": "/games/tetris/tetris.js",
-    "module": false
+    "module": true
   },
   {
     "title": "Breakout",
     "slug": "breakout",
     "entry": "/games/breakout/breakout.js",
-    "module": false
+    "module": true
   },
   {
     "title": "Chess (2D)",
     "slug": "chess",
     "entry": "/games/chess/chess.js",
-    "module": false
+    "module": true
   },
   {
     "title": "Chess 3D (Local)",
     "slug": "chess3d",
     "entry": "/games/chess3d/main.js",
-    "module": false
+    "module": true
   },
   {
     "title": "2048",
@@ -45,36 +45,36 @@
     "title": "Asteroids",
     "slug": "asteroids",
     "entry": "/games/asteroids/main.js",
-    "module": false
+    "module": true
   },
   {
     "title": "3D Box Playground",
     "slug": "box3d",
     "entry": "/games/box3d/main.js",
-    "module": false
+    "module": true
   },
   {
     "title": "Maze 3D",
     "slug": "maze3d",
     "entry": "/games/maze3d/main.js",
-    "module": false
+    "module": true
   },
   {
     "title": "Pixel Platformer",
     "slug": "platformer",
     "entry": "/games/platformer/main.js",
-    "module": false
+    "module": true
   },
   {
     "title": "City Runner",
     "slug": "runner",
     "entry": "/games/runner/main.js",
-    "module": false
+    "module": true
   },
   {
     "title": "Alien Shooter",
     "slug": "shooter",
     "entry": "/games/shooter/main.js",
-    "module": false
+    "module": true
   }
 ]
