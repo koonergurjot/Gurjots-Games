@@ -19,3 +19,7 @@ router.register('/game/:id', () => import('./pages/game.js'), async ({ id }) => 
 });
 
 router.resolve(location.pathname);
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.body.classList.add('loaded');
+});
