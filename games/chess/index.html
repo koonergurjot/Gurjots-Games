@@ -1,4 +1,11 @@
-<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Chess</title><link rel="stylesheet" href="../../css/styles.css?v=5.3"></head>
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Chess</title>
+<link rel="stylesheet" href="../../css/styles.css?v=5.3">
+</head>
 <body style="margin:0;background:#0b1220;color:#e6e7ea;">
 <div style="display:flex;gap:16px;justify-content:center;align-items:flex-start;padding:16px 16px 80px;">
   <canvas id="board" width="480" height="480" style="border:1px solid #243047;border-radius:12px;background:#0f172a;"></canvas>
@@ -9,13 +16,41 @@
     <br/>
     <label>Puzzles: <select id="puzzle-select"><option value="-1">Free Play</option></select></label>
     <div id="status"></div>
+    <div id="lobby" style="margin-top:16px;">
+      <button id="find-match">Find Match</button>
+      <div id="lobby-status"></div>
+      <ol id="rankings"></ol>
+    </div>
   </div>
 </div>
 <script src="../../js/hud.js?v=5.3"></script>
 <script src="ai.js?v=5.3"></script>
 <script src="puzzles.js?v=5.3"></script>
+<script src="ratings.js?v=5.3"></script>
+<script src="net.js?v=5.3"></script>
 <script src="chess.js?v=5.3"></script>
+<script>
+(function(){
+  const rating = Ratings.getRating();
+  const btn = document.getElementById('find-match');
+  const status = document.getElementById('lobby-status');
+  const rankings = document.getElementById('rankings');
+  btn.addEventListener('click', () => {
+    ChessNet.onStatus(m => status.textContent = m);
+    ChessNet.onPlayers(list => {
+      rankings.innerHTML = '';
+      list.forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = `${p.name || 'Player'}: ${p.rating}`;
+        rankings.appendChild(li);
+      });
+    });
+    ChessNet.connect('wss://example.com/chess', rating);
+  });
+})();
+</script>
 <script src="../../js/input.js?v=5.3"></script>
 <script src="../../js/remapUI.js?v=5.3"></script>
 <script src="../../js/perfHud.js?v=5.3"></script>
-</body></html>
+</body>
+</html>
