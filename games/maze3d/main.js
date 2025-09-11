@@ -1,5 +1,6 @@
 import { recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
+import { connect } from './net.js';
 
 recordLastPlayed('maze3d');
 
@@ -45,13 +46,25 @@ const startBtn = document.getElementById('startBtn');
 const restartBtn = document.getElementById('restartBtn');
 const shareBtn = document.getElementById('shareBtn');
 const timeEl = document.getElementById('time');
+const oppTimeEl = document.getElementById('oppTime');
 const bestEl = document.getElementById('best');
 const sizeSelect = document.getElementById('mazeSize');
+const roomInput = document.getElementById('roomInput');
+const connectBtn = document.getElementById('connectBtn');
+const rematchBtn = document.getElementById('rematchBtn');
 
 let running = false;
 let paused = true;
 let startTime = 0;
 let best = Number(localStorage.getItem('besttime:maze3d') || 0);
+let net = null;
+let currentSeed = Math.floor(Math.random()*1e9);
+const myId = Math.random().toString(36).slice(2,8);
+let opponent = { mesh:null };
+let opponentFinish = null;
+let myFinish = null;
+let lastPosSent = 0;
+if (roomInput) roomInput.value = Math.random().toString(36).slice(2,7);
 if (best) bestEl.textContent = best.toFixed(2);
 
 let trail = []; let lastTrailPos = null;
@@ -68,6 +81,8 @@ document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 startBtn.addEventListener('click', () => start());
 restartBtn.addEventListener('click', () => restart());
 sizeSelect.addEventListener('change', () => restart());
+connectBtn?.addEventListener('click', connectMatch);
+rematchBtn?.addEventListener('click', () => { opponentFinish = myFinish = null; restart(); start(); rematchBtn.style.display='none'; });
 
 let wallBoxes = [];
 let exitBox = null;
@@ -84,7 +99,17 @@ function updateMazeParams() {
   cellSize = (BASE_CELL_SIZE * BASE_CELLS) / MAZE_CELLS;
 }
 
-function generateMaze(width, height) {
+function seedRandom(seed) {
+  let s = seed % 2147483647;
+  if (s <= 0) s += 2147483646;
+  return function() {
+    s = s * 16807 % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+function generateMaze(width, height, seed) {
+  const rand = seed !== undefined ? seedRandom(seed) : Math.random;
   const cols = width * 2 + 1;
   const rows = height * 2 + 1;
   const grid = Array.from({ length: rows }, () => Array(cols).fill(1));
@@ -92,7 +117,7 @@ function generateMaze(width, height) {
     grid[y][x] = 0;
     const dirs = [ [2,0], [-2,0], [0,2], [0,-2] ];
     for (let i = dirs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(rand() * (i + 1));
       [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
     }
     for (const [dx, dy] of dirs) {
@@ -114,11 +139,11 @@ function cellToWorld(x, y, cols, rows) {
   return [x * cellSize - offsetX + cellSize / 2, y * cellSize - offsetZ + cellSize / 2];
 }
 
-function buildMaze() {
+function buildMaze(seed) {
   if (floor) scene.remove(floor);
   if (exitMesh) scene.remove(exitMesh);
   wallBoxes = [];
-  const grid = generateMaze(MAZE_CELLS, MAZE_CELLS);
+  const grid = generateMaze(MAZE_CELLS, MAZE_CELLS, seed);
   const rows = grid.length;
   const cols = grid[0].length;
   const wallGeo = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
@@ -159,29 +184,76 @@ function buildMaze() {
   exitBox = new THREE.Box3().setFromCenterAndSize(exitMesh.position, new THREE.Vector3(cellSize, wallHeight, cellSize));
 }
 
-function start() {
+function start(syncTime) {
   if (!running) {
     running = true;
-    startTime = performance.now();
+    startTime = syncTime !== undefined ? syncTime : performance.now();
     emitEvent({ type: 'play', slug: 'maze3d' });
+    if (net && syncTime === undefined) {
+      const startAt = Date.now();
+      net.send('start', { seed: currentSeed, startAt });
+    }
   }
   paused = false;
   overlay.classList.add('hidden');
   controls.lock();
 }
 
-function restart() {
+function restart(seed = Math.floor(Math.random()*1e9)) {
   running = false;
   paused = true;
   startTime = 0;
+  currentSeed = seed;
+  opponentFinish = null;
+  myFinish = null;
   updateMazeParams();
-  buildMaze();
+  buildMaze(seed);
   timeEl.textContent = '0.00';
+  oppTimeEl.textContent = '--';
   message.textContent = 'Click Start to play.';
   startBtn.textContent = 'Start';
   restartBtn.style.display = 'none';
   shareBtn.style.display = 'none';
+  rematchBtn && (rematchBtn.style.display = 'none');
   overlay.classList.remove('hidden');
+}
+
+function connectMatch() {
+  const room = roomInput.value?.trim();
+  if (!room) return;
+  net = connect(room, {
+    start: ({ seed, startAt }) => {
+      currentSeed = seed;
+      restart(seed);
+      const offset = Date.now() - startAt;
+      start(performance.now() - offset);
+    },
+    pos: ({ id, x, z, time }) => {
+      if (id === myId) return;
+      oppTimeEl.textContent = time.toFixed(2);
+      if (!opponent.mesh) {
+        const geo = new THREE.SphereGeometry(0.4, 16, 16);
+        const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        opponent.mesh = new THREE.Mesh(geo, mat);
+        opponent.mesh.castShadow = true;
+        scene.add(opponent.mesh);
+      }
+      opponent.mesh.position.set(x, 1.5, z);
+    },
+    finish: ({ id, time }) => {
+      if (id === myId) return;
+      opponentFinish = time;
+      oppTimeEl.textContent = time.toFixed(2);
+      if (myFinish != null) {
+        message.textContent += myFinish < opponentFinish ? ' You win!' : ' Opponent wins!';
+        rematchBtn.style.display = 'inline-block';
+      } else {
+        message.textContent = `Opponent finished in ${time.toFixed(2)}s`;
+        rematchBtn.style.display = 'inline-block';
+      }
+    }
+  });
+  connectBtn.disabled = true;
 }
 
 function pause() {
@@ -208,6 +280,8 @@ function finish(time) {
   running = false;
   paused = true;
   controls.unlock();
+  myFinish = time;
+  if (net) net.send('finish', { id: myId, time });
   if (!best || time < best) {
     best = time;
     localStorage.setItem('besttime:maze3d', best.toFixed(2));
@@ -221,6 +295,12 @@ function finish(time) {
   overlay.classList.remove('hidden');
   startTime = 0;
   emitEvent({ type: 'game_over', slug: 'maze3d', value: time });
+  if (opponentFinish != null) {
+    message.textContent += myFinish < opponentFinish ? ' You win!' : ' Opponent wins!';
+    rematchBtn.style.display = 'inline-block';
+  } else if (net) {
+    message.textContent += ' Waiting for opponent...';
+  }
 }
 
 function update(dt) {
@@ -255,9 +335,15 @@ function loop() {
   requestAnimationFrame(loop);
   const dt = 0.016; // fixed timestep
   if (running && !paused) {
-    const t = (performance.now() - startTime) / 1000;
+    const now = performance.now();
+    const t = (now - startTime) / 1000;
     timeEl.textContent = t.toFixed(2);
     update(dt);
+    if (net && now - lastPosSent > 100) {
+      const p = controls.getObject().position;
+      net.send('pos', { id: myId, x: p.x, z: p.z, time: t });
+      lastPosSent = now;
+    }
   }
   playerLight.position.copy(controls.getObject().position);
   playerLight.position.y += 1.5;
@@ -301,5 +387,5 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-restart();
+restart(currentSeed);
 loop();
