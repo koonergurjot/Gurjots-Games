@@ -2,7 +2,7 @@
 
 | slug | title | entry file | main files | shared utils | input methods | current known issues | suggested quick wins |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| pong | Pong Classic | games/pong/index.html | pong.js, career.js | injectBackButton.js, resizeCanvas.global.js, gameUtil.js, sfx.js | keyboard, touch | Pause only via **P**, no unified overlay | Pilot global pause overlay with ESC |
+| pong | Pong Classic | games/pong/index.html | pong.js, career.js | injectBackButton.js, canvasLoop.global.js, gameUtil.js, sfx.js | keyboard, touch | Pause only via **P**, no unified overlay | Pilot global pause overlay with ESC |
 | snake | Snake | games/snake/index.html | snake.js, skins.js | injectBackButton.js, resizeCanvas.global.js, gameUtil.js, sfx.js, shared/leaderboard.js | keyboard, touch | `setTimeout` game loop; no game‑over screen | Move loop to `requestAnimationFrame` and add restart overlay |
 | tetris | Tetris | games/tetris/play.html | tetris.js, replay.js | injectBackButton.js, resizeCanvas.global.js, gameUtil.js, sfx.js | keyboard | No touch controls; update loop not delta‑based | Add swipe controls and separate update vs. render |
 | breakout | Breakout | games/breakout/index.html | breakout.js, levels.js | injectBackButton.js, resizeCanvas.global.js, gameUtil.js, sfx.js, shared/leaderboard.js | keyboard, mouse | Lacks touch controls; pause only via **P** | Add touch paddle and ESC pause |
@@ -16,4 +16,4 @@
 | runner | City Runner | games/runner/index.html | main.js, editor.js | shared/controls.js, shared/ui.js, shared/metrics.js, shared/achievements.js, shared/missions.js | keyboard, touch | No baseline smoke test | Add smoke test and minor loop cleanup |
 | shooter | Alien Shooter | games/shooter/index.html | main.js, net.js | shared/ui.js, shared/achievements.js | keyboard | No touch controls | Add tap/virtual joystick and ESC pause |
 
-*Most games also include `sfx.js` for audio and `resizeCanvas.global.js` or `shared/ui.js` for layout helpers.*
+*Most games also include `sfx.js` for audio and `resizeCanvas.global.js`, `canvasLoop.global.js`, or `shared/ui.js` for layout helpers.*

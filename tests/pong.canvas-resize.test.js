@@ -10,17 +10,12 @@ function runScript(relativePath) {
   window.eval(code);
 }
 
-describe('pong canvas resizing', () => {
-  it('defines fitCanvasToParent before pong.js executes and resizes on load and resize', () => {
+describe('pong canvas loop', () => {
+  it('resizes via CSS pixels and exposes controls', () => {
     // Set up DOM with canvas
-    document.body.innerHTML =
-      '<div class="wrap"><canvas id="game" width="900" height="600" data-basew="900" data-baseh="600"></canvas></div>';
+    document.body.innerHTML = '<canvas id="game" style="width:452px;height:301px"></canvas>';
 
-    // Mock window dimensions
-    Object.defineProperty(window, 'innerWidth', { writable: true, value: 500 });
-    Object.defineProperty(window, 'innerHeight', { writable: true, value: 400 });
     window.devicePixelRatio = 1;
-
     // Stub canvas context methods used by the game
     const ctxStub = {
       setTransform() {},
@@ -42,21 +37,26 @@ describe('pong canvas resizing', () => {
     window.HTMLCanvasElement.prototype.getContext = () => ctxStub;
 
     // Prevent animation loop from continuing
-    window.requestAnimationFrame = () => {};
+    window.requestAnimationFrame = () => 0;
+    window.cancelAnimationFrame = () => {};
+    window.ResizeObserver = undefined;
 
-    runScript('js/resizeCanvas.global.js');
+    runScript('js/canvasLoop.global.js');
     window.GG = { incPlays() {}, addXP() {}, setMeta() {}, addAch() {} };
-    expect(typeof window.fitCanvasToParent).toBe('function');
 
     runScript('games/pong/pong.js');
     const canvas = document.getElementById('game');
     expect({ w: canvas.width, h: canvas.height }).toEqual({ w: 452, h: 301 });
 
-    // Simulate window resize
-    window.innerWidth = 700;
-    window.innerHeight = 600;
+    // Simulate CSS resize and window resize event
+    canvas.style.width = '652px';
+    canvas.style.height = '435px';
     window.dispatchEvent(new Event('resize'));
     expect({ w: canvas.width, h: canvas.height }).toEqual({ w: 652, h: 435 });
+
+    expect(typeof window.pong.start).toBe('function');
+    expect(typeof window.pong.stop).toBe('function');
+    expect(typeof window.pong.dispose).toBe('function');
   });
 });
 
