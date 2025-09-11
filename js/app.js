@@ -3,9 +3,17 @@ const $$=(s,el=document)=>[...el.querySelectorAll(s)];
 const defaultGames=[
   {id:"pong",title:"Pong Classic",path:"games/pong/index.html",desc:"A snappy canvas remake of the arcade legend.",tags:["classic","2D"],new:false,emoji:"🏓",addedAt:"2025-08-20"},
   {id:"snake",title:"Snake",path:"games/snake/index.html",desc:"Eat, grow, don't bonk into yourself.",tags:["classic","2D"],new:true,emoji:"🐍",addedAt:"2025-08-25"},
-  {id:"box3d",title:"3D Box Playground",path:"games/box-playground/index.html",desc:"A tiny Three.js scene—rotate and vibe.",tags:["3D","demo"],new:false,emoji:"🧊",addedAt:"2025-08-15"},
   {id:"tetris",title:"Tetris",path:"games/tetris/index.html",desc:"Classic falling blocks. Clear lines, level up.",tags:["classic","2D"],new:true,emoji:"🧩",addedAt:"2025-08-26"},
-  {id:"breakout",title:"Breakout",path:"games/breakout/index.html",desc:"Smash bricks, power-ups, chase the score.",tags:["classic","2D"],new:true,emoji:"🧱",addedAt:"2025-08-26"}
+  {id:"breakout",title:"Breakout",path:"games/breakout/index.html",desc:"Smash bricks, power-ups, chase the score.",tags:["classic","2D"],new:true,emoji:"🧱",addedAt:"2025-08-26"},
+  {id:"chess",title:"Chess (2D)",path:"games/chess/index.html"},
+  {id:"chess3d",title:"Chess 3D (Local)",path:"games/chess3d/index.html",new:true,tags:["3D","offline"]},
+  {id:"g2048",title:"2048",path:"games/2048/index.html"},
+  {id:"asteroids",title:"Asteroids",path:"games/asteroids/index.html",desc:"Pilot your ship and blast space rocks.",tags:["classic","2D"],new:true,emoji:"☄️",addedAt:"2025-08-27"},
+  {id:"box3d",title:"3D Box Playground",path:"games/box3d/index.html",desc:"A tiny Three.js scene—rotate and vibe.",tags:["3D","demo"],new:false,emoji:"🧊",addedAt:"2025-08-15"},
+  {id:"maze3d",title:"Maze 3D",path:"games/maze3d/index.html",desc:"Wander a first-person labyrinth to find the exit.",tags:["3D"],new:true,emoji:"🧭",addedAt:"2025-08-27"},
+  {id:"platformer",title:"Pixel Platformer",path:"games/platformer/index.html",desc:"Run and jump across platforms to reach the goal.",tags:["2D"],new:true,emoji:"🦘",addedAt:"2025-08-27"},
+  {id:"runner",title:"City Runner",path:"games/runner/index.html",desc:"Dash through the city and avoid obstacles.",tags:["2D"],new:true,emoji:"🏃",addedAt:"2025-08-27"},
+  {id:"shooter",title:"Alien Shooter",path:"games/shooter/index.html",desc:"Blast waves of invaders and survive.",tags:["2D"],new:true,emoji:"👾",addedAt:"2025-08-27"}
 ];
 const state={games:[],tags:new Set(),activeTag:null,search:"",sort:"az"};
 function setTheme(name){document.body.classList.remove("theme-retro","theme-neon","theme-minimal");if(name==="retro")document.body.classList.add("theme-retro");if(name==="neon")document.body.classList.add("theme-neon");if(name==="minimal")document.body.classList.add("theme-minimal");localStorage.setItem("gg:theme",name);}
