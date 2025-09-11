@@ -9,6 +9,9 @@
     .wrap{display:grid;place-items:center;height:100%}
     canvas{background:#0f1320;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,.4)}
     .hud{position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);padding:10px 12px;border-radius:12px}
+    .ladder{position:fixed;left:16px;bottom:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);padding:8px 12px;border-radius:12px;max-width:200px;font-size:14px;line-height:1.4}
+    .ladder .done{text-decoration:line-through;opacity:0.5}
+    .ladder .current{font-weight:bold}
   </style>
 </head>
 <body>
@@ -22,11 +25,13 @@
     </select>
     <span>Best: <span id="bestScore">0</span></span>
   </div>
+  <div id="ladder" class="ladder"></div>
   <div class="wrap"><canvas id="game" width="900" height="600" data-basew="900" data-baseh="600"></canvas></div>
   <script src="../../js/injectBackButton.js"></script>
   <script src="../../js/resizeCanvas.global.js"></script>
   <script src="../../js/gameUtil.js"></script>
   <script src="../../js/sfx.js"></script>
+  <script src="./career.js"></script>
   <script src="./pong.js"></script>
 </body>
 </html>

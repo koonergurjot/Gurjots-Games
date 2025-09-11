@@ -7,7 +7,11 @@ function ctxRestore() { if (ctx.restore) ctx.restore(); }
 
 let W = canvas.width, H = canvas.height;
 const PADDLE_W = 12, PADDLE_H = 110, BALL_R = 8;
-const PADDLE_COLOR = '#00f6ff', BALL_COLOR = '#ff00e6';
+const COS_KEY = 'gg:pong:cosmetics';
+let cosmetics = {};
+try { cosmetics = JSON.parse(localStorage.getItem(COS_KEY) || '{}'); } catch {}
+let paddleColor = cosmetics.paddle || '#00f6ff';
+let ballColor = cosmetics.ball || '#ff00e6';
 
 let left = { x: 30, y: H / 2 - PADDLE_H / 2, vy: 0, score: 0 };
 let right = { x: W - 30 - PADDLE_W, y: H / 2 - PADDLE_H / 2, vy: 0, score: 0 };
@@ -27,11 +31,31 @@ function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 const GAME_ID = 'pong';
 GG.incPlays();
 let twoP = false;
+const CAREER_KEY = 'gg:pong:career';
+let careerLevel = parseInt(localStorage.getItem(CAREER_KEY) || '0', 10);
+let careerUpdated = false;
+function saveCareer(){ localStorage.setItem(CAREER_KEY, careerLevel); }
+function unlockCosmetic(reward = {}){
+  cosmetics = { ...cosmetics, ...reward };
+  localStorage.setItem(COS_KEY, JSON.stringify(cosmetics));
+  paddleColor = cosmetics.paddle || paddleColor;
+  ballColor = cosmetics.ball || ballColor;
+}
+function renderLadder(){
+  const el = document.getElementById('ladder');
+  if (!el || !window.PONG_CAREER) return;
+  el.innerHTML = window.PONG_CAREER.map((p,i)=>{
+    const cls = i < careerLevel ? 'done' : i === careerLevel ? 'current' : '';
+    return `<div class="${cls}">${p.name}</div>`;
+  }).join('');
+}
 
 class AIPlayer {
-  constructor(paddle) { this.paddle = paddle; this.speed = 0.13; }
+  constructor(paddle) { this.paddle = paddle; this.speed = 0.13; this.reaction = 0.3; }
+  loadProfile(p={}){ this.speed = p.speed ?? this.speed; this.reaction = p.reaction ?? this.reaction; }
   setDifficulty(level) { this.speed = level === 'easy' ? 0.08 : level === 'hard' ? 0.2 : 0.13; }
   update() {
+    if (ball.vx < 0 || ball.x < W * this.reaction) return;
     const target = ball.y - (paddleHeight(this.paddle) / 2 - BALL_R);
     this.paddle.y = clamp(
       this.paddle.y + (target - this.paddle.y) * this.speed,
@@ -41,6 +65,22 @@ class AIPlayer {
   }
 }
 const ai = new AIPlayer(right);
+function loadCurrentAI(){
+  const profile = (window.PONG_CAREER || [])[careerLevel] || {};
+  ai.loadProfile(profile);
+}
+loadCurrentAI();
+renderLadder();
+
+function onWinCareer(){
+  const ladder = window.PONG_CAREER || [];
+  const profile = ladder[careerLevel];
+  if (profile && profile.reward) unlockCosmetic(profile.reward);
+  if (careerLevel < ladder.length - 1) careerLevel++;
+  saveCareer();
+  loadCurrentAI();
+  renderLadder();
+}
 
 function setMetaWins() {
   const w = parseInt(localStorage.getItem('gg:pong:wins') || '0');
@@ -77,7 +117,7 @@ document.addEventListener('keydown', e => {
   if (e.key === '1') setDifficulty('easy');
   if (e.key === '3') setDifficulty('hard');
   if (e.key === '2' && e.shiftKey) setDifficulty('medium');
-  if (e.key.toLowerCase() === 'r') { left.score = 0; right.score = 0; ball = resetBall(); }
+  if (e.key.toLowerCase() === 'r') { left.score = 0; right.score = 0; ball = resetBall(); careerUpdated = false; }
 });
 
 function maybeSpawnPower() {
@@ -114,7 +154,7 @@ function paddleHeight(p) { return (p._boost || 0) > Date.now() ? PADDLE_H * 1.35
 })();
 
 function step() {
-  if (paused) return;
+  if (paused || left.score >= 7 || right.score >= 7) return;
   maybeSpawnPower();
   applyPower();
 
@@ -197,13 +237,13 @@ function draw() {
   ctxRestore();
 
   ctxSave();
-  ctx.fillStyle = PADDLE_COLOR; ctx.shadowColor = PADDLE_COLOR; ctx.shadowBlur = 10;
+  ctx.fillStyle = paddleColor; ctx.shadowColor = paddleColor; ctx.shadowBlur = 10;
   ctx.fillRect(left.x, left.y, PADDLE_W, paddleHeight(left));
   ctx.fillRect(right.x, right.y, PADDLE_W, paddleHeight(right));
   ctxRestore();
 
   ctxSave();
-  ctx.fillStyle = BALL_COLOR; ctx.shadowColor = BALL_COLOR; ctx.shadowBlur = 20;
+  ctx.fillStyle = ballColor; ctx.shadowColor = ballColor; ctx.shadowBlur = 20;
   ctx.beginPath();
   ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
   ctx.fill();
@@ -216,16 +256,20 @@ function draw() {
     ctx.fillStyle = '#e6e7ea'; ctx.font = 'bold 48px Inter, system-ui, sans-serif';
     ctx.fillText(`${left.score >= 7 ? 'Left' : 'Right'} wins!`, W / 2, H / 2);
     ctx.font = '24px Inter, system-ui, sans-serif'; ctx.fillText(`Press R to restart`, W / 2, H / 2 + 40);
-    if (left.score >= 7) {
-      const w = parseInt(localStorage.getItem('gg:pong:wins') || '0') + 1;
-      localStorage.setItem('gg:pong:wins', w);
-      GG.addXP(10); GG.addAch(GAME_ID, 'Pong Win');
-    } else {
-      const l = parseInt(localStorage.getItem('gg:pong:loss') || '0') + 1;
-      localStorage.setItem('gg:pong:loss', l);
+    if (!careerUpdated) {
+      if (left.score >= 7) {
+        const w = parseInt(localStorage.getItem('gg:pong:wins') || '0') + 1;
+        localStorage.setItem('gg:pong:wins', w);
+        GG.addXP(10); GG.addAch(GAME_ID, 'Pong Win');
+        onWinCareer();
+      } else {
+        const l = parseInt(localStorage.getItem('gg:pong:loss') || '0') + 1;
+        localStorage.setItem('gg:pong:loss', l);
+      }
+      if (!twoP) saveBestScore(left.score);
+      setMetaWins();
+      careerUpdated = true;
     }
-    if (!twoP) saveBestScore(left.score);
-    setMetaWins();
   }
 }
 
