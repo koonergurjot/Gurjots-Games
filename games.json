@@ -79,6 +79,14 @@
     "id": "chess",
     "title": "Chess (2D)",
     "path": "games/chess/index.html",
+    "desc": "Traditional chess for two players.",
+    "tags": [
+      "classic",
+      "board"
+    ],
+    "new": false,
+    "emoji": "♟️",
+    "addedAt": "2025-08-20",
     "help": {
       "objective": "Checkmate the opponent's king",
       "controls": "Click pieces to move",
@@ -90,11 +98,14 @@
     "id": "chess3d",
     "title": "Chess 3D (Local)",
     "path": "games/chess3d/index.html",
+    "desc": "A three-dimensional chess experiment.",
     "new": true,
     "tags": [
       "3D",
       "offline"
     ],
+    "emoji": "♖",
+    "addedAt": "2025-08-27",
     "help": {
       "objective": "Checkmate your opponent in 3D",
       "controls": "Drag to rotate • Click pieces to move",
@@ -106,6 +117,14 @@
     "id": "g2048",
     "title": "2048",
     "path": "games/2048/index.html",
+    "desc": "Slide numbers to reach 2048.",
+    "tags": [
+      "puzzle",
+      "2D"
+    ],
+    "new": false,
+    "emoji": "🔢",
+    "addedAt": "2025-08-20",
     "help": {
       "objective": "Reach the 2048 tile",
       "controls": "Arrow keys move",
