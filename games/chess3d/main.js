@@ -7,7 +7,7 @@ import { bestMove, evaluate, cancel } from "./ai/simpleEngine.js";
 import { mountThemePicker } from "./ui/themePicker.js";
 import { mountCameraPresets } from "./ui/cameraPresets.js";
 import { envDataUrl } from "./textures/env.js";
-import { log, warn } from '../../tools/reporters/console-signature.ts';
+import { log, warn } from '../../tools/reporters/console-signature.js';
 import { injectHelpButton } from '../../shared/ui.js';
 import games from '../../games.json' assert { type: 'json' };
 

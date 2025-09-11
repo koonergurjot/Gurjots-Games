@@ -1,6 +1,8 @@
-import { execSync } from 'child_process';
-
-const gitSHA = execSync('git rev-parse --short HEAD').toString().trim();
+// Resolve a commit hash if one was injected at build time. Browsers don't
+// expose git metadata, so fall back to a generic placeholder when running in
+// the client.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const gitSHA = (globalThis as any).__GIT_SHA__ || 'dev';
 
 function prefix(game: string) {
   return `[GurjotsGame:${game}@${gitSHA}]`;

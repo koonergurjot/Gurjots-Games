@@ -14,7 +14,7 @@
         const msg=JSON.parse(e.data);
         handlers[msg.type]?.(msg);
       }catch(err){
-        import('../../tools/reporters/console-signature.ts').then(({ error }) => {
+        import('../../tools/reporters/console-signature.js').then(({ error }) => {
           error('2048', err);
         });
       }
