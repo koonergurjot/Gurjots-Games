@@ -17,10 +17,28 @@ body.loaded {
 
 .hero {
   text-align: center;
-  padding: 40px 16px;
+  padding: 80px 16px;
+  background: linear-gradient(135deg, #1e3c72, #2a5298);
+  color: #fff;
 }
 
-.hero .cta { margin-top: 16px; }
+.hero p {
+  margin-top: 8px;
+  font-size: 1.25rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.hero img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 24px auto 0;
+}
+
+.hero .cta { margin-top: 24px; }
 
 .grid {
   display: grid;
