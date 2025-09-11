@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import makeServiceWorkerEnv from 'service-worker-mock';
 
-const CACHE_NAME = 'gg-v5';
+const CACHE_NAME = 'gg-v6';
 
 describe('service worker cache management', () => {
   beforeEach(() => {

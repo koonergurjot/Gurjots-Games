@@ -6,3 +6,12 @@ export function registerSW() {
     });
   }
 }
+
+export function cacheGameAssets(slug, files = ['index.html', 'main.js', 'thumb.png']) {
+  if (!('serviceWorker' in navigator)) return;
+  const base = `/games/${slug}/`;
+  const assets = files.map(f => base + f);
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: 'PRECACHE', assets });
+  }
+}

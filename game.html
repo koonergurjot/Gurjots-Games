@@ -26,8 +26,12 @@
       <a class="btn" href="./index.html" data-i18n="back">← Back</a>
       <h1 id="pageTitle" style="margin:0;font-size:1.5rem" data-i18n="genericGame">Game</h1>
     </div>
-    <label for="langSelect" class="sr-only">Language</label>
-    <select id="langSelect" name="langSelect"><option value="en">EN</option><option value="es">ES</option></select>
+    <div style="display:flex;align-items:center;gap:12px">
+      <label for="langSelect" class="sr-only">Language</label>
+      <select id="langSelect" name="langSelect"><option value="en">EN</option><option value="es">ES</option></select>
+      <div id="profileInfo"></div>
+      <div id="connectionStatus" class="status"></div>
+    </div>
   </header>
 
   <main style="max-width:1100px;margin:0 auto;padding:16px">
@@ -55,6 +59,16 @@
   <script type="module">
     import { applyTheme, getBestScore, getLocalLeaderboard } from './shared/ui.js';
     import { initI18n, t } from './shared/i18n.js';
+    import { registerSW, cacheGameAssets } from './shared/sw.js';
+    import { initProfileUI, onConnectionChange, syncAchievements } from './shared/profile.js';
+    registerSW();
+    initProfileUI(document.getElementById('profileInfo'));
+    onConnectionChange(isOnline => {
+      const el = document.getElementById('connectionStatus');
+      el.textContent = isOnline ? 'Online' : 'Offline';
+      el.className = 'status ' + (isOnline ? 'success' : 'error');
+      if (isOnline) syncAchievements();
+    });
     applyTheme();
     initI18n();
 
@@ -68,6 +82,7 @@
       document.getElementById('leaderboardSection').hidden = true;
       document.getElementById('relatedSection').hidden = true;
     } else {
+      cacheGameAssets(slug);
       init(slug);
     }
 
