@@ -11,7 +11,8 @@ const cbs = {
   ship: [],
   shot: [],
   rocks: [],
-  players: []
+  players: [],
+  enemy: []
 };
 
 function connect(){
@@ -32,6 +33,7 @@ function connect(){
     else if (type === 'ship' && msg.id !== myId){ cbs.ship.forEach(f=>f(msg.id, msg.ship)); }
     else if (type === 'shot' && msg.id !== myId){ cbs.shot.forEach(f=>f(msg.id, msg.bullet)); }
     else if (type === 'rocks'){ cbs.rocks.forEach(f=>f(msg.rocks)); }
+    else if (type === 'enemy' && msg.id !== myId){ cbs.enemy.forEach(f=>f(msg.enemy)); }
     else if (type === 'stats' && msg.id !== myId){
       players[msg.id] = { score: msg.score, lives: msg.lives };
       cbs.players.forEach(f=>f(players));
@@ -56,11 +58,13 @@ function send(type, data){
 function sendShip(ship){ send('ship', { ship }); }
 function sendShot(bullet){ send('shot', { bullet }); }
 function sendRocks(rocks){ send('rocks', { rocks }); }
+function sendEnemy(enemy){ send('enemy', { enemy }); }
 function sendStats(score, lives){ send('stats', { score, lives }); }
 
 function onShip(cb){ cbs.ship.push(cb); }
 function onShot(cb){ cbs.shot.push(cb); }
 function onRocks(cb){ cbs.rocks.push(cb); }
+function onEnemy(cb){ cbs.enemy.push(cb); }
 function onPlayers(cb){ cbs.players.push(cb); }
 
-export { connect, disconnect, sendShip, sendShot, sendRocks, sendStats, onShip, onShot, onRocks, onPlayers, players };
+export { connect, disconnect, sendShip, sendShot, sendRocks, sendEnemy, sendStats, onShip, onShot, onRocks, onEnemy, onPlayers, players };
