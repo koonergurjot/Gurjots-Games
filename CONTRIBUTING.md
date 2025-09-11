@@ -21,14 +21,11 @@ Run the automated checks before opening a pull request:
 
 ```bash
 npm run health       # verifies game metadata and assets
-npm run test:smoke   # launches a quick smoke test
+npm test             # runs the test suite
 ```
-
-These scripts supplement the normal unit tests executed with `npm test`.
 
 ## Common errors & quick fixes
 
 - **Game never cleans up resources** – Ensure `dispose()` removes listeners and stops loops.
 - **Controls behave differently across games** – Import and use `shared/controls.js` instead of implementing custom input handlers.
 - **Health check fails** – Confirm the game is listed in `games.json` and all referenced files exist.
-- **Smoke test fails** – Make sure `init()` runs without errors and assets load correctly before calling `dispose()`.

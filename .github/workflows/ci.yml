@@ -23,5 +23,4 @@ jobs:
             echo 'Build or boot errors detected'
             exit 1
           fi
-      - run: npm run build
-      - run: npm run test:smoke
+      - run: npm test
