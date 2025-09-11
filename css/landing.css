@@ -1,4 +1,4 @@
-/* v1.1 Scoped landing styles */
+/* Landing v1.3, scoped & click-safe */
 :root{
   --bg:#0b0b12;
   --panel:#11111a;
@@ -57,18 +57,30 @@ body{
 
 .gg-hero-art{position:relative;height:260px}
 @media (max-width: 900px){.gg-hero-art{height:180px}}
-.gg-orb{position:absolute;border-radius:999px;filter:blur(10px);opacity:.7}
+.gg-orb{position:absolute;border-radius:999px;filter:blur(10px);opacity:.7;pointer-events:none}
 .orb-1{background:radial-gradient(circle at 30% 30%,#7dd3fc 0,#2563eb 60%,transparent 70%);width:200px;height:200px;right:40px;top:10px}
 .orb-2{background:radial-gradient(circle at 70% 70%,#a78bfa 0,#7c3aed 60%,transparent 70%);width:140px;height:140px;right:160px;bottom:20px}
 .orb-3{background:radial-gradient(circle at 50% 50%,#f472b6 0,#be185d 60%,transparent 70%);width:120px;height:120px;right:0;bottom:60px}
-.gg-hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:24px 24px;mask-image:radial-gradient(circle at 70% 30%,rgba(0,0,0,.7),transparent 70%);pointer-events:none}
+.gg-mesh{
+  position:absolute; inset:0;
+  background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);
+  background-size:24px 24px;
+  mask-image:radial-gradient(circle at 70% 30%,rgba(0,0,0,.7),transparent 70%);
+  pointer-events:none;
+}
 
-.gg-grid-wrap{padding:10px 0 60px}
-.gg-status{color:var(--muted);margin-bottom:10px}
-.gg-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-@media (max-width: 1100px){.gg-grid{grid-template-columns:repeat(3,1fr)}}
-@media (max-width: 760px){.gg-grid{grid-template-columns:repeat(2,1fr)}}
-@media (max-width: 420px){.gg-grid{grid-template-columns:1fr}}
+/* Actual card grid container */
+#gg-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:14px;
+}
+@media (max-width: 1100px){#gg-grid{grid-template-columns:repeat(3,1fr)}}
+@media (max-width: 760px){ #gg-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width: 420px){ #gg-grid{grid-template-columns:1fr}}
+
+.gg-status{color:var(--muted);margin:8px 0 12px}
 
 .gg-card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:transform .2s ease, background .2s ease, border-color .2s ease}
 .gg-card:hover{transform:translateY(-2px);background:var(--cardHover);border-color:rgba(255,255,255,.15)}

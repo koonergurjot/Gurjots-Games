@@ -4,16 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Gurjot’s Games — Play Instantly</title>
-  <meta name="description" content="Gurjot’s Games: a fast, fun, single-player arcade hub. Click a game to play instantly." />
+  <meta name="description" content="Play instantly. No logins. Just fun. Pick a game and we’ll launch it with all UI loaded and ready." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/landing.css?v=20250911162413">
+  <link rel="stylesheet" href="css/landing.css?v=20250911173838">
 </head>
 <body>
   <header class="gg-topbar">
     <div class="gg-container gg-topbar-inner">
       <a class="gg-brand" href="./" aria-label="Gurjot’s Games home">
+        <!-- Inline SVG logo (text-only) -->
         <svg class="gg-logo" viewBox="0 0 512 512" role="img" aria-label="Gurjot’s Games">
           <defs>
             <linearGradient id="ggrad" x1="0" x2="1" y1="0" y2="1">
@@ -43,7 +44,7 @@
     <section class="gg-hero">
       <div class="gg-container gg-hero-inner">
         <div class="gg-hero-copy">
-          <h1>Play instantly. No logins. Just <em>fun</em>.</h1>
+          <h1>Play instantly. No logins.<br/>Just <em>fun</em>.</h1>
           <p>Pick a game and we’ll launch it on a dedicated page with all UI loaded and ready.</p>
           <form class="gg-search" role="search" aria-label="Search games" onsubmit="return false;">
             <input id="gg-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
@@ -52,10 +53,11 @@
           <div id="gg-filters" class="gg-filters" aria-label="Filter by category" role="tablist"></div>
         </div>
         <div class="gg-hero-art" aria-hidden="true">
+          <!-- Decorative orbs & mesh (non-interactive) -->
           <div class="gg-orb orb-1"></div>
           <div class="gg-orb orb-2"></div>
           <div class="gg-orb orb-3"></div>
-          <div class="gg-hero-grid"></div>
+          <div class="gg-mesh"></div>
         </div>
       </div>
     </section>
@@ -80,11 +82,11 @@
   </footer>
 
   <script>
-    document.addEventListener('DOMContentLoaded', function() { 
-      var y = document.getElementById('gg-year'); 
-      if (y) y.textContent = new Date().getFullYear(); 
+    document.addEventListener('DOMContentLoaded', function() {
+      var y = document.getElementById('gg-year');
+      if (y) y.textContent = new Date().getFullYear();
     });
   </script>
-  <script type="module" src="js/landing.js?v=20250911162413"></script>
+  <script type="module" src="js/landing.js?v=20250911173838"></script>
 </body>
 </html>

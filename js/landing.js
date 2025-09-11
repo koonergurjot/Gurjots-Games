@@ -1,4 +1,4 @@
-// v1.1 Landing boot
+// Landing v1.3 — bolt look, repo-safe, auto-detects game.html param
 const GRID = document.getElementById('gg-grid');
 const STATUS = document.getElementById('gg-status');
 const SEARCH = document.getElementById('gg-search');
@@ -7,19 +7,24 @@ const FILTERS = document.getElementById('gg-filters');
 
 let allGames = [];
 let activeTag = 'All';
+let paramKey = 'slug'; // default, we will auto-detect
 
-// derive build version from script tag for cache-busting fetches
-const VERSION = new URL(import.meta.url).searchParams.get('v') || '';
-
-const prettyTag = (t) => t?.charAt(0).toUpperCase() + t?.slice(1);
-const toQuery = (s) => (s||'').trim().toLowerCase();
-
-function slugify(str){
-  return String(str || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+// Auto-detect which query key game.html reads, by scanning its source.
+async function detectParamKey() {
+  try {
+    const res = await fetch('game.html?v=20250911173838', { cache: 'no-cache' });
+    const html = await res.text();
+    // Match URLSearchParams(...).get("param")
+    const m = html.match(/URLSearchParams\([^)]*\)\.get\(["'](\w+)["']\)/);
+    if (m && m[1]) paramKey = m[1];
+  } catch (e) {
+    // keep default 'slug'
+  }
 }
+
+const toSlug = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+const prettyTag = t => t?.charAt(0).toUpperCase() + t?.slice(1);
+const toQuery = s => (s||'').trim().toLowerCase();
 
 function placeholderSVG(label='GG'){
   return `
@@ -52,13 +57,14 @@ function placeholderSVG(label='GG'){
 }
 
 function card(game){
-  const normalizedId = game.slug || game.id || slugify(game.name);
-  const title = game.title || game.name || normalizedId;
+  const id = game.id || game.slug || toSlug(game.name);
+  const slug = game.slug || game.id || toSlug(game.name);
+  const title = game.title || game.name || id;
   const tags = game.tags || game.genres || [];
   const short = game.description || '';
   const badge = Array.isArray(tags) && tags[0] ? prettyTag(tags[0]) : 'Game';
   const thumb = game.thumbnail || game.image || game.cover || null;
-  const href = `game.html?slug=${encodeURIComponent(normalizedId)}`;
+  const href = `game.html?${encodeURIComponent(paramKey)}=${encodeURIComponent(slug)}`;
 
   return `
   <article class="gg-card" tabindex="0" role="article" aria-label="${title} card">
@@ -108,42 +114,35 @@ function buildFilterChips(tags){
   }, {passive:true});
 }
 
-async function loadGamesJson(){
-  const url = `./games.json?v=${VERSION}`;
-  const res = await fetch(url, { cache: 'no-cache' });
-  if (!res.ok) throw new Error('Failed to load games.json');
-  const data = await res.json();
-  const list = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
-  allGames = list.map(g => ({
-      id: g.id || g.slug || g.name,
-      slug: g.slug || null,
-      name: g.name || null,
-      title: g.title || g.name,
-      description: g.description || g.desc || '', // fallback for legacy desc
-      tags: g.tags || g.genres || [],
-      thumbnail: g.thumbnail || g.image || g.cover || null
-  })).filter(g => g.id && g.title);
-  const tags = allGames.flatMap(g => g.tags).map(t => t && (t[0].toUpperCase()+t.slice(1)));
-  buildFilterChips(tags);
-  render(allGames);
-}
-
-function showError(msg){
-  STATUS.textContent = msg + ' ';
-  const btn = document.createElement('button');
-  btn.textContent = 'Retry';
-  btn.className = 'gg-btn';
-  btn.onclick = boot;
-  STATUS.appendChild(btn);
-}
-
 async function boot(){
   try {
-    await loadGamesJson();
+    await detectParamKey(); // auto-detect required query key from game.html
+    const res = await fetch('./games.json?v=20250911173838', { cache:'no-cache' });
+    if (!res.ok) throw new Error('Failed to load games.json');
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
+    allGames = list.map(g => ({
+      id: g.id || g.slug || toSlug(g.name),
+      slug: g.slug || g.id || toSlug(g.name),
+      title: g.title || g.name || (g.id || g.slug || 'Game'),
+      description: g.description || '',
+      tags: g.tags || g.genres || [],
+      thumbnail: g.thumbnail || g.image || g.cover || null
+    })).filter(g => g.id && g.title);
+
+    const tags = allGames.flatMap(g => g.tags).map(t => t && (t[0].toUpperCase()+t.slice(1)));
+    buildFilterChips(tags);
+
+    render(allGames);
     STATUS.focus?.();
-  } catch (err) {
+  } catch(err) {
     console.error(err);
-    showError('Could not load games. Check games.json in the repo root.');
+    STATUS.textContent = 'Could not load games. Check games.json format.';
+    const retry = document.createElement('button');
+    retry.textContent = 'Retry';
+    retry.className = 'gg-btn';
+    retry.onclick = boot;
+    STATUS.appendChild(retry);
   }
 }
 
