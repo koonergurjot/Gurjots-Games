@@ -1,4 +1,5 @@
 import { injectBackButton, injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
+import games from '../../games.json' assert { type: 'json' };
 import { emitEvent } from '../../shared/achievements.js';
 import Net from './net.js';
 
@@ -11,14 +12,8 @@ const bestEl  = document.getElementById('best');
 const shareBtn = document.getElementById('shareBtn');
 
 injectBackButton();
-const helpSteps = [
-  {
-    objective: 'Survive and score points',
-    controls: 'WASD move • Space shoot • P pause • R restart',
-    tips: 'Use T for turret and F for wall'
-  }
-];
-injectHelpButton({ gameId: 'shooter', steps: helpSteps });
+const help = games.find(g => g.id === 'shooter')?.help || {};
+injectHelpButton({ gameId: 'shooter', ...help });
 recordLastPlayed('shooter');
 emitEvent({ type: 'play', slug: 'shooter' });
 

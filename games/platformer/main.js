@@ -1,15 +1,10 @@
 import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 import * as net from './net.js';
+import games from '../../games.json' assert { type: 'json' };
 
-const helpSteps = [
-  {
-    objective: 'Reach the end of the level',
-    controls: 'Arrow keys move • Space/Up jump • P pause • R restart',
-    tips: 'Collect items and avoid enemies'
-  }
-];
-injectHelpButton({ gameId: 'platformer', steps: helpSteps });
+const help = games.find(g => g.id === 'platformer')?.help || {};
+injectHelpButton({ gameId: 'platformer', ...help });
 recordLastPlayed('platformer');
 emitEvent({ type: 'play', slug: 'platformer' });
 

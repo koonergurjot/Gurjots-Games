@@ -85,6 +85,8 @@ export function injectHelpButton(opts) {
     btn.textContent = '?';
     document.body.appendChild(btn);
   }
+  btn.setAttribute('aria-label', t('help'));
+  btn.title = t('help');
 
   let overlay;
   btn.onclick = () => {
@@ -171,20 +173,20 @@ export function attachPauseOverlay({ onResume, onRestart }) {
   return { show, hide };
 }
 
-export function attachHelpOverlay({ gameId, steps }) {
+export function attachHelpOverlay({ gameId, steps = [], objective = '', controls = '', tips = [] }) {
   const overlay = document.createElement('div');
   overlay.className = 'help-overlay hidden';
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.innerHTML = `
     <div class="panel">
-      <button class="close-icon" aria-label="Close">\u00d7</button>
+      <button class="close-icon" aria-label="${t('close')}">\u00d7</button>
       <div class="step-content"></div>
       <div class="footer">
         <span class="step-indicator"></span>
         <div class="actions">
-          <button class="btn next-btn">Next</button>
-          <button class="btn close-btn">Close</button>
+          <button class="btn next-btn">${t('next')}</button>
+          <button class="btn close-btn">${t('close')}</button>
         </div>
       </div>
     </div>`;
@@ -193,12 +195,13 @@ export function attachHelpOverlay({ gameId, steps }) {
   let index = 0;
 
   const render = () => {
-    const step = steps[index] || {};
+    const step = steps[index] || '';
     overlay.querySelector('.step-content').innerHTML = `
-      <section><h4>Objective</h4><p>${step.objective || ''}</p></section>
-      <section><h4>Controls</h4><p>${step.controls || ''}</p></section>
-      <section><h4>Tips</h4><p>${step.tips || ''}</p></section>`;
-    overlay.querySelector('.step-indicator').textContent = `${index + 1}/${steps.length}`;
+      ${objective ? `<section><h4>${t('objective')}</h4><p>${objective}</p></section>` : ''}
+      ${controls ? `<section><h4>${t('controls')}</h4><p>${controls}</p></section>` : ''}
+      ${tips && tips.length ? `<section><h4>${t('tips')}</h4><ul>${tips.map(tip => `<li>${tip}</li>`).join('')}</ul></section>` : ''}
+      ${step ? `<section><p>${step}</p></section>` : ''}`;
+    overlay.querySelector('.step-indicator').textContent = steps.length ? `${index + 1}/${steps.length}` : '';
   };
 
   const onKeyDown = e => { if (e.key === 'Escape') hide(); };
