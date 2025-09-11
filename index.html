@@ -3,77 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gurjot’s Games — Play Instantly</title>
-  <meta name="description" content="Play instantly. No logins. Just fun. Pick a game and we’ll launch it with all UI loaded and ready." />
+  <title>Gurjot's Games</title>
+  <meta name="description" content="Discover amazing games, challenge your skills, and have endless fun. Ready Player One?" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/landing.css?v=20250911173838">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/bolt-landing.css?v=20250911175011">
 </head>
-<body>
-  <header class="gg-topbar">
-    <div class="gg-container gg-topbar-inner">
-      <a class="gg-brand" href="./" aria-label="Gurjot’s Games home">
-        <!-- Inline SVG logo (text-only) -->
-        <svg class="gg-logo" viewBox="0 0 512 512" role="img" aria-label="Gurjot’s Games">
-          <defs>
-            <linearGradient id="ggrad" x1="0" x2="1" y1="0" y2="1">
-              <stop offset="0" stop-color="#6EE7F9"/>
-              <stop offset="1" stop-color="#A78BFA"/>
-            </linearGradient>
-          </defs>
-          <rect x="16" y="16" width="480" height="480" rx="88" fill="url(#ggrad)" />
-          <g fill="white">
-            <path d="M170 200h60v-40h-60a60 60 0 100 120h60v-40h-60a20 20 0 110-40z"/>
-            <circle cx="340" cy="220" r="20"/>
-            <rect x="300" y="260" width="120" height="40" rx="12"/>
-          </g>
-        </svg>
-        <span class="gg-title">Gurjot’s Games</span>
+<body class="bolt-body">
+  <header class="bolt-nav">
+    <div class="bolt-container bolt-nav-inner">
+      <a class="bolt-brand" href="./" aria-label="Gurjot's Games home">
+        <span class="bolt-logo" aria-hidden="true">🎮</span>
+        <span class="bolt-brand-text"><strong>Gurjot's</strong> Games</span>
       </a>
-      <nav class="gg-actions">
-        <a class="gg-link" href="achievements.html">Achievements</a>
-        <a class="gg-link" href="stats.html">Stats</a>
-        <a class="gg-link" href="quests.html">Quests</a>
-        <a class="gg-link" href="cabinet.html">Cabinet</a>
+      <nav class="bolt-links">
+        <a href="game.html" class="bolt-link">Games</a>
+        <a href="#about" class="bolt-link">About</a>
+        <a href="#contact" class="bolt-link">Contact</a>
       </nav>
     </div>
   </header>
 
-  <main>
-    <section class="gg-hero">
-      <div class="gg-container gg-hero-inner">
-        <div class="gg-hero-copy">
-          <h1>Play instantly. No logins.<br/>Just <em>fun</em>.</h1>
-          <p>Pick a game and we’ll launch it on a dedicated page with all UI loaded and ready.</p>
-          <form class="gg-search" role="search" aria-label="Search games" onsubmit="return false;">
-            <input id="gg-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
-            <button id="gg-clear" type="button" title="Clear search">✕</button>
-          </form>
-          <div id="gg-filters" class="gg-filters" aria-label="Filter by category" role="tablist"></div>
-        </div>
-        <div class="gg-hero-art" aria-hidden="true">
-          <!-- Decorative orbs & mesh (non-interactive) -->
-          <div class="gg-orb orb-1"></div>
-          <div class="gg-orb orb-2"></div>
-          <div class="gg-orb orb-3"></div>
-          <div class="gg-mesh"></div>
-        </div>
+  <!-- HERO -->
+  <section class="bolt-hero">
+    <div class="bolt-hero-bg" aria-hidden="true">
+      <div class="bolt-gradient"></div>
+      <div class="bolt-bubble bolt-b1"></div>
+      <div class="bolt-bubble bolt-b2"></div>
+      <div class="bolt-bubble bolt-b3"></div>
+      <div class="bolt-stars"></div>
+    </div>
+    <div class="bolt-container bolt-hero-content">
+      <h1 class="bolt-hero-title">Gurjot's Games</h1>
+      <p class="bolt-hero-sub">Welcome to the ultimate gaming destination! Discover amazing games, challenge your skills, and have endless fun.</p>
+      <p class="bolt-cta-line"><span>Ready Player One?</span> 🎮</p>
+      <div class="bolt-metrics">
+        <div class="bolt-metric"><div class="bolt-ic">👥</div><div><div class="bolt-met-n">10K+</div><div class="bolt-met-l">Players</div></div></div>
+        <div class="bolt-metric"><div class="bolt-ic">🕹</div><div><div class="bolt-met-n" id="bolt-game-count">50+</div><div class="bolt-met-l">Games</div></div></div>
+        <div class="bolt-metric"><div class="bolt-ic">⭐</div><div><div class="bolt-met-n">4.8</div><div class="bolt-met-l">Rating</div></div></div>
+        <div class="bolt-metric"><div class="bolt-ic">⚡</div><div><div class="bolt-met-n">99%</div><div class="bolt-met-l">Uptime</div></div></div>
       </div>
-    </section>
+      <a href="#games" class="bolt-cta">Start Playing ↗</a>
+    </div>
+  </section>
 
-    <section class="gg-grid-wrap">
-      <div class="gg-container">
-        <div id="gg-status" class="gg-status" role="status" aria-live="polite">Loading games…</div>
-        <div id="gg-grid" class="gg-grid" aria-label="Game list"></div>
-      </div>
-    </section>
-  </main>
+  <!-- GAMES SECTION -->
+  <section id="games" class="bolt-games">
+    <div class="bolt-container">
+      <h2 class="bolt-section-title">Browse Games</h2>
+      <form class="bolt-search" role="search" aria-label="Search games" onsubmit="return false;">
+        <input id="bolt-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
+        <button id="bolt-clear" type="button" title="Clear search">✕</button>
+      </form>
+      <div id="bolt-filters" class="bolt-filters" aria-label="Filter by category" role="tablist"></div>
+      <div id="bolt-status" class="bolt-status" role="status" aria-live="polite">Loading games…</div>
+      <div id="bolt-grid" class="bolt-grid" aria-label="Game list"></div>
+    </div>
+  </section>
 
-  <footer class="gg-footer">
-    <div class="gg-container gg-footer-inner">
-      <p>© <span id="gg-year"></span> Gurjot’s Games. Built for speed & fun.</p>
-      <div class="gg-footer-links">
+  <footer class="bolt-footer">
+    <div class="bolt-container bolt-footer-inner">
+      <p>© <span id="bolt-year"></span> Gurjot's Games. Built for speed & fun.</p>
+      <div class="bolt-footer-links">
         <a href="sitemap.xml">Sitemap</a>
         <a href="404.html">404</a>
         <a href="robots.txt">Robots</a>
@@ -83,10 +75,10 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      var y = document.getElementById('gg-year');
+      var y = document.getElementById('bolt-year');
       if (y) y.textContent = new Date().getFullYear();
     });
   </script>
-  <script type="module" src="js/landing.js?v=20250911173838"></script>
+  <script type="module" src="js/bolt-landing.js?v=20250911175011"></script>
 </body>
 </html>
