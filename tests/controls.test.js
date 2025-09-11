@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import { describe, it, expect } from 'vitest';
-import { enableGamepadHint, virtualButtons } from '../shared/controls.js';
+import { enableGamepadHint, virtualButtons } from '../src/runtime/controls.ts';
 
 describe('enableGamepadHint', () => {
   it('shows and hides the hint element on gamepad connect/disconnect', () => {

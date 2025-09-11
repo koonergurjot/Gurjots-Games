@@ -1,6 +1,10 @@
 export interface ControlsOptions {
-  /** Mapping of action -> key codes (KeyboardEvent.code). Values may be a string or array of strings. */
-  map?: Record<string, string | string[]>;
+  /**
+   * Mapping of action -> key codes (KeyboardEvent.code).
+   * Provide an object for a single player or an array of objects for multiple players.
+   * Values may be a string or array of strings.
+   */
+  map?: Record<string, string | string[]> | Array<Record<string, string | string[]>>;
   /** Automatically append touch controls */
   touch?: boolean;
 }
@@ -13,9 +17,9 @@ export interface ControlsOptions {
  * - Call `dispose()` to remove all event listeners and DOM elements.
  */
 export class Controls {
-  private map: Record<string, string | string[]>;
+  private maps: Array<Record<string, string | string[]>>;
   private state = new Map<string, boolean>();
-  private handlers = new Map<string, Set<() => void>>();
+  private handlers: Array<Map<string, Set<() => void>>>;
   private disposers: Array<[EventTarget, string, EventListenerOrEventListenerObject, any?]> = [];
   /** Root element for touch controls */
   public element: HTMLElement | null = null;
@@ -31,24 +35,38 @@ export class Controls {
       pause: 'KeyP',
       restart: 'KeyR',
     };
-    this.map = { ...defaults, ...(opts.map || {}) };
+
+    if (Array.isArray(opts.map)) {
+      this.maps = opts.map.map((m, i) => (i === 0 ? { ...defaults, ...m } : { ...m }));
+    } else {
+      this.maps = [{ ...defaults, ...(opts.map || {}) }];
+    }
+
+    this.handlers = this.maps.map(() => new Map());
     this.bindKeyboard();
     if (opts.touch !== false) this.buildTouch();
   }
 
   /** Register callback for an action. Returns unsubscribe function. */
-  on(action: string, cb: () => void): () => void {
-    let set = this.handlers.get(action);
-    if (!set) this.handlers.set(action, (set = new Set()));
+  on(action: string, cb: () => void, player = 0): () => void {
+    let set = this.handlers[player].get(action);
+    if (!set) this.handlers[player].set(action, (set = new Set()));
     set.add(cb);
     return () => set!.delete(cb);
   }
 
   /** Check whether given action is currently pressed. */
-  isDown(action: string): boolean {
-    const code = this.map[action];
+  isDown(action: string, player = 0): boolean {
+    const code = this.maps[player]?.[action];
+    if (!code) return false;
     if (Array.isArray(code)) return code.some(c => this.state.get(c));
     return !!this.state.get(code);
+  }
+
+  /** Change mapping for an action at runtime */
+  setMapping(action: string, key: string | string[], player = 0): void {
+    if (!this.maps[player]) this.maps[player] = {};
+    this.maps[player][action] = key;
   }
 
   /** Remove all listeners and DOM nodes. */
@@ -57,13 +75,13 @@ export class Controls {
       t.removeEventListener(type, fn as any, opt);
     }
     this.disposers = [];
-    this.handlers.clear();
+    this.handlers.forEach(h => h.clear());
     if (this.element) this.element.remove();
     this.element = null;
   }
 
-  private match(action: string, code: string): boolean {
-    const m = this.map[action];
+  private match(action: string, code: string, player: number): boolean {
+    const m = this.maps[player]?.[action];
     if (Array.isArray(m)) return m.includes(code);
     return m === code;
   }
@@ -80,25 +98,27 @@ export class Controls {
     this.disposers.push([window, 'keyup', up]);
   }
 
-  private fire(action: string): void {
-    const set = this.handlers.get(action);
+  private fire(action: string, player: number): void {
+    const set = this.handlers[player].get(action);
     if (set) for (const fn of Array.from(set)) fn();
   }
 
   private fireByCode(code: string): void {
-    for (const action in this.map) {
-      if (this.match(action, code)) this.fire(action);
+    for (let p = 0; p < this.maps.length; p++) {
+      for (const action in this.maps[p]) {
+        if (this.match(action, code, p)) this.fire(action, p);
+      }
     }
   }
 
   private createButton(action: string, label: string): HTMLElement {
     const btn = document.createElement('button');
     btn.textContent = label;
-    const code = this.map[action];
+    const code = this.maps[0][action];
     const start = (e: Event) => {
       e.preventDefault();
       if (Array.isArray(code)) this.state.set(code[0], true); else this.state.set(code, true);
-      this.fire(action);
+      this.fire(action, 0);
     };
     const end = () => {
       if (Array.isArray(code)) this.state.set(code[0], false); else this.state.set(code, false);
@@ -175,3 +195,106 @@ export class Controls {
     this.element = root;
   }
 }
+
+/**
+ * Basic key state helper.
+ * Optionally provide per-player mappings of actions to keys (KeyboardEvent.key).
+ */
+export function keyState(
+  map: Record<string, string | string[]> | Array<Record<string, string | string[]>> = []
+) {
+  const keys = new Set<string>();
+  const maps = Array.isArray(map) ? map.map(m => ({ ...m })) : [
+    typeof map === 'object' && map !== null ? { ...map } : {}
+  ];
+  const down = (e: KeyboardEvent) => keys.add(e.key.toLowerCase());
+  const up = (e: KeyboardEvent) => keys.delete(e.key.toLowerCase());
+  window.addEventListener('keydown', down);
+  window.addEventListener('keyup', up);
+  const has = (action: string, player = 0): boolean => {
+    const m = maps[player]?.[action];
+    if (m) {
+      if (Array.isArray(m)) return m.some(k => keys.has(k.toLowerCase()));
+      return keys.has(m.toLowerCase());
+    }
+    return keys.has(action.toLowerCase());
+  };
+  const setMapping = (action: string, key: string | string[], player = 0) => {
+    if (!maps[player]) maps[player] = {};
+    maps[player][action] = key;
+  };
+  const destroy = () => {
+    window.removeEventListener('keydown', down);
+    window.removeEventListener('keyup', up);
+  };
+  return { has, setMapping, destroy };
+}
+
+/** Create a polling loop for the primary gamepad. */
+export function createGamepad(fn: (pad: Gamepad) => void) {
+  let raf: number | null = null;
+  function loop() {
+    const pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+    if (pads[0]) fn(pads[0]!);
+    raf = requestAnimationFrame(loop);
+  }
+  const start = () => { if (!raf) loop(); };
+  const stop = () => { if (raf) cancelAnimationFrame(raf); raf = null; };
+  window.addEventListener('gamepadconnected', start);
+  window.addEventListener('gamepaddisconnected', stop);
+  start();
+  const destroy = () => {
+    stop();
+    window.removeEventListener('gamepadconnected', start);
+    window.removeEventListener('gamepaddisconnected', stop);
+  };
+  return { start, stop, destroy };
+}
+
+/** Convert standard gamepad axes to directional x/y values with deadzone. */
+export function standardAxesToDir(pad: Gamepad, dead = 0.2) {
+  const [lx = 0, ly = 0] = pad.axes || [];
+  const dx = Math.abs(lx) > dead ? lx : 0;
+  const dy = Math.abs(ly) > dead ? ly : 0;
+  return { dx, dy };
+}
+
+/** Show/hide a hint element when a gamepad is connected. */
+export function enableGamepadHint(hintEl: HTMLElement) {
+  const show = () => { hintEl.style.display = ''; };
+  const hide = () => { hintEl.style.display = 'none'; };
+  window.addEventListener('gamepadconnected', show);
+  window.addEventListener('gamepaddisconnected', hide);
+  hide();
+  return {
+    destroy: () => {
+      window.removeEventListener('gamepadconnected', show);
+      window.removeEventListener('gamepaddisconnected', hide);
+    }
+  };
+}
+
+/**
+ * Create virtual touch buttons for the given key codes.
+ * Returns an element containing the buttons and a read() method
+ * that returns a Map of button states.
+ */
+export function virtualButtons(codes: string[]) {
+  const element = document.createElement('div');
+  const state = new Map<string, boolean>();
+  const up = (code: string) => () => state.set(code, false);
+  for (const code of codes) {
+    const btn = document.createElement('button');
+    btn.dataset.k = code;
+    state.set(code, false);
+    btn.addEventListener('touchstart', e => { state.set(code, true); e.preventDefault(); }, { passive: false });
+    btn.addEventListener('touchend', up(code));
+    btn.addEventListener('touchcancel', up(code));
+    element.appendChild(btn);
+  }
+  return {
+    element,
+    read: () => new Map(state)
+  };
+}
+

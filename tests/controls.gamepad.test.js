@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 import { test, expect, vi } from 'vitest';
-import { standardAxesToDir, createGamepad } from '../shared/controls.js';
+import { standardAxesToDir, createGamepad } from '../src/runtime/controls.ts';
 
 test('deadzone', () => {
   const pad = { axes: [0.1, 0.05] };
