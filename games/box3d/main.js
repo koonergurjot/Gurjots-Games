@@ -10,6 +10,7 @@ import { registerSW } from '../../shared/sw.js';
 import { injectBackButton, injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import games from '../../games.json' assert { type: 'json' };
 import { emitEvent } from '../../shared/achievements.js';
+import { World, Body } from '../box-core/physics.js';
 
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode') || 'play';
@@ -127,9 +128,14 @@ scene.add(ground);
 const platforms = [];
 const collectibles = [];
 let spawnPoint = new THREE.Vector3(0, 1, 5);
+const world = new World({ gravity: [0, -20, 0] });
+const playerBody = new Body({ position: [0, 1, 5], size: [0.6, 1.8, 0.6] });
+world.addBody(playerBody);
+const groundBody = new Body({ position: [0, 0, 0], size: [100, 1, 100], isStatic: true });
+world.addBody(groundBody);
 
 async function loadLevel(url) {
-  for (const p of platforms) scene.remove(p);
+  for (const p of platforms) scene.remove(p.mesh);
   platforms.length = 0;
   for (const c of collectibles) scene.remove(c);
   collectibles.length = 0;
@@ -138,6 +144,7 @@ async function loadLevel(url) {
   if (data.spawn) {
     spawnPoint.fromArray(data.spawn);
     player.position.copy(spawnPoint);
+    playerBody.position = spawnPoint.toArray();
   }
   for (const p of data.platforms || []) {
     const mesh = new THREE.Mesh(
@@ -148,7 +155,9 @@ async function loadLevel(url) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
-    platforms.push(mesh);
+    const body = new Body({ position: [...p.position], size: p.size, isStatic: true });
+    world.addBody(body);
+    platforms.push({ mesh, body });
   }
   for (const c of data.collectibles || []) {
     const mesh = new THREE.Mesh(
@@ -175,7 +184,6 @@ const scoreEl = document.getElementById('score');
 let score = 0;
 const shareBtn = document.getElementById('shareBtn');
 
-const GRAVITY = -20;
 const ACCEL = 28;
 const JUMP_SPEED = 8.5;
 const MAX_SPEED = 10;
@@ -188,6 +196,8 @@ addEventListener('keyup', (e) => keys.set(e.code, false));
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyR'){
     player.position.copy(spawnPoint);
+    playerBody.position = spawnPoint.toArray();
+    playerBody.velocity.fill(0);
     velocity.set(0,0,0);
   }
 });
@@ -246,26 +256,26 @@ function update(dt){
     const speed = Math.hypot(velocity.x, velocity.z);
     if (speed > MAX_SPEED){ const s = MAX_SPEED / speed; velocity.x *= s; velocity.z *= s; }
 
-    if (onGround && keys.get('Space')) { velocity.y = JUMP_SPEED; onGround = false; }
-    else { velocity.y += GRAVITY * dt; }
+    if (onGround && keys.get('Space')) { playerBody.velocity[1] = JUMP_SPEED; onGround = false; }
+  }
 
-    player.position.addScaledVector(velocity, dt);
+  playerBody.velocity[0] = velocity.x;
+  playerBody.velocity[2] = velocity.z;
+  world.step(dt);
+  player.position.set(...playerBody.position);
+  velocity.set(...playerBody.velocity);
+  onGround = playerBody.onGround;
+  if (onGround){ velocity.x *= 0.88; velocity.z *= 0.88; }
 
-    const floorY = 1.0;
-    if (player.position.y <= floorY){ player.position.y = floorY; velocity.y = 0; onGround = true; }
-
-    if (onGround){ velocity.x *= 0.88; velocity.z *= 0.88; }
-
-    for (let i = collectibles.length - 1; i >= 0; i--) {
-      const c = collectibles[i];
-      if (player.position.distanceTo(c.position) < 1) {
-        score++;
-        scoreEl.textContent = score;
-        shareBtn.style.display = 'inline-block';
-        shareBtn.onclick = () => shareScore('box3d', score);
-        scene.remove(c);
-        collectibles.splice(i, 1);
-      }
+  for (let i = collectibles.length - 1; i >= 0; i--) {
+    const c = collectibles[i];
+    if (player.position.distanceTo(c.position) < 1) {
+      score++;
+      scoreEl.textContent = score;
+      shareBtn.style.display = 'inline-block';
+      shareBtn.onclick = () => shareScore('box3d', score);
+      scene.remove(c);
+      collectibles.splice(i, 1);
     }
   }
 
