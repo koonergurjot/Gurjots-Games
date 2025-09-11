@@ -12,27 +12,45 @@
     }
   };
 
-  async function loadJSON(url) {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`Failed to fetch ${url} (${res.status})`);
-    return await res.json();
+  async function fetchJSON(url){
+    const res = await fetch(url, { cache:'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res.json();
   }
 
-  function ensure(cond, msg) { if (!cond) throw new Error(msg); }
+  async function loadGamesList(){
+    const bases = [
+      '/games.json',
+      '/public/games.json',
+      (location.pathname.replace(/[^\/]+$/, '') + 'games.json')
+    ];
+    const tried = [];
+    for (const b of bases){
+      const url = b + (b.includes('?') ? '&' : '?') + 't=' + Date.now();
+      try {
+        const j = await fetchJSON(url);
+        return { j, src:b };
+      } catch(e){ tried.push(`${b} → ${e.message}`); }
+    }
+    throw new Error('Unable to fetch games.json from any known location:\n' + tried.join('\n'));
+  }
 
-  async function main() {
+  function ensure(cond, msg){ if (!cond) throw new Error(msg); }
+
+  async function main(){
     try {
       ensure(id, 'Missing ?id= in URL (e.g., /game.html?id=pong)');
-      const list = await loadJSON(`/games.json?t=${Date.now()}`);
-      const game = Array.isArray(list) ? list.find(g => g.slug === id) : (list[id] || null);
-      ensure(game, `Game with slug "${id}" not found in games.json`);
+      const { j:list, src } = await loadGamesList();
+      const games = Array.isArray(list) ? list : Object.keys(list).map(k => ({ slug:k, ...list[k] }));
+      const game = games.find(g => g && g.slug === id);
+      ensure(game, `Game "${id}" not found in ${src}`);
       const { entry, module } = game;
-      ensure(entry, 'games.json: "entry" is required');
-      // Load the game script
+      ensure(entry, `games.json at ${src} has no "entry" for slug "${id}"`);
+
       if (module) {
         const mod = await import(entry + `?t=${Date.now()}`);
         const boot = mod.default || mod.init || mod.start;
-        ensure(typeof boot === 'function', 'No boot export found');
+        ensure(typeof boot === 'function', 'No boot export found (default/init/start)');
         boot({ mount: '#game-root', meta: game });
       } else {
         await new Promise((resolve, reject) => {
@@ -43,13 +61,14 @@
           document.head.appendChild(s);
         });
         const boot = window.GameInit || window.init || window.startGame || window.start;
-        ensure(typeof boot === 'function', 'No boot function found');
+        ensure(typeof boot === 'function', 'No boot function found (GameInit/init/startGame/start)');
         boot({ mount: '#game-root', meta: game });
       }
-    } catch (err) {
-      ui.error('Game failed to start', String(err?.stack || err));
-      console.error(err);
+    } catch(e){
+      ui.error('Game failed to start', String(e && (e.stack || e.message || e)));
+      console.error(e);
     }
   }
+
   window.addEventListener('DOMContentLoaded', main);
 })();
