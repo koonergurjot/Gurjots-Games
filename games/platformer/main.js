@@ -1,5 +1,6 @@
 import { recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
+import * as net from './net.js';
 
 recordLastPlayed('platformer');
 emitEvent({ type: 'play', slug: 'platformer' });
@@ -31,6 +32,7 @@ const state = {
 };
 
 const player = { x: 100, y: 0, w: 40, h: 48, vx: 0, vy: 0, onGround: false, dir: 1 };
+const buddy = { x: 100, y: 0, w: 40, h: 48, dir: 1 };
 // Jump feel helpers
 let jumpBuffer = 0;        // seconds remaining to accept a buffered jump
 let coyoteTime = 0;        // seconds remaining to allow late jump after leaving ground
@@ -41,6 +43,8 @@ const moveSpeed = 300;
 const gravity = 2000;
 const jumpV = -900;
 let camX = 0;
+const enemies = [];
+let enemyTimer = 3;
 
 // Particle system
 const particles = [];
@@ -57,6 +61,7 @@ addEventListener('keydown', e => {
   }
   if (e.code === 'KeyP') state.running = !state.running;
   if (e.code === 'KeyR') restart();
+  if (e.code === 'KeyF') net.sendAssist();
 });
 addEventListener('keyup', e => {
   keys.set(e.code, false);
@@ -69,6 +74,17 @@ addEventListener('keyup', e => {
 addEventListener('pointerdown', () => { if (state.running) jump(); else restart(); });
 document.getElementById('restartBtn').addEventListener('click', () => restart());
 const shareBtn = document.getElementById('shareBtn');
+const connStatus = document.getElementById('connStatus');
+document.getElementById('startCoop').addEventListener('click', () => net.connect());
+net.on('connect', () => { connStatus.textContent = 'Connected'; });
+net.on('state', data => { Object.assign(buddy, data); });
+net.on('collect', d => {
+  setTile(d.x, d.y, '0');
+  state.score = d.score;
+  spawnParticles(d.x * TILE + TILE/2, d.y * TILE + TILE/2, 8);
+});
+net.on('enemy', e => { enemies.push(e); });
+net.on('assist', () => { jump(); });
 
 function jump(){
   player.vy = jumpV;
@@ -129,11 +145,26 @@ function update(dt){
 
   checkCollectibles();
   updateParticles(dt);
+  updateEnemies(dt);
+
+  if (net.isConnected()) {
+    net.sendState({ x: player.x, y: player.y, dir: player.dir });
+  }
+
+  if (net.amHost()) {
+    enemyTimer -= dt;
+    if (enemyTimer <= 0) {
+      const e = spawnEnemy();
+      net.sendEnemy(e);
+      enemyTimer = 5;
+    }
+  }
 
   if (player.y > H + 100) gameOver(false); // fell
 
-  // camera follows player
-  camX = player.x + player.w/2 - W/2;
+  // camera follows players
+  const centerX = net.isConnected() ? (player.x + buddy.x) / 2 : player.x;
+  camX = centerX + player.w/2 - W/2;
   const worldW = levelData[0].length * TILE;
   camX = Math.max(0, Math.min(camX, worldW - W));
 }
@@ -198,6 +229,7 @@ function checkCollectibles(){
         state.score += 1;
         emitEvent({ type: 'score', slug: 'platformer', value: state.score });
         spawnParticles(x * TILE + TILE/2, y * TILE + TILE/2, 8);
+        net.sendCollect({ x, y, score: state.score });
       } else if (t === '3'){
         gameOver(true);
       }
@@ -237,6 +269,35 @@ function spawnParticles(x, y, count){
     p.life = 0.5 + Math.random() * 0.5;
     particles.push(p);
   }
+}
+
+function spawnEnemy(){
+  const e = { x: camX + W + 50, y: 350, w: 40, h: 40, vx: -80 };
+  enemies.push(e);
+  return e;
+}
+
+function updateEnemies(dt){
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    e.x += e.vx * dt;
+    if (e.x < -50) { enemies.splice(i,1); continue; }
+    if (collides(player, e) || (net.isConnected() && collides(buddy, e))) {
+      gameOver(false);
+    }
+  }
+}
+
+function drawEnemies(){
+  ctx.fillStyle = '#ff5555';
+  for (const e of enemies){
+    ctx.fillRect(e.x - camX, e.y, e.w, e.h);
+  }
+}
+
+function collides(a, b){
+  return a.x < b.x + b.w && a.x + a.w > b.x &&
+         a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 function updateParticles(dt){
@@ -291,6 +352,23 @@ function draw(){
   }
 
   drawParticles();
+  drawEnemies();
+
+  // buddy
+  if (net.isConnected()) {
+    const bx = buddy.x - camX;
+    const by = Math.round(buddy.y);
+    ctx.save();
+    if (buddy.dir === -1) {
+      ctx.scale(-1,1);
+      ctx.fillStyle = '#ffb3ba';
+      ctx.fillRect(-bx - buddy.w, by, buddy.w, buddy.h);
+    } else {
+      ctx.fillStyle = '#ffb3ba';
+      ctx.fillRect(bx, by, buddy.w, buddy.h);
+    }
+    ctx.restore();
+  }
 
   // player
   const px = player.x - camX;
