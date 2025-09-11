@@ -1,7 +1,7 @@
 // Simple network helper for Asteroids Co-op Campaign
 // Handles WebSocket connections and sync of ships, bullets and asteroids.
 
-import { warn } from '../../tools/reporters/console-signature.ts';
+import { warn } from '../../tools/reporters/console-signature.js';
 
 let ws;
 let myId = null;
