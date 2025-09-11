@@ -10,6 +10,38 @@ import { registerSW } from '../../shared/sw.js';
 import { injectBackButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 
+const params = new URLSearchParams(location.search);
+const mode = params.get('mode') || 'play';
+const levelUrl = params.get('level') || 'levels/demo.json';
+
+const levelSelect = document.getElementById('levelSelect');
+if (levelSelect) levelSelect.value = levelUrl;
+const modeBtn = document.getElementById('modeBtn');
+if (modeBtn) {
+  modeBtn.textContent = mode === 'editor' ? 'Play' : 'Edit';
+  modeBtn.onclick = () => {
+    params.set('mode', mode === 'editor' ? 'play' : 'editor');
+    params.set('level', levelSelect ? levelSelect.value : levelUrl);
+    location.search = '?' + params.toString();
+  };
+}
+
+if (mode === 'editor') {
+  import('./editor.js').then((m) => m.initEditor(levelUrl));
+  // Editor handles the rest
+  document.getElementById('score').parentElement.style.display = 'none';
+  document.getElementById('shareBtn').style.display = 'none';
+  registerSW();
+  injectBackButton();
+  recordLastPlayed('box3d');
+  emitEvent({ type: 'play', slug: 'box3d' });
+  // Show import/export controls in editor
+  return;
+}
+
+document.getElementById('importBtn')?.style.setProperty('display', 'none');
+document.getElementById('exportBtn')?.style.setProperty('display', 'none');
+
 registerSW();
 injectBackButton();
 recordLastPlayed('box3d');
@@ -89,22 +121,52 @@ ground.rotation.x = -Math.PI * 0.5;
 ground.receiveShadow = true;
 scene.add(ground);
 
-const box = new THREE.Mesh(
-  new THREE.BoxGeometry(1.5, 1.5, 1.5),
-  new THREE.MeshStandardMaterial({ color: 0x6aa9ff })
-);
-box.position.set(4, 0.75, -3);
-box.castShadow = true;
-scene.add(box);
+const platforms = [];
+const collectibles = [];
+let spawnPoint = new THREE.Vector3(0, 1, 5);
 
-let pickup = new THREE.Mesh(
-  new THREE.SphereGeometry(0.3, 16, 16),
-  new THREE.MeshStandardMaterial({ color: 0xffdd00, emissive: 0xffaa00, emissiveIntensity: 1.5 })
-);
-pickup.position.set(-3, 0.3, 4);
-pickup.castShadow = true;
-pickup.add(new THREE.PointLight(0xffaa00, 1, 3));
-scene.add(pickup);
+async function loadLevel(url) {
+  for (const p of platforms) scene.remove(p);
+  platforms.length = 0;
+  for (const c of collectibles) scene.remove(c);
+  collectibles.length = 0;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.spawn) {
+    spawnPoint.fromArray(data.spawn);
+    player.position.copy(spawnPoint);
+  }
+  for (const p of data.platforms || []) {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(...p.size),
+      new THREE.MeshStandardMaterial({ color: p.color || 0x6aa9ff })
+    );
+    mesh.position.set(...p.position);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    platforms.push(mesh);
+  }
+  for (const c of data.collectibles || []) {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.3, 16, 16),
+      new THREE.MeshStandardMaterial({ color: 0xffdd00, emissive: 0xffaa00, emissiveIntensity: 1.5 })
+    );
+    mesh.position.set(...c.position);
+    mesh.castShadow = true;
+    mesh.add(new THREE.PointLight(0xffaa00, 1, 3));
+    scene.add(mesh);
+    collectibles.push(mesh);
+  }
+}
+
+loadLevel(levelUrl);
+
+levelSelect?.addEventListener('change', () => {
+  params.set('level', levelSelect.value);
+  loadLevel(levelSelect.value);
+  history.replaceState(null, '', '?' + params.toString());
+});
 
 const scoreEl = document.getElementById('score');
 let score = 0;
@@ -122,7 +184,7 @@ addEventListener('keydown', (e) => keys.set(e.code, true));
 addEventListener('keyup', (e) => keys.set(e.code, false));
 addEventListener('keydown', (e) => {
   if (e.code === 'KeyR'){
-    player.position.set(0,1,5);
+    player.position.copy(spawnPoint);
     velocity.set(0,0,0);
   }
 });
@@ -191,20 +253,23 @@ function update(dt){
 
     if (onGround){ velocity.x *= 0.88; velocity.z *= 0.88; }
 
-    if (pickup && player.position.distanceTo(pickup.position) < 1){
-      score++;
-      scoreEl.textContent = score;
-      shareBtn.style.display = 'inline-block';
-      shareBtn.onclick = () => shareScore('box3d', score);
-      scene.remove(pickup);
-      pickup = null;
+    for (let i = collectibles.length - 1; i >= 0; i--) {
+      const c = collectibles[i];
+      if (player.position.distanceTo(c.position) < 1) {
+        score++;
+        scoreEl.textContent = score;
+        shareBtn.style.display = 'inline-block';
+        shareBtn.onclick = () => shareScore('box3d', score);
+        scene.remove(c);
+        collectibles.splice(i, 1);
+      }
     }
   }
 
-  if (pickup){
-    pickup.rotation.y += dt * 2;
+  for (const c of collectibles) {
+    c.rotation.y += dt * 2;
     const s = 1 + Math.sin(clock.elapsedTime * 5) * 0.25;
-    pickup.scale.setScalar(s);
+    c.scale.setScalar(s);
   }
 }
 
