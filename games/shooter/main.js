@@ -1,5 +1,6 @@
 import { injectBackButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
+import Net from './net.js';
 
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
@@ -45,17 +46,19 @@ class Player {
 }
 
 class Bullet {
-  constructor(x,y){
+  constructor(x, y, vx = 0, vy = -500){
     this.x = x;
     this.y = y;
     this.prevX = x;
     this.prevY = y;
-    this.vy = -500;
+    this.vx = vx;
+    this.vy = vy;
     this.r = 4;
   }
   update(dt){
     this.prevX = this.x;
     this.prevY = this.y;
+    this.x += this.vx * dt;
     this.y += this.vy * dt;
   }
   draw(ctx){
@@ -217,11 +220,77 @@ class Explosion {
   }
 }
 
+class Turret {
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.r = 12;
+    this.cool = 0;
+  }
+  update(dt){
+    this.cool -= dt;
+    if(this.cool <= 0 && enemies.length){
+      const target = enemies[0];
+      const dx = target.x - this.x;
+      const dy = target.y - this.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const spd = 400;
+      bullets.push(new Bullet(this.x, this.y, dx/d*spd, dy/d*spd));
+      flashes.push(new MuzzleFlash(this.x, this.y));
+      this.cool = 0.8;
+    }
+  }
+  draw(ctx){
+    ctx.fillStyle = '#94a3b8';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+class Wall {
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.w = 40;
+    this.h = 10;
+  }
+  draw(ctx){
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(this.x - this.w/2, this.y - this.h/2, this.w, this.h);
+  }
+}
+
+class Loot {
+  constructor(x, y){
+    this.x = x;
+    this.y = y;
+    this.vx = (Math.random()-0.5)*60;
+    this.vy = (Math.random()-0.5)*60;
+    this.r = 3;
+    this.life = 6;
+  }
+  update(dt){
+    this.x += this.vx*dt;
+    this.y += this.vy*dt;
+    this.life -= dt;
+  }
+  draw(ctx){
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
 const player = new Player();
 let bullets = [];
 let enemies = [];
 let flashes = [];
 let explosions = [];
+let turrets = [];
+let walls = [];
+let loot = [];
 let spawnTimer = 0;
 let shakeTime = 0;
 
@@ -231,6 +300,8 @@ addEventListener('keydown', e => {
   if(e.code === 'Space') fire();
   if(e.code === 'KeyP') state.running = !state.running;
   if(e.code === 'KeyR') restart();
+  if(e.code === 'KeyT') buildTurret();
+  if(e.code === 'KeyF') buildWall();
 });
 addEventListener('keyup', e => keys.set(e.code, false));
 
@@ -240,6 +311,14 @@ function fire(){
   bullets.push(new Bullet(player.x, player.y - player.r));
   flashes.push(new MuzzleFlash(player.x, player.y - player.r));
   shakeTime = 0.1;
+}
+
+function buildTurret(){
+  turrets.push(new Turret(player.x, player.y));
+}
+
+function buildWall(){
+  walls.push(new Wall(player.x, player.y));
 }
 
 function restart(){
@@ -267,13 +346,18 @@ function update(dt){
   player.update(dt, keys);
 
   bullets.forEach(b => b.update(dt));
-  bullets = bullets.filter(b => b.y + b.r > 0);
+  bullets = bullets.filter(b => b.y + b.r > 0 && b.y - b.r < H && b.x + b.r > 0 && b.x - b.r < W);
 
   flashes.forEach(f => f.update(dt));
   flashes = flashes.filter(f => f.life > 0);
 
   explosions.forEach(ex => ex.update(dt));
   explosions = explosions.filter(ex => !ex.isDone());
+
+  turrets.forEach(t => t.update(dt));
+
+  loot.forEach(l => l.update(dt));
+  loot = loot.filter(l => l.life > 0);
 
   spawnTimer -= dt;
   if(spawnTimer <= 0){
@@ -295,10 +379,19 @@ function update(dt){
         e.hitFlash = 1;
         enemies.splice(j,1);
         explosions.push(new Explosion(e.x, e.y));
-        state.score += e.elite ? 3 : 1; scoreEl.textContent = state.score;
-        emitEvent({ type: 'score', slug: 'shooter', value: state.score });
+        for(let k=0;k<3;k++) loot.push(new Loot(e.x, e.y));
         break;
       }
+    }
+  }
+
+  for(let i=loot.length-1; i>=0; i--){
+    const l = loot[i];
+    const dx = player.x - l.x, dy = player.y - l.y;
+    if(dx*dx + dy*dy < (player.r + l.r)*(player.r + l.r)){
+      loot.splice(i,1);
+      state.score += 1; scoreEl.textContent = state.score;
+      emitEvent({ type: 'score', slug: 'shooter', value: state.score });
     }
   }
 
@@ -314,6 +407,13 @@ function update(dt){
       }
     }
   }
+
+  Net.syncPlayer({ x: player.x, y: player.y });
+  Net.syncEnemies(enemies.map(e => ({ x: e.x, y: e.y, r: e.r, elite: e.elite })));
+  Net.syncDefenses({
+    turrets: turrets.map(t => ({ x: t.x, y: t.y })),
+    walls: walls.map(w => ({ x: w.x, y: w.y, w: w.w, h: w.h }))
+  });
 }
 
 function gameOver(){
@@ -341,6 +441,9 @@ function draw(){
   player.draw(ctx);
   bullets.forEach(b => b.draw(ctx));
   enemies.forEach(e => e.draw(ctx));
+  walls.forEach(w => w.draw(ctx));
+  turrets.forEach(t => t.draw(ctx));
+  loot.forEach(l => l.draw(ctx));
   flashes.forEach(f => f.draw(ctx));
   explosions.forEach(ex => ex.draw(ctx));
 
