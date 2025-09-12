@@ -1,6 +1,6 @@
 import { Controls, createGamepad } from '../../src/runtime/controls.ts';
 import { attachPauseOverlay, injectHelpButton, saveBestScore, shareScore } from '../../shared/ui.js';
-import games from '../../games.json' assert { type: 'json' };
+const games = await fetch(new URL('../../games.json', import.meta.url)).then(r => r.json());
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { GameEngine } from '../../shared/gameEngine.js';

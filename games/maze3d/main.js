@@ -2,7 +2,7 @@ import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.
 import { emitEvent } from '../../shared/achievements.js';
 import { connect } from './net.js';
 import { generateMaze, seedRandom } from './generator.js';
-import games from '../../games.json' assert { type: 'json' };
+const games = await fetch(new URL('../../games.json', import.meta.url)).then(r => r.json());
 
 const help = games.find(g => g.id === 'maze3d')?.help || {};
 injectHelpButton({ gameId: 'maze3d', ...help });
