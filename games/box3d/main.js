@@ -8,7 +8,7 @@ import { FXAAShader } from 'https://unpkg.com/three@0.160.0/examples/jsm/shaders
 import { SSAOPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/SSAOPass.js';
 import { registerSW } from '../../shared/sw.js';
 import { injectBackButton, injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
-import games from '../../games.json' assert { type: 'json' };
+const games = await fetch(new URL('../../games.json', import.meta.url)).then(r => r.json());
 import { emitEvent } from '../../shared/achievements.js';
 import { World, Body } from '../box-core/physics.js';
 

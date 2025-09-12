@@ -1,7 +1,7 @@
 import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 import * as net from './net.js';
-import games from '../../games.json' assert { type: 'json' };
+const games = await fetch(new URL('../../games.json', import.meta.url)).then(r => r.json());
 import { TILE, levels, isSolid, isSlope, maskFor } from './tiles.js';
 
 const help = games.find(g => g.id === 'platformer')?.help || {};

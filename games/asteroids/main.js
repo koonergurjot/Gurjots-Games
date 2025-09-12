@@ -11,7 +11,7 @@ import { createFpsMonitor } from '../../shared/util/fps.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { postReady } from '../../shared/debug/post-ready.js';
 import signature from 'console-signature';
-import games from '../../games.json' assert { type: 'json' };
+const games = await fetch(new URL('../../games.json', import.meta.url)).then(r => r.json());
 
 const help = games.find(g => g.id === 'asteroids')?.help || {};
 window.helpData = help;

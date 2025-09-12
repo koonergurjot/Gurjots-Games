@@ -1,5 +1,5 @@
 import { injectBackButton, injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
-import games from '../../games.json' assert { type: 'json' };
+const games = await fetch(new URL('../../games.json', import.meta.url)).then(r => r.json());
 import { emitEvent } from '../../shared/achievements.js';
 import Net from './net.js';
 

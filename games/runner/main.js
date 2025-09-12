@@ -6,7 +6,7 @@ import { getMission, updateMission, formatMission, clearMission } from '../../sh
 import { renderFallbackPanel } from '../../shared/fallback.js';
 import { GameEngine } from '../../shared/gameEngine.js';
 import signature from 'console-signature';
-import games from '../../games.json' assert { type: 'json' };
+const games = await fetch(new URL('../../games.json', import.meta.url)).then(r => r.json());
 
 const help = games.find(g => g.id === 'runner')?.help || {};
 window.helpData = help;
