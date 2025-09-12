@@ -1,197 +1,93 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title data-i18n="genericGame">Game</title>
-  <link rel="stylesheet" href="./styles.css" />
-  <link rel="stylesheet" href="./styles.themes.css" />
-  <meta name="description" content="" />
-  <meta property="og:title" content="Game" />
-  <meta property="og:description" content="" />
-  <meta property="og:image" content="" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <style>
-    #hero { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; }
-    #hero img { width:300px; max-width:100%; border-radius:12px; border:1px solid var(--border); }
-    #hero .info { flex:1 1 250px; }
-    #hero .actions { margin-top:12px; }
-    #leaderboard ol { padding-left:20px; }
-    @media (max-width:600px){ #hero { flex-direction:column; align-items:center; } #hero .info { text-align:center; } }
-  </style>
-</head>
-<body>
-  <header class="site-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-    <div style="display:flex;align-items:center;gap:12px">
-      <a class="btn" href="./index.html" data-i18n="back">← Back</a>
-      <h1 id="pageTitle" style="margin:0;font-size:1.5rem" data-i18n="genericGame">Game</h1>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gurjot's Games — Game</title>
+    <meta name="description" content="Unified game shell for Gurjot's Games." />
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        background: #0c1222;
+        color: #e6ecff;
+      }
+      header, footer { padding: 8px 12px; background: rgba(255,255,255,0.04); backdrop-filter: blur(4px); }
+      main { display: grid; place-items: center; padding: 12px; }
+      #hud { position: fixed; top: 10px; right: 10px; display: flex; gap: 8px; align-items: center; }
+      #score { min-width: 80px; text-align: right; }
+      #pause-btn { padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); color: inherit; }
+      canvas { max-width: 100%; height: auto; background:#000; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+      .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Gurjot's Games</strong> — Unified Game Shell
+    </header>
+
+    <div id="hud" role="region" aria-label="Game HUD">
+      <div id="score" aria-live="polite">0</div>
+      <button id="pause-btn" aria-pressed="false" title="Pause/Resume">Pause</button>
     </div>
-    <div style="display:flex;align-items:center;gap:12px">
-      <label for="langSelect" class="sr-only">Language</label>
-      <select id="langSelect" name="langSelect"><option value="en">EN</option><option value="es">ES</option></select>
-      <div id="profileInfo"></div>
-      <div id="connectionStatus" class="status"></div>
-    </div>
-  </header>
 
-  <main style="max-width:1100px;margin:0 auto;padding:16px">
-    <section id="hero"></section>
-    <section id="details" class="row">
-      <h2 data-i18n="description">Description</h2>
-      <p id="blurb"></p>
-      <h3 data-i18n="instructions">Instructions</h3>
-      <pre id="instructions" class="muted" style="white-space:pre-wrap"></pre>
-      <h3 data-i18n="controls">Controls</h3>
-      <p id="controls" class="muted"></p>
-    </section>
-    <section id="leaderboardSection" class="row">
-      <h2 data-i18n="localLeaderboard">Local Leaderboard</h2>
-      <div id="leaderboard"></div>
-    </section>
-    <section id="relatedSection" class="row">
-      <h2 data-i18n="relatedGames">Related Games</h2>
-      <div class="cards" id="relatedCards"></div>
-    </section>
-  </main>
+    <main>
+      <canvas id="game-canvas" width="800" height="600" aria-label="Game canvas"></canvas>
+    </main>
 
-  <footer class="site-footer"><small data-i18n="footerGame">Game details • Data from games.json</small></footer>
+    <footer>
+      <span id="game-name">Loading…</span>
+    </footer>
 
-  <script type="module">
-    import { applyTheme, getBestScore, getLocalLeaderboard } from './shared/ui.js';
-    import { initI18n, t } from './shared/i18n.js';
-    import { registerSW, cacheGameAssets } from './shared/sw.js';
-    import { initProfileUI, onConnectionChange, syncAchievements } from './shared/profile.js';
-    registerSW();
-    initProfileUI(document.getElementById('profileInfo'));
-    onConnectionChange(isOnline => {
-      const el = document.getElementById('connectionStatus');
-      el.textContent = isOnline ? 'Online' : 'Offline';
-      el.className = 'status ' + (isOnline ? 'success' : 'error');
-      if (isOnline) syncAchievements();
-    });
-    applyTheme();
-    initI18n();
+    <!-- Fix Pack bootstrap: MUST be BEFORE per-game scripts -->
+    <script src="/js/bootstrap/gg.js"></script>
+    <script type="module">
+      import { ensureCanvas, ensureElement } from "/js/bootstrap/dom.js";
 
-    const params = new URLSearchParams(location.search);
-    const slug = params.get('slug') || params.get('id') || params.get('game');
-    const heroEl = document.getElementById('hero');
-    const pageTitle = document.getElementById('pageTitle');
-    if (!slug) {
-      heroEl.innerHTML = `<p class="muted">${t('missingSlug')}</p>`;
-      document.getElementById('details').hidden = true;
-      document.getElementById('leaderboardSection').hidden = true;
-      document.getElementById('relatedSection').hidden = true;
-    } else {
-      cacheGameAssets(slug);
-      init(slug);
-    }
-
-    async function init(slug){
-      try {
-        const res = await fetch('./games.json', { cache: 'no-store' });
-        const data = await res.json();
-        const games = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
-        const game = games.find(g => normalizeId(g) === slug);
-        if (!game) throw new Error('not found');
-        renderGame(game, games);
-      } catch (e) {
-        heroEl.innerHTML = `<p class="muted">${t('gameNotFound')}</p>`;
-        document.getElementById('details').hidden = true;
-        document.getElementById('leaderboardSection').hidden = true;
-        document.getElementById('relatedSection').hidden = true;
-      }
-    }
-
-    function updateMeta(name, content, prop = false){
-      const sel = prop ? `meta[property="${name}"]` : `meta[name="${name}"]`;
-      let el = document.head.querySelector(sel);
-      if (!el){
-        el = document.createElement('meta');
-        if (prop) el.setAttribute('property', name); else el.setAttribute('name', name);
-        document.head.appendChild(el);
-      }
-      el.setAttribute('content', content);
-    }
-
-    function slugify(str){
-      return String(str || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    }
-
-    function normalizeId(g){
-      return g.slug || g.id || slugify(g.name || g.title || '');
-    }
-
-    function card(g){
-      const id = normalizeId(g);
-      const best = getBestScore(id);
-      const bestBadge = Number.isFinite(best) ? `<span class="badge best">${t('best')} ${best}</span>` : '';
-      return `
-        <a class="card" href="./game.html?slug=${id}">
-          ${g.isNew ? `<span class="ribbon">${t('new')}</span>` : ''}
-          ${g.thumb ? `<img src="${g.thumb}" alt="${g.title||g.slug} thumbnail" loading="lazy" onerror="this.remove()">` : ''}
-          <div class="meta">
-            <div class="title">${g.title||g.slug} ${g.badge?`<span class="badge">${g.badge}</span>`:''} ${bestBadge}</div>
-            <div class="tags">${(g.tags||[]).map(t=>`<span>${t}</span>`).join('')}</div>
-            <p>${g.blurb||''}</p>
-          </div>
-        </a>`;
-    }
-
-    async function renderGame(game, allGames){
-      const id = normalizeId(game);
-      document.title = game.title;
-      pageTitle.textContent = game.title;
-      updateMeta('description', game.blurb || '');
-      updateMeta('og:title', game.title, true);
-      updateMeta('og:description', game.blurb || '', true);
-      if (game.thumb) updateMeta('og:image', new URL(game.thumb, location.href).href, true);
-      const best = getBestScore(id);
-      const playHref = `./play.html?id=${id}`;
-      heroEl.innerHTML = `
-        ${game.thumb ? `<img src="${game.thumb}" alt="${game.title} thumbnail" onerror="this.remove()">` : ''}
-        <div class="info">
-          <h2>${game.title} ${game.badge?`<span class=\"badge\">${game.badge}</span>`:''}</h2>
-          <div class="tags">${(game.tags||[]).map(t=>`<span>${t}</span>`).join('')}</div>
-          <div id="heroBest" class="muted" style="margin-top:8px">${Number.isFinite(best)?`${t('bestScore')} ${best}`:''}</div>
-          <div class="actions"><a class="btn" id="playBtn" href="${playHref}">${t('play')}</a></div>
-        </div>`;
-      document.getElementById('blurb').textContent = game.blurb || '';
-
-      // Load instructions if available
-      try {
-        const r = await fetch(`${playHref}README.txt`);
-        document.getElementById('instructions').textContent = r.ok ? await r.text() : t('noDetailedInstructions');
-      } catch {
-        document.getElementById('instructions').textContent = t('noDetailedInstructions');
+      // Basic shell behaviors
+      function setPaused(paused) {
+        const btn = document.getElementById('pause-btn');
+        btn.setAttribute('aria-pressed', String(paused));
+        btn.textContent = paused ? "Resume" : "Pause";
+        window.dispatchEvent(new CustomEvent('gg:pause', { detail: { paused } }));
       }
 
-      // Detect controls heuristically
-      const controls = [];
-      try {
-        const codeRes = await fetch(`${playHref}main.js`);
-        if (codeRes.ok){
-          const txt = await codeRes.text();
-          if (/KeyW|KeyA|KeyS|KeyD/.test(txt)) controls.push('WASD');
-          if (/ArrowUp|ArrowDown|ArrowLeft|ArrowRight/.test(txt)) controls.push('Arrow keys');
-          if (/Space/.test(txt)) controls.push('Space');
-          if (/Enter/.test(txt)) controls.push('Enter');
-        }
-      } catch {}
-      document.getElementById('controls').textContent = controls.length ? controls.join(', ') : t('unknown');
+      window.addEventListener("DOMContentLoaded", () => {
+        const { canvas } = ensureCanvas("game-canvas");
+        ensureElement("#score");
+        document.getElementById('pause-btn').addEventListener('click', () => {
+          const pressed = document.getElementById('pause-btn').getAttribute('aria-pressed') === 'true';
+          setPaused(!pressed);
+        });
 
-      // Leaderboard
-      const board = getLocalLeaderboard(id);
-      const lbEl = document.getElementById('leaderboard');
-      lbEl.innerHTML = board.length ? `<ol>${board.map(e=>`<li>${e.name}: ${e.score}</li>`).join('')}</ol>` : `<p class="muted">${t('noScoresYet')}</p>`;
+        // Reflect game name from query (?game=slug) for UX
+        const params = new URLSearchParams(location.search);
+        const slug = params.get('game') || '';
+        const map = {
+          pong: "Pong Classic",
+          snake: "Snake",
+          tetris: "Tetris",
+          breakout: "Breakout",
+          chess: "Chess 2D",
+          chess3d: "Chess 3D (Local)",
+          g2048: "2048",
+          asteroids: "Asteroids",
+          box3d: "3D Box Playground",
+          maze3d: "Maze 3D",
+          platformer: "Pixel Platformer",
+          runner: "City Runner",
+          shooter: "Alien Shooter"
+        };
+        document.getElementById('game-name').textContent = map[slug] || "Game";
+      });
+    </script>
 
-      // Related games
-      const related = allGames.filter(g => normalizeId(g) !== id && g.tags && game.tags && g.tags.some(t => game.tags.includes(t)));
-      if (!related.length) document.getElementById('relatedSection').hidden = true;
-      else document.getElementById('relatedCards').innerHTML = related.map(card).join('');
-    }
-  </script>
-</body>
+    <!-- 
+      Per-game script(s) should be added below this line by your router or static HTML.
+      EXAMPLE for Pong:
+      <script type="module" src="/games/pong/main.js"></script>
+    -->
+  </body>
 </html>

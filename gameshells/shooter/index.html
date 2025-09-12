@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alien Shooter — Gurjot's Games</title>
+  </head>
+  <body>
+    <canvas id="game-canvas" width="800" height="600" aria-label="Alien Shooter canvas"></canvas>
+    <div id="hud">
+      <div id="score" aria-live="polite">0</div>
+      <button id="pause-btn" aria-pressed="false">Pause</button>
+    </div>
+
+    <!-- Fix Pack bootstrap -->
+    <script src="/js/bootstrap/gg.js"></script>
+    <script type="module">
+      import { ensureCanvas, ensureElement } from "/js/bootstrap/dom.js";
+      window.addEventListener("DOMContentLoaded", () => {
+        ensureCanvas("game-canvas");
+        ensureElement("#score");
+      });
+    </script>
+
+    <!-- Game entry -->
+    <script type="module" src="/games/shooter/main.js"></script>
+  </body>
+</html>
