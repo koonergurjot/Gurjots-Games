@@ -27,6 +27,18 @@ self.addEventListener('activate', (event) => {
 
 // network-first for navigations (index.html), cache-first for others
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  // Network-first for all JS (handles dynamic imports with ?t=…)
+  if (url.pathname.endsWith('.js')) {
+    event.respondWith((async () => {
+      try {
+        const fresh = await fetch(event.request, { cache: 'no-store' });
+        if (fresh && fresh.ok) return fresh;
+      } catch (e) { /* ignore */ }
+      return caches.match(event.request) || fetch(event.request);
+    })());
+    return;
+    }
   const req = event.request;
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
