@@ -5,89 +5,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Gurjot's Games — Game</title>
     <meta name="description" content="Unified game shell for Gurjot's Games." />
-    <style>
-      html, body { height: 100%; margin: 0; }
-      body {
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-        display: grid;
-        grid-template-rows: auto 1fr auto;
-        background: #0c1222;
-        color: #e6ecff;
+
+    <!-- Import map resolves bare specifiers BEFORE any module loads -->
+    <script type="importmap">
+    {
+      "imports": {
+        "console-signature": "/js/vendor/console-signature.js",
+        "three": "https://unpkg.com/three@0.161.0/build/three.module.js"
       }
-      header, footer { padding: 8px 12px; background: rgba(255,255,255,0.04); backdrop-filter: blur(4px); }
-      main { display: grid; place-items: center; padding: 12px; }
-      #hud { position: fixed; top: 10px; right: 10px; display: flex; gap: 8px; align-items: center; }
+    }
+    </script>
+
+    <style>
+      html, body { height: 100%; margin: 0; background:#0c1222; color:#e6ecff; }
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+      #hud { position: fixed; top: 10px; right: 10px; display: flex; gap: 8px; align-items: center; z-index: 10; }
       #score { min-width: 80px; text-align: right; }
       #pause-btn { padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.06); color: inherit; }
       canvas { max-width: 100%; height: auto; background:#000; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
-      .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+      main { display:grid; place-items:center; min-height: 100vh; padding: 12px; }
     </style>
   </head>
   <body>
-    <header>
-      <strong>Gurjot's Games</strong> — Unified Game Shell
-    </header>
-
     <div id="hud" role="region" aria-label="Game HUD">
       <div id="score" aria-live="polite">0</div>
       <button id="pause-btn" aria-pressed="false" title="Pause/Resume">Pause</button>
     </div>
 
     <main>
+      <!-- default canvas; games may use their own, but this prevents null getContext -->
       <canvas id="game-canvas" width="800" height="600" aria-label="Game canvas"></canvas>
     </main>
 
-    <footer>
-      <span id="game-name">Loading…</span>
-    </footer>
-
-    <!-- Fix Pack bootstrap: MUST be BEFORE per-game scripts -->
+    <!-- 1) GG bootstrap (must be before any per-game code) -->
     <script src="/js/bootstrap/gg.js"></script>
+
+    <!-- 2) Common DOM nodes & canvases -->
+    <script src="/js/preflight.js"></script>
+
+    <!-- 3) THREE global (legacy scripts like Maze 3D expect window.THREE) -->
+    <script type="module" src="/js/three-global-shim.js"></script>
+
+    <!-- 4) Ensure specific nodes; runs after DOM ready -->
     <script type="module">
       import { ensureCanvas, ensureElement } from "/js/bootstrap/dom.js";
-
-      // Basic shell behaviors
-      function setPaused(paused) {
-        const btn = document.getElementById('pause-btn');
-        btn.setAttribute('aria-pressed', String(paused));
-        btn.textContent = paused ? "Resume" : "Pause";
-        window.dispatchEvent(new CustomEvent('gg:pause', { detail: { paused } }));
-      }
-
       window.addEventListener("DOMContentLoaded", () => {
-        const { canvas } = ensureCanvas("game-canvas");
+        ensureCanvas("game-canvas");
         ensureElement("#score");
-        document.getElementById('pause-btn').addEventListener('click', () => {
-          const pressed = document.getElementById('pause-btn').getAttribute('aria-pressed') === 'true';
-          setPaused(!pressed);
-        });
-
-        // Reflect game name from query (?game=slug) for UX
-        const params = new URLSearchParams(location.search);
-        const slug = params.get('game') || '';
-        const map = {
-          pong: "Pong Classic",
-          snake: "Snake",
-          tetris: "Tetris",
-          breakout: "Breakout",
-          chess: "Chess 2D",
-          chess3d: "Chess 3D (Local)",
-          g2048: "2048",
-          asteroids: "Asteroids",
-          box3d: "3D Box Playground",
-          maze3d: "Maze 3D",
-          platformer: "Pixel Platformer",
-          runner: "City Runner",
-          shooter: "Alien Shooter"
-        };
-        document.getElementById('game-name').textContent = map[slug] || "Game";
+        // Optional: mirror pause button state
+        const btn = document.getElementById('pause-btn');
+        const setPaused = (p) => { btn.setAttribute('aria-pressed', String(p)); btn.textContent = p ? "Resume" : "Pause"; };
+        btn.addEventListener('click', () => setPaused(btn.getAttribute('aria-pressed') === 'true' ? false : true));
       });
     </script>
 
-    <!-- 
-      Per-game script(s) should be added below this line by your router or static HTML.
-      EXAMPLE for Pong:
-      <script type="module" src="/games/pong/main.js"></script>
+    <!-- 5) Your per-game script(s) go below this line.
+         Example (Pong):
+         <script type="module" src="/games/pong/main.js"></script>
     -->
   </body>
 </html>
