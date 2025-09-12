@@ -1,65 +1,58 @@
-# Gurjot's Games — Loader & SW Patch Bundle
+# Gurjot's Games
 
-This bundle adds:
-- A universal **game loader with on-screen diagnostics** (`js/game-loader.js`).
-- A **network-first rule for JavaScript** in `sw.js`, so stale caches stop breaking fresh game code.
-- A safe **patch script** that injects the minimal changes into your existing repo (with `.bak` backups).
+Gurjot's Games is a fun, web‑based gaming hub that lets you discover and play a growing collection of HTML5 games right in your browser. The project powers a responsive website with a curated library of titles, a custom loader, and offline‑friendly caching to keep play sessions smooth and up to date.
 
-## What this fixes
-- Clicking a game but nothing starts (bad slug / wrong entry path / missing export).
-- Works locally but not on Netlify (case/caching/path issues).
-- Games load with stale code after deploy (service worker cache).
+## Features
 
-## Files in this bundle
-```
-scripts/apply-patches.js   # Node script to patch your repo files in-place (creates .bak backups)
-js/game-loader.js          # New loader with friendly error panel & module/classic support
-README.md
-```
+- **Curated game library** – browse and launch games from a unified interface that works on desktop and mobile.
+- **Game loader with diagnostics** – `js/game-loader.js` boots each game and surfaces clear error messages when something goes wrong.
+- **Service Worker caching** – a network‑first strategy keeps JavaScript fresh while enabling offline support for assets.
+- **Accessible design** – semantic HTML, ARIA labels and responsive layouts provide an inclusive experience.
 
-## How to use (2 minutes)
+## Getting Started
 
-1. **Download & unzip** this bundle at the root of your `Game` repo (same folder where `game.html` and `sw.js` live).
+### Prerequisites
 
-2. **Run the patch script** (requires Node 16+):
+- Node.js 16 or later
+- npm 8 or later
+
+### Installation
+
+Clone the repository and install dependencies:
+
 ```bash
-# from the repo root
-node scripts/apply-patches.js
-# (optional dry run)
-DRY=1 node scripts/apply-patches.js
+git clone https://github.com/USER/Game.git
+cd Game
+npm install
 ```
 
-What it does:
-- Copies `js/game-loader.js` into your repo.
-- Updates `game.html` to ensure:
-  - `<meta name="viewport" ...>` exists.
-  - A `<div id="game-root">` mount is present.
-  - `<script src="/js/game-loader.js"></script>` is included before `</body>`.
-- Appends a network-first JS fetch handler to `sw.js` (if one isn’t already present).
-- Creates backups as `game.html.bak` and `sw.js.bak` before writing.
+### Running locally
 
-3. **Run locally** (any static server):
+Serve the site with any static server:
+
 ```bash
 npx serve .
-# then open: http://localhost:3000/game.html?id=<slug>
 ```
 
-4. **Deploy (Netlify)** and hard-refresh once so the updated Service Worker activates.
+Then open `http://localhost:3000` in your browser.
 
-## Notes
-- The loader supports **both** `module` (`type="module"` imports) and classic scripts with globals. In `games.json`, set `"module": true` for ES modules; omit/false for globals.
-- If a game doesn’t expose a recognizable boot function, add one of:
-  - `export default (ctx) => {...}` **or** `export function init(ctx){...}` for modules
-  - `window.GameInit = (ctx) => {...}` **or** `window.startGame = (ctx) => {...}` for classic scripts
+### Testing
 
-## Rollback
-Use the `.bak` files to restore originals:
+Run health checks and unit tests:
+
 ```bash
-mv game.html.bak game.html
-mv sw.js.bak sw.js
-rm -f js/game-loader.js
+npm test
 ```
 
----
+## Contributing
 
-**Tip:** After this patch, when a game fails to start you’ll see a red diagnostic panel at the bottom with the exact cause (bad slug, 404 entry, missing export, etc.).
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and adhere to the [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests.
+
+## Security
+
+If you discover a vulnerability, please follow the instructions in [SECURITY.md](SECURITY.md).
+
+## License
+
+This repository does not currently specify a license. Contact the project maintainer for usage permissions.
+
