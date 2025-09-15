@@ -1,4 +1,3 @@
-// DOM helpers for game pages.
 export function ensureElement(selector, fallbackTag = "div", attrs = {}) {
   let el = document.querySelector(selector);
   if (!el) {
@@ -9,12 +8,9 @@ export function ensureElement(selector, fallbackTag = "div", attrs = {}) {
   }
   return el;
 }
-
 export function ensureCanvas(id = "game-canvas") {
   const canvas = ensureElement(`#${id}`, "canvas", { id });
   const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    console.error("[fixpack] Canvas.getContext returned null. Check browser support.");
-  }
+  if (!ctx) console.error("[fixpack] Canvas.getContext returned null.");
   return { canvas, ctx };
 }

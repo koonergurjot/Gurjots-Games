@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Gurjot's Games — Game</title>
     <meta name="description" content="Unified game shell for Gurjot's Games." />
-
-    <!-- Import map resolves bare specifiers BEFORE any module loads -->
     <script type="importmap">
     {
       "imports": {
@@ -15,7 +13,6 @@
       }
     }
     </script>
-
     <style>
       html, body { height: 100%; margin: 0; background:#0c1222; color:#e6ecff; }
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
@@ -31,36 +28,23 @@
       <div id="score" aria-live="polite">0</div>
       <button id="pause-btn" aria-pressed="false" title="Pause/Resume">Pause</button>
     </div>
-
     <main>
-      <!-- default canvas; games may use their own, but this prevents null getContext -->
       <canvas id="game-canvas" width="800" height="600" aria-label="Game canvas"></canvas>
     </main>
-
-    <!-- 1) GG bootstrap (must be before any per-game code) -->
     <script src="/js/bootstrap/gg.js"></script>
-
-    <!-- 2) Common DOM nodes & canvases -->
     <script src="/js/preflight.js"></script>
-
-    <!-- 3) THREE global (legacy scripts like Maze 3D expect window.THREE) -->
     <script type="module" src="/js/three-global-shim.js"></script>
-
-    <!-- 4) Ensure specific nodes; runs after DOM ready -->
     <script type="module">
       import { ensureCanvas, ensureElement } from "/js/bootstrap/dom.js";
       window.addEventListener("DOMContentLoaded", () => {
         ensureCanvas("game-canvas");
         ensureElement("#score");
-        // Optional: mirror pause button state
         const btn = document.getElementById('pause-btn');
         const setPaused = (p) => { btn.setAttribute('aria-pressed', String(p)); btn.textContent = p ? "Resume" : "Pause"; };
         btn.addEventListener('click', () => setPaused(btn.getAttribute('aria-pressed') === 'true' ? false : true));
       });
     </script>
-
-    <!-- 5) Your per-game script(s) go below this line.
-         Example (Pong):
+    <!-- Per-game script(s) go here, e.g.:
          <script type="module" src="/games/pong/main.js"></script>
     -->
   </body>

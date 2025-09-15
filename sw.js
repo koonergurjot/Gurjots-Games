@@ -1,77 +1,40 @@
-// v1.1 service worker (safe, minimal).
-// CACHE_VERSION bumped to force users to receive the new landing right away.
-const CACHE_VERSION = 'gg-v4-20250911172711';
-const PRECACHE = 'precache-' + CACHE_VERSION;
-const RUNTIME = 'runtime-' + CACHE_VERSION;
-
-// This manifest is generated/edited separately; imported below.
+const CACHE_NAME = 'gg-v3-' + (self.registration ? self.registration.scope : Math.random());
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // ensure new SW activates immediately
-  event.waitUntil(
-    caches.open(PRECACHE).then(async (cache) => {
-      const urls = (self.__GG_PRECACHE_MANIFEST || []);
-      await cache.addAll(urls);
-    })
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.addAll(['/','/index.html','/game.html','/js/bootstrap/gg.js','/js/bootstrap/dom.js','/js/preflight.js','/js/three-global-shim.js','/js/vendor/console-signature.js'].filter(Boolean));
+  })());
+  self.skipWaiting();
 });
-
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    // Claim clients so the updated SW controls pages without reload
-    await self.clients.claim();
-    // Clean up old caches
     const names = await caches.keys();
-    await Promise.all(names.map(n => n.includes(CACHE_VERSION) ? null : caches.delete(n)));
+    await Promise.all(names.filter(n => n !== CACHE_NAME).map(n => caches.delete(n)));
+    await self.clients.claim();
   })());
 });
-
-// network-first for navigations (index.html), cache-first for others
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  // Network-first for all JS (handles dynamic imports with ?t=…)
   if (url.pathname.endsWith('.js')) {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(event.request, { cache: 'no-store' });
         if (fresh && fresh.ok) return fresh;
-      } catch (e) { /* ignore */ }
+      } catch (e) {}
       return caches.match(event.request) || fetch(event.request);
     })());
     return;
-    }
-  const req = event.request;
-  if (req.mode === 'navigate') {
-    event.respondWith((async () => {
-      try {
-        const net = await fetch(req);
-        const cache = await caches.open(RUNTIME);
-        cache.put(req, net.clone());
-        return net;
-      } catch (e) {
-        const cache = await caches.open(PRECACHE);
-        const cached = await cache.match(req) || await cache.match('/index.html');
-        return cached || Response.error();
-      }
-    })());
-    return;
   }
-
-  // cache-first for static assets
   event.respondWith((async () => {
-    const cache = await caches.open(RUNTIME);
-    const cached = await cache.match(req);
+    const cached = await caches.match(event.request);
     if (cached) return cached;
     try {
-      const net = await fetch(req);
-      // only cache same-origin GET requests
-      if (req.method === 'GET' && new URL(req.url).origin === location.origin) {
-        cache.put(req, net.clone());
-      }
-      return net;
+      const resp = await fetch(event.request);
+      const cache = await caches.open(CACHE_NAME);
+      cache.put(event.request, resp.clone());
+      return resp;
     } catch (e) {
-      const precache = await caches.open(PRECACHE);
-      const fallback = await precache.match(req);
-      return fallback || Response.error();
+      return fetch(event.request);
     }
   })());
 });
