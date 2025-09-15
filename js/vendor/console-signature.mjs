@@ -1,1 +1,1 @@
-export default function consoleSignature(){ /* no-op shim */ }
+export default function consoleSignature() {}
