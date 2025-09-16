@@ -28,8 +28,20 @@ const toggle = document.getElementById('dailyToggle');
 toggle.checked = DAILY_MODE;
 function renderScores(){
   const box = document.getElementById('dailyScores');
-  if(!DAILY_MODE){ box.style.display = 'none'; return; }
-  const scores = LB.getTopScores('snake', DAILY_SEED, 5);
+  if(!box) return;
+  if(!DAILY_MODE){
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  const lb = window.LB;
+  if(!lb || typeof lb.getTopScores !== 'function'){
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  box.style.display = '';
+  const scores = lb.getTopScores('snake', DAILY_SEED, 5) || [];
   box.innerHTML = scores.map(s=>`<li>${s.score}</li>`).join('');
 }
 window.renderScores = renderScores;
