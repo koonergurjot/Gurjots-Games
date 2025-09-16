@@ -1,34 +1,25 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <!-- Import map to resolve bare specifiers used by legacy games -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
-      "three/examples/jsm/": "https://unpkg.com/three@0.158.0/examples/jsm/",
-      "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/",
-      "console-signature": "/shared/console-signature-shim.js"
-    }
-  }
-  </script>
-  <!-- Ensure global THREE for games that expect a global instead of ESM -->
-  <script type="module" src="/js/three-global-shim.js"></script>
-  <!-- Ensure GG helper exists for games that expect window.GG -->
-  <script type="module" src="/shared/gg-shim.js"></script>
-  <!-- Create required DOM nodes before the game boots -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gurjot's Games</title>
+  <script src="/js/three-global-shim.js"></script>
+  <script src="/shared/gg-shim.js"></script>
   <script type="module" src="/js/preflight.js"></script>
 </head>
 <body>
   <!-- Ensure a default container/canvas exists (preflight is idempotent) -->
   <div id="game" style="position:relative;"></div>
   <canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>
-  <!-- Mount root for games that expect it -->
+
+  <!-- Mount root used by the universal loader -->
   <div id="game-root" aria-live="polite" style="display:block;min-height:100vh"></div>
-  
-  <!-- Shim first (creates #game / <canvas> and a tiny window.GG if missing) -->
+
+  <!-- Shim that helps older games find a canvas/ids -->
   <script src="/js/compat-shim.js"></script>
 
-  <!-- Universal loader: accepts ?id=<slug> or ?slug=<slug> -->
+  <!-- Universal loader: now also powers game.html -->
   <script src="/js/game-loader.js"></script>
 </body>
 </html>
