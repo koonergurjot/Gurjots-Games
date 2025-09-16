@@ -1,3 +1,4 @@
+import '/js/three-global-shim.js';
 import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { connect } from './net.js';
