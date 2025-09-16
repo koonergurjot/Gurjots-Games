@@ -19,6 +19,7 @@
     });
   }
 
+  // Provide window.GG with needed stubs
   async function ensureGG() {
     if (typeof window.GG === 'undefined') {
       try { await loadScript('/shared/gg-shim.js'); } catch {}
@@ -29,11 +30,45 @@
     window.GG.log      = window.GG.log      || function(){};
   }
 
+  // Provide a global fitCanvasToParent used by multiple classics
+  function ensureFitCanvas() {
+    if (typeof window.fitCanvasToParent === 'function') return;
+    window.fitCanvasToParent = function(canvas) {
+      if (!canvas || !canvas.getContext) return;
+      function fit() {
+        const parent = canvas.parentElement || document.body;
+        const w = parent.clientWidth || 800;
+        const h = parent.clientHeight || 600;
+        const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        // maintain current aspect if set; otherwise just fill parent
+        canvas.width = Math.max(1, w * dpr);
+        canvas.height = Math.max(1, h * dpr);
+        const ctx = canvas.getContext('2d');
+        if (ctx && ctx.setTransform) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      window.addEventListener('resize', fit);
+      setTimeout(fit, 0);
+      fit();
+    };
+  }
+
   async function ensureTHREE() {
     if (typeof window.THREE !== 'undefined') return;
     try { await loadScript('/js/three-global-shim.js'); } catch {}
     if (typeof window.THREE === 'undefined') {
-      try { await loadScript('https://unpkg.com/three@0.158.0/build/three.min.js'); } catch {}
+      // try multiple CDNs for resilience
+      const cdns = [
+        'https://unpkg.com/three@0.158.0/build/three.min.js',
+        'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js'
+      ];
+      for (const url of cdns) {
+        try { await loadScript(url); if (typeof window.THREE !== 'undefined') break; } catch {}
+      }
+      if (typeof window.THREE === 'undefined') {
+        console.error('[loader] THREE still undefined after attempts');
+      }
     }
   }
 
@@ -76,11 +111,17 @@
       }
       el.id = id;
       root.appendChild(el);
+      if (el.tagName === 'CANVAS') {
+        // Run the fit util on newly created canvases as well
+        ensureFitCanvas();
+        window.fitCanvasToParent(el);
+      }
     }
   }
 
   if (['maze3d','box3d','chess3d'].includes(id)) await ensureTHREE();
   await ensureGG();
+  ensureFitCanvas();
   ensureScaffold(REQUIRED_IDS[id]);
 
   try {
