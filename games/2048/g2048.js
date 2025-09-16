@@ -99,8 +99,6 @@ function updateCanvas(){
   c.height = 40 + N*S + (N-1)*GAP + 30;
 }
 
-function copyGrid(g){ return g.map(r=>r.slice()); }
-
 function applyTheme(){
   const t=themes[currentTheme];
   document.body.style.background=currentTheme==='dark'?'#0b1220':'#fafafa';
