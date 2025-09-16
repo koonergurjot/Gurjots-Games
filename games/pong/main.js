@@ -9,7 +9,13 @@ import '../../shared/skins/index.js';
 import * as ErrorReporter from '../../shared/debug/error-reporter.js';
 
 const canvas = document.getElementById('game');
+if (!(canvas instanceof HTMLCanvasElement)) {
+  throw new Error('Canvas element #game not found');
+}
 const ctx = canvas.getContext('2d');
+if (!ctx) {
+  throw new Error('2D rendering context not available');
+}
 
 // Build HUD UI
 const hudRoot = document.createElement('div');

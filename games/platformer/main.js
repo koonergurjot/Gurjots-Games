@@ -10,7 +10,13 @@ recordLastPlayed('platformer');
 emitEvent({ type: 'play', slug: 'platformer' });
 
 const cvs = document.getElementById('game');
+if (!(cvs instanceof HTMLCanvasElement)) {
+  throw new Error('Canvas element #game not found');
+}
 const ctx = cvs.getContext('2d');
+if (!ctx) {
+  throw new Error('2D rendering context not available');
+}
 const W = cvs.width, H = cvs.height;
 
 let map = [];
