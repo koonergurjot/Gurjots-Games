@@ -104,6 +104,17 @@ let enemies = [];
 let mazeGrid = [];
 let mazeCols = 0;
 let mazeRows = 0;
+const PATH_RECALC_INTERVAL = 0.25;
+let pathRecalcTimer = 0;
+let lastPlayerCell = null;
+let navCache = null;
+const PROFILE_NAV = typeof window !== 'undefined' && typeof performance !== 'undefined' && window.location?.hash?.includes('profile-nav');
+const profileStats = { navTime: 0, navCount: 0, enemyTime: 0, enemyCount: 0 };
+let profileLogTimer = 0;
+
+function cellsEqual(a, b) {
+  return !!a && !!b && a[0] === b[0] && a[1] === b[1];
+}
 
 function updateMazeParams() {
   MAZE_CELLS = parseInt(sizeSelect.value, 10);
@@ -125,9 +136,38 @@ function worldToCell(x, z, cols, rows) {
   return [cx, cy];
 }
 
-function findPath(start, goal, grid) {
+function findPath(start, goal, grid, nav) {
   const rows = grid.length;
   const cols = grid[0].length;
+  if (nav && nav.parents) {
+    const [sx, sy] = start;
+    const [gx, gy] = goal;
+    if (
+      sy < 0 || sy >= nav.parents.length ||
+      sx < 0 || sx >= nav.parents[0].length ||
+      !Number.isFinite(nav.distances?.[sy]?.[sx])
+    ) {
+      return null;
+    }
+    const path = [];
+    const visited = new Set();
+    let current = [sx, sy];
+    while (current) {
+      const key = `${current[0]},${current[1]}`;
+      if (visited.has(key)) break;
+      visited.add(key);
+      path.push(current);
+      if (current[0] === gx && current[1] === gy) {
+        return path;
+      }
+      const next = nav.parents[current[1]]?.[current[0]];
+      if (!next) break;
+      current = [next[0], next[1]];
+    }
+    if (path[path.length - 1]?.[0] === gx && path[path.length - 1]?.[1] === gy) {
+      return path;
+    }
+  }
   const open = [];
   const closed = new Set();
   function key(x,y){return x+','+y;}
@@ -157,24 +197,118 @@ function findPath(start, goal, grid) {
   return null;
 }
 
+function computeNavigation(goal, grid) {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const [gx, gy] = goal;
+  if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) return null;
+  if (grid[gy][gx] === 1) return null;
+  const parents = Array.from({ length: rows }, () => Array(cols).fill(null));
+  const distances = Array.from({ length: rows }, () => Array(cols).fill(Infinity));
+  const queue = [[gx, gy]];
+  distances[gy][gx] = 0;
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  let head = 0;
+  while (head < queue.length) {
+    const [cx, cy] = queue[head++];
+    for (const [dx, dy] of dirs) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      if (grid[ny][nx] === 1) continue;
+      const nextDist = distances[cy][cx] + 1;
+      if (distances[ny][nx] <= nextDist) continue;
+      distances[ny][nx] = nextDist;
+      parents[ny][nx] = [cx, cy];
+      queue.push([nx, ny]);
+    }
+  }
+  return { goal: [gx, gy], parents, distances };
+}
+
+function ensureNavCache(playerCell) {
+  const changed = !cellsEqual(lastPlayerCell, playerCell);
+  if (changed || !navCache || pathRecalcTimer <= 0) {
+    navCache = computeNavigation(playerCell, mazeGrid);
+    lastPlayerCell = [...playerCell];
+    pathRecalcTimer = PATH_RECALC_INTERVAL;
+    return true;
+  }
+  return false;
+}
+
 function updateEnemies(dt) {
   if (!enemies.length) return;
+  const frameStart = PROFILE_NAV ? performance.now() : 0;
+  pathRecalcTimer -= dt;
   const playerPos = controls.getObject().position;
   const playerCell = worldToCell(playerPos.x, playerPos.z, mazeCols, mazeRows);
+  let navUpdated;
+  if (PROFILE_NAV) {
+    const navStart = performance.now();
+    navUpdated = ensureNavCache(playerCell);
+    if (navUpdated) {
+      profileStats.navTime += performance.now() - navStart;
+      profileStats.navCount += 1;
+    }
+  } else {
+    navUpdated = ensureNavCache(playerCell);
+  }
   for (const enemy of enemies) {
     const pos = enemy.mesh.position;
     const enemyCell = worldToCell(pos.x, pos.z, mazeCols, mazeRows);
-    const path = findPath(enemyCell, playerCell, mazeGrid);
-    if (path && path.length > 1) {
-      const [nx, ny] = path[1];
-      const [wx, wz] = cellToWorld(nx, ny, mazeCols, mazeRows);
-      const dir = new THREE.Vector3(wx - pos.x, 0, wz - pos.z);
-      const dist = dir.length();
-      if (dist > 0.01) {
-        dir.normalize();
-        const step = 3 * dt;
-        if (step < dist) pos.add(dir.multiplyScalar(step));
-        else pos.set(wx, pos.y, wz);
+    let needsNewPath = navUpdated || !enemy.path || !enemy.path.length;
+    if (!needsNewPath && !enemy.currentTarget) {
+      if (enemy.currentStepIndex >= enemy.path.length - 1) {
+        needsNewPath = true;
+      } else if (!cellsEqual(enemy.path[enemy.currentStepIndex], enemyCell)) {
+        const idx = enemy.path.findIndex(cell => cellsEqual(cell, enemyCell));
+        if (idx !== -1) enemy.currentStepIndex = idx;
+        else needsNewPath = true;
+      }
+    }
+    if (needsNewPath) {
+      enemy.path = findPath(enemyCell, playerCell, mazeGrid, navCache);
+      enemy.currentStepIndex = 0;
+      enemy.nextStepIndex = null;
+      enemy.currentTarget = null;
+      if (enemy.path) {
+        const idx = enemy.path.findIndex(cell => cellsEqual(cell, enemyCell));
+        if (idx > 0) enemy.currentStepIndex = idx;
+      }
+    }
+    if (enemy.path && enemy.path.length > 1) {
+      if (!enemy.currentTarget) {
+        const nextIndex = enemy.currentStepIndex + 1;
+        if (nextIndex < enemy.path.length) {
+          const [nx, ny] = enemy.path[nextIndex];
+          const [wx, wz] = cellToWorld(nx, ny, mazeCols, mazeRows);
+          enemy.currentTarget = {
+            world: new THREE.Vector3(wx, pos.y, wz),
+            cell: [nx, ny]
+          };
+          enemy.nextStepIndex = nextIndex;
+        }
+      }
+      if (enemy.currentTarget) {
+        const targetPos = enemy.currentTarget.world;
+        const dir = new THREE.Vector3(targetPos.x - pos.x, 0, targetPos.z - pos.z);
+        const dist = dir.length();
+        if (dist > 0.001) {
+          dir.normalize();
+          const step = 3 * dt;
+          if (step < dist) {
+            pos.add(dir.multiplyScalar(step));
+          } else {
+            pos.copy(targetPos);
+          }
+        }
+        if (pos.distanceTo(targetPos) <= 0.01) {
+          pos.copy(targetPos);
+          enemy.currentStepIndex = enemy.nextStepIndex ?? enemy.currentStepIndex;
+          enemy.nextStepIndex = null;
+          enemy.currentTarget = null;
+        }
       }
     }
     if (pos.distanceTo(playerPos) < 0.6) {
@@ -184,6 +318,21 @@ function updateEnemies(dt) {
       break;
     }
   }
+  if (PROFILE_NAV) {
+    profileStats.enemyTime += performance.now() - frameStart;
+    profileStats.enemyCount += 1;
+    profileLogTimer += dt;
+    if (profileLogTimer >= 1) {
+      const navAvg = profileStats.navCount ? profileStats.navTime / profileStats.navCount : 0;
+      const enemyAvg = profileStats.enemyCount ? profileStats.enemyTime / profileStats.enemyCount : 0;
+      console.log(`[maze3d] enemy update avg: ${enemyAvg.toFixed(3)}ms | nav recompute avg: ${navAvg.toFixed(3)}ms (${profileStats.navCount} samples)`);
+      profileStats.navTime = 0;
+      profileStats.enemyTime = 0;
+      profileStats.navCount = 0;
+      profileStats.enemyCount = 0;
+      profileLogTimer = 0;
+    }
+  }
 }
 
 function buildMaze(seed) {
@@ -191,6 +340,9 @@ function buildMaze(seed) {
   if (exitMesh) scene.remove(exitMesh);
   for (const e of enemies) scene.remove(e.mesh);
   enemies = [];
+  navCache = null;
+  lastPlayerCell = null;
+  pathRecalcTimer = 0;
   wallBoxes = [];
   const rand = seedRandom(seed);
   const algorithm = rand() < 0.5 ? 'prim' : 'backtracker';
@@ -256,7 +408,13 @@ function buildMaze(seed) {
     mesh.castShadow = true;
     mesh.position.set(wx, 1.5, wz);
     scene.add(mesh);
-    enemies.push({ mesh });
+    enemies.push({
+      mesh,
+      path: null,
+      currentStepIndex: 0,
+      currentTarget: null,
+      nextStepIndex: null
+    });
   }
 }
 
