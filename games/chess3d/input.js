@@ -2,7 +2,7 @@
  * Handles tile picking and move input. Highlights legal targets using the
  * provided rulesApi.
  */
-export function mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, rulesApi, onMove }) {
+function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, rulesApi, onMove }) {
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
   let selectedSquare = null;
@@ -103,22 +103,23 @@ export function mountInput({ THREE, scene, camera, renderer, controls, boardHelp
 
 // Patch in promotion handling. When a pawn reaches the last rank we
 // request a promotion piece before applying the move with rulesApi.move().
-const _mountInput = mountInput;
-mountInput = function(opts){
-  const origOnMove = opts.onMove;
+export function mountInputWrapper(opts) {
+  const { onMove: origOnMove, rulesApi } = opts;
   return _mountInput({
     ...opts,
     onMove: async ({ from, to }) => {
       let promotion;
-      const legal = opts.rulesApi?.getLegalMoves?.(from) || [];
+      const legal = rulesApi?.getLegalMoves?.(from) || [];
       const move = legal.find((m) => m.to === to);
       if (move?.promotion){
         const { openPromotion } = await import('./ui/promotionModal.js');
-        promotion = await openPromotion(opts.rulesApi?.turn?.());
+        promotion = await openPromotion(rulesApi?.turn?.());
       }
-      const res = opts.rulesApi.move({ from, to, promotion });
+      const res = rulesApi.move({ from, to, promotion });
       if (res?.ok && origOnMove) await origOnMove({ from, to, promotion });
     }
   });
-};
+}
+
+export { _mountInput };
 

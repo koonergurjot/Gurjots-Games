@@ -1,6 +1,6 @@
 import { createBoard } from "./board.js";
 import * as rules from "../chess/engine/rules.js";
-import { mountInput } from "./input.js";
+import { mountInputWrapper } from "./input.js";
 import { createPieces, placeInitialPosition, movePieceByUci } from "./pieces.js";
 import { mountHUD } from "./ui/hud.js";
 import { bestMove, evaluate, cancel } from "./ai/simpleEngine.js";
@@ -294,7 +294,7 @@ async function boot(){
   import('./ui/lastMove.js').then(({ initLastMove })=>{
     lastMoveHelper = initLastMove(scene, helpers, THREE);
   });
-  mountInput({
+  mountInputWrapper({
     THREE,
     scene,
     camera,
