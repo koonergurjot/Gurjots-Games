@@ -11,6 +11,9 @@ const c=document.getElementById('board'), ctx=c.getContext('2d'); const fx=docum
 const statusEl=document.getElementById('status');
 const depthEl=document.getElementById('difficulty');
 const puzzleSelect=document.getElementById('puzzle-select');
+const lobbyStatusEl=document.getElementById('lobby-status');
+const rankingsList=document.getElementById('rankings');
+const findMatchBtn=document.getElementById('find-match');
 const COLS=8, ROWS=8;
 const EMPTY = '.';
 // Simple FEN start
@@ -24,6 +27,10 @@ let castleRights={w:{K:true,Q:true},b:{K:true,Q:true}};
 let epTarget=null; // {x,y} square available for en passant capture
 let repTable={};
 let overMsg=null;
+let onlineMode=false;
+let localColor='w';
+let lastSentMove=null;
+const netMoveQueue=[];
 
 // piece sprites encoded as base64 data URIs to avoid external binary assets
 const pieceSrcs={
@@ -63,10 +70,16 @@ if(puzzleSelect && window.puzzles){
     puzzleSelect.appendChild(opt);
   });
   puzzleSelect.addEventListener('change',()=>{
+    if(onlineMode){
+      puzzleSelect.value='-1';
+      status('Puzzles are unavailable during online play.');
+      return;
+    }
     const i=parseInt(puzzleSelect.value,10);
     if(i>=0) loadPuzzle(i); else { puzzleIndex=-1; reset(); }
   });
 }
+updatePuzzleAvailability();
 
 function reset(){
   if(puzzleIndex>=0){ loadPuzzle(puzzleIndex); return; }
@@ -75,9 +88,13 @@ function reset(){
   epTarget=null;
   repTable={};
   recordPosition();
-  draw(); status('White to move');
+  draw(); status(currentTurnLabel());
 }
 function loadPuzzle(i){
+  if(onlineMode){
+    status('Puzzles are unavailable during online play.');
+    return;
+  }
   puzzleIndex=i; puzzleStep=0;
   const p=window.puzzles[i];
   board=parseFEN(p.fen); turn='w'; sel=null; moves=[]; over=false; overMsg=null;
@@ -285,6 +302,59 @@ function genMovesNoFilter(x,y){ // like genMoves but no legality filter
 }
 
 function status(t){ statusEl.textContent=t; }
+function updateLobbyStatus(message){ if(lobbyStatusEl) lobbyStatusEl.textContent=message||''; }
+function updateRankings(list){
+  if(!rankingsList) return;
+  rankingsList.innerHTML='';
+  if(Array.isArray(list)){
+    list.forEach(p=>{
+      const li=document.createElement('li');
+      li.textContent=`${p.name||'Player'}: ${p.rating}`;
+      rankingsList.appendChild(li);
+    });
+  }
+}
+function updatePuzzleAvailability(){ if(puzzleSelect) puzzleSelect.disabled=onlineMode; }
+function clearNetworkQueues(){ netMoveQueue.length=0; lastSentMove=null; }
+function currentTurnLabel(){
+  if(onlineMode){
+    return (turn===localColor)?'Your move':'Opponent to move';
+  }
+  return (turn==='w'?'White':'Black')+' to move';
+}
+function startOnlineMode(){
+  onlineMode=true;
+  clearNetworkQueues();
+  puzzleIndex=-1; puzzleStep=0;
+  if(puzzleSelect) puzzleSelect.value='-1';
+  updatePuzzleAvailability();
+  reset();
+}
+function stopOnlineMode(){
+  if(!onlineMode) return;
+  onlineMode=false;
+  updatePuzzleAvailability();
+  clearNetworkQueues();
+  updateRankings([]);
+  if(findMatchBtn) findMatchBtn.disabled=false;
+  reset();
+}
+function scheduleProcessNetQueue(){
+  if(anim || !netMoveQueue.length) return;
+  const next=netMoveQueue.shift();
+  processNetMove(next);
+}
+function sendNetworkMove(moveStr){
+  if(!onlineMode || typeof ChessNet==='undefined') return;
+  lastSentMove=moveStr;
+  try{ ChessNet.sendMove(moveStr); }
+  catch(err){ /* ignore network send errors in offline tests */ }
+}
+function enqueueNetMove(moveStr){
+  if(!onlineMode) return;
+  if(anim) netMoveQueue.push(moveStr);
+  else processNetMove(moveStr);
+}
 function highlightSquare(x,y,color){ drawGlow(fxCtx, x*S+S/2, y*S+S/2, S*0.6, color); }
 function draw(){
   ctx.clearRect(0,0,c.width,c.height);
@@ -342,6 +412,134 @@ function animateMove(from,to,piece,cb){
   requestAnimationFrame(step);
 }
 
+function processNetMove(moveStr){
+  if(moveStr===lastSentMove){
+    lastSentMove=null;
+    scheduleProcessNetQueue();
+    return;
+  }
+  const parsed=strToMove(moveStr);
+  const fromPiece=pieceAt(parsed.from.x,parsed.from.y);
+  if(!fromPiece||fromPiece===EMPTY) return;
+  if(colorOf(fromPiece)!==turn) return;
+  const legal=genMoves(parsed.from.x,parsed.from.y).find(m=>m.x===parsed.to.x&&m.y===parsed.to.y);
+  if(!legal) return;
+  const from={x:parsed.from.x,y:parsed.from.y};
+  const to={x:legal.x,y:legal.y};
+  const piece=board[from.y][from.x];
+  movePiece(from,to,legal);
+  animateMove(from,to,piece,()=>{ finalizeMove({source:'remote',moveStr}); });
+}
+
+function executePremoveIfReady(){
+  if(!premove) return null;
+  const from={x:premove.from.x,y:premove.from.y};
+  const piece=pieceAt(from.x,from.y);
+  if(!piece||piece===EMPTY||colorOf(piece)!==turn){ premove=null; return null; }
+  const legal=genMoves(from.x,from.y).find(m=>m.x===premove.to.x&&m.y===premove.to.y);
+  if(!legal){ premove=null; return null; }
+  const to={x:legal.x,y:legal.y};
+  const movingPiece=board[from.y][from.x];
+  movePiece(from,to,legal);
+  animateMove(from,to,movingPiece,()=>{ scheduleProcessNetQueue(); });
+  const info={ moveStr: moveToStr(from,to), color: colorOf(movingPiece) };
+  turn=(turn==='w'?'b':'w');
+  recordPosition();
+  premove=null;
+  return info;
+}
+
+function finalizeMove({source,moveStr}){
+  turn=(turn==='w'?'b':'w');
+  recordPosition();
+  const premoveInfo=executePremoveIfReady();
+  if(source==='local' && onlineMode){
+    sendNetworkMove(moveStr);
+  }
+  if(premoveInfo && onlineMode && premoveInfo.color===localColor){
+    sendNetworkMove(premoveInfo.moveStr);
+  }
+  if(checkmate(turn)){
+    const loser=turn==='w'?'White':'Black';
+    const winner=turn==='w'?'Black':'White';
+    if(onlineMode){
+      const youLose=(turn===localColor);
+      status(youLose?'You are in checkmate.':'Opponent is in checkmate!');
+      overMsg=youLose?'Opponent wins':'You win';
+    } else {
+      status(loser+' in checkmate!');
+      overMsg=winner+' wins';
+    }
+    over=true;
+    draw();
+    scheduleProcessNetQueue();
+    return;
+  }
+  if(stalemate(turn)){
+    status('Stalemate');
+    over=true;
+    overMsg='Stalemate';
+    draw();
+    scheduleProcessNetQueue();
+    return;
+  }
+  if(threefold()){
+    status('Draw by repetition');
+    over=true;
+    overMsg='Draw by repetition';
+    draw();
+    scheduleProcessNetQueue();
+    return;
+  }
+  if(!onlineMode && puzzleIndex<0 && turn==='b'){
+    status('AI thinking...');
+    setTimeout(aiMove,20);
+    scheduleProcessNetQueue();
+    return;
+  }
+  if(!over){
+    const label=currentTurnLabel();
+    if(inCheck(turn)) status(label+' — CHECK!');
+    else status(label);
+  }
+  draw();
+  scheduleProcessNetQueue();
+}
+
+function handleIncomingMove(moveStr){ enqueueNetMove(moveStr); }
+
+function handleNetworkStatus(message){
+  updateLobbyStatus(message);
+  if(typeof message==='string'){
+    if(/white/i.test(message) && /you are/i.test(message)) localColor='w';
+    else if(/black/i.test(message) && /you are/i.test(message)) localColor='b';
+    if(/disconnected/i.test(message)){
+      stopOnlineMode();
+    }
+  }
+  if(onlineMode && !over){
+    const label=currentTurnLabel();
+    if(inCheck(turn)) status(label+' — CHECK!');
+    else status(label);
+  }
+  if(findMatchBtn && !onlineMode) findMatchBtn.disabled=false;
+}
+
+function handlePlayers(list){ updateRankings(list); }
+
+function handleFindMatch(){
+  if(typeof ChessNet==='undefined') return;
+  const rating=(typeof Ratings!=='undefined' && Ratings && typeof Ratings.getRating==='function')?Ratings.getRating():1200;
+  startOnlineMode();
+  if(findMatchBtn) findMatchBtn.disabled=true;
+  updateLobbyStatus('Connecting...');
+  ChessNet.onMove(handleIncomingMove);
+  ChessNet.onStatus(handleNetworkStatus);
+  ChessNet.onPlayers(handlePlayers);
+  ChessNet.connect('wss://example.com/chess', rating);
+}
+if(findMatchBtn) findMatchBtn.addEventListener('click', handleFindMatch);
+
 function movePiece(from,to,opts={}){
   const piece=board[from.y][from.x];
   const color=colorOf(piece);
@@ -392,7 +590,7 @@ function movePiece(from,to,opts={}){
 }
 
 function aiMove(){
-  if(over) return;
+  if(over || onlineMode) return;
   const depth=parseInt(depthEl.value,10)||1;
   const fen=boardToFEN()+" "+turn;
   const move=ai.bestMove(fen, depth);
@@ -400,17 +598,9 @@ function aiMove(){
   const from={x:move.from.x,y:move.from.y};
   const to={x:move.to.x,y:move.to.y};
   const piece=board[from.y][from.x];
+  const moveStr=moveToStr(from,to);
   movePiece(from,to,{});
-  animateMove(from,to,piece,()=>{
-    turn='w';
-    recordPosition();
-    if(checkmate(turn)){ status('White in checkmate!'); over=true; overMsg='Black wins'; }
-    else if(stalemate(turn)){ status('Stalemate'); over=true; overMsg='Stalemate'; }
-    else if(threefold()){ status('Draw by repetition'); over=true; overMsg='Draw by repetition'; }
-    else if(inCheck(turn)){ status('White to move — CHECK!'); }
-    else status('White to move');
-    draw();
-  });
+  animateMove(from,to,piece,()=>{ finalizeMove({source:'ai', moveStr}); });
 }
 c.addEventListener('click', (e)=>{
   if(over || anim) return;
@@ -418,18 +608,23 @@ c.addEventListener('click', (e)=>{
   const x=((e.clientX-r.left)/S)|0, y=((e.clientY-r.top)/S)|0;
   if(!sel){
     const p=pieceAt(x,y); if(!p||p===EMPTY||colorOf(p)!==turn) return;
+    if(onlineMode && colorOf(p)!==localColor) return;
     sel={x,y}; moves=genMoves(x,y); draw(); return;
   } else {
+    if(onlineMode){
+      const selPiece=pieceAt(sel.x,sel.y);
+      if(!selPiece || colorOf(selPiece)!==localColor){ sel=null; moves=[]; draw(); return; }
+    }
     const m = moves.find(mm=>mm.x===x&&mm.y===y);
     if(m){
         const from={x:sel.x,y:sel.y};
         const to={x:m.x,y:m.y};
         const piece=board[sel.y][sel.x];
+        const moveStr=moveToStr(from,to);
         movePiece(from,to,m);
         sel=null; moves=[];
         animateMove(from,to,piece,()=>{
           if(puzzleIndex>=0){
-            const moveStr=moveToStr(from,to);
             const sol=window.puzzles[puzzleIndex].solution;
             const expected=sol[puzzleStep];
             if(moveStr===expected){
@@ -450,33 +645,14 @@ c.addEventListener('click', (e)=>{
             draw();
             return;
           }
-          turn = (turn==='w'?'b':'w');
-          recordPosition();
-          if(premove && colorOf(pieceAt(premove.from.x,premove.from.y))===turn){
-            const legal=genMoves(premove.from.x,premove.from.y).find(z=>z.x===premove.to.x&&z.y===premove.to.y);
-            if(legal){
-              const p2=pieceAt(premove.from.x,premove.from.y);
-              movePiece({x:premove.from.x,y:premove.from.y},{x:legal.x,y:legal.y},legal);
-              animateMove({x:premove.from.x,y:premove.from.y},{x:legal.x,y:legal.y},p2,()=>{});
-              turn=(turn==='w'?'b':'w');
-              recordPosition();
-            }
-            premove=null;
-          }
-          if (checkmate(turn)){ status((turn==='w'?'White':'Black')+' in checkmate!'); over=true; overMsg=(turn==='w'?'Black wins':'White wins'); draw(); return; }
-          if (stalemate(turn)){ status('Stalemate'); over=true; overMsg='Stalemate'; draw(); return; }
-          if (threefold()){ status('Draw by repetition'); over=true; overMsg='Draw by repetition'; draw(); return; }
-          if(turn==='b'){ status('AI thinking...'); setTimeout(aiMove,20); return; }
-          if (inCheck(turn)){ status('White to move — CHECK!'); }
-          else status('White to move');
-          draw();
+          finalizeMove({source:'local', moveStr});
         });
         return;
     } else { sel=null; moves=[]; draw(); }
   }
 });
 // Right-click to set premove
-c.addEventListener('contextmenu',(e)=>{ e.preventDefault(); if(puzzleIndex>=0||anim) return; const r=c.getBoundingClientRect(); const x=((e.clientX-r.left)/S)|0, y=((e.clientY-r.top)/S)|0; if(!sel){ const p=pieceAt(x,y); if(!p||p===EMPTY||colorOf(p)!==turn) return; sel={x,y}; moves=genMoves(x,y); draw(); } else { const m=moves.find(mm=>mm.x===x&&mm.y===y); if(m){ premove={from:{x:sel.x,y:sel.y}, to:{x:m.x,y:m.y}}; sel=null; moves=[]; status('Premove set'); draw(); } else { sel=null; moves=[]; draw(); } } });
+c.addEventListener('contextmenu',(e)=>{ e.preventDefault(); if(puzzleIndex>=0||anim) return; const r=c.getBoundingClientRect(); const x=((e.clientX-r.left)/S)|0, y=((e.clientY-r.top)/S)|0; if(!sel){ const p=pieceAt(x,y); if(!p||p===EMPTY||colorOf(p)!==turn) return; if(onlineMode && colorOf(p)!==localColor) return; sel={x,y}; moves=genMoves(x,y); draw(); } else { if(onlineMode){ const selPiece=pieceAt(sel.x,sel.y); if(!selPiece||colorOf(selPiece)!==localColor){ sel=null; moves=[]; draw(); return; } } const m=moves.find(mm=>mm.x===x&&mm.y===y); if(m){ premove={from:{x:sel.x,y:sel.y}, to:{x:m.x,y:m.y}}; sel=null; moves=[]; status('Premove set'); draw(); } else { sel=null; moves=[]; draw(); } } });
 function checkmate(side){
   // if in check and no legal moves
   if(!inCheck(side)) return false;

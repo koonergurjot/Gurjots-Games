@@ -31,26 +31,6 @@
 <script src="ratings.js?v=5.3"></script>
 <script src="net.js?v=5.3"></script>
 <script type="module" src="chess.js?v=5.3"></script>
-<script>
-(function(){
-  const rating = Ratings.getRating();
-  const btn = document.getElementById('find-match');
-  const status = document.getElementById('lobby-status');
-  const rankings = document.getElementById('rankings');
-  btn.addEventListener('click', () => {
-    ChessNet.onStatus(m => status.textContent = m);
-    ChessNet.onPlayers(list => {
-      rankings.innerHTML = '';
-      list.forEach(p => {
-        const li = document.createElement('li');
-        li.textContent = `${p.name || 'Player'}: ${p.rating}`;
-        rankings.appendChild(li);
-      });
-    });
-    ChessNet.connect('wss://example.com/chess', rating);
-  });
-})();
-</script>
 <script src="../../js/input.js?v=5.3"></script>
 <script src="../../js/remapUI.js?v=5.3"></script>
 <script src="../../js/perfHud.js?v=5.3"></script>
