@@ -22,5 +22,13 @@
   <!-- Ensure a default container/canvas exists (preflight is idempotent) -->
   <div id="game" style="position:relative;"></div>
   <canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>
+  <!-- Mount root for games that expect it -->
+  <div id="game-root" aria-live="polite" style="display:block;min-height:100vh"></div>
+  
+  <!-- Shim first (creates #game / <canvas> and a tiny window.GG if missing) -->
+  <script src="/js/compat-shim.js"></script>
+
+  <!-- Universal loader: accepts ?id=<slug> or ?slug=<slug> -->
+  <script src="/js/game-loader.js"></script>
 </body>
 </html>
