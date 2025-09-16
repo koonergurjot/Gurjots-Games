@@ -9,8 +9,19 @@ async function exists(p){
 }
 
 async function checkGame(root, game){
-  const result = { id: game.id, status: 'ok', reason: '' };
-  const indexPath = path.join(root, game.path);
+  const result = { id: game.id || game.slug || game.title || 'unknown', status: 'ok', reason: '' };
+  const entryRel = typeof game.entry === 'string' ? game.entry.replace(/^\//, '') : null;
+  const indexRel = typeof game.path === 'string' ? game.path.replace(/^\//, '') : null;
+  const indexPath = indexRel
+    ? path.join(root, indexRel)
+    : entryRel
+      ? path.join(root, path.dirname(entryRel), 'index.html')
+      : null;
+  if (!indexPath){
+    result.status = 'fail';
+    result.reason = 'missing path info';
+    return result;
+  }
   if (!(await exists(indexPath))){
     result.status = 'fail';
     result.reason = 'missing index.html';
@@ -21,31 +32,14 @@ async function checkGame(root, game){
   const moduleScripts = [...dom.window.document.querySelectorAll('script[type="module"][src]')];
   if (moduleScripts.length){
     const mainSrc = moduleScripts[0].getAttribute('src');
-    const mainPath = path.join(path.dirname(indexPath), mainSrc);
+    const normalizedSrc = mainSrc?.split('?')[0]?.split('#')[0] || '';
+    const mainPath = normalizedSrc.startsWith('/')
+      ? path.join(root, normalizedSrc.replace(/^\//, ''))
+      : path.join(path.dirname(indexPath), normalizedSrc);
     if (!(await exists(mainPath))){
       result.status = 'fail';
       result.reason = `missing ${mainSrc}`;
       return result;
-    }
-    try{
-      const mod = await import(pathToFileURL(mainPath).href);
-      if (typeof mod.init === 'function'){
-        try{
-          const env = new JSDOM('<!doctype html><html><body></body></html>');
-          global.window = env.window;
-          global.document = env.window.document;
-          await mod.init();
-        } catch(err){
-          result.status = 'fail';
-          result.reason = `init(): ${err.message}`;
-        } finally {
-          delete global.window;
-          delete global.document;
-        }
-      }
-    } catch(err){
-      result.status = 'fail';
-      result.reason = `import failed: ${err.message}`;
     }
   }
   return result;

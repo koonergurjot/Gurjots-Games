@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import makeServiceWorkerEnv from 'service-worker-mock';
 
-const CACHE_NAME = 'gg-v6';
+const SW_SCOPE = 'tests';
+const CACHE_NAME = `gg-v3_2-${SW_SCOPE}`;
 
 describe('service worker cache management', () => {
   beforeEach(() => {
     Object.assign(global, makeServiceWorkerEnv());
+    self.registration = { scope: SW_SCOPE };
     self.clients = {
       claim: () => Promise.resolve(),
     };
