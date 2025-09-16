@@ -1,5 +1,11 @@
 const canvas = document.getElementById('game');
+if (!(canvas instanceof HTMLCanvasElement)) {
+  throw new Error('Canvas element #game not found');
+}
 const ctx = canvas.getContext('2d');
+if (!ctx) {
+  throw new Error('2D rendering context not available');
+}
 function ctxSave() { if (ctx.save) ctx.save(); }
 function ctxRestore() { if (ctx.restore) ctx.restore(); }
 
