@@ -2,8 +2,9 @@
   const params = new URLSearchParams(location.search);
   const id = params.get('id') || params.get('slug');
   if (!id) { console.error("No game id/slug provided"); return; }
+  console.log("[loader] repo-alignment v4.0 slug=", id);
 
-  // Fetch catalogue fresh
+  // fresh catalog to avoid SW caching
   const res = await fetch('/games.json?cb=' + Date.now(), { cache: 'no-store' });
   const list = await res.json();
   const game = list.find(g => g.slug === id);
@@ -19,7 +20,6 @@
     });
   }
 
-  // Provide window.GG with needed stubs
   async function ensureGG() {
     if (typeof window.GG === 'undefined') {
       try { await loadScript('/shared/gg-shim.js'); } catch {}
@@ -30,9 +30,7 @@
     window.GG.log      = window.GG.log      || function(){};
   }
 
-  // Global helpers some classics call
   function ensureGlobalHelpers() {
-    // Canvas fit helper
     if (typeof window.fitCanvasToParent !== 'function') {
       window.fitCanvasToParent = function(canvas) {
         if (!canvas || !canvas.getContext) return;
@@ -53,25 +51,51 @@
         fit();
       };
     }
-    // Some classics reference Replay() globally (e.g., Tetris)
-    if (typeof window.Replay !== 'function') {
-      window.Replay = function(){ /* no-op */ };
+    if (typeof window.SFX !== 'object') {
+      window.SFX = { load(){}, play(){}, mute(){}, unmute(){}, stop(){} };
+    }
+    if (typeof window.Replay !== 'object') {
+      window.Replay = { recordPiece(){}, reset(){}, start(){}, export(){ return ''; } };
     }
   }
 
-  async function ensureTHREE() {
-    if (typeof window.THREE !== 'undefined') return;
-    try { await loadScript('/js/three-global-shim.js'); } catch {}
-    if (typeof window.THREE === 'undefined') {
-      const cdns = [
-        'https://unpkg.com/three@0.158.0/build/three.min.js',
-        'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js'
-      ];
-      for (const url of cdns) {
-        try { await loadScript(url); if (typeof window.THREE !== 'undefined') break; } catch {}
+  function ensureImportMapForThree() {
+    if (document.querySelector('script[type=\"importmap\"]')) return;
+    const map = {
+      imports: {
+        "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
       }
-      if (typeof window.THREE === 'undefined') {
-        console.error('[loader] THREE still undefined after attempts');
+    };
+    const s = document.createElement('script');
+    s.type = 'importmap';
+    s.textContent = JSON.stringify(map);
+    document.head.appendChild(s);
+    console.log('[loader] added importmap for three');
+  }
+
+  async function ensureTHREE() {
+    ensureImportMapForThree();
+    if (typeof window.THREE !== 'undefined') return;
+    const cdns = [
+      'https://unpkg.com/three@0.158.0/build/three.min.js',
+      'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js'
+    ];
+    for (const url of cdns) {
+      try { await loadScript(url); if (typeof window.THREE !== 'undefined') break; } catch {}
+    }
+    if (typeof window.THREE === 'undefined') {
+      console.error('[loader] THREE still undefined after attempts');
+    } else {
+      const plcCDNs = [
+        'https://unpkg.com/three@0.158.0/examples/js/controls/PointerLockControls.js',
+        'https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/PointerLockControls.js'
+      ];
+      for (const url of plcCDNs) {
+        try { await loadScript(url); if (window.THREE.PointerLockControls) break; } catch {}
+      }
+      if (!window.THREE.PointerLockControls) {
+        console.warn('[loader] PointerLockControls not available; if using jsm, importmap handles it.');
       }
     }
   }
@@ -80,9 +104,9 @@
     tetris: ['t','status','level','lives','score','pauseBtn','restartBtn','hud'],
     snake: ['c','score','status','sizeSel','wrapSel','snakeSkin','fruitSkin','boardSkin','dailyToggle','dailyScores','pauseBtn','restartBtn','hud'],
     pong:  ['game','status','lScore','rScore','lWins','rWins','pauseBtn','restartBtn','shareBtn','modeSel','diffSel','seriesSel','sndSel','hud'],
-    breakout: ['game','canvas','gameCanvas','status','score','lives','level','pauseBtn','restartBtn','hud'],
+    breakout: ['b','canvas','gameCanvas','game','status','score','lives','level','pauseBtn','restartBtn','hud'],
     asteroids: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
-    chess: ['c','board','status','turn','moves','restartBtn','hud'],
+    chess: ['c','board','fx','difficulty','puzzle-select','rankings','lobby','status','turn','moves','startBtn','resignBtn','undoBtn','restartBtn','hud'],
     platformer: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
     shooter: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
     runner: ['game','status','score','pauseBtn','restartBtn','hud'],
@@ -96,10 +120,10 @@
     if (!el) return;
     if (el.tagName !== 'CANVAS') {
       const c = document.createElement('canvas');
-      c.id = id;
-      c.width = 960; c.height = 540;
+      c.id = id; c.width = 960; c.height = 540;
       el.replaceWith(c);
       if (typeof window.fitCanvasToParent === 'function') window.fitCanvasToParent(c);
+      console.log('[loader] upgraded #' + id + ' to <canvas>');
     }
   }
 
@@ -115,7 +139,7 @@
     for (const id of ids){
       if (document.getElementById(id)) continue;
       let el;
-      if (['t','c','game','board','canvas','gameCanvas'].includes(id)){
+      if (['t','c','game','board','b','canvas','gameCanvas'].includes(id)){
         el = document.createElement('canvas');
         el.width = 960; el.height = 540;
       } else if (id === 'hud') {
@@ -131,8 +155,7 @@
         window.fitCanvasToParent(el);
       }
     }
-    // If these IDs already existed but weren't canvases, upgrade them
-    ['c','board','game','canvas','gameCanvas'].forEach(ensureIsCanvas);
+    ['c','board','game','b','canvas','gameCanvas'].forEach(ensureIsCanvas);
   }
 
   if (['maze3d','box3d','chess3d'].includes(id)) await ensureTHREE();

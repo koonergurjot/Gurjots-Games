@@ -24,5 +24,11 @@
       fit();
     };
   }
-  if (typeof window.Replay !== 'function') window.Replay = function () {};
+  if (typeof window.SFX !== 'object') {
+    window.SFX = { load(){}, play(){}, mute(){}, unmute(){}, stop(){} };
+  }
+  if (typeof window.Replay !== 'object') {
+    window.Replay = { recordPiece(){}, reset(){}, start(){}, export(){ return ''; } };
+  }
+  console.log('[gg-shim] installed helpers: GG, SFX, Replay, fitCanvasToParent');
 })();
