@@ -104,7 +104,8 @@
 
   try {
     if (game.module) {
-      const mod = await import(`./${game.entry}?t=${Date.now()}`);
+      const entryUrl = game.entry.startsWith('/') ? game.entry : `/${game.entry}`;
+      const mod = await import(`${entryUrl}?t=${Date.now()}`);
       const boot = mod && (mod.default || mod.init || mod.start || mod.boot);
       if (typeof boot === 'function') {
         boot({ mount: '#game-root', meta: game });
@@ -117,7 +118,7 @@
     } else {
       await new Promise((resolve, reject) => {
         const s = document.createElement('script');
-        s.src = `./${game.entry}`;
+        s.src = (game.entry.startsWith('/') ? game.entry : `/${game.entry}`);
         s.onload = resolve;
         s.onerror = reject;
         document.head.appendChild(s);
