@@ -14,21 +14,13 @@
     </script>
   </head>
   <body>
-    <canvas id="game-canvas" width="800" height="600" aria-label="Breakout canvas"></canvas>
-    <div id="hud">
-      <div id="score" aria-live="polite">0</div>
-      <button id="pause-btn" aria-pressed="false">Pause</button>
-    </div>
+    <canvas id="b" width="1000" height="800" aria-label="Breakout canvas"></canvas>
     <script src="/js/bootstrap/gg.js"></script>
     <script src="/js/preflight.js"></script>
-    <script type="module" src="/js/three-global-shim.js"></script>
-    <script type="module">
-      import { ensureCanvas, ensureElement } from "/js/bootstrap/dom.js";
-      window.addEventListener("DOMContentLoaded", () => {
-        ensureCanvas("game-canvas");
-        ensureElement("#score");
-      });
-    </script>
+    <script src="/js/resizeCanvas.global.js"></script>
+    <script src="/js/gameUtil.js"></script>
+    <script src="/js/sfx.js"></script>
+    <script src="/shared/leaderboard.js"></script>
     <script type="module" src="/games/breakout/breakout.js"></script>
   </body>
 </html>
