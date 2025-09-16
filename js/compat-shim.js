@@ -14,12 +14,20 @@
     return el;
   }
 
+  function tagShimCanvas(c){
+    if (!c) return c;
+    try { c.classList.add('compat-shim-canvas'); } catch (e) {}
+    c.dataset.compatShimCanvas = '1';
+    return c;
+  }
+
   function createPlaceholderCanvas(id, parent){
     var c = document.createElement('canvas');
     if (id) c.id = id;
     c.width = window.innerWidth || 800;
     c.height = window.innerHeight || 600;
     c.dataset.compatShimPlaceholder = '1';
+    tagShimCanvas(c);
     (parent || document.body).appendChild(c);
     return c;
   }
@@ -73,6 +81,7 @@
 
   ensureMounted(canvas, root);
   var isPlaceholder = canvas.dataset.compatShimPlaceholder === '1';
+  var placeholderCanvas = isPlaceholder ? canvas : null;
 
   // Minimal GG stub (only if absent)
   if (!('GG' in window)) {
@@ -103,4 +112,114 @@
   }
   window.addEventListener('resize', fit, { passive: true });
   fit();
+
+  if (placeholderCanvas) {
+    var placeholderObserver = null;
+    var placeholderPoll = null;
+    var observerTargets = [];
+
+    function pushObserverTarget(node){
+      if (!node) return;
+      if (observerTargets.indexOf(node) !== -1) return;
+      if (typeof node.querySelectorAll !== 'function') return;
+      observerTargets.push(node);
+    }
+
+    var placeholderParent = placeholderCanvas.parentElement;
+    pushObserverTarget(placeholderParent);
+    if (mount && mount.contains(placeholderCanvas)) pushObserverTarget(mount);
+    pushObserverTarget(root);
+
+    function findReplacementCanvas(){
+      var searchRoots = [];
+      var currentGameEl = document.getElementById('game');
+      if (placeholderParent && placeholderParent.isConnected && searchRoots.indexOf(placeholderParent) === -1) searchRoots.push(placeholderParent);
+      if (mount && mount.isConnected && searchRoots.indexOf(mount) === -1) searchRoots.push(mount);
+      if (currentGameEl && searchRoots.indexOf(currentGameEl) === -1) searchRoots.push(currentGameEl);
+      if (root && searchRoots.indexOf(root) === -1) searchRoots.push(root);
+
+      for (var i = 0; i < searchRoots.length; i++) {
+        var candidateRoot = searchRoots[i];
+        if (!candidateRoot || typeof candidateRoot.querySelectorAll !== 'function') continue;
+        var canvases = candidateRoot.querySelectorAll('canvas');
+        for (var j = 0; j < canvases.length; j++) {
+          var candidate = canvases[j];
+          if (candidate === placeholderCanvas) continue;
+          if (candidate.dataset && candidate.dataset.compatShimCanvas === '1') continue;
+          return candidate;
+        }
+      }
+      return null;
+    }
+
+    function stopPolling(){
+      if (placeholderPoll != null) {
+        clearInterval(placeholderPoll);
+        placeholderPoll = null;
+      }
+    }
+
+    function promoteReplacement(replacement){
+      if (!replacement || replacement === placeholderCanvas) return false;
+      isPlaceholder = false;
+      window.removeEventListener('resize', fit);
+      if (placeholderObserver) {
+        placeholderObserver.disconnect();
+        placeholderObserver = null;
+      }
+      stopPolling();
+      if (placeholderCanvas && placeholderCanvas.parentElement) {
+        placeholderCanvas.parentElement.removeChild(placeholderCanvas);
+      } else if (placeholderCanvas && typeof placeholderCanvas.remove === 'function') {
+        placeholderCanvas.remove();
+      }
+      placeholderCanvas = null;
+      canvas = replacement;
+      return true;
+    }
+
+    function checkForReplacement(){
+      var replacement = findReplacementCanvas();
+      if (!replacement) return false;
+      return promoteReplacement(replacement);
+    }
+
+    if (!checkForReplacement()) {
+      var observed = false;
+      if ('MutationObserver' in window) {
+        placeholderObserver = new MutationObserver(function(){
+          if (checkForReplacement()) {
+            if (placeholderObserver) {
+              placeholderObserver.disconnect();
+              placeholderObserver = null;
+            }
+            stopPolling();
+          }
+        });
+        for (var t = 0; t < observerTargets.length; t++) {
+          var target = observerTargets[t];
+          if (!target || !target.isConnected) continue;
+          try {
+            placeholderObserver.observe(target, { childList: true, subtree: true });
+            observed = true;
+          } catch (e) {}
+        }
+        if (!observed && placeholderObserver) {
+          placeholderObserver.disconnect();
+          placeholderObserver = null;
+        }
+      }
+      if (!observed) {
+        placeholderPoll = setInterval(function(){
+          if (checkForReplacement()) {
+            stopPolling();
+            if (placeholderObserver) {
+              placeholderObserver.disconnect();
+              placeholderObserver = null;
+            }
+          }
+        }, 250);
+      }
+    }
+  }
 })();
