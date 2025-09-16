@@ -6,14 +6,34 @@ import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 installErrorReporter();
 getThemeTokens();
 
+function requireElementById(id){
+  const el=document.getElementById(id);
+  if(!el) throw new Error(`Chess: required element #${id} was not found.`);
+  return el;
+}
+
+function requireCanvas(id){
+  const el=requireElementById(id);
+  if(!(el instanceof HTMLCanvasElement)) throw new Error(`Chess: element #${id} must be a <canvas>.`);
+  return el;
+}
+
+function require2dContext(canvas){
+  const ctx=canvas.getContext('2d');
+  if(!ctx) throw new Error(`Chess: canvas #${canvas.id} does not provide a 2D context.`);
+  return ctx;
+}
+
 (function(){
-const c=document.getElementById('board'), ctx=c.getContext('2d'); const fx=document.getElementById('fx'), fxCtx=fx.getContext('2d'); const S=60;
-const statusEl=document.getElementById('status');
-const depthEl=document.getElementById('difficulty');
-const puzzleSelect=document.getElementById('puzzle-select');
-const lobbyStatusEl=document.getElementById('lobby-status');
-const rankingsList=document.getElementById('rankings');
-const findMatchBtn=document.getElementById('find-match');
+const c=requireCanvas('board'), ctx=require2dContext(c);
+const fx=requireCanvas('fx'), fxCtx=require2dContext(fx);
+const S=60;
+const statusEl=requireElementById('status');
+const depthEl=/** @type {HTMLSelectElement} */ (requireElementById('difficulty'));
+const puzzleSelect=/** @type {HTMLSelectElement} */ (requireElementById('puzzle-select'));
+const lobbyStatusEl=requireElementById('lobby-status');
+const rankingsList=/** @type {HTMLOListElement} */ (requireElementById('rankings'));
+const findMatchBtn=/** @type {HTMLButtonElement} */ (requireElementById('find-match'));
 const COLS=8, ROWS=8;
 const EMPTY = '.';
 // Simple FEN start
