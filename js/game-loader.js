@@ -1,6 +1,6 @@
 (function () {
   const params = new URLSearchParams(location.search);
-  const id = params.get('id');
+  const id = params.get('id') || params.get('slug'); // accept both
 
   const ui = {
     error(title, details) {
@@ -35,6 +35,39 @@
     throw new Error('Unable to fetch games.json from any known location:\n' + tried.join('\n'));
   }
 
+  // --- Pre-create per-game DOM scaffolding ----------------------------------
+  const REQUIRED_IDS = {
+    tetris: ['t'], // <canvas id="t">
+    snake: ['c', 'score', 'status', 'sizeSel', 'wrapSel', 'snakeSkin', 'fruitSkin', 'boardSkin', 'dailyToggle', 'dailyScores'],
+    pong:  ['game', 'status', 'lScore', 'rScore', 'lWins', 'rWins', 'pauseBtn', 'restartBtn', 'shareBtn', 'modeSel', 'diffSel', 'seriesSel', 'sndSel'],
+    asteroids: ['game'],
+    breakout: ['game'],
+    chess: ['game'],
+    platformer: ['game'],
+    shooter: ['game'],
+    runner: ['game'],
+    box3d: ['game'],
+    maze3d: ['game']
+  };
+
+  function scaffold(ids){
+    if (!ids || !ids.length) return;
+    let root = document.getElementById('game-root');
+    if (!root){
+      root = document.createElement('main');
+      root.id = 'game-root';
+      document.body.appendChild(root);
+    }
+    for (const id of ids){
+      if (document.getElementById(id)) continue;
+      const el = (id === 't' || id === 'c' || id === 'game')
+        ? Object.assign(document.createElement('canvas'), { width: 960, height: 540 })
+        : document.createElement('div');
+      el.id = id;
+      root.appendChild(el);
+    }
+  }
+  // --------------------------------------------------------------------------
   function ensure(cond, msg){ if (!cond) throw new Error(msg); }
 
   async function main(){
@@ -44,14 +77,19 @@
       const games = Array.isArray(list) ? list : Object.keys(list).map(k => ({ slug:k, ...list[k] }));
       const game = games.find(g => g && g.slug === id);
       ensure(game, `Game "${id}" not found in ${src}`);
-      const { entry, module } = game;
+      const { entry, module } = game; 
+      // Create expected DOM for this game before loading 
+      scaffold(REQUIRED_IDS[game.slug]);
       ensure(entry, `games.json at ${src} has no "entry" for slug "${id}"`);
 
       if (module) {
         const mod = await import(entry + `?t=${Date.now()}`);
         const boot = mod.default || mod.init || mod.start;
-        ensure(typeof boot === 'function', 'No boot export found (default/init/start)');
-        boot({ mount: '#game-root', meta: game });
+        if (typeof boot === 'function') {
+          boot({ mount: '#game-root', meta: game });
+        } else {
+          console.warn('[loader] no boot export; assuming self-boot', game.slug);
+        }
       } else {
         await new Promise((resolve, reject) => {
           const s = document.createElement('script');
@@ -61,8 +99,11 @@
           document.head.appendChild(s);
         });
         const boot = window.GameInit || window.init || window.startGame || window.start;
-        ensure(typeof boot === 'function', 'No boot function found (GameInit/init/startGame/start)');
-        boot({ mount: '#game-root', meta: game });
+        if (typeof boot === 'function') {
+          boot({ mount: '#game-root', meta: game });
+        } else {
+          console.warn('[loader] no global boot; assuming classic self-boot', game.slug);
+        }
       }
     } catch(e){
       ui.error('Game failed to start', String(e && (e.stack || e.message || e)));
