@@ -9,10 +9,14 @@ const c=document.getElementById('t');
 fitCanvasToParent(c,420,840,24);
 addEventListener('resize',()=>fitCanvasToParent(c,420,840,24));
 const ctx=c.getContext('2d');
-const COLS=10, ROWS=20, CELL=Math.floor(c.height/ROWS);
+const COLS=10, ROWS=20;
 const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
 const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L:[[0,0,7],[7,7,7]]};
 const LINES_PER_LEVEL=10;
+
+function getCellSize(){
+  return Math.floor(c.height/ROWS);
+}
 
 const params=new URLSearchParams(location.search);
 const mode=params.has('spectate')?'spectate':(params.get('replay')?'replay':'play');
@@ -155,34 +159,36 @@ function lockPiece(soft=0,hard=0){
   rotated=false;
 }
 
-function drawCell(x,y,v){
+function drawCell(x,y,v,cell){
   if(!v) return;
   ctx.fillStyle=COLORS[v];
-  ctx.fillRect(x*CELL,y*CELL,CELL-1,CELL-1);
+  ctx.fillRect(x*cell,y*cell,cell-1,cell-1);
 }
-function drawPieceCell(x,y,v,alpha=1){
+function drawPieceCell(x,y,v,cell,alpha=1){
   ctx.fillStyle=`rgba(0,0,0,${0.4*alpha})`;
-  ctx.fillRect(x*CELL+2,y*CELL+2,CELL-1,CELL-1);
+  ctx.fillRect(x*cell+2,y*cell+2,cell-1,cell-1);
   ctx.globalAlpha=alpha;
   ctx.fillStyle=COLORS[v];
-  ctx.fillRect(x*CELL,y*CELL,CELL-1,CELL-1);
+  ctx.fillRect(x*cell,y*cell,cell-1,cell-1);
   ctx.globalAlpha=1;
 }
-function drawMatrix(m,ox,oy){
+function drawMatrix(m,ox,oy,cell){
+  const previewCell=cell*0.8;
   for(let y=0;y<m.length;y++)
     for(let x=0;x<m[y].length;x++){
       if(!m[y][x]) continue;
       ctx.fillStyle=COLORS[m[y][x]];
-      ctx.fillRect(ox+x*CELL*0.8, oy+y*CELL*0.8, CELL*0.8-2, CELL*0.8-2);
+      ctx.fillRect(ox+x*previewCell, oy+y*previewCell, previewCell-2, previewCell-2);
     }
 }
-function drawGhost(){
+function drawGhost(cell){
   if(!showGhost||!ghost) return;
   for(let y=0;y<ghost.m.length;y++)
     for(let x=0;x<ghost.m[y].length;x++)
-      if(ghost.m[y][x]) drawPieceCell(ghost.x+x,ghost.y+y,ghost.m[y][x],0.3);
+      if(ghost.m[y][x]) drawPieceCell(ghost.x+x,ghost.y+y,ghost.m[y][x],cell,0.3);
 }
 function draw(){
+  const cell=getCellSize();
   bgShift=(bgShift+0.5)%c.height;
   const bg=ctx.createLinearGradient(0,bgShift,0,c.height+bgShift);
   bg.addColorStop(0,'#0f1320');
@@ -204,16 +210,16 @@ function draw(){
   }
 
   for(let y=0;y<ROWS;y++)
-    for(let x=0;x<COLS;x++) drawCell(x,y,grid[y][x]);
-  drawGhost();
+    for(let x=0;x<COLS;x++) drawCell(x,y,grid[y][x],cell);
+  drawGhost(cell);
   for(let y=0;y<cur.m.length;y++)
     for(let x=0;x<cur.m[y].length;x++)
-      if(cur.m[y][x]) drawPieceCell(cur.x+x,cur.y+y,cur.m[y][x]);
+      if(cur.m[y][x]) drawPieceCell(cur.x+x,cur.y+y,cur.m[y][x],cell);
 
   if(clearAnim>0){
     const alpha=clearAnim/8;
     ctx.fillStyle=`rgba(255,255,255,${alpha})`;
-    for(const y of clearRows) ctx.fillRect(0,y*CELL,COLS*CELL,CELL);
+    for(const y of clearRows) ctx.fillRect(0,y*cell,COLS*cell,cell);
     clearAnim--;
     if(clearAnim===0){
       grid=grid.filter((r,i)=>!clearRows.includes(i));
@@ -228,11 +234,11 @@ function draw(){
   ctx.fillText(`Level ${level}`,8,40);
   ctx.fillText(`Lines ${lines}`,8,60);
   if(combo>0) ctx.fillText(`Combo ${combo}`,8,80);
-  const ox=COLS*CELL+16;
+  const ox=COLS*cell+16;
   ctx.fillText('NEXT',ox,20);
-  drawMatrix(nextM.m,ox,30);
+  drawMatrix(nextM.m,ox,30,cell);
   ctx.fillText('HOLD (C)',ox,120);
-  if(holdM) drawMatrix(holdM.m,ox,130);
+  if(holdM) drawMatrix(holdM.m,ox,130,cell);
 
   if(over){
     ctx.fillStyle='rgba(0,0,0,.6)';
