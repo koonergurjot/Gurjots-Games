@@ -25,6 +25,13 @@ diffSel?.addEventListener('change',()=>{
 });
 const hud=HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset()});
 
+const gameOverOverlay=document.getElementById('gameOverOverlay');
+const gameOverTitle=document.getElementById('gameOverTitle');
+const gameOverMessage=document.getElementById('gameOverMessage');
+const overlayRestartBtn=document.getElementById('overlayRestart');
+const overlayBackBtn=document.getElementById('overlayBack');
+let gameOverShown=false;
+
 const MAX_UNDO=3;
 const LS_UNDO='g2048.undo', LS_BEST='g2048.best', LS_THEME='g2048.theme';
 const ANIM_TIME=120;
@@ -82,6 +89,7 @@ function drawOpponent(){
 
 function injectGarbage(count){
   for(let i=0;i<count;i++) addTile();
+  check();
   draw();
   net?.send('move',{grid,score});
 }
@@ -107,6 +115,22 @@ function applyTheme(){
   if(themeBtn){ themeBtn.style.background=t.empty; themeBtn.style.color=t.text; themeBtn.style.borderColor=c.style.borderColor; themeBtn.textContent=currentTheme==='dark'?'Light':'Dark'; }
   if(sizeSel){ sizeSel.style.background=t.empty; sizeSel.style.color=t.text; sizeSel.style.borderColor=c.style.borderColor; }
   if(diffSel){ diffSel.style.background=t.empty; diffSel.style.color=t.text; diffSel.style.borderColor=c.style.borderColor; }
+  if(gameOverOverlay){
+    gameOverOverlay.style.background=currentTheme==='dark'?'rgba(11,18,32,0.7)':'rgba(15,23,42,0.45)';
+    gameOverOverlay.setAttribute('aria-hidden', gameOverOverlay.classList.contains('hidden')?'true':'false');
+    const panel=gameOverOverlay.querySelector('.modal-panel');
+    if(panel){
+      panel.style.background=currentTheme==='dark'?'#111827':'#f3f4f6';
+      panel.style.color=t.text;
+      panel.style.borderColor=currentTheme==='dark'?'#243047':'#d1d5db';
+      panel.style.boxShadow=currentTheme==='dark'?'0 20px 40px rgba(15,23,42,0.45)':'0 20px 40px rgba(148,163,184,0.35)';
+    }
+    gameOverOverlay.querySelectorAll('.overlay-actions button').forEach(btn=>{
+      btn.style.background=t.empty;
+      btn.style.color=t.text;
+      btn.style.borderColor=c.style.borderColor;
+    });
+  }
 }
 
 function reset(keepUndo=false){
@@ -117,6 +141,7 @@ function reset(keepUndo=false){
   history=[{grid:copyGrid(grid), score:0}];
   if(!keepUndo){ undoLeft=MAX_UNDO; localStorage.setItem(LS_UNDO,undoLeft); }
   net?.send('move',{grid,score});
+  hideGameOverModal();
 }
 
 function addTile(){
@@ -135,6 +160,7 @@ function undoMove(){
       ({grid,score,history}=res);
       undoLeft--; localStorage.setItem(LS_UNDO,undoLeft);
       over=false; won=false; hintDir=null;
+      hideGameOverModal();
       net?.send('move',{grid,score});
     }
   }
@@ -153,7 +179,31 @@ function move(dir){
   anim={base, tiles:animations, after, p:0};
 }
 
-function check(){ won = won || grid.flat().some(v=>v>=2048); over = !won && !canMove(grid); }
+function hideGameOverModal(){
+  if(gameOverOverlay){
+    gameOverOverlay.classList.add('hidden');
+    gameOverOverlay.setAttribute('aria-hidden','true');
+  }
+  gameOverShown=false;
+}
+
+function showGameOverModal(title,message){
+  if(!gameOverOverlay) return;
+  if(gameOverTitle) gameOverTitle.textContent=title;
+  if(gameOverMessage) gameOverMessage.textContent=message;
+  gameOverOverlay.classList.remove('hidden');
+  gameOverOverlay.setAttribute('aria-hidden','false');
+  overlayRestartBtn?.focus();
+  gameOverShown=true;
+}
+
+function check(){
+  won = won || grid.flat().some(v=>v>=2048);
+  over = !won && !canMove(grid);
+  if((won||over) && !gameOverShown){
+    showGameOverModal(won?'2048!':'Game over', won?'You made 2048! Want to go again?':'No moves left. Try again?');
+  }
+}
 
 addEventListener('keydown', e=>{
   if(e.key==='ArrowLeft') move(0);
@@ -199,19 +249,8 @@ function draw(anim){
     }
   }
   if(hintDir!=null){ ctx.fillText('Hint: '+['Left','Up','Right','Down'][hintDir],12,c.height-12); }
-  if(won){ overlay('You made 2048! Press R to restart'); }
-  else if(over){ overlay('No moves left — Press R'); }
   updateStatus();
   drawOpponent();
-}
-
-function overlay(msg){
-  ctx.fillStyle='rgba(0,0,0,0.55)';
-  ctx.fillRect(0,0,c.width,c.height);
-  ctx.fillStyle=themes[currentTheme].tileTextLight;
-  ctx.font='18px Inter';
-  ctx.textAlign='center';
-  ctx.fillText(msg,c.width/2,c.height/2);
 }
 
 function tileColor(v){
@@ -261,6 +300,13 @@ document.getElementById('themeToggle')?.addEventListener('click',()=>{
   localStorage.setItem(LS_THEME,currentTheme);
   applyTheme();
   draw();
+});
+
+overlayRestartBtn?.addEventListener('click',()=>{ hideGameOverModal(); reset(); });
+overlayBackBtn?.addEventListener('click',()=>{
+  hideGameOverModal();
+  if(window.history.length>1) window.history.back();
+  else window.location.href='../../';
 });
 
 net?.on('move',msg=>{ oppGrid=msg.grid; oppScore=msg.score; drawOpponent(); updateStatus(); });
