@@ -123,15 +123,52 @@ updateBestDisplay();
 
 // v5: pause, power-up, touch
 let paused = false, lastHit = 'left', power = null;
-function togglePause() { paused = !paused; }
+let pauseOverlay = null;
+function ensurePauseOverlay() {
+  if (!pauseOverlay && window.PongPauseOverlay) {
+    pauseOverlay = window.PongPauseOverlay.create({
+      onResume: () => setPaused(false),
+      onRestart: () => restartGame()
+    });
+  }
+  return pauseOverlay;
+}
+function setPaused(value) {
+  const next = Boolean(value);
+  if (paused === next) return;
+  paused = next;
+  const overlay = ensurePauseOverlay();
+  if (overlay) {
+    if (paused) overlay.show();
+    else overlay.hide();
+  }
+}
+function togglePause(force) {
+  if (typeof force === 'boolean') {
+    setPaused(force);
+  } else {
+    setPaused(!paused);
+  }
+}
+function restartGame() {
+  left.score = 0;
+  right.score = 0;
+  ball = resetBall();
+  careerUpdated = false;
+  power = null;
+  lastHit = 'left';
+  setPaused(false);
+}
 document.addEventListener('keydown', e => {
-  if (e.key.toLowerCase() === 'p') togglePause();
+  const key = e.key.toLowerCase();
+  if (key === 'p' || e.key === 'Escape') togglePause();
   if (e.key === '2') toggle2P();
   if (e.key === '1') setDifficulty('easy');
   if (e.key === '3') setDifficulty('hard');
   if (e.key === '2' && e.shiftKey) setDifficulty('medium');
-  if (e.key.toLowerCase() === 'r') { left.score = 0; right.score = 0; ball = resetBall(); careerUpdated = false; }
+  if (key === 'r') restartGame();
 });
+ensurePauseOverlay();
 
 function maybeSpawnPower() {
   if (power || Math.random() > 0.006) return;
@@ -263,7 +300,13 @@ function draw() {
   ctxRestore();
   if (power) { ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(power.x, power.y, 10, 0, Math.PI * 2); ctx.fill(); }
   ctx.textAlign = 'center'; ctx.fillStyle = '#e6e7ea'; ctx.font = 'bold 42px Inter, system-ui, sans-serif'; ctx.fillText(`${left.score}`, W / 2 - 80, 60); ctx.fillText(`${right.score}`, W / 2 + 80, 60);
-  if (paused) { ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#e6e7ea'; ctx.font = 'bold 34px Inter'; ctx.fillText('Paused — P to resume', W / 2, H / 2); }
+  if (paused && !pauseOverlay) {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#e6e7ea';
+    ctx.font = 'bold 34px Inter';
+    ctx.fillText('Paused — Esc or P to resume', W / 2, H / 2);
+  }
   if (left.score >= 7 || right.score >= 7) {
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#e6e7ea'; ctx.font = 'bold 48px Inter, system-ui, sans-serif';

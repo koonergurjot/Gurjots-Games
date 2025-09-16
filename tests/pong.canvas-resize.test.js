@@ -44,6 +44,7 @@ describe('pong canvas loop', () => {
     runScript('js/canvasLoop.global.js');
     window.GG = { incPlays() {}, addXP() {}, setMeta() {}, addAch() {} };
 
+    runScript('games/pong/pauseOverlay.js');
     runScript('games/pong/pong.js');
     const canvas = document.getElementById('game');
     expect({ w: canvas.width, h: canvas.height }).toEqual({ w: 452, h: 301 });
@@ -57,6 +58,16 @@ describe('pong canvas loop', () => {
     expect(typeof window.pong.start).toBe('function');
     expect(typeof window.pong.stop).toBe('function');
     expect(typeof window.pong.dispose).toBe('function');
+
+    const overlay = document.querySelector('.pause-overlay[data-game="pong"]');
+    expect(overlay).toBeTruthy();
+    expect(overlay.classList.contains('hidden')).toBe(true);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(overlay.classList.contains('hidden')).toBe(false);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(overlay.classList.contains('hidden')).toBe(true);
   });
 });
 
