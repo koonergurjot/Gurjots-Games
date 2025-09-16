@@ -4,7 +4,6 @@
   if (typeof window.GG.incPlays !== 'function') window.GG.incPlays = function(){};
   if (typeof window.GG.playSnd !== 'function') window.GG.playSnd = function(){};
   if (typeof window.GG.log !== 'function') window.GG.log = function(){};
-  // Provide a global canvas-fit utility used by classic games
   if (typeof window.fitCanvasToParent !== 'function') {
     window.fitCanvasToParent = function(canvas) {
       if (!canvas || !canvas.getContext) return;
@@ -25,4 +24,5 @@
       fit();
     };
   }
+  if (typeof window.Replay !== 'function') window.Replay = function () {};
 })();

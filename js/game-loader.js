@@ -30,35 +30,39 @@
     window.GG.log      = window.GG.log      || function(){};
   }
 
-  // Provide a global fitCanvasToParent used by multiple classics
-  function ensureFitCanvas() {
-    if (typeof window.fitCanvasToParent === 'function') return;
-    window.fitCanvasToParent = function(canvas) {
-      if (!canvas || !canvas.getContext) return;
-      function fit() {
-        const parent = canvas.parentElement || document.body;
-        const w = parent.clientWidth || 800;
-        const h = parent.clientHeight || 600;
-        const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
-        // maintain current aspect if set; otherwise just fill parent
-        canvas.width = Math.max(1, w * dpr);
-        canvas.height = Math.max(1, h * dpr);
-        const ctx = canvas.getContext('2d');
-        if (ctx && ctx.setTransform) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      }
-      window.addEventListener('resize', fit);
-      setTimeout(fit, 0);
-      fit();
-    };
+  // Global helpers some classics call
+  function ensureGlobalHelpers() {
+    // Canvas fit helper
+    if (typeof window.fitCanvasToParent !== 'function') {
+      window.fitCanvasToParent = function(canvas) {
+        if (!canvas || !canvas.getContext) return;
+        function fit() {
+          const parent = canvas.parentElement || document.body;
+          const w = parent.clientWidth || 800;
+          const h = parent.clientHeight || 600;
+          const dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+          canvas.style.width = "100%";
+          canvas.style.height = "100%";
+          canvas.width = Math.max(1, w * dpr);
+          canvas.height = Math.max(1, h * dpr);
+          const ctx = canvas.getContext('2d');
+          if (ctx && ctx.setTransform) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        window.addEventListener('resize', fit);
+        setTimeout(fit, 0);
+        fit();
+      };
+    }
+    // Some classics reference Replay() globally (e.g., Tetris)
+    if (typeof window.Replay !== 'function') {
+      window.Replay = function(){ /* no-op */ };
+    }
   }
 
   async function ensureTHREE() {
     if (typeof window.THREE !== 'undefined') return;
     try { await loadScript('/js/three-global-shim.js'); } catch {}
     if (typeof window.THREE === 'undefined') {
-      // try multiple CDNs for resilience
       const cdns = [
         'https://unpkg.com/three@0.158.0/build/three.min.js',
         'https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js'
@@ -76,7 +80,7 @@
     tetris: ['t','status','level','lives','score','pauseBtn','restartBtn','hud'],
     snake: ['c','score','status','sizeSel','wrapSel','snakeSkin','fruitSkin','boardSkin','dailyToggle','dailyScores','pauseBtn','restartBtn','hud'],
     pong:  ['game','status','lScore','rScore','lWins','rWins','pauseBtn','restartBtn','shareBtn','modeSel','diffSel','seriesSel','sndSel','hud'],
-    breakout: ['game','status','score','lives','level','pauseBtn','restartBtn','hud'],
+    breakout: ['game','canvas','gameCanvas','status','score','lives','level','pauseBtn','restartBtn','hud'],
     asteroids: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
     chess: ['c','board','status','turn','moves','restartBtn','hud'],
     platformer: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
@@ -86,6 +90,18 @@
     maze3d: ['game','status','pauseBtn','restartBtn','hud'],
     chess3d: ['stage','hud','coords','thinking','difficulty']
   };
+
+  function ensureIsCanvas(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.tagName !== 'CANVAS') {
+      const c = document.createElement('canvas');
+      c.id = id;
+      c.width = 960; c.height = 540;
+      el.replaceWith(c);
+      if (typeof window.fitCanvasToParent === 'function') window.fitCanvasToParent(c);
+    }
+  }
 
   function ensureScaffold(ids){
     if (!ids) return;
@@ -99,7 +115,7 @@
     for (const id of ids){
       if (document.getElementById(id)) continue;
       let el;
-      if (['t','c','game','board'].includes(id)){
+      if (['t','c','game','board','canvas','gameCanvas'].includes(id)){
         el = document.createElement('canvas');
         el.width = 960; el.height = 540;
       } else if (id === 'hud') {
@@ -111,17 +127,17 @@
       }
       el.id = id;
       root.appendChild(el);
-      if (el.tagName === 'CANVAS') {
-        // Run the fit util on newly created canvases as well
-        ensureFitCanvas();
+      if (el.tagName === 'CANVAS' && typeof window.fitCanvasToParent === 'function') {
         window.fitCanvasToParent(el);
       }
     }
+    // If these IDs already existed but weren't canvases, upgrade them
+    ['c','board','game','canvas','gameCanvas'].forEach(ensureIsCanvas);
   }
 
   if (['maze3d','box3d','chess3d'].includes(id)) await ensureTHREE();
   await ensureGG();
-  ensureFitCanvas();
+  ensureGlobalHelpers();
   ensureScaffold(REQUIRED_IDS[id]);
 
   try {
