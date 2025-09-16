@@ -4,22 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gurjot's Games</title>
+  <!-- Shims may also be injected by loader, but keeping these is safe -->
   <script src="/js/three-global-shim.js"></script>
   <script src="/shared/gg-shim.js"></script>
   <script type="module" src="/js/preflight.js"></script>
 </head>
 <body>
-  <!-- Ensure a default container/canvas exists (preflight is idempotent) -->
   <div id="game" style="position:relative;"></div>
   <canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>
-
-  <!-- Mount root used by the universal loader -->
   <div id="game-root" aria-live="polite" style="display:block;min-height:100vh"></div>
-
-  <!-- Shim that helps older games find a canvas/ids -->
   <script src="/js/compat-shim.js"></script>
-
-  <!-- Universal loader: now also powers game.html -->
   <script src="/js/game-loader.js"></script>
 </body>
 </html>
