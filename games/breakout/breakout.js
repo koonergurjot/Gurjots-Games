@@ -73,6 +73,7 @@ addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft')paddle.x=Math.max(0,paddle.x-24);
   if(e.key==='ArrowRight')paddle.x=Math.min(c.width-paddle.w,paddle.x+24);
   if(e.key.toLowerCase()==='r'&&lives<=0){
+    powerEngine.reset();
     score=0;lives=3;level=1;
     loadLevel();resetBall();
     runStart=performance.now();endTime=null;submitted=false;

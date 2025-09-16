@@ -18,5 +18,12 @@ export class PowerUpEngine {
     }
     this.active = this.active.filter(p => p.remaining > 0);
   }
+
+  reset() {
+    for (const p of this.active) {
+      p.remove();
+    }
+    this.active = [];
+  }
 }
 export default PowerUpEngine;
