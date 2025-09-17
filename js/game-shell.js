@@ -266,6 +266,7 @@ function renderError(msg, e){
 window.addEventListener('message', function(ev){
   var data = ev.data || {};
   if(data.type === 'GAME_READY'){
+    if (state.timer) { try { clearTimeout(state.timer); } catch(_){} state.timer = null; }
     var _ov = ensureOverlays();
     try { _ov.loader.style.display='none'; } catch(_) {}
     try { _ov.err.classList.remove('show'); } catch(_) {}
