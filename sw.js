@@ -1,42 +1,40 @@
-const CACHE_NAME = 'gg-v3_2-' + (self.registration ? self.registration.scope : Math.random());
-self.addEventListener('install', (event) => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(['/','/index.html','/game.html','/js/bootstrap/gg.js','/js/bootstrap/dom.js','/js/preflight.js','/js/three-global-shim.js','/js/vendor/console-signature.mjs']);
-  })());
-  self.skipWaiting();
-});
+// sw.js — safe service worker with pass-through for games and scripts
+const CACHE_NAME = 'gg-static-v1';
+
+self.addEventListener('install', (event) => { self.skipWaiting(); });
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    const names = await caches.keys();
-    await Promise.all(names.filter(n => n !== CACHE_NAME).map(n => caches.delete(n)));
-    await self.clients.claim();
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
   })());
+  self.clients.claim();
 });
+
+async function cacheFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const resp = await fetch(request);
+  try { cache.put(request, resp.clone()); } catch(_) {}
+  return resp;
+}
+
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  if (url.pathname.endsWith('.ts')) {
-    const content = "import { OrbitControls as OC } from 'three/examples/jsm/controls/OrbitControls.js';\nexport const OrbitControls = OC;\nexport default OC;\n";
-    event.respondWith(new Response(content, { headers: { 'Content-Type': 'application/javascript; charset=utf-8' } }));
+  const req = event.request;
+  const url = new URL(req.url);
+
+  const isGameAsset = url.pathname.startsWith('/games/');
+  const isScript = req.destination === 'script' || url.pathname.endsWith('.js') || url.pathname.endsWith('.mjs');
+
+  if (isGameAsset || isScript) {
+    event.respondWith(fetch(req));
     return;
   }
-  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.mjs')) {
-    event.respondWith((async () => {
-      try { const fresh = await fetch(event.request, { cache: 'no-store' }); if (fresh && fresh.ok) return fresh; } catch (e) {}
-      return caches.match(event.request) || fetch(event.request);
-    })());
+
+  if (req.mode === 'navigate' || req.destination === 'document') {
+    event.respondWith(fetch(req).catch(() => caches.match('/index.html')));
     return;
   }
-  event.respondWith((async () => {
-    const cached = await caches.match(event.request);
-    if (cached) return cached;
-    try {
-      const resp = await fetch(event.request);
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(event.request, resp.clone());
-      return resp;
-    } catch (e) {
-      return fetch(event.request);
-    }
-  })());
+
+  event.respondWith(cacheFirst(req));
 });

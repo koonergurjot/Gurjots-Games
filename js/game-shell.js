@@ -1,143 +1,114 @@
-// js/game-shell.js — universal shell that loads a game by slug using games.json
+// js/game-shell.js — hardened, SW-friendly, compat version
 const qs = new URLSearchParams(location.search);
 const DEBUG = qs.get('debug') === '1' || qs.get('debug') === 'true';
 const FORCE = qs.get('force'); // 'iframe' | 'script'
 const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
 const slug = qs.get('slug') || qs.get('id') || qs.get('game');
-const $ = s => document.querySelector(s);
+var $ = function(s){ return document.querySelector(s); };
 
-function el(tag, cls){ const e = document.createElement(tag); if(cls) e.className = cls; return e; }
+function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className = cls; return e; }
 
-const state = {
-  timer: null,
-  muted: true,
-  gameInfo: null,
-  iframe: null,
-};
+var state = { timer:null, muted:true, gameInfo:null, iframe:null };
+
+function cacheBust(url) {
+  try {
+    var u = new URL(url, location.origin);
+    if (qs.get('bust') === '1' || DEBUG) {
+      u.searchParams.set('_v', String(Date.now()));
+    }
+    return u.pathname + (u.search ? u.search : '');
+  } catch(_) { return url; }
+}
 
 async function boot(){
-  if(!slug){
-    render404("Missing ?slug= parameter");
-    return;
-  }
-  let catalog;
+  if(!slug){ return render404("Missing ?slug= parameter"); }
+  var catalog;
   try{
-    const res = await fetch('/games.json', {cache:'no-cache'});
+    var res = await fetch('/games.json', {cache:'no-cache'});
     catalog = await res.json();
-  }catch(e){
-    renderError("Could not load games.json", e);
-    return;
-  }
-  const info = (Array.isArray(catalog) ? catalog : catalog.games || []).find(g => (g.slug||g.id) === slug);
-  if(!info){
-    render404(`Unknown game: ${slug}`);
-    return;
-  }
+  }catch(e){ return renderError("Could not load games.json", e); }
+  var list = Array.isArray(catalog) ? catalog : (catalog.games || []);
+  var info = list.find(function(g){ return (g.slug||g.id) === slug; });
+  if(!info){ return render404("Unknown game: "+slug); }
   state.gameInfo = info;
   renderShell(info);
   loadGame(info);
 }
 
 function render404(msg){
-  const root = $('#app');
-  root.innerHTML = `
-    <div class="container">
-      <div class="card">
-        <h2>Game not found</h2>
-        <p>${msg}</p>
-        <p><a class="btn" href="./">← Back to Home</a></p>
-      </div>
-    </div>`;
+  var root = $('#app');
+  root.innerHTML = '\n    <div class="container">\n      <div class="card">\n        <h2>Game not found</h2>\n        <p>'+msg+'</p>\n        <p><a class="btn" href="./">← Back to Home</a></p>\n      </div>\n    </div>';
 }
 
 function renderShell(info){
-  $('#title').textContent = info.title || info.name || slug;
-  const tags = info.tags || info.genres || [];
-  const t = $('.tags');
-  t.innerHTML = '';
-  tags.slice(0,6).forEach(tag=>{
-    const chip = el('span','tag'); chip.textContent = tag; t.appendChild(chip);
-  });
+  var title = $('#title'); if (title) title.textContent = info.title || info.name || slug;
+  var tags = info.tags || info.genres || [];
+  var t = $('.tags'); if (t){ t.innerHTML=''; tags.slice(0,6).forEach(function(tag){ var chip = el('span','tag'); chip.textContent = tag; t.appendChild(chip); }); }
 
-  // About panel
-  $('#about-text').textContent = info.description || info.short || 'Ready to play?';
-  const openNew = document.getElementById('open-new'); if (openNew) openNew.href = location.href;
+  var about = $('#about-text'); if (about) about.textContent = info.description || info.short || 'Ready to play?';
+  var openNew = document.getElementById('open-new'); if (openNew) openNew.href = location.href;
 
-  // Keyboard help (best-effort defaults)
-  const cl = document.getElementById('controls-list');
-  if (cl) cl.innerHTML = `
-    <li><kbd>← →</kbd> Move</li>
-    <li><kbd>Space</kbd> Action / Jump</li>
-    <li><kbd>P</kbd> Pause</li>
-    <li><kbd>F</kbd> Fullscreen</li>`;
+  var cl = document.getElementById('controls-list');
+  if (cl) cl.innerHTML = '\n    <li><kbd>← →</kbd> Move</li>\n    <li><kbd>Space</kbd> Action / Jump</li>\n    <li><kbd>P</kbd> Pause</li>\n    <li><kbd>F</kbd> Fullscreen</li>';
 
-  // Wire controls
-  const btnRestart = document.getElementById('btn-restart'); if (btnRestart) btnRestart.onclick = ()=> reloadGame();
-  const btnFs = document.getElementById('btn-fullscreen'); if (btnFs) btnFs.onclick = ()=> {
-    const stage = $('#stage');
-    (stage?.requestFullscreen||stage?.webkitRequestFullscreen||stage?.msRequestFullscreen||(()=>Promise.reject()))().catch(()=>{});
+  var btnRestart = document.getElementById('btn-restart'); if (btnRestart) btnRestart.onclick = function(){ reloadGame(); };
+  var btnFs = document.getElementById('btn-fullscreen'); if (btnFs) btnFs.onclick = function(){
+    var stage = $('#stage');
+    var req = stage && (stage.requestFullscreen || stage.webkitRequestFullscreen || stage.msRequestFullscreen);
+    if (req) try{ req.call(stage); }catch(_){}
   };
-  const btnMute = document.getElementById('btn-mute'); if (btnMute) btnMute.onclick = ()=> toggleMute();
-  const btnHow = document.getElementById('btn-how'); if (btnHow) btnHow.onclick = ()=> document.getElementById('about')?.scrollIntoView({behavior:'smooth'});
+  var btnMute = document.getElementById('btn-mute'); if (btnMute) btnMute.onclick = function(){ toggleMute(); };
+  var btnHow = document.getElementById('btn-how'); if (btnHow) btnHow.onclick = function(){ var a=document.getElementById('about'); if (a) a.scrollIntoView({behavior:'smooth'}); };
 
-  // pause overlay by page visibility
-  document.addEventListener('visibilitychange', ()=>{
-    if(document.hidden){
-      window.postMessage({type:'GAME_PAUSE'}, '*');
-    }
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden){ try { window.postMessage({type:'GAME_PAUSE'}, '*'); } catch(_){ } }
   });
 }
 
 function loadGame(info){
-  const stage = $('#stage');
-  const overlays = ensureOverlays();
-  const loader = overlays.loader;
-  const err = overlays.err;
-
+  var stage = $('#stage');
+  var overlays = ensureOverlays();
+  var loader = overlays.loader, err = overlays.err;
   try { err.classList.remove('show'); } catch(_){}
   try { loader.style.display = 'flex'; } catch(_){}
 
-  // Provide legacy anchors some games may expect
   ensureLegacyElements();
 
-  // decide embedding strategy
-  const entry = info.launch?.path || info.entry || info.url;
-  const isModule = info.launch?.module || info.module || false;
-  let type = info.launch?.type || (entry && entry.endsWith('.html') ? 'iframe' : 'script');
+  var entry = info.launch && info.launch.path || info.entry || info.url;
+  var isModule = (info.launch && info.launch.module) || info.module || false;
+  var type = (info.launch && info.launch.type) || (entry && entry.endsWith('.html') ? 'iframe' : 'script');
   if (FORCE === 'iframe') type = 'iframe'; else if (FORCE === 'script') type = 'script';
 
   if(type === 'iframe'){
-    const debugEntry = DEBUG ? (entry + (entry.includes('?')?'&':'?') + 'debug=1') : entry;
-    const iframe = document.createElement('iframe');
+    var debugEntry = DEBUG ? (entry + (entry.indexOf('?')>=0?'&':'?') + 'debug=1') : entry;
+    var iframe = document.createElement('iframe');
     iframe.id = 'frame';
     iframe.allow = 'autoplay; fullscreen';
-    iframe.src = debugEntry;
-    iframe.onload = ()=>{/* waiting for GAME_READY handshake */};
+    iframe.src = cacheBust(debugEntry);
+    iframe.onload = function(){ /* wait for GAME_READY */ };
     if (stage) stage.innerHTML = '';
     (stage || document.body).appendChild(iframe);
     state.iframe = iframe;
     createDiagUI(info, type, debugEntry);
   } else {
-    // script boot
     if (stage) stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>';
     if (DEBUG) {
-      const d = document.createElement('script');
+      var d = document.createElement('script');
       d.src = '/js/runtime-diagnostics.js';
       document.body.appendChild(d);
     }
-    const s = document.createElement('script');
-    const useModule = (FORCE_MODULE !== null) ? FORCE_MODULE : isModule;
+    var s = document.createElement('script');
+    var useModule = (FORCE_MODULE !== null) ? FORCE_MODULE : isModule;
     if(useModule){ s.type='module'; }
-    s.src = entry;
-    s.onerror = (e)=>renderError('Failed to load game script', e);
+    s.src = cacheBust(entry);
+    s.onerror = function(e){ renderError('Failed to load game script', e); };
     document.body.appendChild(s);
     createDiagUI(info, type, entry);
   }
 
-  // Handshake timer
   if(state.timer) clearTimeout(state.timer);
-  state.timer = setTimeout(()=>{
-    const overlays2 = ensureOverlays();
+  state.timer = setTimeout(function(){
+    var overlays2 = ensureOverlays();
     try { overlays2.loader.style.display = 'none'; } catch(_){}
     showSoftLoading();
   }, 6000);
@@ -145,8 +116,7 @@ function loadGame(info){
 
 function reloadGame(){
   if(state.iframe){
-    const src = state.iframe.src;
-    state.iframe.src = src;
+    var src = state.iframe.src; state.iframe.src = src;
   } else {
     location.reload();
   }
@@ -154,7 +124,7 @@ function reloadGame(){
 
 function toggleMute(){
   state.muted = !state.muted;
-  const btn = document.getElementById('btn-mute'); if (btn) btn.innerText = state.muted ? 'Unmute' : 'Mute';
+  var btn = document.getElementById('btn-mute'); if (btn) btn.innerText = state.muted ? 'Unmute' : 'Mute';
   try{
     if(state.iframe && state.iframe.contentWindow){
       state.iframe.contentWindow.postMessage({type:'GAME_MUTE', muted: state.muted}, '*');
@@ -163,23 +133,15 @@ function toggleMute(){
 }
 
 function ensureLegacyElements(){
-  // Some games expect these IDs to exist
-  if(!document.getElementById('game')) {
-    const d = document.createElement('div'); d.id = 'game'; d.style.position='relative'; document.body.appendChild(d);
-  }
-  if(!document.getElementById('game-root')){
-    const d = document.createElement('div'); d.id = 'game-root'; document.body.appendChild(d);
-  }
-  if(!document.getElementById('gameCanvas')){
-    const c = document.createElement('canvas'); c.id='gameCanvas'; c.width=800; c.height=600; c.setAttribute('aria-label','Game canvas'); document.body.appendChild(c);
-  }
+  if(!document.getElementById('game')) { var d = document.createElement('div'); d.id = 'game'; d.style.position='relative'; document.body.appendChild(d); }
+  if(!document.getElementById('game-root')){ var d2 = document.createElement('div'); d2.id = 'game-root'; document.body.appendChild(d2); }
+  if(!document.getElementById('gameCanvas')){ var c = document.createElement('canvas'); c.id='gameCanvas'; c.width=800; c.height=600; c.setAttribute('aria-label','Game canvas'); document.body.appendChild(c); }
 }
 
-// Ensure loader & error overlays always exist
 function ensureOverlays(){
-  const stage = document.getElementById('stage') || document.body;
+  var stage = document.getElementById('stage') || document.body;
 
-  let loader = document.getElementById('loader');
+  var loader = document.getElementById('loader');
   if (!loader) {
     loader = document.createElement('div');
     loader.id = 'loader';
@@ -188,128 +150,107 @@ function ensureOverlays(){
     stage.appendChild(loader);
   }
 
-  let err = document.getElementById('error');
+  var err = document.getElementById('error');
   if (!err) {
     err = document.createElement('div');
     err.id = 'error';
     err.className = 'error';
-    err.innerHTML = `
-      <div class="panel">
-        <div class="message"></div>
-        <div class="toggle">Show details</div>
-        <pre class="details"></pre>
-        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
-          <button class="btn" id="btn-restart">Retry</button>
-          <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>
-        </div>
-      </div>`;
+    err.innerHTML = '\n      <div class="panel">\n        <div class="message"></div>\n        <div class="toggle">Show details</div>\n        <pre class="details"></pre>\n        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">\n          <button class="btn" id="btn-restart">Retry</button>\n          <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>\n        </div>\n      </div>';
     stage.appendChild(err);
   }
 
-  // Bind/refresh actions
-  const btn = err.querySelector('#btn-restart');
-  if (btn) btn.onclick = ()=> reloadGame();
-  const openNew = err.querySelector('#open-new');
+  var btn = err.querySelector('#btn-restart');
+  if (btn) btn.onclick = function(){ reloadGame(); };
+  var openNew = err.querySelector('#open-new');
   if (openNew) openNew.href = location.href;
 
-  return { loader, err };
+  return { loader: loader, err: err };
 }
 
 function showSoftLoading(){
-  const { loader, err } = ensureOverlays();
+  var _ov = ensureOverlays();
+  var loader = _ov.loader, err = _ov.err;
   try { loader.style.display = 'none'; } catch(_) {}
   try { err.classList.add('show'); } catch(_) {}
-  const msg = err.querySelector('.message'); if (msg) msg.textContent = 'Still loading… This game may take longer on first load.';
-  const details = err.querySelector('.details'); if (details) details.style.display = 'none';
-  const toggle = err.querySelector('.toggle'); if (toggle) toggle.style.display = 'none';
+  var msg = err.querySelector('.message'); if (msg) msg.textContent = 'Still loading… This game may take longer on first load.';
+  var details = err.querySelector('.details'); if (details) details.style.display = 'none';
+  var toggle = err.querySelector('.toggle'); if (toggle) toggle.style.display = 'none';
 }
 
 function renderError(msg, e){
-  const { loader, err } = ensureOverlays();
+  var _ov = ensureOverlays();
+  var loader = _ov.loader, err = _ov.err;
   try { loader.style.display='none'; } catch(_) {}
   try { err.classList.add('show'); } catch(_) {}
-  const d = err.querySelector('.details');
-  if (d) {
-    d.textContent = (e && (e.message || e.toString())) || '';
-    d.style.display = 'none';
-  }
-  const m = err.querySelector('.message'); if (m) m.textContent = msg;
-  const tog = err.querySelector('.toggle');
-  if (tog && d) tog.onclick = ()=> {
-    d.style.display = (d.style.display==='none' ? 'block' : 'none');
-  };
+  var d = err.querySelector('.details');
+  if (d) { d.textContent = (e && (e.message || e.toString())) || ''; d.style.display = 'none'; }
+  var m = err.querySelector('.message'); if (m) m.textContent = msg;
+  var tog = err.querySelector('.toggle');
+  if (tog && d) tog.onclick = function(){ d.style.display = (d.style.display==='none' ? 'block' : 'none'); };
 }
 
-// Listen for handshake from games
-window.addEventListener('message', (ev)=>{
-  const data = ev.data || {};
+window.addEventListener('message', function(ev){
+  var data = ev.data || {};
   if(data.type === 'GAME_READY'){
-    const { loader, err } = ensureOverlays();
-    try { loader.style.display='none'; } catch(_) {}
-    try { err.classList.remove('show'); } catch(_) {}
+    var _ov = ensureOverlays();
+    try { _ov.loader.style.display='none'; } catch(_) {}
+    try { _ov.err.classList.remove('show'); } catch(_) {}
   } else if(data.type === 'GAME_ERROR'){
     renderError('Game error', {message: data.message || 'Unknown error'});
   }
 });
 
-// --- Diagnostics UI (only when debug) ---
 function createDiagUI(info, type, entry) {
   if (!DEBUG) return;
-  const btn = document.createElement('button');
+  var btn = document.createElement('button');
   btn.textContent = '🧪 Diagnostics';
   btn.style.position='fixed'; btn.style.right='12px'; btn.style.bottom='12px';
   btn.style.zIndex='1000'; btn.className='btn';
   document.body.appendChild(btn);
 
-  const panel = document.createElement('div');
+  var panel = document.createElement('div');
   panel.style.position='fixed'; panel.style.right='12px'; panel.style.bottom='56px';
   panel.style.background='#0b0f2a'; panel.style.color='#e8eefc';
   panel.style.border='1px solid #25305a'; panel.style.borderRadius='10px';
   panel.style.padding='10px'; panel.style.width='360px'; panel.style.maxHeight='60vh'; panel.style.overflow='auto';
   panel.style.display='none'; panel.style.boxShadow='0 10px 30px rgba(0,0,0,.4)';
-  const meta = `
-    <div style="font-weight:700;margin-bottom:6px">Game Diagnostics</div>
-    <div><b>Slug</b>: ${info.slug || 'n/a'}</div>
-    <div><b>Title</b>: ${info.title || 'n/a'}</div>
-    <div><b>Entry</b>: ${entry}</div>
-    <div><b>Type</b>: ${type}${FORCE?` (forced)`:''}</div>
-    <div><b>Module</b>: ${String(info.launch?.module || info.module || false)}</div>
-    <hr style="border-color:#25305a">
-    <div id="diag-logs" style="font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap"></div>
-  `;
+  var forced = FORCE ? ' (forced)' : '';
+  var meta = ''+
+    '<div style="font-weight:700;margin-bottom:6px">Game Diagnostics</div>'+
+    '<div><b>Slug</b>: ' + (info.slug || 'n/a') + '</div>'+
+    '<div><b>Title</b>: ' + (info.title || 'n/a') + '</div>'+
+    '<div><b>Entry</b>: ' + entry + '</div>'+
+    '<div><b>Type</b>: ' + type + forced + '</div>'+
+    '<div><b>Module</b>: ' + String((info.launch && info.launch.module) || info.module || false) + '</div>'+
+    '<hr style="border-color:#25305a">'+
+    '<div id="diag-logs" style="font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap"></div>';
   panel.innerHTML = meta;
   document.body.appendChild(panel);
 
-  btn.onclick = ()=> panel.style.display = (panel.style.display==='none'?'block':'none');
+  btn.onclick = function(){ panel.style.display = (panel.style.display==='none'?'block':'none'); };
 
-  // log sink
-  const sink = panel.querySelector('#diag-logs');
-  const add = (e)=> {
+  var sink = panel.querySelector('#diag-logs');
+  var add = function(e){
     try{
-      const d = e.data;
-      if(d?.type==='DIAG_LOG'){
-        const ent = d.entry;
-        sink.textContent += `[+${ent.t}ms] ${ent.level.toUpperCase()}: ${ent.msg}
-`;
-      } else if (d?.type==='GAME_READY') {
-        sink.textContent += '[event] GAME_READY
-';
-      } else if (d?.type==='GAME_ERROR') {
-        sink.textContent += '[event] GAME_ERROR: '+ (d.message||'') + '
-';
+      var d = e.data;
+      if(d && d.type==='DIAG_LOG'){
+        var ent = d.entry;
+        sink.textContent += '[+'+ent.t+'ms] '+String(ent.level||'LOG').toUpperCase()+': '+ent.msg+'\n';
+      } else if (d && d.type==='GAME_READY') {
+        sink.textContent += '[event] GAME_READY\n';
+      } else if (d && d.type==='GAME_ERROR') {
+        sink.textContent += '[event] GAME_ERROR: '+ (d.message||'') + '\n';
       }
     }catch(_){}
   };
   window.addEventListener('message', add);
 
-  // capture own errors too
-  window.addEventListener('error', (e)=>{
-    sink.textContent += '[shell] window.error: '+e.message+'
-';
+  window.addEventListener('error', function(e){
+    sink.textContent += '[shell] window.error: '+e.message+'\n';
   });
-  window.addEventListener('unhandledrejection', (e)=>{
-    sink.textContent += '[shell] unhandledrejection: '+(e.reason && (e.reason.message || e.reason.toString()))+'
-';
+  window.addEventListener('unhandledrejection', function(e){
+    var r = e.reason && (e.reason.message || e.reason.toString());
+    sink.textContent += '[shell] unhandledrejection: '+ r +'\n';
   });
 }
 
