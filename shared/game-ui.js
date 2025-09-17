@@ -123,11 +123,19 @@
       const pauseBtn = root.querySelector('#gg-pause');
       if (pauseBtn){ pauseBtn.setAttribute('aria-pressed','false'); }
       if (window.GG_HUD && typeof window.GG_HUD.hidePause==='function') window.GG_HUD.hidePause();
-      frame?.contentWindow?.postMessage({ type: 'GAME_RESUME' }, '*');
     } catch (err) {}
   }
 
-  clearAnyPause();
+  function sendGamePause(){
+    frame?.contentWindow?.postMessage({type:'GAME_PAUSE'}, '*');
+  }
+
+  function sendGameResume(){
+    clearAnyPause();
+    frame?.contentWindow?.postMessage({type:'GAME_RESUME'}, '*');
+  }
+
+  sendGameResume();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e)=>{
@@ -179,11 +187,11 @@
       // currently visible -> resume
       $paused.setAttribute('hidden','');
       root.querySelector('#gg-pause').setAttribute('aria-pressed','false');
-      frame.contentWindow?.postMessage({type:'GG_RESUME'}, '*');
+      sendGameResume();
     } else {
       $paused.removeAttribute('hidden');
       root.querySelector('#gg-pause').setAttribute('aria-pressed','true');
-      frame.contentWindow?.postMessage({type:'GG_PAUSE'}, '*');
+      sendGamePause();
     }
   }
   function restart(){

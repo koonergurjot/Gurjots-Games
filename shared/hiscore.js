@@ -7,8 +7,8 @@ export function error(message){ try{ parent.postMessage({type:'GAME_ERROR', mess
 export function attachShellControls({ onPause, onResume, onRestart, onMute } = {}){
   window.addEventListener('message', (ev)=>{
     const d = ev.data||{};
-    if (d.type==='GG_PAUSE') onPause && onPause();
-    if (d.type==='GG_RESUME') onResume && onResume();
+    if (d.type==='GG_PAUSE' || d.type==='GAME_PAUSE') onPause && onPause();
+    if (d.type==='GG_RESUME' || d.type==='GAME_RESUME') onResume && onResume();
     if (d.type==='GG_RESTART') onRestart && onRestart();
     if (d.type==='GG_SET_MUTE') onMute && onMute(!!d.value);
   });
