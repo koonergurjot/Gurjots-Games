@@ -24,9 +24,28 @@
   })();
 
   try{
+    let basePath = `/games/${slug}`;
+    try{
+      const mod = await import('/shared/game-paths.js');
+      if (mod?.resolveGamePaths){
+        const { basePath: resolvedBase } = await mod.resolveGamePaths(slug);
+        if (resolvedBase) basePath = resolvedBase;
+      }
+    }catch(e0){
+      console.warn('[loader] unable to resolve game directory', e0);
+    }
+    basePath = basePath.replace(/\/+$/, '') || `/games/${slug}`;
+    const baseLeaf = basePath.split('/').filter(Boolean).pop() || slug;
+
     const moduleTag = document.querySelector('script[type=\"module\"][data-entry]');
     if (!moduleTag){
-      const guess = ['/games/'+slug+'/main.js','/games/'+slug+'/'+slug+'.js','/games/'+slug+'/index.js','/games/'+slug+'/engine.js'];
+      const guess = Array.from(new Set([
+        `${basePath}/main.js`,
+        `${basePath}/${slug}.js`,
+        `${basePath}/${baseLeaf}.js`,
+        `${basePath}/index.js`,
+        `${basePath}/engine.js`
+      ]));
       let loaded=false;
       for(const url of guess){
         try{ await loadModule(url); console.log('[loader] loaded (module)', url); loaded=true; break; }catch(e1){
