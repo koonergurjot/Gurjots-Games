@@ -1,3 +1,4 @@
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
 import '/js/three-global-shim.js';
 import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
@@ -43,7 +44,7 @@ const playerLight = new THREE.PointLight(0xffffff, 1, 20, 2);
 playerLight.castShadow = true;
 scene.add(playerLight);
 
-const controls = new THREE.PointerLockControls(camera, renderer.domElement);
+const controls = new PointerLockControls(camera, renderer.domElement);
 
 const overlay = document.getElementById('overlay');
 const message = document.getElementById('message');
