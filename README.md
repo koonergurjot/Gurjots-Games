@@ -63,6 +63,40 @@ npm test
 
 Helpful resources: [Node.js Docs](https://nodejs.org/en/docs/), [MDN Web Docs](https://developer.mozilla.org/).
 
+## 🧹 Debloat
+
+The repository includes helper scripts that refresh `debloat-report.json` and surface any files that are safe to prune. Every run regenerates the report before taking action, and the tools default to a dry-run summary so you can review proposed deletions first.
+
+Run the dry-run (default safeguard) mode:
+
+- **Bash**
+
+  ```bash
+  bash tools/apply-debloat.sh
+  ```
+
+- **PowerShell**
+
+  ```powershell
+  .\tools\apply-debloat.ps1
+  ```
+
+To actually remove the files listed in the refreshed report, pass the apply flag:
+
+- **Bash**
+
+  ```bash
+  bash tools/apply-debloat.sh --apply
+  ```
+
+- **PowerShell**
+
+  ```powershell
+  .\tools\apply-debloat.ps1 -Apply
+  ```
+
+Add `--dry-run` or `-DryRun` if you want to explicitly request the non-destructive mode.
+
 ## 🎮 Examples
 
 Showcase games with screenshots or GIFs:
