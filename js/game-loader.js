@@ -82,7 +82,7 @@
     pong:  ['game','status','lScore','rScore','lWins','rWins','pauseBtn','restartBtn','shareBtn','modeSel','diffSel','seriesSel','sndSel','hud'],
     breakout: ['game','canvas','gameCanvas','status','score','lives','level','pauseBtn','restartBtn','hud'],
     asteroids: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
-    chess: ['c','board','status','turn','moves','restartBtn','hud'],
+    chess: ['board','fx','status','difficulty','puzzle-select','lobby','find-match','lobby-status','rankings','hud'],
     platformer: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
     shooter: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
     runner: ['game','status','score','pauseBtn','restartBtn','hud'],
@@ -90,6 +90,83 @@
     maze3d: ['game','status','pauseBtn','restartBtn','hud'],
     chess3d: ['stage','hud','coords','thinking','difficulty']
   };
+
+  function ensureRoot(){
+    let root = document.getElementById('game-root');
+    if (!root){
+      root = document.createElement('main');
+      root.id='game-root';
+      root.setAttribute('aria-live','polite');
+      document.body.appendChild(root);
+    }
+    return root;
+  }
+
+  function ensureElementOfType(id, tagName, parent, init){
+    const desired = tagName.toUpperCase();
+    let el = document.getElementById(id);
+    let created = false;
+    if (!el || el.tagName !== desired){
+      const replacement = document.createElement(tagName);
+      replacement.id = id;
+      const currentParent = el && el.parentElement ? el.parentElement : (parent || ensureRoot());
+      if (el && el.parentElement){
+        el.parentElement.replaceChild(replacement, el);
+      } else if (el && typeof el.replaceWith === 'function'){
+        el.replaceWith(replacement);
+      } else if (currentParent){
+        currentParent.appendChild(replacement);
+      }
+      el = replacement;
+      created = true;
+    }
+    const targetParent = parent || el.parentElement || ensureRoot();
+    if (!el.parentElement){
+      targetParent.appendChild(el);
+    } else if (parent && el.parentElement !== parent && (!parent.contains(el) || el.parentElement === document.body)){
+      parent.appendChild(el);
+    }
+    if (typeof init === 'function') init(el, created);
+    return el;
+  }
+
+  function ensureCanvasElement(id, parent, options={}){
+    return ensureElementOfType(id, 'canvas', parent, (el, created) => {
+      if (options.width && (created || !el.width || el.width === 300)) el.width = options.width;
+      if (options.height && (created || !el.height || el.height === 150)) el.height = options.height;
+      if (options.attrs){
+        for (const [key, value] of Object.entries(options.attrs)){
+          if (created || !el.hasAttribute(key)) el.setAttribute(key, value);
+        }
+      }
+      if (options.style){
+        for (const [key, value] of Object.entries(options.style)){
+          if (created || !el.style[key]) el.style[key] = value;
+        }
+      }
+    });
+  }
+
+  function ensureSelectElement(id, parent, options=[]){
+    return ensureElementOfType(id, 'select', parent, (el) => {
+      if (options.length && el.options.length === 0){
+        for (const opt of options){
+          const optionEl = document.createElement('option');
+          optionEl.value = opt.value;
+          optionEl.textContent = opt.label;
+          if (opt.selected) optionEl.selected = true;
+          el.appendChild(optionEl);
+        }
+      }
+    });
+  }
+
+  function ensureButtonElement(id, parent, text){
+    return ensureElementOfType(id, 'button', parent, (el) => {
+      el.type = el.type || 'button';
+      if (text && !el.textContent) el.textContent = text;
+    });
+  }
 
   function ensureIsCanvas(id) {
     const el = document.getElementById(id);
@@ -105,23 +182,95 @@
 
   function ensureScaffold(ids){
     if (!ids) return;
-    let root = document.getElementById('game-root');
-    if (!root){
-      root = document.createElement('main');
-      root.id='game-root';
-      root.setAttribute('aria-live','polite');
-      document.body.appendChild(root);
+    const root = ensureRoot();
+
+    let chessBoardStack = null;
+    if (ids.includes('board') && ids.includes('fx')){
+      const boardEl = document.getElementById('board');
+      const fxEl = document.getElementById('fx');
+      if (boardEl && fxEl && boardEl.parentElement && boardEl.parentElement === fxEl.parentElement && boardEl.parentElement !== root){
+        chessBoardStack = boardEl.parentElement;
+      } else if (boardEl && boardEl.parentElement && boardEl.parentElement !== root){
+        chessBoardStack = boardEl.parentElement;
+      } else if (fxEl && fxEl.parentElement && fxEl.parentElement !== root){
+        chessBoardStack = fxEl.parentElement;
+      } else {
+        chessBoardStack = document.createElement('div');
+        chessBoardStack.className = 'chess-board-stack';
+        chessBoardStack.style.position = 'relative';
+        chessBoardStack.style.display = 'inline-block';
+        root.appendChild(chessBoardStack);
+        if (boardEl && boardEl.parentElement === root) chessBoardStack.appendChild(boardEl);
+        if (fxEl && fxEl.parentElement === root) chessBoardStack.appendChild(fxEl);
+      }
     }
+
+    let lobbySection = null;
+
     for (const id of ids){
+      switch (id){
+        case 'board':
+          ensureCanvasElement('board', chessBoardStack || root, {
+            width: 480,
+            height: 480,
+            attrs: { 'aria-label': 'Chess board' },
+            style: { border: '1px solid #243047', borderRadius: '12px', background: '#0f172a', display: 'block' }
+          });
+          continue;
+        case 'fx':
+          ensureCanvasElement('fx', chessBoardStack || root, {
+            width: 480,
+            height: 480,
+            attrs: { 'aria-hidden': 'true' },
+            style: { position: 'absolute', left: '0', top: '0', pointerEvents: 'none' }
+          });
+          continue;
+        case 'status':
+          ensureElementOfType('status', 'div', root, (el) => {
+            if (!el.hasAttribute('role')) el.setAttribute('role','status');
+            if (!el.hasAttribute('aria-live')) el.setAttribute('aria-live','polite');
+          });
+          continue;
+        case 'difficulty':
+          ensureSelectElement('difficulty', root, [
+            { value: '1', label: 'Easy' },
+            { value: '2', label: 'Medium', selected: true },
+            { value: '3', label: 'Hard' },
+            { value: '4', label: 'Expert' }
+          ]);
+          continue;
+        case 'puzzle-select':
+          ensureSelectElement('puzzle-select', root, [
+            { value: '-1', label: 'Free Play', selected: true }
+          ]);
+          continue;
+        case 'lobby':
+          lobbySection = ensureElementOfType('lobby', 'section', root, (el) => {
+            if (!el.hasAttribute('aria-label')) el.setAttribute('aria-label','Online play');
+          });
+          continue;
+        case 'find-match':
+          ensureButtonElement('find-match', lobbySection || root, 'Find Match');
+          continue;
+        case 'lobby-status':
+          ensureElementOfType('lobby-status', 'div', lobbySection || root);
+          continue;
+        case 'rankings':
+          ensureElementOfType('rankings', 'ol', lobbySection || root);
+          continue;
+        default:
+          break;
+      }
+
       if (document.getElementById(id)) continue;
       let el;
-      if (['t','c','game','board','canvas','gameCanvas'].includes(id)){
+      if (['t','c','game','board','canvas','gameCanvas','fx'].includes(id)){
         el = document.createElement('canvas');
         el.width = 960; el.height = 540;
       } else if (id === 'hud') {
         el = document.createElement('div'); el.id='hud'; el.className='hud'; root.appendChild(el); continue;
       } else if (id.endsWith('Btn')) {
-        el = document.createElement('button'); el.type='button'; el.textContent=id.replace(/Btn$/,''); 
+        el = document.createElement('button'); el.type='button'; el.textContent=id.replace(/Btn$/,'');
       } else {
         el = document.createElement('div');
       }
@@ -132,7 +281,7 @@
       }
     }
     // If these IDs already existed but weren't canvases, upgrade them
-    ['c','board','game','canvas','gameCanvas'].forEach(ensureIsCanvas);
+    ['c','board','game','canvas','gameCanvas','fx'].forEach(ensureIsCanvas);
   }
 
   if (['maze3d','box3d','chess3d'].includes(id)) await ensureTHREE();
