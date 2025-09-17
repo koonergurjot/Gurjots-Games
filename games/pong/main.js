@@ -1,16 +1,80 @@
 // Minimal playable Pong (canvas id='game')
 let previousCleanup;
 
+const DEFAULT_WIDTH = 960;
+const DEFAULT_HEIGHT = 540;
+
+function reportFatal(message) {
+  console.error(`[pong] ${message}`);
+  try {
+    window.DIAG?.error?.(message);
+  } catch (err) {
+    // Ignore diagnostics reporting failures.
+  }
+  try {
+    window.parent?.postMessage?.({ type: 'GAME_ERROR', message }, '*');
+  } catch (err) {
+    // Ignore failures to notify parent window.
+  }
+}
+
+function resolveCanvas() {
+  const gameEl = document.getElementById('game');
+  if (gameEl instanceof HTMLCanvasElement) return gameEl;
+
+  const fallback = document.getElementById('gameCanvas');
+  if (fallback instanceof HTMLCanvasElement) return fallback;
+
+  const stage = document.getElementById('stage');
+  if (stage) {
+    const stageCanvas = stage instanceof HTMLCanvasElement ? stage : stage.querySelector('canvas');
+    if (stageCanvas instanceof HTMLCanvasElement) return stageCanvas;
+  }
+
+  return undefined;
+}
+
+function createCanvas() {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = DEFAULT_WIDTH;
+    canvas.height = DEFAULT_HEIGHT;
+    if (!document.getElementById('game')) {
+      canvas.id = 'game';
+    }
+    const target = document.getElementById('stage') || document.body;
+    if (!target) return undefined;
+    target.appendChild(canvas);
+    return canvas;
+  } catch (err) {
+    return undefined;
+  }
+}
+
 export function boot() {
   if (typeof previousCleanup === 'function') {
     previousCleanup();
     previousCleanup = undefined;
   }
-  const canvas = document.getElementById('game');
-  if (!canvas) return console.error('[pong] missing #game canvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = canvas.width || 960;
-  canvas.height = canvas.height || 540;
+
+  let canvas = resolveCanvas();
+  if (!(canvas instanceof HTMLCanvasElement)) {
+    canvas = createCanvas();
+  }
+
+  if (!(canvas instanceof HTMLCanvasElement)) {
+    reportFatal('unable to locate or create a canvas element for rendering');
+    return;
+  }
+
+  canvas.width = canvas.width || DEFAULT_WIDTH;
+  canvas.height = canvas.height || DEFAULT_HEIGHT;
+
+  const ctx = canvas.getContext?.('2d');
+  if (!ctx) {
+    reportFatal('canvas 2D context is unavailable');
+    return;
+  }
   const W = canvas.width, H = canvas.height;
 
   const paddleW = 14, paddleH = Math.floor(H * 0.2);
