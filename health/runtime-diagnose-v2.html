@@ -100,8 +100,17 @@ function buildRows(list, shell='game.html', forceNoCache=false) {
     const setStatus = (cls, txt) => { status.className = 'status ' + cls; status.textContent = txt; };
 
     let ready = false;
+    let syntheticReady = false;
     const timer = setTimeout(() => {
-      if (!ready) { setStatus('WARN','NO SIGNAL'); log('No GAME_READY/ERROR postMessage within 6s'); }
+      if (!ready) {
+        if (syntheticReady) {
+          setStatus('WARN','SYNTHETIC READY—waiting for real signal');
+          log('No real GAME_READY/ERROR after synthetic postMessage within 6s');
+        } else {
+          setStatus('WARN','NO SIGNAL');
+          log('No GAME_READY/ERROR postMessage within 6s');
+        }
+      }
     }, 6000);
 
     function renderDetails() {
@@ -113,6 +122,12 @@ function buildRows(list, shell='game.html', forceNoCache=false) {
       const d = ev.data;
       if (d.slug !== g.slug) return;
       if (d.type === 'GAME_READY') {
+        if (d.synthetic) {
+          syntheticReady = true;
+          setStatus('WARN','SYNTHETIC READY—waiting for real signal');
+          log('GAME_READY (synthetic)');
+          return;
+        }
         ready = true;
         clearTimeout(timer);
         setStatus('OK','OK');
