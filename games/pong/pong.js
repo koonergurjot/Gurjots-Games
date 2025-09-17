@@ -21,12 +21,16 @@
   function saveLS(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({mode:state.mode, ai:state.ai, toScore:state.toScore, winByTwo:state.winByTwo, powerups:state.powerups, sfx:state.sfx, keys:state.keys})); }catch(_){ } }
   function post(type, message){ try { parent && parent.postMessage({type, slug:SLUG, message}, "*"); } catch(_){ } }
   function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
-  function now(){ return (performance||Date).now(); }
 
   // --- UI --------------------------------------------------------------------
   function h(tag, props={}, ...kids){
     const el = document.createElement(tag);
-    for(const [k,v] of Object.entries(props)){ if(k==="class") el.className=v; else if(k.startsWith("on")) el.addEventListener(k.slice(2), v, {passive:true}); else if(k==="html") el.innerHTML=v; else el.setAttribute(k,v); }
+    for(const [k,v] of Object.entries(props)){
+      if(k==="class") el.className=v;
+      else if(k.startsWith("on")) el.addEventListener(k.slice(2), v, {passive:true});
+      else if(k==="html") el.innerHTML=v;
+      else el.setAttribute(k,v);
+    }
     for(const k of kids) if(k!=null) el.append(k);
     return el;
   }
@@ -51,7 +55,10 @@
       labelChk("Power-ups", state.powerups, v => (state.powerups=v)),
       labelChk("SFX", state.sfx, v => (state.sfx=v)),
     );
-    const wrap = h("div",{class:"pong-canvas-wrap"}, state.canvas = h("canvas",{class:"pong-canvas", id:"canvas", width:1280, height:720}));
+    const wrap = h("div",{class:"pong-canvas-wrap"},
+      // Use a unique id to avoid collisions with host shells that might also use #canvas
+      state.canvas = h("canvas",{class:"pong-canvas", id:"pong-canvas", width:1280, height:720})
+    );
     const diag = state.diag = h("div",{class:"pong-diag"+(state.debug?" show":""), id:"diag"}, h("pre",{}, "Diagnostics ready."));
     root.append(bar, wrap, hud, menu, diag);
     state.hud = {p1: hud.querySelector("#score-p1"), p2: hud.querySelector("#score-p2")};
@@ -95,8 +102,8 @@
 
   // --- Loop ------------------------------------------------------------------
   function onResize(){
-    // devicePixelRatio-aware backing store
-    const el = state.canvas; const rect = el.getBoundingClientRect();
+    const el = state.canvas;
+    const rect = el.getBoundingClientRect();
     const ratio = Math.max(1, Math.floor(window.devicePixelRatio||1));
     state.ratio = ratio; el.width = Math.round(rect.width * ratio); el.height = Math.round(rect.height * ratio);
   }
@@ -108,18 +115,13 @@
   }
   function physics(dt){
     const W = state.canvas.width, H = state.canvas.height, K = state.ratio;
-    // integrate paddles
-    state.p1.y = clamp(state.p1.y + state.p1.dy*dt*K, 0, H - state.p1.h*K);
-    if(state.mode==="2P") state.p2.y = clamp(state.p2.y + state.p2.dy*dt*K, 0, H - state.p2.h*K);
-    // ball
+    state.p1.y = Math.max(0, Math.min(H - state.p1.h*K, state.p1.y + state.p1.dy*dt*K));
+    if(state.mode==="2P") state.p2.y = Math.max(0, Math.min(H - state.p2.h*K, state.p2.y + state.p2.dy*dt*K));
     const b = state.ball;
     b.x += b.dx*dt*K; b.y += b.dy*dt*K;
-    // walls
     if(b.y - b.r < 0){ b.y = b.r; b.dy *= -1; }
     if(b.y + b.r > H){ b.y = H - b.r; b.dy *= -1; }
-    // paddles
     collidePaddle(state.p1); collidePaddle(state.p2);
-    // goals
     if(b.x < 0) award("p2");
     if(b.x > W) award("p1");
   }
@@ -128,12 +130,8 @@
     const px1=p.x, py1=p.y, px2=p.x+p.w*state.ratio, py2=p.y+p.h*state.ratio;
     if(b.x+b.r>px1 && b.x-b.r<px2 && b.y+b.r>py1 && b.y-b.r<py2){
       b.dx *= -1;
-      // add “english” based on hit offset and paddle velocity:
       const hit = (b.y - (p.y + (p.h*state.ratio)/2)) / ((p.h*state.ratio)/2);
-    }
-  }
-})();
-      b.dy = clamp(b.dy + hit*260 + p.dy*0.15, -720, 720);
+      b.dy = Math.max(-720, Math.min(720, b.dy + hit*260 + p.dy*0.15));
       if(state.powerups){
         const s = Math.hypot(b.dx, b.dy) * 1.03; const ang=Math.atan2(b.dy,b.dx); b.dx=Math.cos(ang)*s; b.dy=Math.sin(ang)*s;
       }
@@ -183,8 +181,8 @@ ball=(${state.ball.x|0},${state.ball.y|0}) v=(${state.ball.dx|0},${state.ball.dy
   }
   function onPoint(e){
     const r = state.canvas.getBoundingClientRect(); const y = (e.clientY - r.top) * state.ratio - state.p1.h*state.ratio/2;
-    if(e.clientX < r.left + r.width/2){ state.p1.y = clamp(y,0,state.canvas.height - state.p1.h*state.ratio); }
-    else { state.p2.y = clamp(y,0,state.canvas.height - state.p2.h*state.ratio); }
+    if(e.clientX < r.left + r.width/2){ state.p1.y = Math.max(0, Math.min(state.canvas.height - state.p1.h*state.ratio, y)); }
+    else { state.p2.y = Math.max(0, Math.min(state.canvas.height - state.p2.h*state.ratio, y)); }
   }
   function bindMove(){
     const v = 720;
@@ -193,15 +191,31 @@ ball=(${state.ball.x|0},${state.ball.y|0}) v=(${state.ball.dx|0},${state.ball.dy
   }
   function togglePause(){ state.paused=!state.paused; }
   function toggleDiag(){ state.debug=!state.debug; state.diag.classList.toggle("show", state.debug); }
+
+  function ensureCanvas(){
+    // Guard against unexpected host markup collisions
+    if(!state.canvas || !(state.canvas instanceof HTMLCanvasElement)){
+      const el = document.getElementById("pong-canvas");
+      if(el && el instanceof HTMLCanvasElement){ state.canvas = el; }
+      else {
+        const c = document.createElement("canvas");
+        c.className = "pong-canvas"; c.id = "pong-canvas"; c.width = 1280; c.height = 720;
+        const wrap = document.querySelector(".pong-canvas-wrap") || document.getElementById("app") || document.body;
+        wrap.appendChild(c); state.canvas = c;
+      }
+    }
+    if(!state.canvas.getContext) throw new Error("Canvas element missing or invalid");
+  }
+
   function boot(){
     try{
       const app = document.getElementById("app");
       app.innerHTML="";
       buildUI(app);
-      state.canvas = document.getElementById("canvas");
+      ensureCanvas();
       state.ctx = state.canvas.getContext("2d", {alpha:false, desynchronized:true});
       reset(); saveLS();
-      state.running=true; state.paused=false; state.over=false; state.last=now(); frame(state.last);
+      state.running=true; state.paused=false; state.over=false; state.last=performance.now(); frame(state.last);
       post("GAME_READY");
     }catch(err){
       console.error("[pong] boot error", err);

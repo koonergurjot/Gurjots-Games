@@ -8,13 +8,8 @@
     <link rel="stylesheet" href="./pong.css">
   </head>
   <body class="pong-root">
-    <!--
-      This file is loaded inside game.html’s iframe.
-      Keep markup minimal; UI is rendered by pong.js to #app.
-    -->
     <div id="app" class="pong-app" aria-live="polite"></div>
     <script>
-      // Minimal guard so loader sees a signal even if JS fails later:
       try { window.parent && window.parent.postMessage({type:'IFRAME_LOADED', slug:'pong'}, '*'); } catch(e){}
     </script>
     <script src="./pong.js" defer></script>
