@@ -7,8 +7,8 @@
     "totalSizeBytes": 55632200
   },
   "textInventory": {
-    "fileCount": 2812,
-    "totalSizeBytes": 30849973,
+    "fileCount": 2808,
+    "totalSizeBytes": 30836769,
     "byExtension": {
       ".yml": {
         "fileCount": 24,
@@ -27,16 +27,16 @@
         "totalSizeBytes": 257312
       },
       ".js": {
-        "fileCount": 1446,
-        "totalSizeBytes": 19865059
+        "fileCount": 1444,
+        "totalSizeBytes": 19858617
       },
       ".svg": {
         "fileCount": 3,
         "totalSizeBytes": 8540
       },
       ".css": {
-        "fileCount": 21,
-        "totalSizeBytes": 36053
+        "fileCount": 20,
+        "totalSizeBytes": 30297
       },
       ".json": {
         "fileCount": 223,
@@ -47,8 +47,8 @@
         "totalSizeBytes": 30485
       },
       ".mjs": {
-        "fileCount": 58,
-        "totalSizeBytes": 1138012
+        "fileCount": 57,
+        "totalSizeBytes": 1137006
       },
       ".toml": {
         "fileCount": 1,
@@ -229,11 +229,6 @@
       {
         "path": "css/bolt-landing.css",
         "sizeBytes": 7269,
-        "extension": ".css"
-      },
-      {
-        "path": "css/landing.css",
-        "sizeBytes": 5756,
         "extension": ".css"
       },
       {
@@ -889,11 +884,6 @@
       {
         "path": "js/input.js",
         "sizeBytes": 772,
-        "extension": ".js"
-      },
-      {
-        "path": "js/landing.js",
-        "sizeBytes": 6251,
         "extension": ".js"
       },
       {
@@ -13702,11 +13692,6 @@
         "extension": ".html"
       },
       {
-        "path": "precache-manifest.js",
-        "sizeBytes": 191,
-        "extension": ".js"
-      },
-      {
         "path": "public/logo.svg",
         "sizeBytes": 384,
         "extension": ".svg"
@@ -14149,11 +14134,6 @@
       {
         "path": "tools/generate-sitemap.mjs",
         "sizeBytes": 617,
-        "extension": ".mjs"
-      },
-      {
-        "path": "tools/generate-sw-manifest.mjs",
-        "sizeBytes": 1006,
         "extension": ".mjs"
       },
       {
