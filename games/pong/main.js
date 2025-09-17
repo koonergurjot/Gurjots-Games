@@ -91,6 +91,51 @@ export function boot() {
   let serveDirection = 1;
   let overlayNeedsDraw = true;
 
+  const difficultyPresets = {
+    off: { label: '2P (Manual)', reactionFrames: 0, maxSpeed: speed * 1.1 },
+    easy: { label: 'Easy AI', reactionFrames: 18, maxSpeed: speed * 0.85 },
+    normal: { label: 'Normal AI', reactionFrames: 9, maxSpeed: speed * 1.05 },
+    hard: { label: 'Hard AI', reactionFrames: 4, maxSpeed: speed * 1.35 },
+  };
+  const difficultyOrder = ['off', 'easy', 'normal', 'hard'];
+  const searchParams = (() => {
+    try {
+      return new URLSearchParams(window.location?.search || '');
+    } catch (err) {
+      return new URLSearchParams();
+    }
+  })();
+
+  function normalizeDifficulty(value) {
+    if (!value) return 'off';
+    const key = String(value).toLowerCase();
+    if (difficultyPresets[key]) return key;
+    if (key === '1p' || key === 'single' || key === 'solo' || key === 'cpu') return 'normal';
+    if (key === 'easy' || key === '1') return 'easy';
+    if (key === 'normal' || key === 'medium' || key === '2') return 'normal';
+    if (key === 'hard' || key === '3') return 'hard';
+    return 'off';
+  }
+
+  let aiMode = normalizeDifficulty(searchParams.get('cpu') || searchParams.get('ai'));
+  let aiCooldown = 0;
+  let aiTargetY = right.y + paddleH / 2;
+
+  function setAiMode(nextMode) {
+    const normalized = normalizeDifficulty(nextMode);
+    if (normalized === aiMode) return;
+    aiMode = normalized;
+    aiCooldown = 0;
+    aiTargetY = right.y + paddleH / 2;
+    overlayNeedsDraw = true;
+  }
+
+  function cycleDifficulty(direction = 1) {
+    const currentIndex = Math.max(0, difficultyOrder.indexOf(aiMode));
+    const nextIndex = (currentIndex + direction + difficultyOrder.length) % difficultyOrder.length;
+    setAiMode(difficultyOrder[nextIndex]);
+  }
+
   function awaitServe(direction = serveDirection) {
     servePending = true;
     serveDirection = direction;
@@ -139,6 +184,31 @@ export function boot() {
       e.preventDefault();
     }
 
+    if (key === '0') {
+      setAiMode('off');
+      return;
+    }
+
+    if (key === '1') {
+      setAiMode('easy');
+      return;
+    }
+
+    if (key === '2') {
+      setAiMode('normal');
+      return;
+    }
+
+    if (key === '3') {
+      setAiMode('hard');
+      return;
+    }
+
+    if (key === 'c' || key === 'C') {
+      cycleDifficulty(1);
+      return;
+    }
+
     keys.add(key);
   }
 
@@ -153,7 +223,25 @@ export function boot() {
     if (servePending) return;
 
     left.vy = (keys.has('w')||keys.has('W') ? -speed*1.1 : 0) + (keys.has('s')||keys.has('S') ? speed*1.1 : 0);
-    right.vy = (keys.has('ArrowUp')?-speed*1.1:0) + (keys.has('ArrowDown')?speed*1.1:0);
+
+    const aiPreset = difficultyPresets[aiMode] || difficultyPresets.off;
+    const aiActive = aiMode !== 'off';
+
+    if (aiActive) {
+      if (aiCooldown <= 0) {
+        aiTargetY = ball.y;
+        aiCooldown = aiPreset.reactionFrames;
+      } else {
+        aiCooldown -= 1;
+      }
+      const paddleCenter = right.y + paddleH / 2;
+      const delta = aiTargetY - paddleCenter;
+      const direction = Math.sign(delta);
+      const magnitude = Math.min(Math.abs(delta), aiPreset.maxSpeed);
+      right.vy = direction * magnitude;
+    } else {
+      right.vy = (keys.has('ArrowUp')?-speed*1.1:0) + (keys.has('ArrowDown')?speed*1.1:0);
+    }
 
     left.y = Math.max(0, Math.min(H - paddleH, left.y + left.vy));
     right.y = Math.max(0, Math.min(H - paddleH, right.y + right.vy));
@@ -226,7 +314,35 @@ export function boot() {
     ctx.restore();
   }
 
+  function drawInstructionsOverlay() {
+    const lines = [
+      'Left paddle: W / S',
+      aiMode === 'off' ? 'Right paddle: Arrow keys (2P mode)' : `Right paddle: ${difficultyPresets[aiMode]?.label || 'AI'}`,
+      'Press 1/2/3 for Easy/Normal/Hard AI, 0 for 2P, C to cycle',
+      'URL ?cpu=easy|normal|hard starts with AI enabled',
+    ];
+    const padding = 10;
+    const lineHeight = 20;
+    ctx.save();
+    ctx.font = '16px system-ui, sans-serif';
+    const maxWidth = lines.reduce((acc, line) => Math.max(acc, ctx.measureText(line).width), 0);
+    const boxWidth = Math.ceil(maxWidth + padding * 2);
+    const boxHeight = padding * 2 + lineHeight * lines.length;
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(12, 12, boxWidth, boxHeight);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    lines.forEach((line, index) => {
+      ctx.fillText(line, 12 + padding, 12 + padding + index * lineHeight);
+    });
+    ctx.restore();
+  }
+
   function drawOverlay() {
+    drawInstructionsOverlay();
     drawPauseOverlay();
     drawServePrompt();
   }
