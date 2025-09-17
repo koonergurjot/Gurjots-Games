@@ -88,6 +88,8 @@ function buildRows(list, shell='game.html', forceNoCache=false) {
     const url = `/${shell}?slug=${encodeURIComponent(g.slug)}&diag_v=2&cb=${Date.now()}`;
     const open = mk('a', { href: url, textContent: 'Open', target: '_blank', rel: 'noopener' });
     const iframe = mk('iframe');
+    const createdAt = performance.now();
+    let loadAt = null;
     iframe.referrerPolicy = 'no-referrer';
     if (forceNoCache) {
       iframe.loading = 'eager';
@@ -103,12 +105,13 @@ function buildRows(list, shell='game.html', forceNoCache=false) {
     let syntheticReady = false;
     const timer = setTimeout(() => {
       if (!ready) {
+        const elapsed = Math.round(performance.now() - createdAt);
         if (syntheticReady) {
-          setStatus('WARN','SYNTHETIC READY—waiting for real signal');
-          log('No real GAME_READY/ERROR after synthetic postMessage within 6s');
+          setStatus('WARN', `SYNTHETIC READY (${elapsed} ms)—waiting for real signal`);
+          log(`No real GAME_READY/ERROR after synthetic postMessage (${elapsed} ms)`);
         } else {
-          setStatus('WARN','NO SIGNAL');
-          log('No GAME_READY/ERROR postMessage within 6s');
+          setStatus('WARN', `NO SIGNAL (${elapsed} ms)`);
+          log(`No GAME_READY/ERROR postMessage (${elapsed} ms)`);
         }
       }
     }, 6000);
@@ -124,30 +127,47 @@ function buildRows(list, shell='game.html', forceNoCache=false) {
       if (d.type === 'GAME_READY') {
         if (d.synthetic) {
           syntheticReady = true;
-          setStatus('WARN','SYNTHETIC READY—waiting for real signal');
-          log('GAME_READY (synthetic)');
+          const now = performance.now();
+          const syntheticElapsed = Math.round(now - createdAt);
+          const postLoad = loadAt ? Math.round(now - loadAt) : null;
+          const suffix = postLoad !== null ? ` (${postLoad} ms post-load)` : '';
+          setStatus('WARN', `SYNTHETIC READY (${syntheticElapsed} ms)—waiting for real signal`);
+          log(`GAME_READY (synthetic) after ${syntheticElapsed} ms${suffix}`);
           return;
         }
         ready = true;
         clearTimeout(timer);
-        setStatus('OK','OK');
-        log('GAME_READY');
+        const now = performance.now();
+        const readyElapsed = Math.round(now - createdAt);
+        const postLoad = loadAt ? Math.round(now - loadAt) : null;
+        const suffix = postLoad !== null ? ` (${postLoad} ms post-load)` : '';
+        setStatus('OK', `OK (${readyElapsed} ms)`);
+        log(`GAME_READY after ${readyElapsed} ms${suffix}`);
       }
       if (d.type === 'GAME_ERROR') {
         ready = true;
         clearTimeout(timer);
-        setStatus('FAIL','FAIL');
-        log('GAME_ERROR: ' + (d.message || ''));
+        const now = performance.now();
+        const errorElapsed = Math.round(now - createdAt);
+        const postLoad = loadAt ? Math.round(now - loadAt) : null;
+        const suffix = postLoad !== null ? ` (${postLoad} ms post-load)` : '';
+        const message = d.message ? `: ${d.message}` : '';
+        setStatus('FAIL', `FAIL (${errorElapsed} ms)`);
+        log(`GAME_ERROR after ${errorElapsed} ms${suffix}${message}`);
       }
     });
 
     iframe.addEventListener('error', () => {
       clearTimeout(timer);
-      setStatus('FAIL','IFRAME LOAD ERROR');
-      log('iframe onerror fired');
+      const now = performance.now();
+      const errorElapsed = Math.round(now - createdAt);
+      setStatus('FAIL', `IFRAME LOAD ERROR (${errorElapsed} ms)`);
+      log(`iframe onerror fired after ${errorElapsed} ms`);
     });
     iframe.addEventListener('load', () => {
-      log('iframe loaded');
+      loadAt = performance.now();
+      const loadElapsed = Math.round(loadAt - createdAt);
+      log(`iframe loaded in ${loadElapsed} ms`);
     });
   }
 }
