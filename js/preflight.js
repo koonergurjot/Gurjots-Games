@@ -29,3 +29,9 @@ const cvs = document.getElementById('gameCanvas') || (() => {
 game.style.position ||= 'relative';
 game.style.minHeight ||= '400px';
 export {};
+
+// shim: some games call reportReady(slug)
+    window.reportReady = window.reportReady || function(slug){
+      try { window.parent && window.parent.postMessage({ type:'GAME_READY', slug: slug }, '*'); }
+      catch(e) { /* no-op */ }
+    };

@@ -138,7 +138,7 @@
     for (const id of ids){
       if (document.getElementById(id)) continue;
       let el;
-      if (['t','c','game','board','b','canvas','gameCanvas'].includes(id)){
+      if (['t','c','game','board','b','canvas','gameCanvas','fx'].includes(id)){
         el = document.createElement('canvas');
         el.width = 960; el.height = 540;
       } else if (id === 'hud') {
@@ -154,7 +154,7 @@
         window.fitCanvasToParent(el);
       }
     }
-    ['c','board','game','b','canvas','gameCanvas'].forEach(ensureIsCanvas);
+    ['c','board','game','b','canvas','gameCanvas','fx'].forEach(ensureIsCanvas);
   }
 
   if (['maze3d','chess3d'].includes(id)) await ensureTHREE();
