@@ -6,7 +6,40 @@ import { showToast, showModal, clearHud } from '../../shared/ui/hud.js';
 import { createParticleSystem } from '../../shared/fx/canvasFx.js';
 
 const GAME_ID='breakout';GG.incPlays();
-const c=document.getElementById('b');fitCanvasToParent(c,1000,800,24);addEventListener('resize',()=>fitCanvasToParent(c,1000,800,24));
+const BASE_W=1000;
+const BASE_H=800;
+
+let c=document.getElementById('b');
+if(!c){
+  const fallback=document.getElementById('gameCanvas');
+  if(fallback){
+    c=fallback;
+  }else{
+    const host=document.getElementById('game-root')||document.body;
+    if(host){
+      const created=document.createElement('canvas');
+      created.id='b';
+      created.width=BASE_W;
+      created.height=BASE_H;
+      created.dataset.basew=String(BASE_W);
+      created.dataset.baseh=String(BASE_H);
+      host.appendChild(created);
+      c=created;
+    }
+  }
+}
+
+if(!c){
+  const error=new Error('Breakout: unable to locate or create a canvas element (#b or #gameCanvas).');
+  console.error(error);
+  throw error;
+}
+
+if(!c.dataset.basew)c.dataset.basew=String(BASE_W);
+if(!c.dataset.baseh)c.dataset.baseh=String(BASE_H);
+c.width=BASE_W;
+c.height=BASE_H;
+fitCanvasToParent(c,BASE_W,BASE_H,24);addEventListener('resize',()=>fitCanvasToParent(c,BASE_W,BASE_H,24));
 const ctx=c.getContext('2d');
 installErrorReporter();
 
