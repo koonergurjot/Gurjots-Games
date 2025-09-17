@@ -15,10 +15,6 @@ const RETIRED_DIRECTORIES = [
     path: 'games/box-playground',
     reason: 'Legacy Box Playground prototype directory slated for removal'
   },
-  {
-    path: 'gameshells/box3d',
-    reason: 'Legacy Box3D game shell directory slated for removal'
-  }
 ];
 const TEXT_EXTENSIONS = new Set([
   '.c',

@@ -722,71 +722,6 @@
         "extension": ".json"
       },
       {
-        "path": "gameshells/IMPORTMAP_SNIPPET.html",
-        "sizeBytes": 189,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/asteroids/index.html",
-        "sizeBytes": 1169,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/breakout/index.html",
-        "sizeBytes": 886,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/chess/index.html",
-        "sizeBytes": 3440,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/chess3d/index.html",
-        "sizeBytes": 1181,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/g2048/index.html",
-        "sizeBytes": 1154,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/maze3d/index.html",
-        "sizeBytes": 1162,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/platformer/index.html",
-        "sizeBytes": 1184,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/pong/index.html",
-        "sizeBytes": 1170,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/runner/index.html",
-        "sizeBytes": 1170,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/shooter/index.html",
-        "sizeBytes": 1175,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/snake/index.html",
-        "sizeBytes": 1158,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/tetris/index.html",
-        "sizeBytes": 1618,
-        "extension": ".html"
-      },
-      {
         "path": "health/cache-reset.html",
         "sizeBytes": 1845,
         "extension": ".html"
@@ -14186,8 +14121,7 @@
   "to_remove": {
     "dirs": [
       "games/box3d",
-      "games/box-playground",
-      "gameshells/box3d"
+      "games/box-playground"
     ]
   },
   "junk": {
