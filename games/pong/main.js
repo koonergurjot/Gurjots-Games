@@ -168,6 +168,22 @@ export function boot() {
   }
 
   let raf;
+  let readyNotified = false;
+  function notifyReady() {
+    if (readyNotified) return;
+    readyNotified = true;
+    try {
+      window.DIAG?.ready?.();
+    } catch (err) {
+      // Ignore errors from diagnostics hooks.
+    }
+    try {
+      window.parent?.postMessage?.({ type: 'GAME_READY' }, '*');
+    } catch (err) {
+      // Ignore failures to notify parent window.
+    }
+  }
+
   function loop(){
     if (!paused) {
       update();
@@ -178,6 +194,7 @@ export function boot() {
       drawOverlay();
       overlayNeedsDraw = false;
     }
+    notifyReady();
     raf = requestAnimationFrame(loop);
   }
   loop();
@@ -195,4 +212,13 @@ export function boot() {
 
   addEventListener('beforeunload', handleUnload);
   previousCleanup = cleanup;
+}
+
+if (typeof window !== 'undefined') {
+  const start = () => boot();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
 }
