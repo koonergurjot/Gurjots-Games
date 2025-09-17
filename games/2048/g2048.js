@@ -320,3 +320,4 @@ applyTheme();
 reset(true);
 gameLoop.start();
 net?.send('move',{grid,score});
+window.DIAG?.ready?.();
