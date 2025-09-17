@@ -208,7 +208,10 @@
   // Listen for game events (from inside iframe)
   window.addEventListener('message', (ev)=>{
     const d = ev.data || {};
-    if (d.type==='GAME_READY'){ clearAnyPause(); setReady(); }
+    if (d.type==='GAME_READY'){
+      setReady();
+      sendGameResume();
+    }
     if (d.type==='GAME_ERROR'){ setError(d.message||'Unknown error'); }
     if (d.type==='GAME_SCORE'){ setScore(d.score); }
   });
