@@ -12,7 +12,7 @@
   </style>
 </head>
 <body>
-  <!-- Provide multiple common mount points so the game doesn't crash -->
+  <!-- Common mount points -->
   <div id="game-root"></div>
   <div id="game"></div>
   <div id="app"></div>
@@ -20,7 +20,6 @@
   <div id="container"></div>
   <div id="board"></div>
 
-  <!-- Provide a default canvas some games use -->
   <div class="fit">
     <div class="stack" aria-live="polite">
       <canvas id="gameCanvas" width="800" height="600" aria-label="Snake canvas"></canvas>
@@ -28,16 +27,20 @@
     </div>
   </div>
 
-  <!-- Optional diagnostics for debugging; safe to keep -->
+  <!-- Diagnostics; keep during debug, remove for prod if you like -->
   <script src="/js/runtime-diagnostics.js"></script>
 
-  <!-- Load the original Snake entry script -->
+  <!-- Load original Snake script -->
   <script src="./main.js"></script>
 
-  <!-- If the game doesn't notify readiness, send a best-effort READY after load -->
+  <!-- Signal ready via DIAG (also stops heartbeats) -->
   <script>
     window.addEventListener('load', function(){
-      try { parent && parent.postMessage({ type:'GAME_READY' }, '*'); } catch(_) {}
+      if (window.DIAG && typeof window.DIAG.ready === 'function') {
+        window.DIAG.ready();
+      } else {
+        try { parent && parent.postMessage({ type: 'GAME_READY' }, '*'); } catch(_) {}
+      }
     });
   </script>
 </body>
