@@ -51,7 +51,7 @@ function createCanvas() {
   }
 }
 
-export function boot() {
+export function boot(configOverrides = {}) {
   if (typeof previousCleanup === 'function') {
     previousCleanup();
     previousCleanup = undefined;
@@ -90,6 +90,10 @@ export function boot() {
   let servePending = true;
   let serveDirection = 1;
   let overlayNeedsDraw = true;
+  let matchOver = false;
+  let pauseRequested = false;
+  let winner = null;
+  let testHooks;
 
   const difficultyPresets = {
     off: { label: '2P (Manual)', reactionFrames: 0, maxSpeed: speed * 1.1 },
@@ -105,6 +109,37 @@ export function boot() {
       return new URLSearchParams();
     }
   })();
+
+  function parseTargetScore(value) {
+    const num = Number.parseInt(value, 10);
+    if (!Number.isFinite(num) || num <= 0) return undefined;
+    return num;
+  }
+
+  function parseBoolean(value) {
+    if (value === undefined || value === null) return undefined;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false;
+    return undefined;
+  }
+
+  const defaultMatchConfig = {
+    targetScore: 11,
+    winByTwo: false,
+  };
+
+  const matchConfig = {
+    targetScore:
+      parseTargetScore(configOverrides.targetScore) ||
+      parseTargetScore(searchParams.get('to') || searchParams.get('target') || searchParams.get('score')) ||
+      defaultMatchConfig.targetScore,
+    winByTwo:
+      parseBoolean(configOverrides.winByTwo) ??
+      parseBoolean(searchParams.get('winbytwo') || searchParams.get('win-by-two')) ??
+      defaultMatchConfig.winByTwo,
+  };
 
   function normalizeDifficulty(value) {
     if (!value) return 'off';
@@ -158,10 +193,62 @@ export function boot() {
     overlayNeedsDraw = true;
   }
 
+  function hasPlayerWon(score, opponentScore) {
+    if (score < matchConfig.targetScore) return false;
+    if (matchConfig.winByTwo && score - opponentScore < 2) return false;
+    return true;
+  }
+
+  function concludeMatch(side) {
+    matchOver = true;
+    winner = side;
+    pauseRequested = true;
+    awaitServe(side === 'left' ? 1 : -1);
+    overlayNeedsDraw = true;
+  }
+
+  function handleScore(side) {
+    if (matchOver) return;
+    const scoring = side === 'left' ? left : right;
+    const opponent = side === 'left' ? right : left;
+    const nextServeDirection = side === 'left' ? 1 : -1;
+    scoring.score += 1;
+    overlayNeedsDraw = true;
+    if (hasPlayerWon(scoring.score, opponent.score)) {
+      concludeMatch(side);
+      return;
+    }
+    awaitServe(nextServeDirection);
+  }
+
+  function startNewMatch() {
+    const nextServeDirection = winner === 'left' ? -1 : 1;
+    left.score = 0;
+    right.score = 0;
+    matchOver = false;
+    pauseRequested = false;
+    paused = false;
+    winner = null;
+    awaitServe(nextServeDirection);
+    overlayNeedsDraw = true;
+  }
+
   awaitServe(serveDirection);
 
   function handleKeydown(e) {
     const key = e.key;
+
+    if (matchOver) {
+      if (key === ' ' || key === 'Space' || key === 'Enter') {
+        e.preventDefault();
+        startNewMatch();
+        return;
+      }
+      if (key === 'p' || key === 'P' || key === 'Escape') {
+        e.preventDefault();
+        return;
+      }
+    }
 
     if (key === 'p' || key === 'P' || key === 'Escape') {
       e.preventDefault();
@@ -262,8 +349,8 @@ export function boot() {
       if (hitRight) ball.x = right.x - ballR - 1;
     }
 
-    if (ball.x < -ballR) { right.score++; awaitServe(-1); }
-    if (ball.x > W + ballR) { left.score++; awaitServe(1); }
+    if (ball.x < -ballR) { handleScore('right'); }
+    if (ball.x > W + ballR) { handleScore('left'); }
   }
 
   function draw() {
@@ -281,7 +368,7 @@ export function boot() {
   }
 
   function drawPauseOverlay() {
-    if (!paused) return;
+    if (!paused || matchOver) return;
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(0,0,W,H);
@@ -296,7 +383,7 @@ export function boot() {
   }
 
   function drawServePrompt() {
-    if (!servePending) return;
+    if (!servePending || matchOver) return;
     ctx.save();
     const message = paused ? 'Serve ready: press Space or Enter' : 'Press Space or Enter to serve';
     ctx.font = '24px system-ui, sans-serif';
@@ -316,9 +403,11 @@ export function boot() {
 
   function drawInstructionsOverlay() {
     const lines = [
+      `Match: first to ${matchConfig.targetScore}${matchConfig.winByTwo ? ' (win by 2)' : ''}`,
       'Left paddle: W / S',
       aiMode === 'off' ? 'Right paddle: Arrow keys (2P mode)' : `Right paddle: ${difficultyPresets[aiMode]?.label || 'AI'}`,
       'Press 1/2/3 for Easy/Normal/Hard AI, 0 for 2P, C to cycle',
+      'After a win, press Space or Enter to start a new match',
       'URL ?cpu=easy|normal|hard starts with AI enabled',
     ];
     const padding = 10;
@@ -341,10 +430,27 @@ export function boot() {
     ctx.restore();
   }
 
+  function drawVictoryOverlay() {
+    if (!matchOver) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const winnerLabel = winner === 'left' ? 'Player 1' : 'Player 2';
+    ctx.font = 'bold 56px system-ui, sans-serif';
+    ctx.fillText(`${winnerLabel} wins!`, W / 2, H / 2 - 40);
+    ctx.font = '24px system-ui, sans-serif';
+    ctx.fillText('Press Space or Enter to start a new match', W / 2, H / 2 + 12);
+    ctx.restore();
+  }
+
   function drawOverlay() {
     drawInstructionsOverlay();
     drawPauseOverlay();
     drawServePrompt();
+    drawVictoryOverlay();
   }
 
   let raf;
@@ -368,6 +474,10 @@ export function boot() {
     if (!paused) {
       update();
       draw();
+      if (pauseRequested) {
+        paused = true;
+        pauseRequested = false;
+      }
       drawOverlay();
       overlayNeedsDraw = true;
     } else if (overlayNeedsDraw) {
@@ -388,6 +498,28 @@ export function boot() {
     removeEventListener('keydown', handleKeydown);
     removeEventListener('keyup', handleKeyup);
     removeEventListener('beforeunload', handleUnload);
+    if (typeof window !== 'undefined' && window.__pongTest === testHooks) {
+      delete window.__pongTest;
+    }
+  }
+
+  testHooks = {
+    config: matchConfig,
+    handleScore,
+    startNewMatch,
+    getState: () => ({
+      leftScore: left.score,
+      rightScore: right.score,
+      servePending,
+      paused: paused || pauseRequested,
+      matchOver,
+      winner,
+    }),
+    cleanup,
+  };
+
+  if (typeof window !== 'undefined') {
+    window.__pongTest = testHooks;
   }
 
   addEventListener('beforeunload', handleUnload);
