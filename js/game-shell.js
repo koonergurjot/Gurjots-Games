@@ -9,6 +9,7 @@ var $ = function(s){ return document.querySelector(s); };
 function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className = cls; return e; }
 
 var state = { timer:null, muted:true, gameInfo:null, iframe:null };
+var diagState = { sink:null, listenerBound:false, errorListenerBound:false };
 
 // NEW: inject high-contrast styles for shell overlays
 function injectShellStyles(){
@@ -61,6 +62,23 @@ function injectShellStyles(){
   @keyframes gg-bounce { 0%,80%,100%{ transform:scale(0.6); opacity:.6 } 40%{ transform:scale(1); opacity:1 } }
   `;
   document.head.appendChild(style);
+}
+
+function ensureRuntimeDiagnostics(targetDoc) {
+  var doc = targetDoc || document;
+  try {
+    if (!doc) return;
+    if (doc.getElementById('__runtime-diag')) return;
+    var script = doc.createElement('script');
+    script.id = '__runtime-diag';
+    script.src = '/js/runtime-diagnostics.js';
+    var host = doc.body || doc.head || doc.documentElement;
+    if (host) {
+      host.appendChild(script);
+    }
+  } catch (err) {
+    try { console.warn('Failed to inject runtime diagnostics', err); } catch(_){ }
+  }
 }
 
 function cacheBust(url) {
@@ -140,17 +158,19 @@ function loadGame(info){
     iframe.allow = 'autoplay; fullscreen';
     iframe.src = cacheBust(debugEntry);
     iframe.onload = function(){ /* wait for GAME_READY */ };
+    iframe.addEventListener('load', function(){
+      try {
+        var doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+        ensureRuntimeDiagnostics(doc);
+      } catch(_){ }
+    });
     if (stage) stage.innerHTML = '';
     (stage || document.body).appendChild(iframe);
     state.iframe = iframe;
     createDiagUI(info, type, debugEntry);
   } else {
     if (stage) stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>';
-    if (DEBUG) {
-      var d = document.createElement('script');
-      d.src = '/js/runtime-diagnostics.js';
-      document.body.appendChild(d);
-    }
+    ensureRuntimeDiagnostics(document);
     var s = document.createElement('script');
     var useModule = (FORCE_MODULE !== null) ? FORCE_MODULE : isModule;
     if(useModule){ s.type='module'; }
@@ -254,58 +274,117 @@ window.addEventListener('message', function(ev){
   }
 });
 
-function createDiagUI(info, type, entry) {
-  if (!DEBUG) return;
-  var btn = document.createElement('button');
-  btn.textContent = '🧪 Diagnostics';
-  btn.style.position='fixed'; btn.style.right='12px'; btn.style.bottom='12px';
-  btn.style.zIndex='1000'; btn.className='btn';
-  document.body.appendChild(btn);
+function appendDiag(text) {
+  if (diagState.sink) {
+    diagState.sink.textContent += text;
+  }
+}
 
-  var panel = document.createElement('div');
-  panel.style.position='fixed'; panel.style.right='12px'; panel.style.bottom='56px';
-  panel.style.background='#0b0f2a'; panel.style.color='#e8eefc';
-  panel.style.border='1px solid #25305a'; panel.style.borderRadius='10px';
-  panel.style.padding='10px'; panel.style.width='360px'; panel.style.maxHeight='60vh'; panel.style.overflow='auto';
-  panel.style.display='none'; panel.style.boxShadow='0 10px 30px rgba(0,0,0,.4)';
+function ensureDiagListeners() {
+  if (!diagState.listenerBound) {
+    window.addEventListener('message', function(e){
+      if (!diagState.sink) return;
+      var d = e && e.data;
+      if (d && d.type === 'DIAG_LOG' && d.entry) {
+        var ent = d.entry;
+        appendDiag('[+'+ent.t+'ms] '+String(ent.level || 'LOG').toUpperCase()+': '+ent.msg+'\n');
+      } else if (d && d.type === 'GAME_READY') {
+        appendDiag('[event] GAME_READY\n');
+      } else if (d && d.type === 'GAME_ERROR') {
+        appendDiag('[event] GAME_ERROR: ' + (d.message || '') + '\n');
+      }
+    });
+    diagState.listenerBound = true;
+  }
+  if (!diagState.errorListenerBound) {
+    window.addEventListener('error', function(e){
+      appendDiag('[shell] window.error: ' + e.message + '\n');
+    });
+    window.addEventListener('unhandledrejection', function(e){
+      var r = e && e.reason && (e.reason.message || e.reason.toString());
+      appendDiag('[shell] unhandledrejection: ' + (r || 'unknown') + '\n');
+    });
+    diagState.errorListenerBound = true;
+  }
+}
+
+function createDiagUI(info, type, entry) {
+  var btn = document.getElementById('diag-btn');
+  var panel = document.getElementById('diag-panel');
+  if (!btn || !panel) {
+    if (btn) try { btn.remove(); } catch(_){}
+    if (panel) try { panel.remove(); } catch(_){}
+
+    btn = document.createElement('button');
+    btn.id = 'diag-btn';
+    btn.textContent = '🧪 Diagnostics';
+    btn.style.position='fixed'; btn.style.right='12px'; btn.style.bottom='12px';
+    btn.style.zIndex='1000'; btn.className='btn';
+    document.body.appendChild(btn);
+
+    panel = document.createElement('div');
+    panel.id = 'diag-panel';
+    panel.style.position='fixed'; panel.style.right='12px'; panel.style.bottom='56px';
+    panel.style.background='#0b0f2a'; panel.style.color='#e8eefc';
+    panel.style.border='1px solid #25305a'; panel.style.borderRadius='10px';
+    panel.style.padding='10px'; panel.style.width='360px'; panel.style.maxHeight='60vh'; panel.style.overflow='auto';
+    panel.style.display='none'; panel.style.boxShadow='0 10px 30px rgba(0,0,0,.4)';
+
+    var metaWrap = document.createElement('div');
+    metaWrap.id = 'diag-meta';
+    metaWrap.style.fontFamily = 'ui-sans-serif,system-ui';
+    metaWrap.style.fontSize = '13px';
+    metaWrap.style.lineHeight = '1.4';
+    panel.appendChild(metaWrap);
+
+    var hr = document.createElement('hr');
+    hr.className = 'diag-separator';
+    hr.style.borderColor = '#25305a';
+    panel.appendChild(hr);
+
+    var sink = document.createElement('div');
+    sink.id = 'diag-logs';
+    sink.style.fontFamily = 'ui-monospace,monospace';
+    sink.style.fontSize = '12px';
+    sink.style.whiteSpace = 'pre-wrap';
+    panel.appendChild(sink);
+
+    document.body.appendChild(panel);
+
+    btn.onclick = function(){ panel.style.display = (panel.style.display==='none'?'block':'none'); };
+  }
+
+  var meta = panel.querySelector('#diag-meta');
+  if (!meta) {
+    meta = document.createElement('div');
+    meta.id = 'diag-meta';
+    panel.insertBefore(meta, panel.firstChild);
+  }
+
+  var sinkEl = panel.querySelector('#diag-logs');
+  if (!sinkEl) {
+    sinkEl = document.createElement('div');
+    sinkEl.id = 'diag-logs';
+    sinkEl.style.fontFamily = 'ui-monospace,monospace';
+    sinkEl.style.fontSize = '12px';
+    sinkEl.style.whiteSpace = 'pre-wrap';
+    panel.appendChild(sinkEl);
+  }
+
   var forced = FORCE ? ' (forced)' : '';
-  var meta = ''+
+  meta.innerHTML = ''+
     '<div style="font-weight:700;margin-bottom:6px">Game Diagnostics</div>'+
     '<div><b>Slug</b>: ' + (info.slug || 'n/a') + '</div>'+
     '<div><b>Title</b>: ' + (info.title || 'n/a') + '</div>'+
     '<div><b>Entry</b>: ' + entry + '</div>'+
     '<div><b>Type</b>: ' + type + forced + '</div>'+
-    '<div><b>Module</b>: ' + String((info.launch && info.launch.module) || info.module || false) + '</div>'+
-    '<hr style="border-color:#25305a">'+
-    '<div id="diag-logs" style="font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap"></div>';
-  panel.innerHTML = meta;
-  document.body.appendChild(panel);
+    '<div><b>Module</b>: ' + String((info.launch && info.launch.module) || info.module || false) + '</div>';
 
-  btn.onclick = function(){ panel.style.display = (panel.style.display==='none'?'block':'none'); };
+  sinkEl.textContent = '';
+  diagState.sink = sinkEl;
 
-  var sink = panel.querySelector('#diag-logs');
-  var add = function(e){
-    try{
-      var d = e.data;
-      if(d && d.type==='DIAG_LOG'){
-        var ent = d.entry;
-        sink.textContent += '[+'+ent.t+'ms] '+String(ent.level||'LOG').toUpperCase()+': '+ent.msg+'\n';
-      } else if (d && d.type==='GAME_READY') {
-        sink.textContent += '[event] GAME_READY\n';
-      } else if (d && d.type==='GAME_ERROR') {
-        sink.textContent += '[event] GAME_ERROR: '+ (d.message||'') + '\n';
-      }
-    }catch(_){}
-  };
-  window.addEventListener('message', add);
-
-  window.addEventListener('error', function(e){
-    sink.textContent += '[shell] window.error: '+e.message+'\n';
-  });
-  window.addEventListener('unhandledrejection', function(e){
-    var r = e.reason && (e.reason.message || e.reason.toString());
-    sink.textContent += '[shell] unhandledrejection: '+ r +'\n';
-  });
+  ensureDiagListeners();
+  appendDiag('[shell] diagnostics ready\n');
 }
 
 boot();
