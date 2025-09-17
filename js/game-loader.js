@@ -14,10 +14,10 @@
 
   (function(){
     const root = document.getElementById('game-root') || (function(){ const d=document.createElement('div'); d.id='game-root'; document.body.appendChild(d); return d; })();
-    const ids=['status','level','lives','board','game','c','canvas','gameCanvas','fx','hud','score'];
+    const ids=['status','level','lives','board','game','c','canvas','gameCanvas','fx','hud','score','t'];
     ids.forEach(id=>{
       if(document.getElementById(id)) return;
-      const el = (id==='c'||id==='board'||id==='game'||id==='canvas'||id==='gameCanvas'||id==='fx') ? document.createElement('canvas') : document.createElement('div');
+      const el = (id==='c'||id==='board'||id==='game'||id==='canvas'||id==='gameCanvas'||id==='fx'||id==='t') ? document.createElement('canvas') : document.createElement('div');
       el.id=id; root.appendChild(el);
       if (el.tagName==='CANVAS' && typeof window.fitCanvasToParent==='function') window.fitCanvasToParent(el);
     });
