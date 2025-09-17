@@ -1,339 +1,214 @@
-const canvas = document.getElementById('game');
-if (!(canvas instanceof HTMLCanvasElement)) {
-  throw new Error('Canvas element #game not found');
-}
-const ctx = canvas.getContext('2d');
-if (!ctx) {
-  throw new Error('2D rendering context not available');
-}
-function ctxSave() { if (ctx.save) ctx.save(); }
-function ctxRestore() { if (ctx.restore) ctx.restore(); }
+(function(){
+  "use strict";
+  const SLUG = "pong";
+  const LS_KEY = "pong.v2";
+  const DFLT = {
+    mode:"1P",          // 1P | 2P | PRACTICE
+    ai:"Normal",        // Easy | Normal | Hard
+    toScore:11,
+    winByTwo:true,
+    powerups:true,
+    sfx:false,
+    keys:{p1Up:"KeyW", p1Down:"KeyS", p2Up:"ArrowUp", p2Down:"ArrowDown", pause:"Space"},
+  };
+  const state = { ...DFLT, ...loadLS(), running:false, debug:hasDebug(), t0:0, last:0, dt:0,
+    canvas:null, ctx:null, ratio:1, paused:false, over:false,
+    score:{p1:0,p2:0}, ball:null, p1:null, p2:null, hud:null, diag:null, loopId:0,
+  };
 
-let W = 0, H = 0;
-const loop = createCanvasLoop(canvas, () => { step(); draw(); }, {
-  onResize: (w, h, dpr) => {
-    W = w;
-    H = h;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  function hasDebug(){ try { return new URLSearchParams(location.search).has("debug"); } catch(_){ return false; } }
+  function loadLS(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||"{}"); }catch(_){return {}}}
+  function saveLS(){ try{ localStorage.setItem(LS_KEY, JSON.stringify({mode:state.mode, ai:state.ai, toScore:state.toScore, winByTwo:state.winByTwo, powerups:state.powerups, sfx:state.sfx, keys:state.keys})); }catch(_){ } }
+  function post(type, message){ try { parent && parent.postMessage({type, slug:SLUG, message}, "*"); } catch(_){ } }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function now(){ return (performance||Date).now(); }
+
+  // --- UI --------------------------------------------------------------------
+  function h(tag, props={}, ...kids){
+    const el = document.createElement(tag);
+    for(const [k,v] of Object.entries(props)){ if(k==="class") el.className=v; else if(k.startsWith("on")) el.addEventListener(k.slice(2), v, {passive:true}); else if(k==="html") el.innerHTML=v; else el.setAttribute(k,v); }
+    for(const k of kids) if(k!=null) el.append(k);
+    return el;
   }
-});
-window.pong = loop;
-loop.start();
-const PADDLE_W = 12, PADDLE_H = 110, BALL_R = 8;
-const COS_KEY = 'gg:pong:cosmetics';
-let cosmetics = {};
-try { cosmetics = JSON.parse(localStorage.getItem(COS_KEY) || '{}'); } catch {}
-let paddleColor = cosmetics.paddle || '#00f6ff';
-let ballColor = cosmetics.ball || '#ff00e6';
-
-let left = { x: 30, y: H / 2 - PADDLE_H / 2, vy: 0, score: 0 };
-let right = { x: W - 30 - PADDLE_W, y: H / 2 - PADDLE_H / 2, vy: 0, score: 0 };
-
-function resetBall(dir = Math.random() < 0.5 ? -1 : 1) {
-  return { x: W / 2, y: H / 2, vx: 5 * dir, vy: (Math.random() * 2 - 1) * 3 };
-}
-let ball = resetBall(1);
-
-// Keyboard state
-let keys = {};
-document.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
-
-const GAME_ID = 'pong';
-GG.incPlays();
-let twoP = false;
-const CAREER_KEY = 'gg:pong:career';
-let careerLevel = parseInt(localStorage.getItem(CAREER_KEY) || '0', 10);
-let careerUpdated = false;
-function saveCareer(){ localStorage.setItem(CAREER_KEY, careerLevel); }
-function unlockCosmetic(reward = {}){
-  cosmetics = { ...cosmetics, ...reward };
-  localStorage.setItem(COS_KEY, JSON.stringify(cosmetics));
-  paddleColor = cosmetics.paddle || paddleColor;
-  ballColor = cosmetics.ball || ballColor;
-}
-function renderLadder(){
-  const el = document.getElementById('ladder');
-  if (!el || !window.PONG_CAREER) return;
-  el.innerHTML = window.PONG_CAREER.map((p,i)=>{
-    const cls = i < careerLevel ? 'done' : i === careerLevel ? 'current' : '';
-    return `<div class="${cls}">${p.name}</div>`;
-  }).join('');
-}
-
-class AIPlayer {
-  constructor(paddle) { this.paddle = paddle; this.speed = 0.13; this.reaction = 0.3; }
-  loadProfile(p={}){ this.speed = p.speed ?? this.speed; this.reaction = p.reaction ?? this.reaction; }
-  setDifficulty(level) { this.speed = level === 'easy' ? 0.08 : level === 'hard' ? 0.2 : 0.13; }
-  update() {
-    if (ball.vx < 0 || ball.x < W * this.reaction) return;
-    const target = ball.y - (paddleHeight(this.paddle) / 2 - BALL_R);
-    this.paddle.y = clamp(
-      this.paddle.y + (target - this.paddle.y) * this.speed,
-      0,
-      H - paddleHeight(this.paddle)
+  function buildUI(root){
+    const bar = h("div",{class:"pong-bar", role:"toolbar","aria-label":"Pong toolbar"},
+      h("span",{class:"pong-title"},"Pong"),
+      h("span",{class:"pong-chip",title:"Mode"}, ()=>state.mode ),
+      h("span",{class:"pong-spacer"}),
+      h("button",{class:"pong-btn",title:"Toggle Diagnostics",onclick:()=>toggleDiag()}, "Diagnostics"),
+      h("button",{class:"pong-btn",title:"Pause/Resume (Space)",onclick:()=>togglePause()}, "Pause")
     );
+    const hud = h("div",{class:"pong-hud", role:"status","aria-live":"polite"},
+      h("div",{class:"pong-score",id:"score-p1"},"0"),
+      h("div",{class:"pong-mid"},"—"),
+      h("div",{class:"pong-score",id:"score-p2"},"0"),
+    );
+    const menu = h("div",{class:"pong-menu"},
+      labelSel("Mode",["1P","2P","PRACTICE"], v => (state.mode=v, reset())),
+      labelSel("AI",["Easy","Normal","Hard"], v => (state.ai=v, reset())),
+      labelSel("To", [5,7,11,15], v => (state.toScore=+v, reset())),
+      labelChk("Win by 2", state.winByTwo, v => (state.winByTwo=v, reset())),
+      labelChk("Power-ups", state.powerups, v => (state.powerups=v)),
+      labelChk("SFX", state.sfx, v => (state.sfx=v)),
+    );
+    const wrap = h("div",{class:"pong-canvas-wrap"}, state.canvas = h("canvas",{class:"pong-canvas", id:"canvas", width:1280, height:720}));
+    const diag = state.diag = h("div",{class:"pong-diag"+(state.debug?" show":""), id:"diag"}, h("pre",{}, "Diagnostics ready."));
+    root.append(bar, wrap, hud, menu, diag);
+    state.hud = {p1: hud.querySelector("#score-p1"), p2: hud.querySelector("#score-p2")};
+    onResize(); addEvents();
   }
-}
-const ai = new AIPlayer(right);
-function loadCurrentAI(){
-  const profile = (window.PONG_CAREER || [])[careerLevel] || {};
-  ai.loadProfile(profile);
-}
-loadCurrentAI();
-renderLadder();
-
-function onWinCareer(){
-  const ladder = window.PONG_CAREER || [];
-  const profile = ladder[careerLevel];
-  if (profile && profile.reward) unlockCosmetic(profile.reward);
-  if (careerLevel < ladder.length - 1) careerLevel++;
-  saveCareer();
-  loadCurrentAI();
-  renderLadder();
-}
-
-function setMetaWins() {
-  const w = parseInt(localStorage.getItem('gg:pong:wins') || '0');
-  const l = parseInt(localStorage.getItem('gg:pong:loss') || '0');
-  GG.setMeta(GAME_ID, `Wins: ${w} • Losses: ${l}`);
-}
-function toggle2P() { twoP = !twoP; }
-function setDifficulty(level) { ai.setDifficulty(level); }
-
-setMetaWins();
-
-// Best score handling
-const BEST_KEY = 'bestScore:pong';
-function updateBestDisplay() {
-  const b = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
-  const el = document.getElementById('bestScore');
-  if (el) el.textContent = b;
-}
-function saveBestScore(score) {
-  try {
-    const prev = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
-    if (score > prev) localStorage.setItem(BEST_KEY, score);
-  } catch {}
-  updateBestDisplay();
-}
-updateBestDisplay();
-
-// v5: pause, power-up, touch
-let paused = false, lastHit = 'left', power = null;
-let pauseOverlay = null;
-function ensurePauseOverlay() {
-  if (!pauseOverlay && window.PongPauseOverlay) {
-    pauseOverlay = window.PongPauseOverlay.create({
-      onResume: () => setPaused(false),
-      onRestart: () => restartGame()
-    });
+  function labelSel(name, opts, onChange){
+    const sel = h("select",{class:"pong-select",onchange:(e)=>onChange(e.target.value)}, ...opts.map(v=>h("option",{value:String(v), selected:String(v)===String(state[name.toLowerCase()]||state[name])},String(v))));
+    return h("label",{}, name, " ", sel);
   }
-  return pauseOverlay;
-}
-function setPaused(value) {
-  const next = Boolean(value);
-  if (paused === next) return;
-  paused = next;
-  const overlay = ensurePauseOverlay();
-  if (overlay) {
-    if (paused) overlay.show();
-    else overlay.hide();
-  }
-}
-function togglePause(force) {
-  if (typeof force === 'boolean') {
-    setPaused(force);
-  } else {
-    setPaused(!paused);
-  }
-}
-function restartGame() {
-  left.score = 0;
-  right.score = 0;
-  ball = resetBall();
-  careerUpdated = false;
-  power = null;
-  lastHit = 'left';
-  setPaused(false);
-}
-document.addEventListener('keydown', e => {
-  const key = e.key.toLowerCase();
-  if (key === 'p' || e.key === 'Escape') togglePause();
-  if (e.key === '2') toggle2P();
-  if (e.key === '1') setDifficulty('easy');
-  if (e.key === '3') setDifficulty('hard');
-  if (e.key === '2' && e.shiftKey) setDifficulty('medium');
-  if (key === 'r') restartGame();
-});
-ensurePauseOverlay();
-
-function maybeSpawnPower() {
-  if (power || Math.random() > 0.006) return;
-  power = { x: W / 2, y: 40 + Math.random() * (H - 80), ttl: 10000 };
-}
-function applyPower() {
-  if (!power) return;
-  if (Math.abs(ball.x - power.x) < 12 && Math.abs(ball.y - power.y) < 20) {
-    if (lastHit === 'left') { left._boost = Date.now() + 6000; } else { right._boost = Date.now() + 6000; }
-    SFX.seq([[880, 0.06, 0.25], [1320, 0.08, 0.25]]);
-    power = null;
-  }
-  if (power) {
-    power.ttl -= 16;
-    if (power.ttl < 0) power = null;
-  }
-}
-function paddleHeight(p) { return (p._boost || 0) > Date.now() ? PADDLE_H * 1.35 : PADDLE_H; }
-
-// Touch to move left paddle
-(function () {
-  let dragging = false;
-  canvas.addEventListener('touchstart', () => dragging = true);
-  canvas.addEventListener('touchend', () => dragging = false);
-  canvas.addEventListener('touchmove', e => {
-    if (!dragging) return;
-    const t = e.touches[0];
-    const r = canvas.getBoundingClientRect();
-    const y = (t.clientY - r.top) * (canvas.height / r.height);
-    left.y = clamp(y - paddleHeight(left) / 2, 0, H - paddleHeight(left));
-    e.preventDefault();
-  }, { passive: false });
-})();
-
-function step() {
-  if (paused || left.score >= 7 || right.score >= 7) return;
-  maybeSpawnPower();
-  applyPower();
-
-  left.vy = (keys['w'] ? -7 : 0) + (keys['s'] ? 7 : 0);
-  left.y = clamp(left.y + left.vy, 0, H - paddleHeight(left));
-
-  right.vy = (keys['arrowup'] ? -7 : 0) + (keys['arrowdown'] ? 7 : 0);
-  if (!twoP && !keys['arrowup'] && !keys['arrowdown']) {
-    ai.update();
-  } else {
-    right.y = clamp(right.y + right.vy, 0, H - paddleHeight(right));
+  function labelChk(name, val, onChange){
+    const id = "chk-"+name.replace(/\s+/g,'-').toLowerCase();
+    const input = h("input",{id, type:"checkbox", class:"pong-input", checked:val, onchange:(e)=>onChange(e.target.checked)});
+    return h("label",{for:id}, input," ", name);
   }
 
-  ball.x += ball.vx; ball.y += ball.vy;
-  if (ball.y < BALL_R || ball.y > H - BALL_R) { ball.vy *= -1; SFX.beep({ freq: 220 }); }
-
-  // angle clamp helper to avoid flat trajectories
-  function clampBounce(vx, vy) {
-    const sp = Math.hypot(vx, vy) || 1; let ang = Math.atan2(vy, vx);
-    const min = 0.25, max = Math.PI - 0.25;
-    if (ang < min && ang > -min) ang = Math.sign(ang || 1) * min;
-    if (ang > max || ang < -max) ang = Math.sign(ang) * (Math.PI - 0.25);
-    return { vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp };
+  // --- Game objects ----------------------------------------------------------
+  function reset(){
+    state.score.p1 = 0; state.score.p2 = 0; updateHUD();
+    state.p1 = {x:32, y:360-60, w:18, h:120, dy:0, speed:520};
+    state.p2 = {x:1280-50, y:360-60, w:18, h:120, dy:0, speed:520};
+    spawnBall();
   }
-
-  if (ball.x - BALL_R < left.x + PADDLE_W && ball.y > left.y && ball.y < left.y + paddleHeight(left) && ball.vx < 0) {
-    const rel = (ball.y - (left.y + paddleHeight(left) / 2)) / (paddleHeight(left) / 2);
-    ball.vx = Math.abs(ball.vx) * 1.05;
-    ball.vy = rel * 6;
-    const n = clampBounce(ball.vx, ball.vy); ball.vx = n.vx; ball.vy = n.vy;
-    lastHit = 'left'; SFX.beep({ freq: 440 });
+  function spawnBall(dir = Math.random()<0.5? -1 : 1){
+    state.ball = {x:1280/2, y:720/2, r:9, dx: dir*350, dy: (Math.random()*2-1)*220, spin:0};
   }
-
-  if (ball.x + BALL_R > right.x && ball.y > right.y && ball.y < right.y + paddleHeight(right) && ball.vx > 0) {
-    const rel = (ball.y - (right.y + paddleHeight(right) / 2)) / (paddleHeight(right) / 2);
-    ball.vx = -Math.abs(ball.vx) * 1.05;
-    ball.vy = rel * 6;
-    const n = clampBounce(ball.vx, ball.vy); ball.vx = n.vx; ball.vy = n.vy;
-    lastHit = 'right'; SFX.beep({ freq: 520 });
+  function award(pointTo){
+    state.score[pointTo]++; updateHUD();
+    if(isMatchOver()) endMatch(); else spawnBall(pointTo==="p1" ? 1 : -1);
   }
-
-  if (ball.x < -20) { right.score++; GG.addXP(2); SFX.seq([[260], [200]]); ball = resetBall(1); }
-  if (ball.x > W + 20) { left.score++; GG.addXP(2); SFX.seq([[260], [200]]); ball = resetBall(-1); }
-}
-
-const trail = [];
-let gridOffset = 0;
-function draw() {
-  trail.push({ x: ball.x, y: ball.y });
-  if (trail.length > 12) trail.shift();
-  ctx.clearRect(0, 0, canvas.width, canvas.height); W = canvas.width; H = canvas.height;
-
-  ctx.fillStyle = '#11162a';
-  ctx.fillRect(0, 0, W, H);
-
-  gridOffset = (gridOffset + 0.5) % 40;
-  ctxSave();
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-  ctx.lineWidth = 1;
-  for (let x = -gridOffset; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-  for (let y = -gridOffset; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-  ctxRestore();
-
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.setLineDash([12, 18]);
-  ctx.beginPath();
-  ctx.moveTo(W / 2, 0);
-  ctx.lineTo(W / 2, H);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctxSave();
-  trail.forEach((p, i) => {
-    const a = (i + 1) / trail.length;
-    ctx.fillStyle = `rgba(255,0,230,${a * 0.3})`;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, BALL_R, 0, Math.PI * 2);
-    ctx.fill();
-  });
-  ctxRestore();
-
-  ctxSave();
-  ctx.fillStyle = paddleColor; ctx.shadowColor = paddleColor; ctx.shadowBlur = 10;
-  ctx.fillRect(left.x, left.y, PADDLE_W, paddleHeight(left));
-  ctx.fillRect(right.x, right.y, PADDLE_W, paddleHeight(right));
-  ctxRestore();
-
-  ctxSave();
-  ctx.fillStyle = ballColor; ctx.shadowColor = ballColor; ctx.shadowBlur = 20;
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
-  ctx.fill();
-  ctxRestore();
-  if (power) { ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.arc(power.x, power.y, 10, 0, Math.PI * 2); ctx.fill(); }
-  ctx.textAlign = 'center'; ctx.fillStyle = '#e6e7ea'; ctx.font = 'bold 42px Inter, system-ui, sans-serif'; ctx.fillText(`${left.score}`, W / 2 - 80, 60); ctx.fillText(`${right.score}`, W / 2 + 80, 60);
-  if (paused && !pauseOverlay) {
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#e6e7ea';
-    ctx.font = 'bold 34px Inter';
-    ctx.fillText('Paused — Esc or P to resume', W / 2, H / 2);
+  function isMatchOver(){
+    const a=state.score.p1, b=state.score.p2, T=state.toScore;
+    if(a>=T||b>=T){
+      if(!state.winByTwo) return true;
+      return Math.abs(a-b)>=2;
+    }
+    return false;
   }
-  if (left.score >= 7 || right.score >= 7) {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#e6e7ea'; ctx.font = 'bold 48px Inter, system-ui, sans-serif';
-    ctx.fillText(`${left.score >= 7 ? 'Left' : 'Right'} wins!`, W / 2, H / 2);
-    ctx.font = '24px Inter, system-ui, sans-serif'; ctx.fillText(`Press R to restart`, W / 2, H / 2 + 40);
-    if (!careerUpdated) {
-      if (left.score >= 7) {
-        const w = parseInt(localStorage.getItem('gg:pong:wins') || '0') + 1;
-        localStorage.setItem('gg:pong:wins', w);
-        GG.addXP(10); GG.addAch(GAME_ID, 'Pong Win');
-        onWinCareer();
-      } else {
-        const l = parseInt(localStorage.getItem('gg:pong:loss') || '0') + 1;
-        localStorage.setItem('gg:pong:loss', l);
-      }
-      if (!twoP) saveBestScore(left.score);
-      setMetaWins();
-      careerUpdated = true;
+  function endMatch(){ state.over=true; state.paused=true; toast("Match over"); }
+  function toast(msg){ if(state.diag) { const pre = state.diag.querySelector("pre"); pre.textContent = `[note] ${msg}\n` + pre.textContent; } }
+  function updateHUD(){ state.hud.p1.textContent=String(state.score.p1); state.hud.p2.textContent=String(state.score.p2); }
+
+  // --- Loop ------------------------------------------------------------------
+  function onResize(){
+    // devicePixelRatio-aware backing store
+    const el = state.canvas; const rect = el.getBoundingClientRect();
+    const ratio = Math.max(1, Math.floor(window.devicePixelRatio||1));
+    state.ratio = ratio; el.width = Math.round(rect.width * ratio); el.height = Math.round(rect.height * ratio);
+  }
+  function aiTick(dt){
+    if(state.mode!=="1P") return;
+    const target = state.ball.y - state.p2.h/2;
+    const k = state.ai==="Easy" ? 0.03 : state.ai==="Normal" ? 0.06 : 0.11;
+    state.p2.y += clamp((target - state.p2.y)*k, -state.p2.speed*dt, state.p2.speed*dt);
+  }
+  function physics(dt){
+    const W = state.canvas.width, H = state.canvas.height, K = state.ratio;
+    // integrate paddles
+    state.p1.y = clamp(state.p1.y + state.p1.dy*dt*K, 0, H - state.p1.h*K);
+    if(state.mode==="2P") state.p2.y = clamp(state.p2.y + state.p2.dy*dt*K, 0, H - state.p2.h*K);
+    // ball
+    const b = state.ball;
+    b.x += b.dx*dt*K; b.y += b.dy*dt*K;
+    // walls
+    if(b.y - b.r < 0){ b.y = b.r; b.dy *= -1; }
+    if(b.y + b.r > H){ b.y = H - b.r; b.dy *= -1; }
+    // paddles
+    collidePaddle(state.p1); collidePaddle(state.p2);
+    // goals
+    if(b.x < 0) award("p2");
+    if(b.x > W) award("p1");
+  }
+  function collidePaddle(p){
+    const b = state.ball;
+    const px1=p.x, py1=p.y, px2=p.x+p.w*state.ratio, py2=p.y+p.h*state.ratio;
+    if(b.x+b.r>px1 && b.x-b.r<px2 && b.y+b.r>py1 && b.y-b.r<py2){
+      b.dx *= -1;
+      // add “english” based on hit offset and paddle velocity:
+      const hit = (b.y - (p.y + (p.h*state.ratio)/2)) / ((p.h*state.ratio)/2);
     }
   }
-}
-
-
-// Difficulty selector hookup
-const diffSel = document.getElementById('difficulty');
-if (diffSel) {
-  diffSel.addEventListener('change', e => setDifficulty(e.target.value));
-  setDifficulty(diffSel.value);
-}
-
+})();
+      b.dy = clamp(b.dy + hit*260 + p.dy*0.15, -720, 720);
+      if(state.powerups){
+        const s = Math.hypot(b.dx, b.dy) * 1.03; const ang=Math.atan2(b.dy,b.dx); b.dx=Math.cos(ang)*s; b.dy=Math.sin(ang)*s;
+      }
+      b.x = (b.dx<0) ? px1 - b.r : px2 + b.r;
+    }
+  }
+  function render(){
+    const ctx = state.ctx, W = state.canvas.width, H = state.canvas.height, K = state.ratio;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = "#0f1720"; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = "#1f2b3b"; for(let y=10; y<H; y+=40){ ctx.fillRect(W/2-3, y, 6, 28); }
+    ctx.fillStyle = "#e8f1ff"; ctx.fillRect(state.p1.x, state.p1.y, state.p1.w*K, state.p1.h*K);
+    ctx.fillRect(state.p2.x, state.p2.y, state.p2.w*K, state.p2.h*K);
+    ctx.beginPath(); ctx.arc(state.ball.x, state.ball.y, state.ball.r, 0, Math.PI*2); ctx.fill();
+  }
+  function frame(t){
+    state.loopId = requestAnimationFrame(frame);
+    const dt = Math.min(0.033, (t - state.last)/1000 || 0); state.last=t; state.dt=dt;
+    if(!state.paused && !state.over){
+      if(state.mode==="1P") aiTick(dt);
+      physics(dt); render();
+    }
+    if(state.debug) diagTick();
+  }
+  function diagTick(){
+    if(!state.diag) return;
+    const pre = state.diag.querySelector("pre");
+    pre.textContent =
+`mode=${state.mode} ai=${state.ai} powerups=${state.powerups}
+score=${state.score.p1}-${state.score.p2} paused=${state.paused} over=${state.over}
+dt=${(state.dt*1000).toFixed(2)}ms DPR=${state.ratio}
+ball=(${state.ball.x|0},${state.ball.y|0}) v=(${state.ball.dx|0},${state.ball.dy|0})
+` + pre.textContent.slice(0,400);
+  }
+  const pressed = new Set();
+  function addEvents(){
+    window.addEventListener("resize", onResize);
+    document.addEventListener("visibilitychange", ()=> { state.paused = document.hidden || state.paused; });
+    window.addEventListener("keydown", e=>{
+      pressed.add(e.code);
+      if(e.code===state.keys.pause){ togglePause(); e.preventDefault(); }
+      bindMove();
+    }, {passive:false});
+    window.addEventListener("keyup", e=>{ pressed.delete(e.code); bindMove(); });
+    state.canvas.addEventListener("pointerdown", onPoint, {passive:true});
+    state.canvas.addEventListener("pointermove", onPoint, {passive:true});
+  }
+  function onPoint(e){
+    const r = state.canvas.getBoundingClientRect(); const y = (e.clientY - r.top) * state.ratio - state.p1.h*state.ratio/2;
+    if(e.clientX < r.left + r.width/2){ state.p1.y = clamp(y,0,state.canvas.height - state.p1.h*state.ratio); }
+    else { state.p2.y = clamp(y,0,state.canvas.height - state.p2.h*state.ratio); }
+  }
+  function bindMove(){
+    const v = 720;
+    state.p1.dy = (pressed.has(state.keys.p1Down) ? v : 0) - (pressed.has(state.keys.p1Up) ? v : 0);
+    state.p2.dy = (pressed.has(state.keys.p2Down) ? v : 0) - (pressed.has(state.keys.p2Up) ? v : 0);
+  }
+  function togglePause(){ state.paused=!state.paused; }
+  function toggleDiag(){ state.debug=!state.debug; state.diag.classList.toggle("show", state.debug); }
+  function boot(){
+    try{
+      const app = document.getElementById("app");
+      app.innerHTML="";
+      buildUI(app);
+      state.canvas = document.getElementById("canvas");
+      state.ctx = state.canvas.getContext("2d", {alpha:false, desynchronized:true});
+      reset(); saveLS();
+      state.running=true; state.paused=false; state.over=false; state.last=now(); frame(state.last);
+      post("GAME_READY");
+    }catch(err){
+      console.error("[pong] boot error", err);
+      post("GAME_ERROR", String(err&&err.message||err));
+      if(state.diag){ const pre=state.diag.querySelector("pre"); pre.textContent = "BOOT ERROR: "+String(err)+"\n"+pre.textContent; state.diag.classList.add("show"); }
+    }
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
+  else boot();
+})();
