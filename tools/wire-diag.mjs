@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
- * Wire diag-upgrades into every /games/<slug>/index.html
- * - Idempotent: skips files already wired
- * - Inserts before </body>
- * - Prints a summary of changes
+ * tools/wire-diag.mjs
+ * Bulk insert <script src="../common/diag-upgrades.js" defer></script>
+ * into every /games/<slug>/index.html just before </body>.
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -20,27 +19,14 @@ function looksWired(html) {
 function insertBeforeBody(html, snippet) {
   const i = html.lastIndexOf('</body>');
   if (i === -1) return null;
-  const head = html.slice(0, i);
-  const tail = html.slice(i);
-  return `${head}\n  ${snippet}\n${tail}`;
+  return html.slice(0, i) + `\n  ${snippet}\n` + html.slice(i);
 }
 
 async function main() {
-  let touched = 0;
-  let skipped = 0;
-  let missing = 0;
-
-  let dirs;
-  try {
-    dirs = await fs.readdir(gamesDir, { withFileTypes: true });
-  } catch (e) {
-    console.error(`[wire-diag] ERROR: cannot read ${gamesDir} — ${e.message}`);
-    process.exit(1);
-  }
-
+  let touched = 0, skipped = 0, missing = 0;
+  let dirs = await fs.readdir(gamesDir, { withFileTypes: true });
   for (const d of dirs) {
-    if (!d.isDirectory()) continue;
-    if (d.name === 'common') continue; // skip shared folder
+    if (!d.isDirectory() || d.name === 'common') continue;
     const p = path.join(gamesDir, d.name, 'index.html');
     try {
       const html = await fs.readFile(p, 'utf8');
@@ -51,15 +37,9 @@ async function main() {
       console.log(`[wire-diag] wired: ${p}`);
       touched++;
     } catch (e) {
-      // ignore non-existent files quietly
       if (e.code !== 'ENOENT') console.warn(`[wire-diag] WARN: ${p}: ${e.message}`);
     }
   }
-
-  console.log(`[wire-diag] done: ${touched} updated, ${skipped} already wired, ${missing} missing </body>`);
-  if (touched === 0 && skipped === 0) {
-    console.log(`[wire-diag] NOTE: no games/*/index.html found`);
-  }
+  console.log(`[wire-diag] done: ${touched} updated, ${skipped} skipped, ${missing} missing </body>`);
 }
-
 main().catch(e => { console.error(e); process.exit(1); });
