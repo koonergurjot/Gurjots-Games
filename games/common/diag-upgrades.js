@@ -1,4 +1,7 @@
-/* Gurjot's Games — diag-upgrades.js (v1) */
+/* Gurjot's Games — diag-upgrades.js (v1)
+   Drop-in advanced diagnostics for any game page.
+   Load AFTER the game's main script; or let game.html auto-inject it (see README).
+*/
 (function(){
   const params = new URLSearchParams(location.search);
   const slug = params.get("slug") || document.currentScript?.dataset?.slug || document.body?.dataset?.slug || "unknown";
@@ -80,6 +83,5 @@
   window.GameDiag.copy = () => navigator.clipboard?.writeText(reportText());
   window.GameDiag.save = downloadReport;
 
-  // local bootReadyTimer kept for compatibility:
   const bootReadyTimer = setTimeout(()=>{}, 0);
 })();
