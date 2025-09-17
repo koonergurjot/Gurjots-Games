@@ -46,19 +46,45 @@ scene.add(playerLight);
 
 const controls = new PointerLockControls(camera, renderer.domElement);
 
-const overlay = document.getElementById('overlay');
-const message = document.getElementById('message');
-const startBtn = document.getElementById('startBtn');
-const restartBtn = document.getElementById('restartBtn');
-const shareBtn = document.getElementById('shareBtn');
-const timeEl = document.getElementById('time');
-const oppTimeEl = document.getElementById('oppTime');
-const bestEl = document.getElementById('best');
-const sizeSelect = document.getElementById('mazeSize');
-const enemySelect = document.getElementById('enemyCount');
-const roomInput = document.getElementById('roomInput');
-const connectBtn = document.getElementById('connectBtn');
-const rematchBtn = document.getElementById('rematchBtn');
+let overlay = document.getElementById('overlay');
+let message = document.getElementById('message');
+let startBtn = document.getElementById('startBtn');
+let restartBtn = document.getElementById('restartBtn');
+let shareBtn = document.getElementById('shareBtn');
+let timeEl = document.getElementById('time');
+let oppTimeEl = document.getElementById('oppTime');
+let bestEl = document.getElementById('best');
+let sizeSelect = document.getElementById('mazeSize');
+let enemySelect = document.getElementById('enemyCount');
+let roomInput = document.getElementById('roomInput');
+let connectBtn = document.getElementById('connectBtn');
+let rematchBtn = document.getElementById('rematchBtn');
+
+({
+  overlay,
+  message,
+  startBtn,
+  restartBtn,
+  shareBtn,
+  sizeSelect,
+  enemySelect,
+  roomInput,
+  connectBtn,
+  rematchBtn
+} = ensureOverlayElements({
+  overlay,
+  message,
+  startBtn,
+  restartBtn,
+  shareBtn,
+  sizeSelect,
+  enemySelect,
+  roomInput,
+  connectBtn,
+  rematchBtn
+}));
+
+({ timeEl, oppTimeEl, bestEl } = ensureHudElements({ timeEl, oppTimeEl, bestEl }));
 
 let running = false;
 let paused = true;
@@ -85,12 +111,244 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
-startBtn.addEventListener('click', () => start());
-restartBtn.addEventListener('click', () => restart());
-sizeSelect.addEventListener('change', () => restart());
-enemySelect.addEventListener('change', () => restart());
+startBtn?.addEventListener('click', () => start());
+restartBtn?.addEventListener('click', () => restart());
+sizeSelect?.addEventListener('change', () => restart());
+enemySelect?.addEventListener('change', () => restart());
 connectBtn?.addEventListener('click', connectMatch);
-rematchBtn?.addEventListener('click', () => { opponentFinish = myFinish = null; restart(); start(); rematchBtn.style.display='none'; });
+rematchBtn?.addEventListener('click', () => { opponentFinish = myFinish = null; restart(); start(); if (rematchBtn) rematchBtn.style.display='none'; });
+
+function ensureOverlayElements(elements) {
+  let { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn } = elements;
+  const doc = document;
+  const body = doc.body || doc.documentElement;
+
+  function styleButton(btn) {
+    if (!btn) return;
+    btn.style.margin = '4px';
+    btn.style.padding = '8px 12px';
+    btn.style.border = '1px solid #27314b';
+    btn.style.background = '#0e1422';
+    btn.style.color = '#cfe6ff';
+    btn.style.borderRadius = '10px';
+    btn.style.cursor = 'pointer';
+    btn.style.fontWeight = '700';
+    btn.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+  }
+
+  function ensurePanel(parent) {
+    let panel = parent.querySelector('.panel');
+    if (!panel) {
+      panel = doc.createElement('div');
+      panel.className = 'panel';
+      panel.style.background = '#111522';
+      panel.style.border = '1px solid #27314b';
+      panel.style.padding = '18px 22px';
+      panel.style.borderRadius = '16px';
+      panel.style.textAlign = 'center';
+      panel.style.color = '#e6e6e6';
+      panel.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+      parent.appendChild(panel);
+    }
+    return panel;
+  }
+
+  if (!overlay) {
+    overlay = doc.createElement('div');
+    overlay.id = 'overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.background = 'rgba(0,0,0,0.4)';
+    overlay.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+    overlay.classList.add('hidden');
+    body?.appendChild(overlay);
+  }
+  const panel = ensurePanel(overlay);
+
+  if (!message) {
+    message = doc.createElement('div');
+    message.id = 'message';
+    message.textContent = 'Click Start to play.';
+    panel.appendChild(message);
+  }
+
+  function ensureSelect(id, labelText, options) {
+    let container = panel.querySelector(`[data-for="${id}"]`);
+    if (!container) {
+      container = doc.createElement('div');
+      container.dataset.for = id;
+      container.style.marginTop = '10px';
+      const label = doc.createElement('label');
+      label.setAttribute('for', id);
+      label.textContent = labelText;
+      container.appendChild(label);
+      container.appendChild(doc.createTextNode(' '));
+      panel.appendChild(container);
+    }
+    let select = panel.querySelector(`#${id}`);
+    if (!select) {
+      select = doc.createElement('select');
+      select.id = id;
+      for (const [value, text] of options) {
+        const opt = doc.createElement('option');
+        opt.value = value;
+        opt.textContent = text;
+        select.appendChild(opt);
+      }
+      container.appendChild(select);
+    }
+    return select;
+  }
+
+  function ensureButton(id, label) {
+    let btn = panel.querySelector(`#${id}`);
+    if (!btn) {
+      btn = doc.createElement('button');
+      btn.id = id;
+      btn.textContent = label;
+      btn.classList.add('btn');
+      styleButton(btn);
+    }
+    return btn;
+  }
+
+  if (!sizeSelect) {
+    sizeSelect = ensureSelect('mazeSize', 'Maze Size:', [
+      ['8', '8×8'],
+      ['12', '12×12'],
+      ['16', '16×16']
+    ]);
+  }
+
+  if (!enemySelect) {
+    enemySelect = ensureSelect('enemyCount', 'Enemies:', [
+      ['0', '0'],
+      ['1', '1'],
+      ['2', '2'],
+      ['3', '3']
+    ]);
+  }
+
+  const needsMultiplayerFallback = !roomInput || !connectBtn || !rematchBtn;
+  let multiplayerRow = panel.querySelector('#multiplayerRow');
+  if (!multiplayerRow && needsMultiplayerFallback) {
+    multiplayerRow = doc.createElement('div');
+    multiplayerRow.id = 'multiplayerRow';
+    multiplayerRow.style.marginTop = '10px';
+    panel.appendChild(multiplayerRow);
+  }
+
+  if (!roomInput && multiplayerRow) {
+    const label = doc.createElement('label');
+    label.setAttribute('for', 'roomInput');
+    label.textContent = 'Room: ';
+    multiplayerRow.appendChild(label);
+    roomInput = doc.createElement('input');
+    roomInput.id = 'roomInput';
+    roomInput.size = 6;
+    multiplayerRow.appendChild(roomInput);
+  }
+
+  if (!connectBtn && multiplayerRow) {
+    connectBtn = ensureButton('connectBtn', 'Connect');
+    multiplayerRow.appendChild(connectBtn);
+  }
+
+  if (!rematchBtn && multiplayerRow) {
+    rematchBtn = ensureButton('rematchBtn', 'Rematch');
+    rematchBtn.style.display = 'none';
+    multiplayerRow.appendChild(rematchBtn);
+  }
+
+  const needsControlsFallback = !startBtn || !restartBtn || !shareBtn;
+  let controlsRow = panel.querySelector('#controlsRow');
+  if (!controlsRow && needsControlsFallback) {
+    controlsRow = doc.createElement('div');
+    controlsRow.id = 'controlsRow';
+    controlsRow.style.marginTop = '10px';
+    panel.appendChild(controlsRow);
+  }
+  const buttonTarget = controlsRow || panel;
+
+  if (!startBtn) {
+    startBtn = ensureButton('startBtn', 'Start');
+    buttonTarget.appendChild(startBtn);
+  }
+
+  if (!restartBtn) {
+    restartBtn = ensureButton('restartBtn', 'Restart');
+    restartBtn.style.display = 'none';
+    buttonTarget.appendChild(restartBtn);
+  }
+
+  if (!shareBtn) {
+    shareBtn = ensureButton('shareBtn', 'Share');
+    shareBtn.style.display = 'none';
+    buttonTarget.appendChild(shareBtn);
+  }
+
+  return { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn };
+}
+
+function ensureHudElements(elements) {
+  let { timeEl, oppTimeEl, bestEl } = elements;
+  const doc = document;
+  let hud = doc.getElementById('hud');
+  if (!hud) {
+    hud = doc.createElement('div');
+    hud.id = 'hud';
+    hud.style.position = 'fixed';
+    hud.style.top = '12px';
+    hud.style.left = '12px';
+    hud.style.background = '#1b1e24c0';
+    hud.style.border = '1px solid #27314b';
+    hud.style.borderRadius = '10px';
+    hud.style.padding = '8px 10px';
+    hud.style.color = '#e6e6e6';
+    hud.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+    hud.style.fontSize = '14px';
+    document.body?.appendChild(hud);
+  }
+
+  function ensureSpan(id, label, existing, fallbackText) {
+    let span = existing || doc.getElementById(id);
+    if (!span) {
+      span = doc.createElement('span');
+      span.id = id;
+      span.textContent = fallbackText;
+      hud.appendChild(document.createTextNode(label));
+      hud.appendChild(span);
+    }
+    return span;
+  }
+
+  if (!timeEl) timeEl = ensureSpan('time', 'Time: ', timeEl, '0.00');
+  if (!oppTimeEl) {
+    if (!hud.textContent.includes('Opp:')) hud.appendChild(document.createTextNode(' • Opp: '));
+    oppTimeEl = ensureSpan('oppTime', '', oppTimeEl, '--');
+  }
+  if (!bestEl) {
+    if (!hud.textContent.includes('Best:')) hud.appendChild(document.createTextNode(' • Best: '));
+    bestEl = ensureSpan('best', '', bestEl, '--');
+  }
+
+  return { timeEl, oppTimeEl, bestEl };
+}
+
+function showOverlay() {
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  overlay.style.display = 'flex';
+}
+
+function hideOverlay() {
+  if (!overlay) return;
+  overlay.classList.add('hidden');
+  overlay.style.display = 'none';
+}
 
 let wallBoxes = [];
 let exitBox = null;
@@ -119,8 +377,10 @@ function cellsEqual(a, b) {
 }
 
 function updateMazeParams() {
-  MAZE_CELLS = parseInt(sizeSelect.value, 10);
-  ENEMY_COUNT = parseInt(enemySelect.value, 10);
+  const sizeValue = sizeSelect?.value ?? String(BASE_CELLS);
+  const enemyValue = enemySelect?.value ?? '0';
+  MAZE_CELLS = parseInt(sizeValue, 10) || BASE_CELLS;
+  ENEMY_COUNT = parseInt(enemyValue, 10) || 0;
   cellSize = (BASE_CELL_SIZE * BASE_CELLS) / MAZE_CELLS;
 }
 
@@ -316,7 +576,7 @@ function updateEnemies(dt) {
     if (pos.distanceTo(playerPos) < 0.6) {
       restart(currentSeed);
       message.textContent = 'Caught by enemy!';
-      overlay.classList.remove('hidden');
+      showOverlay();
       break;
     }
   }
@@ -431,7 +691,7 @@ function start(syncTime) {
     }
   }
   paused = false;
-  overlay.classList.add('hidden');
+  hideOverlay();
   controls.lock();
 }
 
@@ -448,14 +708,14 @@ function restart(seed = Math.floor(Math.random()*1e9)) {
   oppTimeEl.textContent = '--';
   message.textContent = 'Click Start to play.';
   startBtn.textContent = 'Start';
-  restartBtn.style.display = 'none';
-  shareBtn.style.display = 'none';
+  if (restartBtn) restartBtn.style.display = 'none';
+  if (shareBtn) shareBtn.style.display = 'none';
   rematchBtn && (rematchBtn.style.display = 'none');
-  overlay.classList.remove('hidden');
+  showOverlay();
 }
 
 function connectMatch() {
-  const room = roomInput.value?.trim();
+  const room = roomInput?.value?.trim();
   if (!room) return;
   net = connect(room, {
     start: ({ seed, startAt }) => {
@@ -482,14 +742,14 @@ function connectMatch() {
       oppTimeEl.textContent = time.toFixed(2);
       if (myFinish != null) {
         message.textContent += myFinish < opponentFinish ? ' You win!' : ' Opponent wins!';
-        rematchBtn.style.display = 'inline-block';
+        rematchBtn && (rematchBtn.style.display = 'inline-block');
       } else {
         message.textContent = `Opponent finished in ${time.toFixed(2)}s`;
-        rematchBtn.style.display = 'inline-block';
+        rematchBtn && (rematchBtn.style.display = 'inline-block');
       }
     }
   });
-  connectBtn.disabled = true;
+  if (connectBtn) connectBtn.disabled = true;
 }
 
 function pause() {
@@ -498,8 +758,8 @@ function pause() {
   controls.unlock();
   message.textContent = 'Paused';
   startBtn.textContent = 'Resume';
-  restartBtn.style.display = 'inline-block';
-  overlay.classList.remove('hidden');
+  if (restartBtn) restartBtn.style.display = 'inline-block';
+  showOverlay();
 }
 
 function togglePause() {
@@ -525,15 +785,17 @@ function finish(time) {
   }
   message.textContent = `Finished in ${time.toFixed(2)}s`;
   startBtn.textContent = 'Start';
-  restartBtn.style.display = 'inline-block';
-  shareBtn.style.display = 'inline-block';
-  shareBtn.onclick = () => shareScore('maze3d', time.toFixed(2));
-  overlay.classList.remove('hidden');
+  if (restartBtn) restartBtn.style.display = 'inline-block';
+  if (shareBtn) {
+    shareBtn.style.display = 'inline-block';
+    shareBtn.onclick = () => shareScore('maze3d', time.toFixed(2));
+  }
+  showOverlay();
   startTime = 0;
   emitEvent({ type: 'game_over', slug: 'maze3d', value: time });
   if (opponentFinish != null) {
     message.textContent += myFinish < opponentFinish ? ' You win!' : ' Opponent wins!';
-    rematchBtn.style.display = 'inline-block';
+    rematchBtn && (rematchBtn.style.display = 'inline-block');
   } else if (net) {
     message.textContent += ' Waiting for opponent...';
   }
