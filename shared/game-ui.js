@@ -1,4 +1,6 @@
 
+import { resolveGamePaths } from './game-paths.js';
+
 /**
  * Shared Game UI shell for Gurjot's Games
  * - Adds consistent header/footer
@@ -6,7 +8,7 @@
  * - Handles pause/resume, restart, back, volume, high score, loading/error overlays
  * - Listens for postMessage {type:'GAME_READY'|'GAME_ERROR'|'GAME_SCORE', score?:number}
  */
-(function () {
+(async function () {
   const qs = (s, r=document)=>r.querySelector(s);
   const params = new URLSearchParams(location.search);
   const slug = params.get('slug') || params.get('game') || (location.pathname.split('/').pop().replace(/\.html$/,'')) || 'unknown';
@@ -15,19 +17,29 @@
 
   // If an iframe is not present, create one targeting conventional path:
   let frame = qs('#game-frame');
+  const candidates = [
+    `/games/${slug}/index.html`,
+    `/games/${slug}.html`,
+    `/games/${slug}/game.html`
+  ];
+
   if (!frame) {
     frame = document.createElement('iframe');
     frame.id = 'game-frame';
     frame.title = slug + ' game';
     frame.setAttribute('aria-label', slug + ' game');
-    // Try common locations: /games/<slug>/index.html then /games/<slug>.html then /games/<slug>/game.html
-    const candidates = [
-      `/games/${slug}/index.html`,
-      `/games/${slug}.html`,
-      `/games/${slug}/game.html`
-    ];
-    frame.src = candidates[0];
   }
+
+  let resolvedSrc = candidates[0];
+  try {
+    const { playPath } = await resolveGamePaths(slug);
+    if (playPath) {
+      resolvedSrc = playPath;
+    }
+  } catch (err) {
+    console.warn('[GG] unable to resolve game iframe path', err);
+  }
+  frame.src = resolvedSrc;
 
   // Build UI
   const root = document.createElement('div');
