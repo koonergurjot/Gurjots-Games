@@ -1,311 +1,182 @@
-// js/game-shell.js — with contrast/readability fixes for overlays
-const qs = new URLSearchParams(location.search);
-const DEBUG = qs.get('debug') === '1' || qs.get('debug') === 'true';
-const FORCE = qs.get('force'); // 'iframe' | 'script'
-const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
-const slug = qs.get('slug') || qs.get('id') || qs.get('game');
-var $ = function(s){ return document.querySelector(s); };
+// js/game-shell.js — Diagnostics always on + readability
+(function(){
+  const qs = new URLSearchParams(location.search);
+  const slug = qs.get('slug') || qs.get('id') || qs.get('game');
+  const FORCE = qs.get('force'); // 'iframe' | 'script'
+  const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
+  const $ = (s)=>document.querySelector(s);
+  const state = { iframe:null, timer:null, ready:false, logs:[] };
 
-function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className = cls; return e; }
+  function style(){
+    if (document.getElementById('gg-shell-css')) return;
+    const st = document.createElement('style'); st.id='gg-shell-css';
+    st.textContent = `
+    #error{position:absolute;inset:0;display:none;align-items:center;justify-content:center}
+    #error.show{display:flex}
+    #error .panel{background:rgba(10,16,46,.96);color:#f5f7ff;border:1px solid #3a4a8a;border-radius:12px;padding:14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.5);max-width:560px;font-size:15px;line-height:1.4}
+    #error .details{background:#0b133b;border:1px solid #2a3a7a;color:#e8eefc;padding:10px;border-radius:8px;max-height:220px;overflow:auto;white-space:pre-wrap;margin-top:8px}
+    #open-new,#btn-restart,.btn{background:#1b2a6b;color:#fff;border:1px solid #3d59b3;border-radius:10px;padding:8px 12px;display:inline-block}
+    #open-new:hover,#btn-restart:hover,.btn:hover{background:#2546a3}
+    #loader.loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px}
+    #loader .dot{width:10px;height:10px;background:#aac6ff;border-radius:50%;animation:gg-bounce 1s infinite ease-in-out}
+    #loader .dot:nth-child(2){animation-delay:.15s}#loader .dot:nth-child(3){animation-delay:.3s}
+    @keyframes gg-bounce{0%,80%,100%{transform:scale(.6);opacity:.6}40%{transform:scale(1);opacity:1}}
+    .diag-btn{position:fixed;right:12px;bottom:12px;z-index:1000}
+    .diag-panel{position:fixed;right:12px;bottom:56px;background:#0b0f2a;color:#e8eefc;border:1px solid #25305a;border-radius:10px;padding:10px;width:420px;max-height:64vh;overflow:auto;display:none;box-shadow:0 10px 30px rgba(0,0,0,.4);font-size:13px;line-height:1.4}
+    .diag-panel pre{white-space:pre-wrap;background:#0d153b;border:1px solid #2a3a7a;padding:8px;border-radius:8px;max-height:44vh;overflow:auto}
+    .diag-panel .row{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}`;
+    document.head.appendChild(st);
+  }
 
-var state = { timer:null, muted:true, gameInfo:null, iframe:null };
-
-// NEW: inject high-contrast styles for shell overlays
-function injectShellStyles(){
-  if (document.getElementById('gg-shell-contrast')) return;
-  var style = document.createElement('style');
-  style.id = 'gg-shell-contrast';
-  style.textContent = `
-  /* shell overlay readability */
-  #error { position:absolute; inset:0; display:none; align-items:center; justify-content:center; }
-  #error.show { display:flex; }
-  #error .panel{
-    background: rgba(10, 16, 46, 0.96);
-    color: #f5f7ff;
-    border: 1px solid #3a4a8a;
-    border-radius: 12px;
-    padding: 14px 16px;
-    box-shadow: 0 12px 40px rgba(0,0,0,.5);
-    max-width: 520px;
-    line-height: 1.4;
-    font-size: 15px;
-  }
-  #error .message{ font-weight:700; margin-bottom:6px; }
-  #error .toggle{ margin-top:8px; cursor:pointer; opacity:.9; text-decoration:underline; }
-  #error .details{
-    background: #0b133b;
-    border: 1px solid #2a3a7a;
-    color: #e8eefc;
-    padding: 10px;
-    border-radius: 8px;
-    max-height: 220px;
-    overflow:auto;
-    margin-top:8px;
-  }
-  #open-new, #btn-restart, .btn{
-    background:#1b2a6b;
-    color:#ffffff;
-    border:1px solid #3d59b3;
-    border-radius:10px;
-    padding:8px 12px;
-    display:inline-block;
-  }
-  #open-new:hover, #btn-restart:hover, .btn:hover{
-    background:#2546a3;
-  }
-  /* loader dots more visible */
-  #loader.loader{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:10px; }
-  #loader .dot{ width:10px; height:10px; background:#aac6ff; border-radius:50%; animation: gg-bounce 1s infinite ease-in-out; }
-  #loader .dot:nth-child(2){ animation-delay:.15s } 
-  #loader .dot:nth-child(3){ animation-delay:.3s }
-  @keyframes gg-bounce { 0%,80%,100%{ transform:scale(0.6); opacity:.6 } 40%{ transform:scale(1); opacity:1 } }
-  `;
-  document.head.appendChild(style);
-}
-
-function cacheBust(url) {
-  try {
-    var u = new URL(url, location.origin);
-    if (qs.get('bust') === '1' || DEBUG) {
-      u.searchParams.set('_v', String(Date.now()));
+  function ensureOverlays(){
+    const stage = document.getElementById('stage') || document.body;
+    let loader = document.getElementById('loader');
+    if (!loader){ loader = document.createElement('div'); loader.id='loader'; loader.className='loader'; loader.innerHTML='<div class="dot"></div><div class="dot"></div><div class="dot"></div>'; stage.appendChild(loader); }
+    let err = document.getElementById('error');
+    if (!err){
+      err = document.createElement('div'); err.id='error'; err.className='error';
+      err.innerHTML = '<div class="panel"><div class="message"></div><div class="toggle">Show details</div><pre class="details"></pre><div style="margin-top:10px;display:flex;gap:8px;justify-content:center"><button class="btn" id="btn-restart">Retry</button><a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a></div></div>';
+      stage.appendChild(err);
     }
-    return u.pathname + (u.search ? u.search : '');
-  } catch(_) { return url; }
-}
+    const btn = err.querySelector('#btn-restart'); if (btn) btn.onclick = reloadGame;
+    const openNew = err.querySelector('#open-new'); if (openNew) openNew.href = location.href;
+    return { loader, err };
+  }
 
-async function boot(){
-  injectShellStyles();
-  if(!slug){ return render404("Missing ?slug= parameter"); }
-  var catalog;
-  try{
-    var res = await fetch('/games.json', {cache:'no-cache'});
-    catalog = await res.json();
-  }catch(e){ return renderError("Could not load games.json", e); }
-  var list = Array.isArray(catalog) ? catalog : (catalog.games || []);
-  var info = list.find(function(g){ return (g.slug||g.id) === slug; });
-  if(!info){ return render404("Unknown game: "+slug); }
-  state.gameInfo = info;
-  renderShell(info);
-  loadGame(info);
-}
+  function showSoftLoading(){
+    const {loader, err} = ensureOverlays();
+    loader.style.display = 'none';
+    err.classList.add('show');
+    const m = err.querySelector('.message'); if (m) m.textContent = 'Still loading… This game may take longer on first load.';
+    err.querySelector('.details').style.display='none';
+    err.querySelector('.toggle').style.display='none';
+  }
 
-function render404(msg){
-  var root = $('#app');
-  root.innerHTML = '\n    <div class="container">\n      <div class="card">\n        <h2>Game not found</h2>\n        <p>'+msg+'</p>\n        <p><a class="btn" href="./">← Back to Home</a></p>\n      </div>\n    </div>';
-}
+  function renderError(msg, e){
+    const {loader, err} = ensureOverlays();
+    loader.style.display='none'; err.classList.add('show');
+    const d = err.querySelector('.details'); d.textContent = (e && (e.message||e.toString())) || ''; d.style.display='none';
+    const m = err.querySelector('.message'); if (m) m.textContent = msg;
+    const t = err.querySelector('.toggle'); t.onclick = ()=> d.style.display = (d.style.display==='none'?'block':'none');
+  }
 
-function renderShell(info){
-  var title = $('#title'); if (title) title.textContent = info.title || info.name || slug;
-  var tags = info.tags || info.genres || [];
-  var t = $('.tags'); if (t){ t.innerHTML=''; tags.slice(0,6).forEach(function(tag){ var chip = el('span','tag'); chip.textContent = tag; t.appendChild(chip); }); }
+  function cacheBust(url){
+    try{ const u = new URL(url, location.origin); if (qs.get('bust')==='1' || qs.get('debug')==='1') u.searchParams.set('_v', String(Date.now())); return u.pathname+(u.search||''); }catch(_){ return url; }
+  }
 
-  var about = $('#about-text'); if (about) about.textContent = info.description || info.short || 'Ready to play?';
-  var openNew = document.getElementById('open-new'); if (openNew) openNew.href = location.href;
-
-  var cl = document.getElementById('controls-list');
-  if (cl) cl.innerHTML = '\n    <li><kbd>← →</kbd> Move</li>\n    <li><kbd>Space</kbd> Action / Jump</li>\n    <li><kbd>P</kbd> Pause</li>\n    <li><kbd>F</kbd> Fullscreen</li>';
-
-  var btnRestart = document.getElementById('btn-restart'); if (btnRestart) btnRestart.onclick = function(){ reloadGame(); };
-  var btnFs = document.getElementById('btn-fullscreen'); if (btnFs) btnFs.onclick = function(){
-    var stage = $('#stage');
-    var req = stage && (stage.requestFullscreen || stage.webkitRequestFullscreen || stage.msRequestFullscreen);
-    if (req) try{ req.call(stage); }catch(_){}
-  };
-  var btnMute = document.getElementById('btn-mute'); if (btnMute) btnMute.onclick = function(){ toggleMute(); };
-  var btnHow = document.getElementById('btn-how'); if (btnHow) btnHow.onclick = function(){ var a=document.getElementById('about'); if (a) a.scrollIntoView({behavior:'smooth'}); };
-
-  document.addEventListener('visibilitychange', function(){
-    if(document.hidden){ try { window.postMessage({type:'GAME_PAUSE'}, '*'); } catch(_){ } }
-  });
-}
-
-function loadGame(info){
-  var stage = $('#stage');
-  var overlays = ensureOverlays();
-  var loader = overlays.loader, err = overlays.err;
-  try { err.classList.remove('show'); } catch(_){}
-  try { loader.style.display = 'flex'; } catch(_){}
-
-  ensureLegacyElements();
-
-  var entry = info.launch && info.launch.path || info.entry || info.url;
-  var isModule = (info.launch && info.launch.module) || info.module || false;
-  var type = (info.launch && info.launch.type) || (entry && entry.endsWith('.html') ? 'iframe' : 'script');
-  if (FORCE === 'iframe') type = 'iframe'; else if (FORCE === 'script') type = 'script';
-
-  if(type === 'iframe'){
-    var debugEntry = DEBUG ? (entry + (entry.indexOf('?')>=0?'&':'?') + 'debug=1') : entry;
-    var iframe = document.createElement('iframe');
-    iframe.id = 'frame';
-    iframe.allow = 'autoplay; fullscreen';
-    iframe.src = cacheBust(debugEntry);
-    iframe.onload = function(){ /* wait for GAME_READY */ };
-    if (stage) stage.innerHTML = '';
-    (stage || document.body).appendChild(iframe);
-    state.iframe = iframe;
-    createDiagUI(info, type, debugEntry);
-  } else {
-    if (stage) stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>';
-    if (DEBUG) {
-      var d = document.createElement('script');
-      d.src = '/js/runtime-diagnostics.js';
-      document.body.appendChild(d);
+  function diag(info, type, entry){
+    let btn = document.getElementById('gg-diag-btn');
+    if (!btn){ btn = document.createElement('button'); btn.id='gg-diag-btn'; btn.textContent='🧪 Diagnostics'; btn.className='btn diag-btn'; document.body.appendChild(btn); }
+    let panel = document.getElementById('gg-diag');
+    if (!panel){
+      panel = document.createElement('div'); panel.id='gg-diag'; panel.className='diag-panel';
+      panel.innerHTML = '<div style="font-weight:700;margin-bottom:6px">Game Diagnostics</div>' +
+      '<div><b>Slug</b>: <span id="diag-slug"></span></div>' +
+      '<div><b>Entry</b>: <span id="diag-entry"></span></div>' +
+      '<div><b>Type</b>: <span id="diag-type"></span></div>' +
+      '<div><b>Module</b>: <span id="diag-mod"></span></div>' +
+      '<div><b>Ready</b>: <span id="diag-ready">false</span></div><hr>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center"><div style="opacity:.9">Logs</div><div><button class="btn" id="diag-copy">Copy</button><button class="btn" id="diag-clear">Clear</button></div></div>' +
+      '<pre id="diag-logs"></pre><div class="row"><button class="btn" id="diag-close">Close</button></div>';
+      document.body.appendChild(panel);
     }
-    var s = document.createElement('script');
-    var useModule = (FORCE_MODULE !== null) ? FORCE_MODULE : isModule;
-    if(useModule){ s.type='module'; }
-    s.src = cacheBust(entry);
-    s.onerror = function(e){ renderError('Failed to load game script', e); };
-    document.body.appendChild(s);
-    createDiagUI(info, type, entry);
-  }
+    document.getElementById('diag-slug').textContent = info.slug || slug;
+    document.getElementById('diag-entry').textContent = entry;
+    document.getElementById('diag-type').textContent = type + (FORCE? ' (forced)':'');
+    document.getElementById('diag-mod').textContent = String((info.launch&&info.launch.module)||info.module||false);
+    document.getElementById('diag-ready').textContent = String(state.ready);
+    btn.onclick = ()=> panel.style.display = (panel.style.display==='none'?'block':'none');
+    document.getElementById('diag-close').onclick = ()=> panel.style.display='none';
+    document.getElementById('diag-copy').onclick = ()=> {
+      const txt = 'slug='+slug+'\nentry='+entry+'\ntype='+type+'\nmodule='+String((info.launch&&info.launch.module)||info.module||false)+'\nready='+state.ready+'\n\n'+state.logs.map(l=>l.level.toUpperCase()+': '+l.msg).join('\n');
+      navigator.clipboard.writeText(txt).catch(()=>{});
+    };
+    document.getElementById('diag-clear').onclick = ()=> { state.logs.length=0; document.getElementById('diag-logs').textContent=''; };
 
-  if(state.timer) clearTimeout(state.timer);
-  state.timer = setTimeout(function(){
-    var overlays2 = ensureOverlays();
-    try { overlays2.loader.style.display = 'none'; } catch(_){}
-    showSoftLoading();
-  }, 6000);
-}
+    // Hook parent console
+    ['log','info','warn','error'].forEach(k=>{
+      const orig = console[k];
+      console[k] = function(...args){
+        try{ orig.apply(console,args);}catch(_){}
+        const str = args.map(a=> typeof a==='string'?a:JSON.stringify(a)).join(' ');
+        state.logs.push({level:k,msg:str}); const sink=$('#diag-logs'); if (sink) sink.textContent += k.toUpperCase()+': '+str+'\n';
+      };
+    });
 
-function reloadGame(){
-  if(state.iframe){
-    var src = state.iframe.src; state.iframe.src = src;
-  } else {
-    location.reload();
-  }
-}
-
-function toggleMute(){
-  state.muted = !state.muted;
-  var btn = document.getElementById('btn-mute'); if (btn) btn.innerText = state.muted ? 'Unmute' : 'Mute';
-  try{
-    if(state.iframe && state.iframe.contentWindow){
-      state.iframe.contentWindow.postMessage({type:'GAME_MUTE', muted: state.muted}, '*');
+    // Hook iframe if same-origin
+    if (state.iframe && state.iframe.contentWindow){
+      try{
+        const iw = state.iframe.contentWindow;
+        iw.addEventListener('error', e=> console.error('[iframe] error:', e.message));
+        iw.addEventListener('unhandledrejection', e=> console.error('[iframe] unhandledrejection:', (e.reason&&(e.reason.message||e.reason.toString()))));
+        ['log','info','warn','error'].forEach(k=>{
+          const orig = iw.console[k];
+          iw.console[k] = function(...args){ try{ orig.apply(iw.console,args);}catch(_){}
+            console[k]('[iframe]', ...args);
+          };
+        });
+      }catch(_){ console.warn('iframe console hook skipped (cross-origin)'); }
     }
-  }catch(e){}
-}
-
-function ensureLegacyElements(){
-  if(!document.getElementById('game')) { var d = document.createElement('div'); d.id = 'game'; d.style.position='relative'; document.body.appendChild(d); }
-  if(!document.getElementById('game-root')){ var d2 = document.createElement('div'); d2.id = 'game-root'; document.body.appendChild(d2); }
-  if(!document.getElementById('gameCanvas')){ var c = document.createElement('canvas'); c.id='gameCanvas'; c.width=800; c.height=600; c.setAttribute('aria-label','Game canvas'); document.body.appendChild(c); }
-}
-
-function ensureOverlays(){
-  var stage = document.getElementById('stage') || document.body;
-
-  var loader = document.getElementById('loader');
-  if (!loader) {
-    loader = document.createElement('div');
-    loader.id = 'loader';
-    loader.className = 'loader';
-    loader.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
-    stage.appendChild(loader);
   }
 
-  var err = document.getElementById('error');
-  if (!err) {
-    err = document.createElement('div');
-    err.id = 'error';
-    err.className = 'error';
-    err.innerHTML = '\n      <div class="panel">\n        <div class="message"></div>\n        <div class="toggle">Show details</div>\n        <pre class="details"></pre>\n        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">\n          <button class="btn" id="btn-restart">Retry</button>\n          <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>\n        </div>\n      </div>';
-    stage.appendChild(err);
+  function boot(){
+    style();
+    if(!slug){ return render404('Missing ?slug='); }
+    fetch('/games.json', {cache:'no-cache'}).then(r=>r.json()).then(catalog=>{
+      const list = Array.isArray(catalog)? catalog : (catalog.games||[]);
+      const info = list.find(g => (g.slug||g.id) === slug);
+      if(!info) return render404('Unknown game: '+slug);
+      renderShell(info); loadGame(info);
+    }).catch(e=> renderError('Could not load games.json', e));
   }
 
-  var btn = err.querySelector('#btn-restart');
-  if (btn) btn.onclick = function(){ reloadGame(); };
-  var openNew = err.querySelector('#open-new');
-  if (openNew) openNew.href = location.href;
-
-  return { loader: loader, err: err };
-}
-
-function showSoftLoading(){
-  var _ov = ensureOverlays();
-  var loader = _ov.loader, err = _ov.err;
-  try { loader.style.display = 'none'; } catch(_) {}
-  try { err.classList.add('show'); } catch(_) {}
-  var msg = err.querySelector('.message'); if (msg) msg.textContent = 'Still loading… This game may take longer on first load.';
-  var details = err.querySelector('.details'); if (details) details.style.display = 'none';
-  var toggle = err.querySelector('.toggle'); if (toggle) toggle.style.display = 'none';
-}
-
-function renderError(msg, e){
-  var _ov = ensureOverlays();
-  var loader = _ov.loader, err = _ov.err;
-  try { loader.style.display='none'; } catch(_) {}
-  try { err.classList.add('show'); } catch(_) {}
-  var d = err.querySelector('.details');
-  if (d) { d.textContent = (e && (e.message || e.toString())) || ''; d.style.display = 'none'; }
-  var m = err.querySelector('.message'); if (m) m.textContent = msg;
-  var tog = err.querySelector('.toggle');
-  if (tog && d) tog.onclick = function(){ d.style.display = (d.style.display==='none' ? 'block' : 'none'); };
-}
-
-window.addEventListener('message', function(ev){
-  var data = ev.data || {};
-  if(data.type === 'GAME_READY'){
-    var _ov = ensureOverlays();
-    try { _ov.loader.style.display='none'; } catch(_) {}
-    try { _ov.err.classList.remove('show'); } catch(_) {}
-  } else if(data.type === 'GAME_ERROR'){
-    renderError('Game error', {message: data.message || 'Unknown error'});
+  function renderShell(info){
+    const title=$('#title'); if (title) title.textContent = info.title || info.name || slug;
+    const about=$('#about-text'); if (about) about.textContent = info.description || info.short || 'Ready to play?';
   }
-});
 
-function createDiagUI(info, type, entry) {
-  if (!DEBUG) return;
-  var btn = document.createElement('button');
-  btn.textContent = '🧪 Diagnostics';
-  btn.style.position='fixed'; btn.style.right='12px'; btn.style.bottom='12px';
-  btn.style.zIndex='1000'; btn.className='btn';
-  document.body.appendChild(btn);
+  function loadGame(info){
+    const stage = document.getElementById('stage');
+    const {loader, err} = ensureOverlays();
+    err.classList.remove('show'); loader.style.display='flex';
 
-  var panel = document.createElement('div');
-  panel.style.position='fixed'; panel.style.right='12px'; panel.style.bottom='56px';
-  panel.style.background='#0b0f2a'; panel.style.color='#e8eefc';
-  panel.style.border='1px solid #25305a'; panel.style.borderRadius='10px';
-  panel.style.padding='10px'; panel.style.width='360px'; panel.style.maxHeight='60vh'; panel.style.overflow='auto';
-  panel.style.display='none'; panel.style.boxShadow='0 10px 30px rgba(0,0,0,.4)';
-  var forced = FORCE ? ' (forced)' : '';
-  var meta = ''+
-    '<div style="font-weight:700;margin-bottom:6px">Game Diagnostics</div>'+
-    '<div><b>Slug</b>: ' + (info.slug || 'n/a') + '</div>'+
-    '<div><b>Title</b>: ' + (info.title || 'n/a') + '</div>'+
-    '<div><b>Entry</b>: ' + entry + '</div>'+
-    '<div><b>Type</b>: ' + type + forced + '</div>'+
-    '<div><b>Module</b>: ' + String((info.launch && info.launch.module) || info.module || false) + '</div>'+
-    '<hr style="border-color:#25305a">'+
-    '<div id="diag-logs" style="font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap"></div>';
-  panel.innerHTML = meta;
-  document.body.appendChild(panel);
+    const entry = info.launch && info.launch.path || info.entry || info.url;
+    const isModule = (info.launch && info.launch.module) || info.module || false;
+    let type = (info.launch && info.launch.type) || (entry && entry.endsWith('.html') ? 'iframe' : 'script');
+    if (FORCE==='iframe') type='iframe'; else if (FORCE==='script') type='script';
 
-  btn.onclick = function(){ panel.style.display = (panel.style.display==='none'?'block':'none'); };
+    if (type==='iframe'){
+      const f = document.createElement('iframe'); f.id='frame'; f.allow='autoplay; fullscreen'; f.src = cacheBust(entry);
+      f.onload = ()=> console.info('iframe loaded:', entry);
+      f.onerror = (e)=> { console.error('iframe onerror'); renderError('Failed to load game iframe', e); };
+      if (stage) stage.innerHTML=''; (stage||document.body).appendChild(f);
+      state.iframe = f; diag(info, type, entry);
+    } else {
+      if (stage) stage.innerHTML='<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>';
+      const s = document.createElement('script'); if ((FORCE_MODULE!=null?FORCE_MODULE:isModule)) s.type='module';
+      s.src = cacheBust(entry); s.onerror = (e)=> { console.error('script load error:', entry); renderError('Failed to load game script', e); };
+      document.body.appendChild(s); diag(info, type, entry);
+    }
 
-  var sink = panel.querySelector('#diag-logs');
-  var add = function(e){
-    try{
-      var d = e.data;
-      if(d && d.type==='DIAG_LOG'){
-        var ent = d.entry;
-        sink.textContent += '[+'+ent.t+'ms] '+String(ent.level||'LOG').toUpperCase()+': '+ent.msg+'\n';
-      } else if (d && d.type==='GAME_READY') {
-        sink.textContent += '[event] GAME_READY\n';
-      } else if (d && d.type==='GAME_ERROR') {
-        sink.textContent += '[event] GAME_ERROR: '+ (d.message||'') + '\n';
-      }
-    }catch(_){}
-  };
-  window.addEventListener('message', add);
+    if (state.timer) clearTimeout(state.timer);
+    state.timer = setTimeout(()=>{
+      loader.style.display='none';
+      if (!state.ready){ showSoftLoading(); console.warn('No GAME_READY from game within timeout'); }
+    }, 7000);
+  }
 
-  window.addEventListener('error', function(e){
-    sink.textContent += '[shell] window.error: '+e.message+'\n';
+  function reloadGame(){ if (state.iframe){ const u=state.iframe.src; state.iframe.src=u; } else { location.reload(); }}
+
+  window.addEventListener('message', (ev)=>{
+    const d=ev.data||{};
+    if (d.type==='GAME_READY'){ state.ready=true; ensureOverlays().loader.style.display='none'; $('#error')?.classList.remove('show'); $('#diag-ready') and (document.getElementById('diag-ready').textContent='true'); console.info('[event] GAME_READY'); }
+    else if (d.type==='GAME_ERROR'){ console.error('[event] GAME_ERROR:', d.message||''); renderError('Game error', {message:d.message||'Unknown error'}); }
+    else if (d.type==='DIAG_LOG'){ const e=d.entry; if (e) console[e.level||'info'](e.msg); }
   });
-  window.addEventListener('unhandledrejection', function(e){
-    var r = e.reason && (e.reason.message || e.reason.toString());
-    sink.textContent += '[shell] unhandledrejection: '+ r +'\n';
-  });
-}
 
-boot();
+  function render404(msg){
+    const root=$('#app'); root.innerHTML='<div class="container"><div class="card"><h2>Game not found</h2><p>'+msg+'</p><p><a class="btn" href="./">← Back to Home</a></p></div></div>';
+  }
+
+  boot();
+})();
