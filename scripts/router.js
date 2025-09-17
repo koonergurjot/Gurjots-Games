@@ -36,7 +36,8 @@ export class Router {
         const params = {};
         r.keys.forEach((k, i) => params[k] = decodeURIComponent(match[i + 1]));
         if (r.guard && !(await r.guard(params))) {
-          return this.navigate('/');
+          history.replaceState({}, '', '/');
+          return this.resolve('/');
         }
         const mod = await r.loader(params);
         this.outlet.innerHTML = '';
