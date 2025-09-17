@@ -142,6 +142,14 @@
         el = document.createElement('canvas');
         el.width = 960; el.height = 540;
       } else if (id === 'hud') {
+
+else if (id === 'lobby-status') {
+    el = document.createElement('div');
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.style.minHeight = '1em';
+}
+
         el = document.createElement('div'); el.id='hud'; el.className='hud'; root.appendChild(el); continue;
       } else if (id.endsWith('Btn')) {
         el = document.createElement('button'); el.type='button'; el.textContent=id.replace(/Btn$/,''); 
