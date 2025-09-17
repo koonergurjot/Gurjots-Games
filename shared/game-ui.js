@@ -96,6 +96,13 @@
   root.querySelector('.gg-stage').appendChild(container);
   document.body.prepend(root);
 
+  const $pauseButton = root.querySelector('#gg-pause');
+  const $loading = root.querySelector('#gg-loading');
+  const $error = root.querySelector('#gg-error');
+  const $paused = root.querySelector('#gg-paused');
+  const $score = root.querySelector('#gg-score');
+  const $hiscore = root.querySelector('#gg-hiscore');
+
   function clearAnyPause(){
     try {
       if (!document.getElementById('gg-pause-kill-style')){
@@ -120,8 +127,14 @@
         el.classList.add('hidden');
         el.setAttribute('aria-hidden','true');
       });
-      const pauseBtn = root.querySelector('#gg-pause');
-      if (pauseBtn){ pauseBtn.setAttribute('aria-pressed','false'); }
+      if ($paused){
+        $paused.setAttribute('hidden','');
+        $paused.setAttribute('aria-hidden','true');
+        $paused.style.display = 'none';
+      }
+      if ($pauseButton && $pauseButton.getAttribute('aria-pressed') !== 'false'){
+        $pauseButton.setAttribute('aria-pressed','false');
+      }
       if (window.GG_HUD && typeof window.GG_HUD.hidePause==='function') window.GG_HUD.hidePause();
     } catch (err) {}
   }
@@ -131,7 +144,7 @@
   }
 
   function sendGameResume(){
-    clearAnyPause();
+    clearAnyPause(); // Ensures shell overlay is cleared when resuming (including watchdog)
     frame?.contentWindow?.postMessage({type:'GAME_RESUME'}, '*');
   }
 
@@ -149,7 +162,7 @@
   // Buttons
   root.querySelector('#gg-back').onclick = ()=>location.href = '/';
   root.querySelector('#gg-restart').onclick = ()=>restart();
-  root.querySelector('#gg-pause').onclick = ()=>togglePause();
+  if ($pauseButton){ $pauseButton.onclick = ()=>togglePause(); }
   root.querySelector('#gg-mute').onclick = (ev)=>{
     const pressed = ev.currentTarget.getAttribute('aria-pressed')==='true';
     ev.currentTarget.setAttribute('aria-pressed', String(!pressed));
@@ -159,12 +172,6 @@
   root.querySelector('#gg-retry').onclick = ()=>{ location.reload(); };
 
   // Loading & error handling via postMessage
-  const $loading = root.querySelector('#gg-loading');
-  const $error = root.querySelector('#gg-error');
-  const $paused = root.querySelector('#gg-paused');
-  const $score = root.querySelector('#gg-score');
-  const $hiscore = root.querySelector('#gg-hiscore');
-
   const hiscoreKey = `gg:hiscore:${slug}`;
   try { $hiscore.textContent = String(parseInt(localStorage.getItem(hiscoreKey)||'0',10)); } catch {}
 
@@ -186,11 +193,15 @@
     if (isPausedVisible){
       // currently visible -> resume
       $paused.setAttribute('hidden','');
-      root.querySelector('#gg-pause').setAttribute('aria-pressed','false');
+      $paused.setAttribute('aria-hidden','true');
+      $paused.style.display = 'none';
+      if ($pauseButton){ $pauseButton.setAttribute('aria-pressed','false'); }
       sendGameResume();
     } else {
       $paused.removeAttribute('hidden');
-      root.querySelector('#gg-pause').setAttribute('aria-pressed','true');
+      $paused.removeAttribute('aria-hidden');
+      $paused.style.display = '';
+      if ($pauseButton){ $pauseButton.setAttribute('aria-pressed','true'); }
       sendGamePause();
     }
   }
