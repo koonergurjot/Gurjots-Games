@@ -1,0 +1,121 @@
+@import './tokens.css';
+
+/* Global styles for Gurjot's Game landing page */
+:root {
+  --bg: #0a0a0a;
+  --fg: #fff;
+  --accent: #0ff;
+  --accent2: #f0f;
+  --card-bg: #111;
+  --spacing: 1rem;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+body.loaded {
+  opacity: 1;
+}
+body.fade-out {
+  opacity: 0;
+}
+
+header {
+  padding: var(--spacing);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #000;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+header .logo {
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--accent);
+}
+
+main {
+  padding: var(--spacing);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--spacing);
+}
+
+.card {
+  background: var(--card-bg);
+  padding: var(--spacing);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 0 0 1px #222;
+  transition: transform 0.2s ease;
+}
+.card:hover {
+  transform: translateY(-4px);
+}
+.card h3 {
+  margin-top: 0;
+}
+.card p {
+  flex: 1 1 auto;
+}
+.card a {
+  align-self: flex-start;
+  padding: 0.5rem 1rem;
+  background: var(--accent);
+  color: #000;
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+.card a:hover {
+  background: var(--accent2);
+}
+
+footer {
+  margin-top: 2rem;
+  padding: var(--spacing);
+  background: #000;
+  position: sticky;
+  top: 100vh;
+}
+footer nav {
+  display: flex;
+  gap: var(--spacing);
+  justify-content: center;
+}
+footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+@media (min-width: 768px) {
+  header .logo {
+    font-size: 1.5rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  main {
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+}
