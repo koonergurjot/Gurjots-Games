@@ -455,10 +455,10 @@ function loop(ts){
 }
 
 if(mode==='replay'){
-  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;requestAnimationFrame(loop);reportReady('tetris');});
+  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;requestAnimationFrame(loop);if(typeof reportReady==='function') reportReady('tetris');});
 }else{
   initGame();
   if(mode==='spectate') started=true;
   requestAnimationFrame(loop);
-  reportReady('tetris');
+  if(typeof reportReady==='function') reportReady('tetris');
 }
