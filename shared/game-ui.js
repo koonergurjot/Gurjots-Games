@@ -216,7 +216,13 @@
   // Safety timeout: show error if no ready/error after 8s
   setTimeout(()=>{
     if (!$loading.hasAttribute('hidden')){
-      setError('No GAME_READY/ERROR signal received within 8s.');
+      console.warn('[GG][WARN] No GAME_READY/ERROR signal received within 8s; forcing resume.');
+      try {
+        clearAnyPause();
+        frame?.contentWindow?.postMessage({type:'GAME_RESUME'}, '*');
+      } catch (err) {
+        console.warn('[GG][WARN] Failed to send GAME_RESUME after timeout', err);
+      }
     }
   }, 8000);
 })();
