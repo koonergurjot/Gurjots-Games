@@ -1,5 +1,34 @@
 // sw.js — safe service worker with pass-through for games and scripts
-const CACHE_NAME = 'gg-static-v1';
+const CACHE_VERSION = 'v3_2';
+
+function normalizeScope(scope) {
+  if (!scope || typeof scope !== 'string') {
+    return 'static';
+  }
+
+  let raw = scope.trim();
+  if (!raw) {
+    return 'static';
+  }
+
+  if (raw.includes('://')) {
+    try {
+      const scopeURL = new URL(raw);
+      raw = scopeURL.pathname || '/';
+    } catch (_) {
+      // Ignore parse failures and fall back to the original string.
+    }
+  }
+
+  const cleaned = raw
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+    .replace(/[^a-z0-9_-]+/gi, '-');
+
+  return cleaned || 'static';
+}
+
+const CACHE_NAME = `gg-${CACHE_VERSION}-${normalizeScope(self.registration?.scope)}`;
 
 self.addEventListener('install', (event) => { self.skipWaiting(); });
 self.addEventListener('activate', (event) => {
