@@ -5,9 +5,41 @@ import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 installErrorReporter();
 
 const GAME_ID='tetris';GG.incPlays();
-const c=document.getElementById('t');
-fitCanvasToParent(c,420,840,24);
-addEventListener('resize',()=>fitCanvasToParent(c,420,840,24));
+const BASE_W=300;
+const BASE_H=600;
+
+let c=document.getElementById('t');
+if(!c){
+  const fallback=document.getElementById('gameCanvas');
+  if(fallback){
+    c=fallback;
+  }else{
+    const host=document.getElementById('game-root')||document.body;
+    if(host){
+      const created=document.createElement('canvas');
+      created.id='t';
+      created.width=BASE_W;
+      created.height=BASE_H;
+      created.dataset.basew=String(BASE_W);
+      created.dataset.baseh=String(BASE_H);
+      host.appendChild(created);
+      c=created;
+    }
+  }
+}
+
+if(c){
+  c.dataset.basew=String(BASE_W);
+  c.dataset.baseh=String(BASE_H);
+  c.width=BASE_W;
+  c.height=BASE_H;
+  fitCanvasToParent(c,420,840,24);
+  addEventListener('resize',()=>fitCanvasToParent(c,420,840,24));
+}else{
+  const error=new Error('Tetris: unable to locate a canvas element (#t or #gameCanvas).');
+  console.error(error);
+  throw error;
+}
 const ctx=c.getContext('2d');
 const COLS=10, ROWS=20;
 const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
