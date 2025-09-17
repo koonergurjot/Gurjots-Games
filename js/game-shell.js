@@ -342,11 +342,39 @@ function createDiagUI(info, type, entry) {
     hr.style.borderColor = '#25305a';
     panel.appendChild(hr);
 
+    var logsHeader = document.createElement('div');
+    logsHeader.id = 'diag-logs-header';
+    logsHeader.style.display = 'flex';
+    logsHeader.style.alignItems = 'center';
+    logsHeader.style.justifyContent = 'space-between';
+    logsHeader.style.gap = '10px';
+    logsHeader.style.marginBottom = '6px';
+
+    var logsLabel = document.createElement('div');
+    logsLabel.textContent = 'Logs';
+    logsLabel.style.fontWeight = '600';
+    logsHeader.appendChild(logsLabel);
+
+    var copyBtn = document.createElement('button');
+    copyBtn.id = 'diag-copy-btn';
+    copyBtn.textContent = 'Copy logs';
+    copyBtn.className = 'btn';
+    copyBtn.style.padding = '4px 8px';
+    copyBtn.style.fontSize = '12px';
+    copyBtn.style.flexShrink = '0';
+    logsHeader.appendChild(copyBtn);
+
+    panel.appendChild(logsHeader);
+
     var sink = document.createElement('div');
     sink.id = 'diag-logs';
     sink.style.fontFamily = 'ui-monospace,monospace';
     sink.style.fontSize = '12px';
     sink.style.whiteSpace = 'pre-wrap';
+    sink.style.border = '1px solid #25305a';
+    sink.style.borderRadius = '8px';
+    sink.style.padding = '8px';
+    sink.style.background = '#070b20';
     panel.appendChild(sink);
 
     document.body.appendChild(panel);
@@ -361,6 +389,33 @@ function createDiagUI(info, type, entry) {
     panel.insertBefore(meta, panel.firstChild);
   }
 
+  var logsHeaderEl = panel.querySelector('#diag-logs-header');
+  if (!logsHeaderEl) {
+    logsHeaderEl = document.createElement('div');
+    logsHeaderEl.id = 'diag-logs-header';
+    logsHeaderEl.style.display = 'flex';
+    logsHeaderEl.style.alignItems = 'center';
+    logsHeaderEl.style.justifyContent = 'space-between';
+    logsHeaderEl.style.gap = '10px';
+    logsHeaderEl.style.marginBottom = '6px';
+
+    var logsLabelEl = document.createElement('div');
+    logsLabelEl.textContent = 'Logs';
+    logsLabelEl.style.fontWeight = '600';
+    logsHeaderEl.appendChild(logsLabelEl);
+
+    var copyBtnEl = document.createElement('button');
+    copyBtnEl.id = 'diag-copy-btn';
+    copyBtnEl.textContent = 'Copy logs';
+    copyBtnEl.className = 'btn';
+    copyBtnEl.style.padding = '4px 8px';
+    copyBtnEl.style.fontSize = '12px';
+    copyBtnEl.style.flexShrink = '0';
+    logsHeaderEl.appendChild(copyBtnEl);
+
+    panel.appendChild(logsHeaderEl);
+  }
+
   var sinkEl = panel.querySelector('#diag-logs');
   if (!sinkEl) {
     sinkEl = document.createElement('div');
@@ -368,7 +423,20 @@ function createDiagUI(info, type, entry) {
     sinkEl.style.fontFamily = 'ui-monospace,monospace';
     sinkEl.style.fontSize = '12px';
     sinkEl.style.whiteSpace = 'pre-wrap';
+    sinkEl.style.border = '1px solid #25305a';
+    sinkEl.style.borderRadius = '8px';
+    sinkEl.style.padding = '8px';
+    sinkEl.style.background = '#070b20';
     panel.appendChild(sinkEl);
+  }
+
+  var copyBtnFinal = panel.querySelector('#diag-copy-btn');
+  if (copyBtnFinal && !copyBtnFinal._copyBound) {
+    copyBtnFinal._copyBound = true;
+    copyBtnFinal.dataset.label = copyBtnFinal.textContent;
+    copyBtnFinal.addEventListener('click', function(){
+      handleDiagCopy(copyBtnFinal, sinkEl);
+    });
   }
 
   var forced = FORCE ? ' (forced)' : '';
@@ -385,6 +453,58 @@ function createDiagUI(info, type, entry) {
 
   ensureDiagListeners();
   appendDiag('[shell] diagnostics ready\n');
+}
+
+function handleDiagCopy(button, sink) {
+  if (!button || !sink) return;
+  var text = sink.textContent || '';
+  var original = button.dataset.label || button.textContent;
+  var resetTimer = button._resetTimer;
+  if (resetTimer) clearTimeout(resetTimer);
+
+  function setFeedback(message, success) {
+    button.textContent = message;
+    button.style.background = success ? '#1f7a4d' : '#7a1f1f';
+    button.style.borderColor = success ? '#2aa568' : '#b33d3d';
+    button._resetTimer = setTimeout(function(){
+      button.textContent = original;
+      button.style.background = '';
+      button.style.borderColor = '';
+    }, 1600);
+  }
+
+  if (!text) {
+    setFeedback('Nothing to copy', false);
+    return;
+  }
+
+  var copyPromise;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    copyPromise = navigator.clipboard.writeText(text);
+  } else {
+    copyPromise = new Promise(function(resolve, reject){
+      try {
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        var successful = document.execCommand && document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (successful) { resolve(); } else { reject(new Error('copy command failed')); }
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  copyPromise.then(function(){
+    setFeedback('Copied!', true);
+  }).catch(function(){
+    setFeedback('Copy failed', false);
+  });
 }
 
 boot();
