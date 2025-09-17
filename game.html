@@ -1,29 +1,79 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-\1
-
-<script type="importmap">
-{
-  "imports": {
-    "console-signature": "/js/vendor/console-signature.js",
-    "three": "https://unpkg.com/three@0.161.0/build/three.module.js"
-  }
-}
-</script>
-
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gurjot's Games</title>
-  <!-- Shims may also be injected by loader, but keeping these is safe -->
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Gurjot's Games — Play</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/game-shell.css">
   <script src="/js/three-global-shim.js"></script>
   <script src="/shared/gg-shim.js"></script>
-  <script type="module" src="/js/preflight.js"></script>
 </head>
 <body>
-  <div id="game" style="position:relative;"></div>
-  <canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>
-  <div id="game-root" aria-live="polite" style="display:block;min-height:100vh"></div>
-  <script src="/js/compat-shim.js"></script>
-  <script src="/js/game-loader.js"></script>
+  <header class="header">
+    <div class="container nav">
+      <div class="brand"><a href="./" aria-label="Home">Gurjot's Games</a></div>
+      <nav class="nav-links" aria-label="Main">
+        <a href="./">Home</a>
+        <a href="./achievements.html">Achievements</a>
+        <a href="./cabinet.html">Cabinet</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="app" class="container" role="main">
+    <section class="hero" aria-labelledby="title">
+      <h1 id="title">Loading…</h1>
+      <div class="tags" aria-label="Game tags"></div>
+    </section>
+
+    <section class="shell" aria-label="Game and controls">
+      <div class="box">
+        <div class="aspect" id="frame-holder">
+          <div class="stage" id="stage" aria-live="polite" aria-label="Game area">
+            <!-- iframe or #game-root inserted here -->
+            <div class="loader" id="loader" aria-label="Loading">
+              <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+            </div>
+            <div class="error" id="error" role="alert">
+              <div class="panel">
+                <div class="message">An error occurred.</div>
+                <div class="toggle">Show details</div>
+                <pre class="details"></pre>
+                <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
+                  <button class="btn" id="btn-restart">Retry</button>
+                  <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="controls" role="toolbar" aria-label="Game controls">
+          <button class="btn primary" id="btn-restart" aria-label="Restart game">⟲ Restart</button>
+          <button class="btn" id="btn-fullscreen" aria-label="Enter fullscreen">⛶ Fullscreen</button>
+          <button class="btn" id="btn-mute" aria-label="Toggle mute">Mute</button>
+          <button class="btn" id="btn-how" aria-controls="about" aria-label="How to play">❓ How to Play</button>
+          <a class="btn" href="./" aria-label="Back to home">← Back</a>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="card about" id="about">
+          <h3>About this game</h3>
+          <p id="about-text">Loading details…</p>
+        </div>
+        <div class="card">
+          <h3>Controls</h3>
+          <ul id="controls-list" style="margin:0;padding-left:18px">
+            <li>Loading…</li>
+          </ul>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/js/game-shell.js" type="module"></script>
 </body>
-  </html>
+</html>
