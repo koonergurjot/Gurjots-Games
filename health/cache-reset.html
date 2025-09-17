@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Force Refresh — Clear SW & Cache</title>
+  <style>
+    body{font:16px system-ui,Segoe UI,Roboto,Arial;margin:2rem;line-height:1.5}
+    code{background:#111;color:#eee;padding:2px 6px;border-radius:6px}
+    .ok{color:#0a7}
+    .bad{color:#d33}
+    .muted{color:#667}
+  </style>
+</head>
+<body>
+  <h1>Force Refresh</h1>
+  <p>This will <strong>unregister the Service Worker</strong>, <strong>clear Cache Storage</strong>, and <strong>reload</strong> with fresh files.</p>
+  <button id="go">Do it now</button>
+  <pre id="log" class="muted"></pre>
+<script>
+(async function(){
+  const log = (m)=>{ document.getElementById('log').textContent += m + "\n"; };
+
+  async function clearCaches(){
+    if (!('caches' in self)) { log('No CacheStorage API'); return; }
+    const keys = await caches.keys();
+    for (const k of keys){ await caches.delete(k); log('Deleted cache: ' + k); }
+  }
+
+  async function unregisterSW(){
+    if (!('serviceWorker' in navigator)) { log('No serviceWorker in navigator'); return; }
+    const regs = await navigator.serviceWorker.getRegistrations();
+    if (!regs.length) { log('No SW registrations found'); return; }
+    for (const r of regs){ await r.unregister(); log('Unregistered SW: ' + (r.scope||'')); }
+  }
+
+  document.getElementById('go').addEventListener('click', async ()=>{
+    try {
+      await unregisterSW();
+      await clearCaches();
+      try { localStorage.clear(); sessionStorage.clear(); log('Cleared local/session storage'); } catch(e){}
+      log('Reloading...');
+      location.replace(location.pathname.replace(/cache-reset\.html$/, '') + '?fr=' + Date.now());
+    } catch(e){
+      log('Error: ' + e.message);
+    }
+  });
+})();
+</script>
+</body>
+</html>

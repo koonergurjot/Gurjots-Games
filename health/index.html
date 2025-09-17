@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Games Health Check</title>
+    <style>
+      :root {
+        --bg: #0b1220; --fg: #e8eefc; --muted:#9ab; --ok:#33d17a; --bad:#ff6b6b; --warn:#f6c177; --card:#111a2e;
+        --mono: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+      }
+      body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,Segoe UI,Roboto,Arial; }
+      header { padding:16px 20px; border-bottom:1px solid #1f2b49; position:sticky; top:0; background:linear-gradient(180deg,var(--bg),rgba(11,18,32,.9));}
+      h1 { margin:0; font-size:18px; }
+      main { padding: 16px; }
+      .panel { background:var(--card); border:1px solid #1f2b49; border-radius:14px; padding:16px; margin:12px 0; }
+      table { width:100%; border-collapse:collapse; border-spacing:0; }
+      th, td { text-align:left; padding:10px 8px; border-bottom:1px solid #213154; }
+      th { color:#c9d7ff; font-weight:600; }
+      .slug { font-family:var(--mono); font-size:12.5px; color:#c6d0f5; }
+      .mono { font-family:var(--mono); font-size:12.5px; color:#c6d0f5; }
+      .ok { color:var(--ok); font-weight:600; }
+      .bad { color:var(--bad); font-weight:600; }
+      .warn { color:var(--warn); font-weight:600; }
+      code { background:#0d162a; padding:2px 6px; border-radius:6px; border:1px solid #1f2b49; }
+      footer { padding:16px; color:var(--muted); }
+      .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #2a3b6d; background:#0f1a33; color:#c9d7ff; font:12px var(--mono); }
+      .grid { display:grid; gap:12px; grid-template-columns: repeat(1, minmax(0,1fr)); }
+      @media (min-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+      .small { font-size:12px; color:var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Gurjot’s Games — Health Check</h1>
+      <div class="small">Scans <code>/games.json</code>, probes each game's <code>entry</code>, and checks common pitfalls.</div>
+    </header>
+    <main>
+      <div id="summary" class="panel">Loading…</div>
+      <div class="panel">
+        <table id="report">
+          <thead>
+            <tr>
+              <th>Game</th>
+              <th>Slug</th>
+              <th>Entry</th>
+              <th>Status</th>
+              <th class="hide-mobile">Notes</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="grid">
+        <div class="panel">
+          <h3>Quick tips</h3>
+          <ul>
+            <li>Click a failing row to open <code>game.html?id=&lt;slug&gt;</code> in a new tab.</li>
+            <li>Use DevTools → Network to confirm 404/500/MIME issues.</li>
+            <li>Check case sensitivity and path correctness for <code>entry</code>.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <h3>Legend</h3>
+          <p><span class="pill">OK</span> Loadable | <span class="pill">FETCH</span> network issue | <span class="pill">BOOT</span> boot/export missing | <span class="pill">SCHEMA</span> bad <code>games.json</code></p>
+        </div>
+      </div>
+    </main>
+    <footer>
+      Built for fast triage. Place this folder at <code>/health</code> and open <code>/health/</code>.
+    </footer>
+    <script src="/js/health-scan.js"></script>
+  </body>
+</html>

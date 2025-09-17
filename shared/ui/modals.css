@@ -1,0 +1,34 @@
+/* shared/ui/modals.css */
+.hud .modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+
+.hud .modal {
+  background: var(--panel-bg, #fff);
+  color: var(--panel-fg, #000);
+  padding: var(--space-4, 16px);
+  border-radius: var(--radius-md, 8px);
+  max-width: 90%;
+  box-shadow: var(--shadow-lg, 0 10px 30px rgba(0,0,0,0.15));
+  position: relative;
+}
+
+.hud .modal-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
