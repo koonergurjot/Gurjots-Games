@@ -1,10 +1,8 @@
-
 // js/game-shell.js — universal shell that loads a game by slug using games.json
 const qs = new URLSearchParams(location.search);
 const DEBUG = qs.get('debug') === '1' || qs.get('debug') === 'true';
 const FORCE = qs.get('force'); // 'iframe' | 'script'
 const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
-
 const slug = qs.get('slug') || qs.get('id') || qs.get('game');
 const $ = s => document.querySelector(s);
 
@@ -63,42 +61,42 @@ function renderShell(info){
 
   // About panel
   $('#about-text').textContent = info.description || info.short || 'Ready to play?';
-  $('#open-new').href = location.href;
+  const openNew = document.getElementById('open-new'); if (openNew) openNew.href = location.href;
 
   // Keyboard help (best-effort defaults)
-  $('#controls-list').innerHTML = `
+  const cl = document.getElementById('controls-list');
+  if (cl) cl.innerHTML = `
     <li><kbd>← →</kbd> Move</li>
     <li><kbd>Space</kbd> Action / Jump</li>
     <li><kbd>P</kbd> Pause</li>
     <li><kbd>F</kbd> Fullscreen</li>`;
 
   // Wire controls
-  $('#btn-restart').onclick = ()=> reloadGame();
-  $('#btn-fullscreen').onclick = ()=> {
+  const btnRestart = document.getElementById('btn-restart'); if (btnRestart) btnRestart.onclick = ()=> reloadGame();
+  const btnFs = document.getElementById('btn-fullscreen'); if (btnFs) btnFs.onclick = ()=> {
     const stage = $('#stage');
-    (stage.requestFullscreen||stage.webkitRequestFullscreen||stage.msRequestFullscreen||(()=>Promise.reject()))().catch(()=>{});
+    (stage?.requestFullscreen||stage?.webkitRequestFullscreen||stage?.msRequestFullscreen||(()=>Promise.reject()))().catch(()=>{});
   };
-  $('#btn-mute').onclick = ()=> toggleMute();
-  $('#btn-how').onclick = ()=> document.getElementById('about').scrollIntoView({behavior:'smooth'});
+  const btnMute = document.getElementById('btn-mute'); if (btnMute) btnMute.onclick = ()=> toggleMute();
+  const btnHow = document.getElementById('btn-how'); if (btnHow) btnHow.onclick = ()=> document.getElementById('about')?.scrollIntoView({behavior:'smooth'});
 
   // pause overlay by page visibility
   document.addEventListener('visibilitychange', ()=>{
     if(document.hidden){
       window.postMessage({type:'GAME_PAUSE'}, '*');
-    } else {
-      // no auto-resume to avoid surprises
     }
   });
 }
 
 function loadGame(info){
   const stage = $('#stage');
-  const loader = $('#loader');
-  const err = $('#error');
-  err.classList.remove('show');
-  loader.style.display = 'flex';
+  const overlays = ensureOverlays();
+  const loader = overlays.loader;
+  const err = overlays.err;
 
-  const aspect = $('#frame-holder');
+  try { err.classList.remove('show'); } catch(_){}
+  try { loader.style.display = 'flex'; } catch(_){}
+
   // Provide legacy anchors some games may expect
   ensureLegacyElements();
 
@@ -115,14 +113,13 @@ function loadGame(info){
     iframe.allow = 'autoplay; fullscreen';
     iframe.src = debugEntry;
     iframe.onload = ()=>{/* waiting for GAME_READY handshake */};
-    stage.innerHTML = '';
-    stage.appendChild(iframe);
+    if (stage) stage.innerHTML = '';
+    (stage || document.body).appendChild(iframe);
     state.iframe = iframe;
     createDiagUI(info, type, debugEntry);
   } else {
     // script boot
-    stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>';
-    // load diagnostics first (optional)
+    if (stage) stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>';
     if (DEBUG) {
       const d = document.createElement('script');
       d.src = '/js/runtime-diagnostics.js';
@@ -140,7 +137,8 @@ function loadGame(info){
   // Handshake timer
   if(state.timer) clearTimeout(state.timer);
   state.timer = setTimeout(()=>{
-    loader.style.display = 'none';
+    const overlays2 = ensureOverlays();
+    try { overlays2.loader.style.display = 'none'; } catch(_){}
     showSoftLoading();
   }, 6000);
 }
@@ -156,32 +154,12 @@ function reloadGame(){
 
 function toggleMute(){
   state.muted = !state.muted;
-  $('#btn-mute').innerText = state.muted ? 'Unmute' : 'Mute';
+  const btn = document.getElementById('btn-mute'); if (btn) btn.innerText = state.muted ? 'Unmute' : 'Mute';
   try{
     if(state.iframe && state.iframe.contentWindow){
       state.iframe.contentWindow.postMessage({type:'GAME_MUTE', muted: state.muted}, '*');
     }
   }catch(e){}
-}
-
-function showSoftLoading(){
-  const err = $('#error');
-  err.classList.add('show');
-  err.querySelector('.message').textContent = 'Still loading… This game may take longer on first load.';
-  err.querySelector('.details').style.display = 'none';
-  err.querySelector('.toggle').style.display = 'none';
-}
-
-function renderError(msg, e){
-  const loader = $('#loader'); loader.style.display='none';
-  const err = $('#error'); err.classList.add('show');
-  err.querySelector('.message').textContent = msg;
-  const details = err.querySelector('.details');
-  details.textContent = (e && (e.message || e.toString())) || '';
-  details.style.display = 'none';
-  err.querySelector('.toggle').onclick = ()=> {
-    details.style.display = (details.style.display==='none' ? 'block' : 'none');
-  };
 }
 
 function ensureLegacyElements(){
@@ -197,19 +175,82 @@ function ensureLegacyElements(){
   }
 }
 
+// Ensure loader & error overlays always exist
+function ensureOverlays(){
+  const stage = document.getElementById('stage') || document.body;
+
+  let loader = document.getElementById('loader');
+  if (!loader) {
+    loader = document.createElement('div');
+    loader.id = 'loader';
+    loader.className = 'loader';
+    loader.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+    stage.appendChild(loader);
+  }
+
+  let err = document.getElementById('error');
+  if (!err) {
+    err = document.createElement('div');
+    err.id = 'error';
+    err.className = 'error';
+    err.innerHTML = `
+      <div class="panel">
+        <div class="message"></div>
+        <div class="toggle">Show details</div>
+        <pre class="details"></pre>
+        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
+          <button class="btn" id="btn-restart">Retry</button>
+          <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>
+        </div>
+      </div>`;
+    stage.appendChild(err);
+  }
+
+  // Bind/refresh actions
+  const btn = err.querySelector('#btn-restart');
+  if (btn) btn.onclick = ()=> reloadGame();
+  const openNew = err.querySelector('#open-new');
+  if (openNew) openNew.href = location.href;
+
+  return { loader, err };
+}
+
+function showSoftLoading(){
+  const { loader, err } = ensureOverlays();
+  try { loader.style.display = 'none'; } catch(_) {}
+  try { err.classList.add('show'); } catch(_) {}
+  const msg = err.querySelector('.message'); if (msg) msg.textContent = 'Still loading… This game may take longer on first load.';
+  const details = err.querySelector('.details'); if (details) details.style.display = 'none';
+  const toggle = err.querySelector('.toggle'); if (toggle) toggle.style.display = 'none';
+}
+
+function renderError(msg, e){
+  const { loader, err } = ensureOverlays();
+  try { loader.style.display='none'; } catch(_) {}
+  try { err.classList.add('show'); } catch(_) {}
+  const d = err.querySelector('.details');
+  if (d) {
+    d.textContent = (e && (e.message || e.toString())) || '';
+    d.style.display = 'none';
+  }
+  const m = err.querySelector('.message'); if (m) m.textContent = msg;
+  const tog = err.querySelector('.toggle');
+  if (tog && d) tog.onclick = ()=> {
+    d.style.display = (d.style.display==='none' ? 'block' : 'none');
+  };
+}
+
 // Listen for handshake from games
 window.addEventListener('message', (ev)=>{
   const data = ev.data || {};
   if(data.type === 'GAME_READY'){
-    const loader = $('#loader'); loader.style.display='none';
-    const err = $('#error'); err.classList.remove('show');
+    const { loader, err } = ensureOverlays();
+    try { loader.style.display='none'; } catch(_) {}
+    try { err.classList.remove('show'); } catch(_) {}
   } else if(data.type === 'GAME_ERROR'){
     renderError('Game error', {message: data.message || 'Unknown error'});
   }
 });
-
-boot();
-
 
 // --- Diagnostics UI (only when debug) ---
 function createDiagUI(info, type, entry) {
@@ -248,11 +289,14 @@ function createDiagUI(info, type, entry) {
       const d = e.data;
       if(d?.type==='DIAG_LOG'){
         const ent = d.entry;
-        sink.textContent += `[+${ent.t}ms] ${ent.level.toUpperCase()}: ${ent.msg}\n`;
+        sink.textContent += `[+${ent.t}ms] ${ent.level.toUpperCase()}: ${ent.msg}
+`;
       } else if (d?.type==='GAME_READY') {
-        sink.textContent += '[event] GAME_READY\n';
+        sink.textContent += '[event] GAME_READY
+';
       } else if (d?.type==='GAME_ERROR') {
-        sink.textContent += '[event] GAME_ERROR: '+ (d.message||'') + '\n';
+        sink.textContent += '[event] GAME_ERROR: '+ (d.message||'') + '
+';
       }
     }catch(_){}
   };
@@ -260,9 +304,13 @@ function createDiagUI(info, type, entry) {
 
   // capture own errors too
   window.addEventListener('error', (e)=>{
-    sink.textContent += '[shell] window.error: '+e.message+'\n';
+    sink.textContent += '[shell] window.error: '+e.message+'
+';
   });
   window.addEventListener('unhandledrejection', (e)=>{
-    sink.textContent += '[shell] unhandledrejection: '+(e.reason && (e.reason.message || e.reason.toString()))+'\n';
+    sink.textContent += '[shell] unhandledrejection: '+(e.reason && (e.reason.message || e.reason.toString()))+'
+';
   });
 }
+
+boot();
