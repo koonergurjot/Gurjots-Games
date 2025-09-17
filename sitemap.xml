@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>/</loc></url>
+  <url><loc>/stats.html</loc></url>
+  <url><loc>/cabinet.html</loc></url>
+  <url><loc>/games/pong/</loc></url>
+  <url><loc>/games/runner/</loc></url>
+  <url><loc>/games/asteroids/</loc></url>
+  <url><loc>/games/shooter/</loc></url>
+  <url><loc>/games/platformer/</loc></url>
+  <url><loc>/games/maze3d/</loc></url>
+</urlset>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="cabinetTitle">Gurjot's Games Cabinet Mode</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.themes.css" />
+  <style>
+    body, html { height: 100%; }
+    .wrap { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+    header { display:flex; align-items:center; gap:8px; padding:8px 12px; }
+    iframe { width: 100%; height: 100%; border: 0; background:#000 }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-header">
+      <strong data-i18n="cabinetMode">Cabinet Mode</strong>
+      <span id="label" class="muted" style="margin-left:auto"></span>
+      <label for="langSelect" class="sr-only">Language</label>
+      <select id="langSelect" name="langSelect" style="margin-left:8px"><option value="en">EN</option><option value="es">ES</option></select>
+      <button id="fsBtn" class="btn" data-i18n="fullscreen">⛶ Fullscreen</button>
+      <button id="startBtn" class="btn" data-i18n="start">▶️ Start</button>
+      <button id="stopBtn" class="btn" data-i18n="stop">⏸️ Stop</button>
+    </header>
+    <iframe id="view" title="Game view"></iframe>
+  </div>
+
+  <script type="module">
+    import { applyTheme, currentTheme } from './shared/themes.js';
+    import { initI18n } from './shared/i18n.js';
+    applyTheme(currentTheme());
+    initI18n();
+
+    const ROTATE_MS = 60000; // 60 seconds
+    const frame = document.getElementById('view');
+    const label = document.getElementById('label');
+    const fsBtn = document.getElementById('fsBtn');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    let timer = null, games = [], idx = 0;
+
+    async function loadGames(){
+      try {
+        const res = await fetch('./games.json', { cache: 'no-store' });
+        const data = await res.json();
+        games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
+      } catch { games = []; }
+    }
+
+    function show(i){
+      if (!games.length) return;
+      idx = i % games.length;
+      const g = games[idx];
+      const url = g.path || `./games/${g.slug}/`;
+      frame.src = url;
+      label.textContent = g.title || g.slug || url;
+    }
+
+    function start(){
+      if (!games.length) return;
+      show(idx);
+      stop();
+      timer = setInterval(() => show(++idx), ROTATE_MS);
+    }
+    function stop(){
+      if (timer) clearInterval(timer);
+      timer = null;
+    }
+
+    fsBtn.onclick = () => {
+      const el = document.documentElement;
+      if (!document.fullscreenElement) el.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    };
+    startBtn.onclick = start;
+    stopBtn.onclick = stop;
+
+    await loadGames();
+    if (games.length) start();
+  </script>
+</body>
+</html>

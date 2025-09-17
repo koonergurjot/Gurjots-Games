@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="statsTitle">Gurjot's Games Stats</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.themes.css" />
+  <style>
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+    .card.pad{padding:16px}
+    canvas{max-width:100%; height:260px}
+  </style>
+</head>
+<body>
+  <header class="site-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px">
+    <h1 style="margin:0" data-i18n="statsTitle">📈 Stats Dashboard</h1>
+    <nav style="display:flex;gap:8px;align-items:center">
+      <a class="btn" href="./index.html" data-i18n="back">← Back</a>
+      <label for="langSelect" class="sr-only">Language</label>
+      <select id="langSelect" name="langSelect"><option value="en">EN</option><option value="es">ES</option></select>
+    </nav>
+  </header>
+
+  <main style="max-width:1100px;margin:0 auto;padding:16px">
+    <div class="grid">
+      <div class="card pad"><h3 data-i18n="timeByGame">Time Played by Game</h3><canvas id="timeByGame"></canvas></div>
+      <div class="card pad"><h3 data-i18n="playsByDay">Plays per Day (last 14)</h3><canvas id="playsByDay"></canvas></div>
+      <div class="card pad"><h3 data-i18n="totalPlays">Total Plays</h3><div id="totalPlays" style="font-size:36px;font-weight:700"></div></div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="module">
+    import { getTimeByGame, getPlaysByDay } from './shared/metrics.js';
+    import { totalPlays } from './shared/themes.js';
+    import { initI18n, t } from './shared/i18n.js';
+    initI18n();
+
+    // Friendly formatter
+    const msToMin = ms => (ms/60000).toFixed(1);
+
+    // Time by game
+    const timeRows = getTimeByGame();
+    const timeCtx = document.getElementById('timeByGame').getContext('2d');
+    new Chart(timeCtx, {
+      type: 'bar',
+      data: {
+        labels: timeRows.map(r => r.slug),
+        datasets: [{ label: t('minutes'), data: timeRows.map(r => Number(msToMin(r.ms))) }]
+      },
+      options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+
+    // Plays by day
+    const dayRows = getPlaysByDay(14);
+    const dayCtx = document.getElementById('playsByDay').getContext('2d');
+    new Chart(dayCtx, {
+      type: 'line',
+      data: {
+        labels: dayRows.map(r => r.day),
+        datasets: [{ label: t('plays'), data: dayRows.map(r => r.count) }]
+      },
+      options: { responsive: true }
+    });
+
+    // Total plays
+    document.getElementById('totalPlays').textContent = totalPlays();
+  </script>
+</body>
+</html>

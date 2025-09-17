@@ -1,0 +1,55 @@
+@import './styles/tokens.css';
+/* === Phase 3 Theme Packs === */
+/* Hook: document.documentElement.classList.add('skin-neon'|'skin-retro'|'skin-minimal') */
+
+:root {
+  --bg:#0b0b0f; --fg:#eaeaf2; --card:#14141d; --border:#1f1f2a; --chip:#2a2a36;
+  --button-bg:#2a2a36; --button-border:#1f1f2a;
+  --accent:#6ee7b7; --font: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  --bg-img:none;
+}
+
+/* Minimal White (default available) */
+.skin-minimal {
+  --bg:#fafafa; --fg:#0b0b0f; --card:#ffffff; --border:#e5e7eb; --chip:#eef2f7;
+  --button-bg:#e5e7eb; --button-border:#d1d5db;
+  --accent:#111827; --font: "Inter", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  --bg-img: none;
+}
+
+/* Neon Cyberpunk (unlocks at 5 plays) */
+@font-face { font-family: "Orbitron"; src: local("Orbitron"); font-display: swap; }
+.skin-neon {
+    --bg:#0a0014; --fg:#e2f1ff; --card:#120026; --border:#2d0052; --chip:#1a0036;
+    --button-bg:#1a0036; --button-border:#2d0052;
+    --accent:#e11d48; --font: "Orbitron", system-ui, sans-serif;
+  --bg-img: radial-gradient(50% 50% at 50% 50%, rgba(225,29,72,0.12) 0%, rgba(0,0,0,0) 60%), radial-gradient(50% 50% at 80% 20%, rgba(59,130,246,0.12) 0%, rgba(0,0,0,0) 50%);
+}
+.skin-neon .card { box-shadow: 0 0 0 1px rgba(225,29,72,.3), 0 8px 30px rgba(0,0,0,.35); }
+.skin-neon .badge { border-color: #e11d48; }
+.skin-neon .ribbon { background: linear-gradient(90deg, #e11d48, #3b82f6); }
+
+/* Retro CRT (unlocks at 10 plays) */
+@font-face { font-family: "PressStart2P"; src: local("Press Start 2P"); font-display: swap; }
+.skin-retro {
+    --bg:#0b0f0a; --fg:#e8f0d8; --card:#0d130b; --border:#19321a; --chip:#112610;
+    --button-bg:#112610; --button-border:#19321a;
+    --accent:#9ae66e; --font: "PressStart2P", monospace;
+    --bg-img: repeating-linear-gradient(0deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px);
+  }
+.skin-retro .card { filter: contrast(1.1) saturate(0.9); }
+.skin-retro .title { text-transform: uppercase; letter-spacing: 0.04em; }
+.skin-retro .site-header { text-shadow: 0 0 8px rgba(154,230,110,0.45); }
+
+/* Common theme plumbing */
+html, body { background: var(--bg); color: var(--fg); }
+body::before { content: ""; position: fixed; inset: 0; pointer-events: none; background: var(--bg-img); z-index: -1; }
+.site-header, .site-footer { background: var(--card); border-bottom: 1px solid var(--border); }
+.site-footer { border-top: 1px solid var(--border); border-bottom: none; }
+* { font-family: var(--font); }
+.card { background: var(--card); border: 1px solid var(--border); }
+.tags span { background: var(--chip); border: 1px solid var(--border); }
+a.btn, .btn { background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; }
+.theme-chip { padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.theme-chip.locked { opacity: .5; cursor: not-allowed; }
+.theme-chip.active { outline: 2px solid var(--accent); }

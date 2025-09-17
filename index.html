@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gurjot's Games</title>
+  <meta name="description" content="Discover amazing games, challenge your skills, and have endless fun. Ready Player One?" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/bolt-landing.css?v=20250911175011">
+</head>
+<body class="bolt-body">
+  <header class="bolt-nav">
+    <div class="bolt-container bolt-nav-inner">
+      <a class="bolt-brand" href="./" aria-label="Gurjot's Games home">
+        <span class="bolt-logo" aria-hidden="true">🎮</span>
+        <span class="bolt-brand-text"><strong>Gurjot's</strong> Games</span>
+      </a>
+      <nav class="bolt-links">
+        <a href="game.html" class="bolt-link">Games</a>
+        <a href="#about" class="bolt-link">About</a>
+        <a href="#contact" class="bolt-link">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="bolt-hero">
+    <div class="bolt-hero-bg" aria-hidden="true">
+      <div class="bolt-gradient"></div>
+      <div class="bolt-bubble bolt-b1"></div>
+      <div class="bolt-bubble bolt-b2"></div>
+      <div class="bolt-bubble bolt-b3"></div>
+      <div class="bolt-stars"></div>
+    </div>
+    <div class="bolt-container bolt-hero-content">
+      <h1 class="bolt-hero-title">Gurjot's Games</h1>
+      <p class="bolt-hero-sub">Welcome to the ultimate gaming destination! Discover amazing games, challenge your skills, and have endless fun.</p>
+      <p class="bolt-cta-line"><span>Ready Player One?</span> 🎮</p>
+      <div class="bolt-metrics">
+        <div class="bolt-metric"><div class="bolt-ic">👥</div><div><div class="bolt-met-n">10K+</div><div class="bolt-met-l">Players</div></div></div>
+        <div class="bolt-metric"><div class="bolt-ic">🕹</div><div><div class="bolt-met-n" id="bolt-game-count">50+</div><div class="bolt-met-l">Games</div></div></div>
+        <div class="bolt-metric"><div class="bolt-ic">⭐</div><div><div class="bolt-met-n">4.8</div><div class="bolt-met-l">Rating</div></div></div>
+        <div class="bolt-metric"><div class="bolt-ic">⚡</div><div><div class="bolt-met-n">99%</div><div class="bolt-met-l">Uptime</div></div></div>
+      </div>
+      <a href="#games" class="bolt-cta">Start Playing ↗</a>
+    </div>
+  </section>
+
+  <!-- GAMES SECTION -->
+  <section id="games" class="bolt-games">
+    <div class="bolt-container">
+      <h2 class="bolt-section-title">Browse Games</h2>
+      <form class="bolt-search" role="search" aria-label="Search games" onsubmit="return false;">
+        <input id="bolt-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
+        <button id="bolt-clear" type="button" title="Clear search">✕</button>
+      </form>
+      <div id="bolt-filters" class="bolt-filters" aria-label="Filter by category" role="tablist"></div>
+      <div id="bolt-status" class="bolt-status" role="status" aria-live="polite">Loading games…</div>
+      <div id="bolt-grid" class="bolt-grid" aria-label="Game list"></div>
+    </div>
+  </section>
+
+  <footer class="bolt-footer">
+    <div class="bolt-container bolt-footer-inner">
+      <p>© <span id="bolt-year"></span> Gurjot's Games. Built for speed & fun.</p>
+      <div class="bolt-footer-links">
+        <a href="sitemap.xml">Sitemap</a>
+        <a href="404.html">404</a>
+        <a href="robots.txt">Robots</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var y = document.getElementById('bolt-year');
+      if (y) y.textContent = new Date().getFullYear();
+    });
+  </script>
+  <script type="module" src="js/bolt-landing.js?v=20250911175011"></script>
+</body>
+</html>

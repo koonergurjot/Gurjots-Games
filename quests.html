@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="questsTitle">Quests</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.themes.css" />
+  <style>
+    ul{list-style:disc;padding-left:20px}
+  </style>
+</head>
+<body>
+  <header class="site-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px">
+    <h1 style="margin:0">🗺️ <span data-i18n="questsTitle">Quests</span></h1>
+    <nav style="display:flex;gap:8px;align-items:center">
+      <a class="btn" href="./index.html" data-i18n="back">← Back</a>
+      <label for="langSelect" class="sr-only">Language</label>
+      <select id="langSelect" name="langSelect"><option value="en">EN</option><option value="es">ES</option></select>
+    </nav>
+  </header>
+
+  <main style="max-width:1100px;margin:0 auto;padding:16px">
+    <section>
+      <h2 data-i18n="dailyQuests">Daily Quests</h2>
+      <ul id="daily"></ul>
+    </section>
+    <section>
+      <h2 data-i18n="weeklyQuests">Weekly Quests</h2>
+      <ul id="weekly"></ul>
+    </section>
+    <p><span data-i18n="totalXP">Total XP:</span> <span id="xp">0</span></p>
+  </main>
+
+  <script type="module">
+    import { getActiveQuests, getXP } from './shared/quests.js';
+    import { applyTheme, currentTheme } from './shared/themes.js';
+    import { initI18n, t } from './shared/i18n.js';
+    applyTheme(currentTheme());
+    initI18n();
+
+    function render(){
+      const { daily, weekly } = getActiveQuests();
+      const dailyEl = document.getElementById('daily');
+      const weeklyEl = document.getElementById('weekly');
+      dailyEl.innerHTML = daily.map(q => `<li>${q.description} — ${q.progress}/${q.goal} ${t('xp')}:${q.xp} ${q.completed ? '✔' : ''}</li>`).join('');
+      weeklyEl.innerHTML = weekly.map(q => `<li>${q.description} — ${q.progress}/${q.goal} ${t('xp')}:${q.xp} ${q.completed ? '✔' : ''}</li>`).join('');
+      document.getElementById('xp').textContent = getXP();
+    }
+
+    render();
+  </script>
+</body>
+</html>
