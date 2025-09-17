@@ -364,7 +364,11 @@ function applyAction(a){
 }
 
 addEventListener('keydown',e=>{
-  if(e.key.toLowerCase()==='g'){
+  const key=e.key||'';
+  const keyLower=key.toLowerCase();
+  const shouldPrevent=e.code==='Space'||key.startsWith('Arrow');
+  if(shouldPrevent) e.preventDefault();
+  if(keyLower==='g'){
     showGhost=!showGhost;
     localStorage.setItem('tetris:ghost',showGhost?'1':'0');
     updateGhost();
@@ -375,7 +379,7 @@ addEventListener('keydown',e=>{
     if(e.code==='Space'){ started=true; Replay.start(); return; }
     return;
   }
-  if(over && e.key.toLowerCase()==='r'){
+  if(over && keyLower==='r'){
     grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
     bag=[]; initGame();
     score=0; level=1; lines=0; holdM=null; canHold=true;
@@ -383,7 +387,7 @@ addEventListener('keydown',e=>{
     updateGhost();
     return;
   }
-  if(e.key.toLowerCase()==='p'){ paused=!paused; return; }
+  if(keyLower==='p'){ paused=!paused; return; }
   if(paused || over || clearAnim) return;
 
   if(e.key==='ArrowLeft'){ applyAction('left'); Replay.recordAction('left'); }
@@ -391,7 +395,7 @@ addEventListener('keydown',e=>{
   if(e.key==='ArrowUp'){ applyAction('rotate'); Replay.recordAction('rotate'); }
   if(e.key==='ArrowDown'){ applyAction('down'); Replay.recordAction('down'); }
   if(e.code==='Space'){ applyAction('hardDrop'); Replay.recordAction('hardDrop'); }
-  if(e.key.toLowerCase()==='c'){ applyAction('hold'); Replay.recordAction('hold'); }
+  if(keyLower==='c'){ applyAction('hold'); Replay.recordAction('hold'); }
 });
 
 
