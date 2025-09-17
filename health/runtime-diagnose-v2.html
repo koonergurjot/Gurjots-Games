@@ -88,8 +88,6 @@ function buildRows(list, shell='game.html', forceNoCache=false) {
     const url = `/${shell}?slug=${encodeURIComponent(g.slug)}&diag_v=2&cb=${Date.now()}`;
     const open = mk('a', { href: url, textContent: 'Open', target: '_blank', rel: 'noopener' });
     const iframe = mk('iframe');
-    const createdAt = performance.now();
-    let loadAt = null;
     iframe.referrerPolicy = 'no-referrer';
     if (forceNoCache) {
       iframe.loading = 'eager';
@@ -105,16 +103,15 @@ function buildRows(list, shell='game.html', forceNoCache=false) {
     let syntheticReady = false;
     const timer = setTimeout(() => {
       if (!ready) {
-        const elapsed = Math.round(performance.now() - createdAt);
         if (syntheticReady) {
-          setStatus('WARN', `SYNTHETIC READY (${elapsed} ms)—waiting for real signal`);
-          log(`No real GAME_READY/ERROR after synthetic postMessage (${elapsed} ms)`);
+          setStatus('WARN','SYNTHETIC READY—waiting for real signal');
+          log('No real GAME_READY/ERROR after synthetic postMessage within 6s');
         } else {
-          setStatus('WARN', `NO SIGNAL (${elapsed} ms)`);
-          log(`No GAME_READY/ERROR postMessage (${elapsed} ms)`);
+          setStatus('WARN','NO SIGNAL');
+          log('No GAME_READY/ERROR postMessage within 6s');
         }
       }
-    }, 6000);
+    }, 10000);
 
     function renderDetails() {
       details.innerHTML = `<details ${logs.length ? 'open':''}><summary>logs (${logs.length})</summary><pre>${logs.join('\n')}</pre></details>`;
@@ -127,47 +124,30 @@ function buildRows(list, shell='game.html', forceNoCache=false) {
       if (d.type === 'GAME_READY') {
         if (d.synthetic) {
           syntheticReady = true;
-          const now = performance.now();
-          const syntheticElapsed = Math.round(now - createdAt);
-          const postLoad = loadAt ? Math.round(now - loadAt) : null;
-          const suffix = postLoad !== null ? ` (${postLoad} ms post-load)` : '';
-          setStatus('WARN', `SYNTHETIC READY (${syntheticElapsed} ms)—waiting for real signal`);
-          log(`GAME_READY (synthetic) after ${syntheticElapsed} ms${suffix}`);
+          setStatus('WARN','SYNTHETIC READY—waiting for real signal');
+          log('GAME_READY (synthetic)');
           return;
         }
         ready = true;
         clearTimeout(timer);
-        const now = performance.now();
-        const readyElapsed = Math.round(now - createdAt);
-        const postLoad = loadAt ? Math.round(now - loadAt) : null;
-        const suffix = postLoad !== null ? ` (${postLoad} ms post-load)` : '';
-        setStatus('OK', `OK (${readyElapsed} ms)`);
-        log(`GAME_READY after ${readyElapsed} ms${suffix}`);
+        setStatus('OK','OK');
+        log('GAME_READY');
       }
       if (d.type === 'GAME_ERROR') {
         ready = true;
         clearTimeout(timer);
-        const now = performance.now();
-        const errorElapsed = Math.round(now - createdAt);
-        const postLoad = loadAt ? Math.round(now - loadAt) : null;
-        const suffix = postLoad !== null ? ` (${postLoad} ms post-load)` : '';
-        const message = d.message ? `: ${d.message}` : '';
-        setStatus('FAIL', `FAIL (${errorElapsed} ms)`);
-        log(`GAME_ERROR after ${errorElapsed} ms${suffix}${message}`);
+        setStatus('FAIL', (d.message? ('FAIL — ' + d.message) : 'FAIL'));
+        log('GAME_ERROR: ' + (d.message || ''));
       }
     });
 
     iframe.addEventListener('error', () => {
       clearTimeout(timer);
-      const now = performance.now();
-      const errorElapsed = Math.round(now - createdAt);
-      setStatus('FAIL', `IFRAME LOAD ERROR (${errorElapsed} ms)`);
-      log(`iframe onerror fired after ${errorElapsed} ms`);
+      setStatus('FAIL','IFRAME LOAD ERROR');
+      log('iframe onerror fired');
     });
     iframe.addEventListener('load', () => {
-      loadAt = performance.now();
-      const loadElapsed = Math.round(loadAt - createdAt);
-      log(`iframe loaded in ${loadElapsed} ms`);
+      log('iframe loaded');
     });
   }
 }

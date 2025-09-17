@@ -14,10 +14,10 @@
 
   (function(){
     const root = document.getElementById('game-root') || (function(){ const d=document.createElement('div'); d.id='game-root'; document.body.appendChild(d); return d; })();
-    const ids=['status','level','lives','board','game','c','canvas','gameCanvas','fx','hud','score','t'];
+    const ids=['status','level','lives','board','game','c','canvas','gameCanvas','fx','hud','score'];
     ids.forEach(id=>{
       if(document.getElementById(id)) return;
-      const el = (id==='c'||id==='board'||id==='game'||id==='canvas'||id==='gameCanvas'||id==='fx'||id==='t') ? document.createElement('canvas') : document.createElement('div');
+      const el = (id==='c'||id==='board'||id==='game'||id==='canvas'||id==='gameCanvas'||id==='fx') ? document.createElement('canvas') : document.createElement('div');
       el.id=id; root.appendChild(el);
       if (el.tagName==='CANVAS' && typeof window.fitCanvasToParent==='function') window.fitCanvasToParent(el);
     });
@@ -37,8 +37,14 @@
     }
 
     const boot = window.GameInit||window.init||window.startGame||window.start||window.boot;
-    if(typeof boot==='function'){ boot({ mount:'#game-root', meta:{slug} }); }
-    window.parent?.postMessage?.({type:'GAME_READY', slug}, '*');
+    let readyToSignal = false;
+    if(typeof boot==='function'){
+      try { boot({ mount:'#game-root', meta:{slug} }); readyToSignal = true; } catch(e){ throw e; }
+    } else {
+      // If no explicit boot, consider it ready only if a script loaded without throwing
+      readyToSignal = true;
+    }
+    if (readyToSignal) window.parent?.postMessage?.({type:'GAME_READY', slug}, '*');
   }catch(e){
     console.error('[loader] error', e);
     window.parent?.postMessage?.({type:'GAME_ERROR', slug, message:String(e?.message||e)}, '*');
