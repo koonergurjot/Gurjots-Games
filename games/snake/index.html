@@ -1,23 +1,44 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Snake</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snake Wrapper</title>
   <style>
-    html,body{height:100%;margin:0;background:#0b0d12;color:#e6e7ea;font-family:Inter,system-ui,sans-serif}
-    .wrap{display:grid;place-items:center;height:100%}
-    canvas{background:#0f1320;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 20px 40px rgba(0,0,0,.4)}
+    html,body{height:100%;margin:0;background:#0b1020;color:#e8eefc;font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif}
+    .fit{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+    .stack>*{margin:6px 0}
+    canvas{max-width:100%;height:auto;display:block}
   </style>
 </head>
 <body>
-  <div class="wrap"><canvas id="c" width="640" height="640" data-basew="640" data-baseh="640"></canvas></div>
-  <script src="../../js/injectBackButton.js"></script>
-  <script src="../../js/resizeCanvas.global.js"></script>
-  <script src="../../js/gameUtil.js"></script>
-  <script src="../../js/sfx.js"></script>
-  <script src="../../shared/leaderboard.js"></script>
-  <script type="module" src="./snake.js"></script>
-  <script type="module" src="../../shared/juice/overlay.js" data-game="snake"></script>
+  <!-- Provide multiple common mount points so the game doesn't crash -->
+  <div id="game-root"></div>
+  <div id="game"></div>
+  <div id="app"></div>
+  <div id="root"></div>
+  <div id="container"></div>
+  <div id="board"></div>
+
+  <!-- Provide a default canvas some games use -->
+  <div class="fit">
+    <div class="stack" aria-live="polite">
+      <canvas id="gameCanvas" width="800" height="600" aria-label="Snake canvas"></canvas>
+      <noscript>Snake requires JavaScript enabled.</noscript>
+    </div>
+  </div>
+
+  <!-- Optional diagnostics for debugging; safe to keep -->
+  <script src="/js/runtime-diagnostics.js"></script>
+
+  <!-- Load the original Snake entry script -->
+  <script src="./main.js"></script>
+
+  <!-- If the game doesn't notify readiness, send a best-effort READY after load -->
+  <script>
+    window.addEventListener('load', function(){
+      try { parent && parent.postMessage({ type:'GAME_READY' }, '*'); } catch(_) {}
+    });
+  </script>
 </body>
 </html>
