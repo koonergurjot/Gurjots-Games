@@ -28,7 +28,24 @@
     window.SFX = { load(){}, play(){}, mute(){}, unmute(){}, stop(){} };
   }
   if (typeof window.Replay !== 'object') {
-    window.Replay = { recordPiece(){}, reset(){}, start(){}, export(){ return ''; } };
+    window.Replay = {
+      start(){},
+      stop(){ return { pieces: [], actions: [] }; },
+      recordPiece(){},
+      recordAction(){},
+      reset(){},
+      export(){ return ''; },
+      exportData(){ return ''; },
+      download(){},
+      load(){ return Promise.resolve({ nextPiece(){}, tick(){ return []; } }); },
+      nextPiece(){},
+      tick(){ return []; },
+      Player: class {
+        constructor(){ this.pieces = []; this.actions = []; }
+        nextPiece(){ return this.pieces.shift(); }
+        tick(){ return []; }
+      }
+    };
   }
   console.log('[gg-shim] installed helpers: GG, SFX, Replay, fitCanvasToParent');
 })();
