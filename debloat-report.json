@@ -1,14 +1,14 @@
 {
   "schemaVersion": "1.0.0",
-  "generatedAt": "2025-09-17T04:28:44.576Z",
+  "generatedAt": "2025-09-17T04:37:57.716Z",
   "repoRoot": "/workspace/Game",
   "initialTotals": {
-    "fileCount": 2831,
-    "totalSizeBytes": 55282626
+    "fileCount": 2824,
+    "totalSizeBytes": 55632200
   },
   "textInventory": {
-    "fileCount": 2818,
-    "totalSizeBytes": 30499206,
+    "fileCount": 2812,
+    "totalSizeBytes": 30849973,
     "byExtension": {
       ".yml": {
         "fileCount": 24,
@@ -16,19 +16,19 @@
       },
       ".md": {
         "fileCount": 220,
-        "totalSizeBytes": 1387128
+        "totalSizeBytes": 1387687
       },
       ".html": {
-        "fileCount": 49,
-        "totalSizeBytes": 91760
+        "fileCount": 46,
+        "totalSizeBytes": 86795
       },
       "<no-ext>": {
         "fileCount": 155,
         "totalSizeBytes": 257312
       },
       ".js": {
-        "fileCount": 1449,
-        "totalSizeBytes": 19895317
+        "fileCount": 1446,
+        "totalSizeBytes": 19865059
       },
       ".svg": {
         "fileCount": 3,
@@ -40,7 +40,7 @@
       },
       ".json": {
         "fileCount": 223,
-        "totalSizeBytes": 1923481
+        "totalSizeBytes": 2306021
       },
       ".txt": {
         "fileCount": 22,
@@ -84,7 +84,7 @@
       },
       ".xml": {
         "fileCount": 6,
-        "totalSizeBytes": 3474
+        "totalSizeBytes": 3436
       },
       ".iml": {
         "fileCount": 1,
@@ -112,7 +112,7 @@
       },
       ".sh": {
         "fileCount": 1,
-        "totalSizeBytes": 8080
+        "totalSizeBytes": 11009
       }
     },
     "files": [
@@ -188,7 +188,7 @@
       },
       {
         "path": "README.md",
-        "sizeBytes": 2952,
+        "sizeBytes": 3719,
         "extension": ".md"
       },
       {
@@ -243,7 +243,12 @@
       },
       {
         "path": "data/games.json",
-        "sizeBytes": 2998,
+        "sizeBytes": 2764,
+        "extension": ".json"
+      },
+      {
+        "path": "debloat-report.json",
+        "sizeBytes": 383076,
         "extension": ".json"
       },
       {
@@ -273,7 +278,7 @@
       },
       {
         "path": "docs/game-inventory.md",
-        "sizeBytes": 3149,
+        "sizeBytes": 2941,
         "extension": ".md"
       },
       {
@@ -349,36 +354,6 @@
       {
         "path": "games/box-core/physics.js",
         "sizeBytes": 2556,
-        "extension": ".js"
-      },
-      {
-        "path": "games/box-playground/box.js",
-        "sizeBytes": 5345,
-        "extension": ".js"
-      },
-      {
-        "path": "games/box-playground/index.html",
-        "sizeBytes": 1019,
-        "extension": ".html"
-      },
-      {
-        "path": "games/box3d/editor.js",
-        "sizeBytes": 8266,
-        "extension": ".js"
-      },
-      {
-        "path": "games/box3d/index.html",
-        "sizeBytes": 2765,
-        "extension": ".html"
-      },
-      {
-        "path": "games/box3d/levels/demo.json",
-        "sizeBytes": 182,
-        "extension": ".json"
-      },
-      {
-        "path": "games/box3d/main.js",
-        "sizeBytes": 17019,
         "extension": ".js"
       },
       {
@@ -743,7 +718,7 @@
       },
       {
         "path": "games.json",
-        "sizeBytes": 1519,
+        "sizeBytes": 1399,
         "extension": ".json"
       },
       {
@@ -754,11 +729,6 @@
       {
         "path": "gameshells/asteroids/index.html",
         "sizeBytes": 1169,
-        "extension": ".html"
-      },
-      {
-        "path": "gameshells/box3d/index.html",
-        "sizeBytes": 1181,
         "extension": ".html"
       },
       {
@@ -853,7 +823,7 @@
       },
       {
         "path": "js/app.js",
-        "sizeBytes": 12625,
+        "sizeBytes": 12435,
         "extension": ".js"
       },
       {
@@ -893,7 +863,7 @@
       },
       {
         "path": "js/game-loader.js",
-        "sizeBytes": 8114,
+        "sizeBytes": 8046,
         "extension": ".js"
       },
       {
@@ -13973,7 +13943,7 @@
       },
       {
         "path": "sitemap.xml",
-        "sizeBytes": 488,
+        "sizeBytes": 450,
         "extension": ".xml"
       },
       {
@@ -14133,7 +14103,7 @@
       },
       {
         "path": "tests/quests.test.js",
-        "sizeBytes": 1837,
+        "sizeBytes": 1841,
         "extension": ".js"
       },
       {
@@ -14173,7 +14143,7 @@
       },
       {
         "path": "tools/apply-debloat.sh",
-        "sizeBytes": 8080,
+        "sizeBytes": 11009,
         "extension": ".sh"
       },
       {
@@ -14203,7 +14173,7 @@
       },
       {
         "path": "tools/scan-debloat.js",
-        "sizeBytes": 12933,
+        "sizeBytes": 13559,
         "extension": ".js"
       }
     ]
@@ -14213,6 +14183,13 @@
     "rootLibs": []
   },
   "duplicateLibraries": [],
+  "to_remove": {
+    "dirs": [
+      "games/box3d",
+      "games/box-playground",
+      "gameshells/box3d"
+    ]
+  },
   "junk": {
     "directories": [],
     "files": []
@@ -14226,8 +14203,8 @@
   "finalEstimates": {
     "removableCount": 0,
     "removableSizeBytes": 0,
-    "estimatedRemainingCount": 2831,
-    "estimatedRemainingSizeBytes": 55282626
+    "estimatedRemainingCount": 2824,
+    "estimatedRemainingSizeBytes": 55632200
   },
   "notes": [
     "This helper only reports findings and never deletes or modifies repository files.",

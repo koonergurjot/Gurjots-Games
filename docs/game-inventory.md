@@ -10,7 +10,6 @@
 | chess3d | Chess 3D (Local) | games/chess3d/index.html | main.js, board.js, input.js | hud.js, sfx.js | pointer | No restart/pause UI | Add restart button and pause state |
 | g2048 | 2048 | games/2048/index.html | g2048.js, net.js | hud.js, input.js, remapUI.js, perfHud.js | keyboard, touch | Game‑over reset unclear | Show explicit restart prompt |
 | asteroids | Asteroids | games/asteroids/index.html | main.js, net.js | shared/game-boot.js | keyboard | No touch controls | Add virtual buttons for rotate/thrust/fire |
-| box3d | 3D Box Playground | games/box3d/index.html | main.js, editor.js | shared/sw.js, shared/ui.js, shared/achievements.js | keyboard, pointer, touch | No pause overlay | Hook into global pause overlay |
 | maze3d | Maze 3D | games/maze3d/index.html | main.js, net.js | shared/ui.js, shared/achievements.js | keyboard | Keyboard only; pointer-lock UX rough | Add touch/gyro movement and clearer start prompt |
 | platformer | Pixel Platformer | games/platformer/index.html | main.js, net.js | shared/ui.js, shared/achievements.js | keyboard, pointer | Pause via **P** only | Integrate shared pause overlay |
 | runner | City Runner | games/runner/index.html | main.js, editor.js | shared/controls.js, shared/ui.js, shared/metrics.js, shared/achievements.js, shared/missions.js | keyboard, touch | No baseline smoke test | Add smoke test and minor loop cleanup |

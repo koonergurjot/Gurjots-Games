@@ -69,9 +69,10 @@ const state = { present: false, data: [] };
 try {
   const raw = fs.readFileSync('debloat-report.json', 'utf8');
   const json = JSON.parse(raw);
-  if (Array.isArray(json.to_remove)) {
+  const toRemove = json.to_remove;
+  if (Array.isArray(toRemove) || (toRemove && typeof toRemove === 'object')) {
     state.present = true;
-    state.data = json.to_remove;
+    state.data = toRemove;
   }
 } catch (error) {
   // Ignore missing or invalid file during preservation stage.
@@ -124,6 +125,57 @@ if ! SUMMARY_DATA_PATH="$SUMMARY_DATA_PATH" node <<'NODE'
 const fs = require('fs');
 const path = require('path');
 
+function normalizeToRemove(raw) {
+  if (raw == null) {
+    return { entries: [], structure: { style: 'none', raw: null } };
+  }
+
+  if (Array.isArray(raw)) {
+    const entries = [];
+    for (const item of raw) {
+      if (typeof item !== 'string' || item.trim() === '') {
+        throw new Error('Invalid to_remove entry detected. All entries must be non-empty strings.');
+      }
+      entries.push({ path: item.trim(), kind: 'unspecified' });
+    }
+    return { entries, structure: { style: 'array', raw: raw.slice() } };
+  }
+
+  if (typeof raw === 'object') {
+    const seen = new Set();
+    const entries = [];
+    const structure = { style: 'object', raw };
+
+    const processList = (key, kind) => {
+      if (!Object.prototype.hasOwnProperty.call(raw, key)) {
+        return;
+      }
+      const list = raw[key];
+      if (!Array.isArray(list)) {
+        throw new Error(`Invalid to_remove.${key} entry detected. Expected an array of strings.`);
+      }
+      for (const value of list) {
+        if (typeof value !== 'string' || value.trim() === '') {
+          throw new Error(`Invalid to_remove.${key} entry detected. All entries must be non-empty strings.`);
+        }
+        const trimmed = value.trim();
+        if (seen.has(trimmed)) {
+          continue;
+        }
+        seen.add(trimmed);
+        entries.push({ path: trimmed, kind });
+      }
+    };
+
+    processList('files', 'file');
+    processList('dirs', 'dir');
+
+    return { entries, structure };
+  }
+
+  throw new Error('Invalid to_remove entry detected. Expected an array or object.');
+}
+
 const summaryPath = process.env.SUMMARY_DATA_PATH;
 if (!summaryPath) {
   console.error('Missing SUMMARY_DATA_PATH environment variable.');
@@ -139,13 +191,7 @@ try {
 }
 
 try {
-  const rawToRemove = report.to_remove;
-  const toRemove = Array.isArray(rawToRemove) ? rawToRemove : [];
-  for (const item of toRemove) {
-    if (typeof item !== 'string' || item.trim() === '') {
-      throw new Error('Invalid to_remove entry detected. All entries must be non-empty strings.');
-    }
-  }
+  const { entries: baseEntries, structure } = normalizeToRemove(report.to_remove);
 
   const cwd = process.cwd();
 
@@ -183,37 +229,49 @@ try {
     return stat.size;
   }
 
-  for (const entry of toRemove) {
-    const trimmed = entry.trim();
-    if (seen.has(trimmed)) {
+  for (const entry of baseEntries) {
+    if (seen.has(entry.path)) {
       continue;
     }
-    seen.add(trimmed);
-    const resolved = ensureSafePath(trimmed);
+    seen.add(entry.path);
+    const resolved = ensureSafePath(entry.path);
     if (fs.existsSync(resolved)) {
       const size = computeSize(resolved);
       totalBytes += size;
       existingCount += 1;
-      entries.push({ path: trimmed, absPath: resolved, sizeBytes: size, missing: false });
+      entries.push({
+        path: entry.path,
+        absPath: resolved,
+        sizeBytes: size,
+        missing: false,
+        kind: entry.kind
+      });
     } else {
-      missing.push(trimmed);
-      entries.push({ path: trimmed, absPath: resolved, sizeBytes: 0, missing: true });
+      missing.push(entry.path);
+      entries.push({
+        path: entry.path,
+        absPath: resolved,
+        sizeBytes: 0,
+        missing: true,
+        kind: entry.kind
+      });
     }
   }
 
   const missingCount = missing.length;
   const summary = {
-    totalEntries: entries.length,
+    totalEntries: baseEntries.length,
     existingCount,
     missingCount,
     totalBytes,
     entries,
-    missing
+    missing,
+    structure
   };
 
   const mb = totalBytes / (1024 * 1024);
   console.log('Debloat dry-run summary:');
-  console.log(`  Total entries in to_remove: ${entries.length}`);
+  console.log(`  Total entries in to_remove: ${baseEntries.length}`);
   console.log(`  Existing entries: ${existingCount}`);
   if (missingCount > 0) {
     console.log(`  Missing entries (will be ignored): ${missingCount}`);
@@ -276,6 +334,49 @@ NODE
 const fs = require('fs');
 const path = require('path');
 
+function rebuildToRemove(structure, remainingEntries) {
+  if (!Array.isArray(remainingEntries) || remainingEntries.length === 0) {
+    return null;
+  }
+
+  if (!structure || structure.style === 'none' || structure.style === undefined) {
+    return remainingEntries.map((entry) => entry.path);
+  }
+
+  if (structure.style === 'array') {
+    return remainingEntries.map((entry) => entry.path);
+  }
+
+  if (structure.style === 'object') {
+    const template = structure.raw && typeof structure.raw === 'object'
+      ? JSON.parse(JSON.stringify(structure.raw))
+      : {};
+
+    const files = remainingEntries
+      .filter((entry) => entry.kind === 'file')
+      .map((entry) => entry.path);
+    const dirs = remainingEntries
+      .filter((entry) => entry.kind === 'dir')
+      .map((entry) => entry.path);
+
+    if (files.length > 0) {
+      template.files = files;
+    } else {
+      delete template.files;
+    }
+
+    if (dirs.length > 0) {
+      template.dirs = dirs;
+    } else {
+      delete template.dirs;
+    }
+
+    return Object.keys(template).length > 0 ? template : null;
+  }
+
+  return remainingEntries.map((entry) => entry.path);
+}
+
 const summary = JSON.parse(process.env.SUMMARY_JSON || '{}');
 const reportPath = 'debloat-report.json';
 let report;
@@ -292,11 +393,13 @@ for (const entry of summary.entries || []) {
   }
   const absPath = path.resolve(process.cwd(), entry.path);
   if (fs.existsSync(absPath)) {
-    remaining.push(entry.path);
+    remaining.push({ path: entry.path, kind: entry.kind || 'unspecified' });
   }
 }
-if (remaining.length > 0) {
-  report.to_remove = remaining;
+
+const nextToRemove = rebuildToRemove(summary.structure, remaining);
+if (nextToRemove && ((Array.isArray(nextToRemove) && nextToRemove.length > 0) || (!Array.isArray(nextToRemove) && Object.keys(nextToRemove).length > 0))) {
+  report.to_remove = nextToRemove;
 } else {
   delete report.to_remove;
 }

@@ -48,12 +48,6 @@
     "module": true
   },
   {
-    "title": "3D Box Playground",
-    "slug": "box3d",
-    "entry": "/games/box3d/main.js",
-    "module": true
-  },
-  {
     "title": "Maze 3D",
     "slug": "maze3d",
     "entry": "/games/maze3d/main.js",

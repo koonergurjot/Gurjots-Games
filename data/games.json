@@ -72,15 +72,6 @@
     "playUrl": "/games/asteroids/"
   },
   {
-    "id": "box3d",
-    "title": "3D Box Playground",
-    "short": "A tiny Three.js scene—rotate and vibe.",
-    "tags": ["3D", "demo"],
-    "difficulty": "easy",
-    "released": "2025-08-15",
-    "playUrl": "/games/box3d/"
-  },
-  {
     "id": "maze3d",
     "title": "Maze 3D",
     "short": "Wander a first-person labyrinth to find the exit.",

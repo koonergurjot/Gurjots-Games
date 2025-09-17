@@ -110,7 +110,6 @@
     platformer: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
     shooter: ['game','status','score','lives','pauseBtn','restartBtn','hud'],
     runner: ['game','status','score','pauseBtn','restartBtn','hud'],
-    box3d: ['game','status','pauseBtn','restartBtn','hud'],
     maze3d: ['game','status','pauseBtn','restartBtn','hud'],
     chess3d: ['stage','hud','coords','thinking','difficulty']
   };
@@ -158,7 +157,7 @@
     ['c','board','game','b','canvas','gameCanvas'].forEach(ensureIsCanvas);
   }
 
-  if (['maze3d','box3d','chess3d'].includes(id)) await ensureTHREE();
+  if (['maze3d','chess3d'].includes(id)) await ensureTHREE();
   await ensureGG();
   ensureGlobalHelpers();
   ensureScaffold(REQUIRED_IDS[id]);

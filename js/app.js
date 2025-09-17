@@ -9,7 +9,6 @@ const defaultGames=[
   {id:"chess3d",title:"Chess 3D (Local)",path:"games/chess3d/index.html",new:true,tags:["3D","offline"]},
   {id:"g2048",title:"2048",path:"games/2048/index.html"},
   {id:"asteroids",title:"Asteroids",path:"games/asteroids/index.html",description:"Pilot your ship and blast space rocks.",tags:["classic","2D"],new:true,emoji:"☄️",addedAt:"2025-08-27"},
-  {id:"box3d",title:"3D Box Playground",path:"games/box3d/index.html",description:"A tiny Three.js scene—rotate and vibe.",tags:["3D","demo"],new:false,emoji:"🧊",addedAt:"2025-08-15"},
   {id:"maze3d",title:"Maze 3D",path:"games/maze3d/index.html",description:"Wander a first-person labyrinth to find the exit.",tags:["3D"],new:true,emoji:"🧭",addedAt:"2025-08-27"},
   {id:"platformer",title:"Pixel Platformer",path:"games/platformer/index.html",description:"Run and jump across platforms to reach the goal.",tags:["2D"],new:true,emoji:"🦘",addedAt:"2025-08-27"},
   {id:"runner",title:"City Runner",path:"games/runner/index.html",description:"Dash through the city and avoid obstacles.",tags:["2D"],new:true,emoji:"🏃",addedAt:"2025-08-27"},

@@ -1,9 +1,0 @@
-{
-  "spawn": [0, 1, 5],
-  "platforms": [
-    { "position": [4, 0.75, -3], "size": [1.5, 1.5, 1.5], "color": 7028735 }
-  ],
-  "collectibles": [
-    { "position": [-3, 0.3, 4] }
-  ]
-}
