@@ -96,6 +96,39 @@
   root.querySelector('.gg-stage').appendChild(container);
   document.body.prepend(root);
 
+  function clearAnyPause(){
+    try {
+      if (!document.getElementById('gg-pause-kill-style')){
+        const style = document.createElement('style');
+        style.id = 'gg-pause-kill-style';
+        style.textContent = `
+          .pause-overlay,
+          #gg-pause-overlay,
+          .gg-overlay.gg-pause,
+          .modal-paused,
+          #hud .paused,
+          .hud-paused {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      document.querySelectorAll('.pause-overlay, #gg-pause-overlay, .gg-overlay.gg-pause, .modal-paused, #hud .paused, .hud-paused').forEach(el=>{
+        el.style.display = 'none';
+        el.classList.add('hidden');
+        el.setAttribute('aria-hidden','true');
+      });
+      const pauseBtn = root.querySelector('#gg-pause');
+      if (pauseBtn){ pauseBtn.setAttribute('aria-pressed','false'); }
+      if (window.GG_HUD && typeof window.GG_HUD.hidePause==='function') window.GG_HUD.hidePause();
+      frame?.contentWindow?.postMessage({ type: 'GAME_RESUME' }, '*');
+    } catch (err) {}
+  }
+
+  clearAnyPause();
+
   // Keyboard shortcuts
   document.addEventListener('keydown', (e)=>{
     if (e.key.toLowerCase()==='p'){e.preventDefault();togglePause();}
@@ -167,7 +200,7 @@
   // Listen for game events (from inside iframe)
   window.addEventListener('message', (ev)=>{
     const d = ev.data || {};
-    if (d.type==='GAME_READY'){ window.forceClearPause&&window.forceClearPause();  window.forceClearPause&&window.forceClearPause();  forceClearPause();  setReady(); }
+    if (d.type==='GAME_READY'){ clearAnyPause(); setReady(); }
     if (d.type==='GAME_ERROR'){ setError(d.message||'Unknown error'); }
     if (d.type==='GAME_SCORE'){ setScore(d.score); }
   });
