@@ -1,6 +1,10 @@
 
 // js/game-shell.js — universal shell that loads a game by slug using games.json
 const qs = new URLSearchParams(location.search);
+const DEBUG = qs.get('debug') === '1' || qs.get('debug') === 'true';
+const FORCE = qs.get('force'); // 'iframe' | 'script'
+const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
+
 const slug = qs.get('slug') || qs.get('id') || qs.get('game');
 const $ = s => document.querySelector(s);
 
@@ -101,25 +105,36 @@ function loadGame(info){
   // decide embedding strategy
   const entry = info.launch?.path || info.entry || info.url;
   const isModule = info.launch?.module || info.module || false;
-  const type = info.launch?.type || (entry && entry.endsWith('.html') ? 'iframe' : 'script');
+  let type = info.launch?.type || (entry && entry.endsWith('.html') ? 'iframe' : 'script');
+  if (FORCE === 'iframe') type = 'iframe'; else if (FORCE === 'script') type = 'script';
 
   if(type === 'iframe'){
+    const debugEntry = DEBUG ? (entry + (entry.includes('?')?'&':'?') + 'debug=1') : entry;
     const iframe = document.createElement('iframe');
     iframe.id = 'frame';
     iframe.allow = 'autoplay; fullscreen';
-    iframe.src = entry;
+    iframe.src = debugEntry;
     iframe.onload = ()=>{/* waiting for GAME_READY handshake */};
     stage.innerHTML = '';
     stage.appendChild(iframe);
     state.iframe = iframe;
+    createDiagUI(info, type, debugEntry);
   } else {
     // script boot
     stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>';
+    // load diagnostics first (optional)
+    if (DEBUG) {
+      const d = document.createElement('script');
+      d.src = '/js/runtime-diagnostics.js';
+      document.body.appendChild(d);
+    }
     const s = document.createElement('script');
-    if(isModule){ s.type='module'; }
+    const useModule = (FORCE_MODULE !== null) ? FORCE_MODULE : isModule;
+    if(useModule){ s.type='module'; }
     s.src = entry;
     s.onerror = (e)=>renderError('Failed to load game script', e);
     document.body.appendChild(s);
+    createDiagUI(info, type, entry);
   }
 
   // Handshake timer
@@ -194,3 +209,60 @@ window.addEventListener('message', (ev)=>{
 });
 
 boot();
+
+
+// --- Diagnostics UI (only when debug) ---
+function createDiagUI(info, type, entry) {
+  if (!DEBUG) return;
+  const btn = document.createElement('button');
+  btn.textContent = '🧪 Diagnostics';
+  btn.style.position='fixed'; btn.style.right='12px'; btn.style.bottom='12px';
+  btn.style.zIndex='1000'; btn.className='btn';
+  document.body.appendChild(btn);
+
+  const panel = document.createElement('div');
+  panel.style.position='fixed'; panel.style.right='12px'; panel.style.bottom='56px';
+  panel.style.background='#0b0f2a'; panel.style.color='#e8eefc';
+  panel.style.border='1px solid #25305a'; panel.style.borderRadius='10px';
+  panel.style.padding='10px'; panel.style.width='360px'; panel.style.maxHeight='60vh'; panel.style.overflow='auto';
+  panel.style.display='none'; panel.style.boxShadow='0 10px 30px rgba(0,0,0,.4)';
+  const meta = `
+    <div style="font-weight:700;margin-bottom:6px">Game Diagnostics</div>
+    <div><b>Slug</b>: ${info.slug || 'n/a'}</div>
+    <div><b>Title</b>: ${info.title || 'n/a'}</div>
+    <div><b>Entry</b>: ${entry}</div>
+    <div><b>Type</b>: ${type}${FORCE?` (forced)`:''}</div>
+    <div><b>Module</b>: ${String(info.launch?.module || info.module || false)}</div>
+    <hr style="border-color:#25305a">
+    <div id="diag-logs" style="font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap"></div>
+  `;
+  panel.innerHTML = meta;
+  document.body.appendChild(panel);
+
+  btn.onclick = ()=> panel.style.display = (panel.style.display==='none'?'block':'none');
+
+  // log sink
+  const sink = panel.querySelector('#diag-logs');
+  const add = (e)=> {
+    try{
+      const d = e.data;
+      if(d?.type==='DIAG_LOG'){
+        const ent = d.entry;
+        sink.textContent += `[+${ent.t}ms] ${ent.level.toUpperCase()}: ${ent.msg}\n`;
+      } else if (d?.type==='GAME_READY') {
+        sink.textContent += '[event] GAME_READY\n';
+      } else if (d?.type==='GAME_ERROR') {
+        sink.textContent += '[event] GAME_ERROR: '+ (d.message||'') + '\n';
+      }
+    }catch(_){}
+  };
+  window.addEventListener('message', add);
+
+  // capture own errors too
+  window.addEventListener('error', (e)=>{
+    sink.textContent += '[shell] window.error: '+e.message+'\n';
+  });
+  window.addEventListener('unhandledrejection', (e)=>{
+    sink.textContent += '[shell] unhandledrejection: '+(e.reason && (e.reason.message || e.reason.toString()))+'\n';
+  });
+}
