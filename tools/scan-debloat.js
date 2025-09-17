@@ -6,6 +6,20 @@ import { createHash } from 'node:crypto';
 
 const repoRoot = process.cwd();
 const REQUIRED_ROOT_ITEMS = ['index.html', 'games'];
+const RETIRED_DIRECTORIES = [
+  {
+    path: 'games/box3d',
+    reason: 'Legacy Box3D prototype directory slated for removal'
+  },
+  {
+    path: 'games/box-playground',
+    reason: 'Legacy Box Playground prototype directory slated for removal'
+  },
+  {
+    path: 'gameshells/box3d',
+    reason: 'Legacy Box3D game shell directory slated for removal'
+  }
+];
 const TEXT_EXTENSIONS = new Set([
   '.c',
   '.cc',
@@ -419,10 +433,22 @@ function markUnreferencedAssets() {
   return unreferenced;
 }
 
+function collectManualRemovals() {
+  if (RETIRED_DIRECTORIES.length === 0) {
+    return null;
+  }
+
+  return {
+    dirs: RETIRED_DIRECTORIES.map((entry) => entry.path)
+  };
+}
+
 function buildReport(duplicateLibraries, unreferencedAssets) {
   const removalList = Array.from(removalCandidates.values());
   const removableSizeBytes = removalList.reduce((sum, item) => sum + item.sizeBytes, 0);
   const removableCount = removalList.length;
+
+  const toRemove = collectManualRemovals();
 
   return {
     schemaVersion: '1.0.0',
@@ -444,6 +470,7 @@ function buildReport(duplicateLibraries, unreferencedAssets) {
         .map((entry) => ({ path: entry.path, sizeBytes: entry.sizeBytes, sha256: entry.sha256 }))
     },
     duplicateLibraries,
+    ...(toRemove ? { to_remove: toRemove } : {}),
     junk: {
       directories: Array.from(junkDirectoriesMap.values()),
       files: junkFiles

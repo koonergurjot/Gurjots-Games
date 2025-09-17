@@ -29,7 +29,7 @@ describe('quest rotation', () => {
 describe('recordPlay progress', () => {
   it('tracks 3D quest progress and awards XP', () => {
     const date = findDateForDailyQuest('d_play3d3');
-    recordPlay('box3d', ['3D'], date);
+    recordPlay('chess3d', ['3D'], date);
     recordPlay('maze3d', ['3D'], date);
     recordPlay('third3d', ['3D'], date);
 
@@ -44,7 +44,7 @@ describe('profile isolation', () => {
   it('separates progress per profile', () => {
     const date = findDateForDailyQuest('d_play3d3');
     localStorage.setItem('profile', 'p1');
-    recordPlay('box3d', ['3D'], date);
+    recordPlay('chess3d', ['3D'], date);
     recordPlay('maze3d', ['3D'], date);
     recordPlay('third3d', ['3D'], date);
     expect(getXP()).toBeGreaterThan(0);
