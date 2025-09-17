@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Chess</title>
+<link rel="stylesheet" href="../../css/styles.css?v=5.3">
+</head>
+<body style="margin:0;background:#0b1220;color:#e6e7ea;">
+<div style="display:flex;gap:16px;justify-content:center;align-items:flex-start;padding:16px 16px 80px;">
+  <div style="position:relative;">
+    <canvas id="board" width="480" height="480" style="border:1px solid #243047;border-radius:12px;background:#0f172a;"></canvas>
+    <canvas id="fx" width="480" height="480" style="position:absolute;left:0;top:0;pointer-events:none;"></canvas>
+  </div>
+  <div style="max-width:260px;">
+    <h3 style="margin:0 0 8px 0;">Chess</h3>
+    <p>Click a piece, then a target square. <br/>Press <b>R</b> to restart. <br/>Press <b>F1</b> for control remap.</p>
+    <label>Difficulty: <select id="difficulty"><option value="1">Easy</option><option value="2" selected>Medium</option><option value="3">Hard</option><option value="4">Expert</option></select></label>
+    <br/>
+    <label>Puzzles: <select id="puzzle-select"><option value="-1">Free Play</option></select></label>
+    <div id="status"></div>
+    <div id="lobby" style="margin-top:16px;">
+      <button id="find-match">Find Match</button>
+      <div id="lobby-status"></div>
+      <ol id="rankings"></ol>
+    </div>
+  </div>
+</div>
+<script src="ai.js?v=5.3"></script>
+<script src="puzzles.js?v=5.3"></script>
+<script src="ratings.js?v=5.3"></script>
+<script src="net.js?v=5.3"></script>
+<script type="module" src="chess.js?v=5.3"></script>
+<script src="../../js/input.js?v=5.3"></script>
+<script src="../../js/remapUI.js?v=5.3"></script>
+<script src="../../js/perfHud.js?v=5.3"></script>
+</body>
+</html>
