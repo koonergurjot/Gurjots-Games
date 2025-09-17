@@ -13747,11 +13747,6 @@
         "extension": ".js"
       },
       {
-        "path": "scripts/home.js",
-        "sizeBytes": 2708,
-        "extension": ".js"
-      },
-      {
         "path": "scripts/pages/about.js",
         "sizeBytes": 225,
         "extension": ".js"
