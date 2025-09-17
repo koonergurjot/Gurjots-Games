@@ -1,8 +1,8 @@
 {
   "slug": "pong",
   "name": "Pong",
-  "author": "Gurjot’s Games",
-  "version": "2.0.1",
+  "author": "Gurjot\u2019s Games",
+  "version": "2.1.0",
   "modes": [
     "1P",
     "2P",
@@ -11,8 +11,9 @@
   "features": [
     "AI",
     "Touch",
-    "Keyboard Rebinds",
-    "Powerups",
+    "Keybinds",
+    "Gamepad",
+    "SFX",
     "Diagnostics"
   ],
   "entry": "games/pong/index.html",
