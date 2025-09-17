@@ -1,4 +1,4 @@
-// js/game-shell.js — hardened, SW-friendly, compat version
+// js/game-shell.js — with contrast/readability fixes for overlays
 const qs = new URLSearchParams(location.search);
 const DEBUG = qs.get('debug') === '1' || qs.get('debug') === 'true';
 const FORCE = qs.get('force'); // 'iframe' | 'script'
@@ -9,6 +9,59 @@ var $ = function(s){ return document.querySelector(s); };
 function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className = cls; return e; }
 
 var state = { timer:null, muted:true, gameInfo:null, iframe:null };
+
+// NEW: inject high-contrast styles for shell overlays
+function injectShellStyles(){
+  if (document.getElementById('gg-shell-contrast')) return;
+  var style = document.createElement('style');
+  style.id = 'gg-shell-contrast';
+  style.textContent = `
+  /* shell overlay readability */
+  #error { position:absolute; inset:0; display:none; align-items:center; justify-content:center; }
+  #error.show { display:flex; }
+  #error .panel{
+    background: rgba(10, 16, 46, 0.96);
+    color: #f5f7ff;
+    border: 1px solid #3a4a8a;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.5);
+    max-width: 520px;
+    line-height: 1.4;
+    font-size: 15px;
+  }
+  #error .message{ font-weight:700; margin-bottom:6px; }
+  #error .toggle{ margin-top:8px; cursor:pointer; opacity:.9; text-decoration:underline; }
+  #error .details{
+    background: #0b133b;
+    border: 1px solid #2a3a7a;
+    color: #e8eefc;
+    padding: 10px;
+    border-radius: 8px;
+    max-height: 220px;
+    overflow:auto;
+    margin-top:8px;
+  }
+  #open-new, #btn-restart, .btn{
+    background:#1b2a6b;
+    color:#ffffff;
+    border:1px solid #3d59b3;
+    border-radius:10px;
+    padding:8px 12px;
+    display:inline-block;
+  }
+  #open-new:hover, #btn-restart:hover, .btn:hover{
+    background:#2546a3;
+  }
+  /* loader dots more visible */
+  #loader.loader{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:10px; }
+  #loader .dot{ width:10px; height:10px; background:#aac6ff; border-radius:50%; animation: gg-bounce 1s infinite ease-in-out; }
+  #loader .dot:nth-child(2){ animation-delay:.15s } 
+  #loader .dot:nth-child(3){ animation-delay:.3s }
+  @keyframes gg-bounce { 0%,80%,100%{ transform:scale(0.6); opacity:.6 } 40%{ transform:scale(1); opacity:1 } }
+  `;
+  document.head.appendChild(style);
+}
 
 function cacheBust(url) {
   try {
@@ -21,6 +74,7 @@ function cacheBust(url) {
 }
 
 async function boot(){
+  injectShellStyles();
   if(!slug){ return render404("Missing ?slug= parameter"); }
   var catalog;
   try{
