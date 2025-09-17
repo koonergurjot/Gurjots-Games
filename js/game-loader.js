@@ -3,6 +3,7 @@
   const slug = params.get('id') || params.get('slug');
   if(!slug){ console.error('[loader] missing slug'); return; }
 
+  function loadModule(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.type='module'; s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
   function loadClassic(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
   async function ensureHelpers(){
     try{ await loadClassic('/shared/gg-shim.js'); }catch{}
@@ -23,12 +24,14 @@
   })();
 
   try{
-    const moduleTag = document.querySelector('script[type="module"][data-entry]');
+    const moduleTag = document.querySelector('script[type=\"module\"][data-entry]');
     if (!moduleTag){
       const guess = ['/games/'+slug+'/main.js','/games/'+slug+'/'+slug+'.js','/games/'+slug+'/index.js','/games/'+slug+'/engine.js'];
       let loaded=false;
       for(const url of guess){
-        try{ await loadClassic(url); console.log('[loader] loaded', url); loaded=true; break; }catch{}
+        try{ await loadModule(url); console.log('[loader] loaded (module)', url); loaded=true; break; }catch(e1){
+          try{ await loadClassic(url); console.log('[loader] loaded (classic)', url); loaded=true; break; }catch(e2){}
+        }
       }
       if(!loaded) console.warn('[loader] no known entry found; relying on page self-boot');
     }
