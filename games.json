@@ -6,10 +6,9 @@
     "module": true
   },
   {
-    "title": "Snake",
-    "slug": "snake",
-    "entry": "/games/snake/snake.js",
-    "module": true
+  "title": "Snake",
+  "slug": "snake",
+  "entry": "/games/snake/index.html"
   },
   {
     "title": "Tetris",
