@@ -13,10 +13,30 @@
     try { parent && parent.postMessage({ type: 'DIAG_LOG', entry }, '*'); } catch(_) {}
   };
 
+  function formatArg(arg) {
+    if (arg === null) return 'null';
+    const type = typeof arg;
+    if (type === 'string') return arg;
+    if (type === 'number' || type === 'boolean' || type === 'bigint') return String(arg);
+    if (type === 'undefined') return 'undefined';
+    if (type === 'symbol') {
+      try { return arg.toString(); } catch(_) { return 'Symbol()'; }
+    }
+    if (arg instanceof Error) {
+      return arg.stack || arg.message || arg.toString();
+    }
+    try {
+      const json = JSON.stringify(arg);
+      return typeof json === 'string' ? json : String(json);
+    } catch(_) {
+      try { return String(arg); } catch(__) { return '[unstringifiable]'; }
+    }
+  }
+
   ['log','info','warn','error'].forEach(k=>{
     const orig = console[k];
     console[k] = function(...args){
-      push(k, args.map(a=> typeof a==='string'?a:JSON.stringify(a)).join(' '));
+      push(k, args.map(formatArg).join(' '));
       try{ orig.apply(console, args);}catch(_){}
     };
   });
