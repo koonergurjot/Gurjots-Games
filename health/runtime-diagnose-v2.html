@@ -30,6 +30,7 @@
 <h1>Runtime Diagnosis v2 <code class="badge">uses game.html</code></h1>
 <div class="meta">This checker loads each game via <code>game.html?slug=&lt;slug&gt;</code> (same as production). If you still see fails for games that are playable, you may be looking at an older cached diagnostics page. Use the buttons below.</div>
 <div class="controls">
+  <button id="kill-sw">Kill SW</button>
   <button id="reload-all">Reload All</button>
   <button id="clear-logs">Clear Logs</button>
   <button id="force-nocache">Force No-Cache</button>
@@ -66,10 +67,38 @@ if ('serviceWorker' in navigator) {
 }
 
 async function loadCatalog() {
-  const res = await fetch('/games.json?diag_v=2&cb=' + Date.now(), { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to fetch games.json');
-  return res.json();
+  const tryFetch = async (url) => {
+    try {
+      const r = await fetch(url + (url.includes('?') ? '&' : '?') + 'diag_v=2&cb=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) throw new Error('status ' + r.status);
+      const j = await r.json();
+      return Array.isArray(j) ? j : [];
+    } catch (_) { return []; }
+  };
+  // Prefer root, fallback to /data
+  const root = location.pathname.replace(/\/health\/.*$/, '/');
+  const primary = await tryFetch(root + 'games.json');
+  const fallback = await tryFetch(root + 'data/games.json');
+  // Union by slug
+  const map = new Map();
+  for (const g of [...primary, ...fallback]) {
+    if (g && g.slug) map.set(g.slug, g);
+  }
+  const list = Array.from(map.values());
+  // expose count
+  window.__diag_catalog_info = { primaryCount: primary.length, fallbackCount: fallback.length, total: list.length };
+  return list;
 }
+
+
+// Kill SW handler
+document.getElementById('kill-sw')?.addEventListener('click', async () => {
+  if (!('serviceWorker' in navigator)) return;
+  const regs = await navigator.serviceWorker.getRegistrations();
+  for (const r of regs) { try { await r.unregister(); } catch(_){} }
+  alert('Service workers unregistered. Hard refresh recommended.');
+});
+
 
 function buildRows(list, shell='game.html', forceNoCache=false) {
   tbody.innerHTML = '';
