@@ -83,5 +83,21 @@
     <script src="/js/input.js?v=5.3"></script>
     <script src="/js/remapUI.js?v=5.3"></script>
     <script src="/js/perfHud.js?v=5.3"></script>
-  </body>
+  
+<!-- Auto-signal bootstrap: emits READY/ERROR to parent -->
+<script>
+(function(){
+  if (window.__gg_autoSignalInstalled) return; window.__gg_autoSignalInstalled = true;
+  function post(type, payload){ try { parent && parent.postMessage(Object.assign({type}, payload||{}), "*"); } catch(e){} }
+  window.addEventListener("error", e => post("GAME_ERROR", { error: (e.message || String(e.error || e)).slice(0,500) }));
+  window.addEventListener("unhandledrejection", e => {
+    const r = e && e.reason ? (e.reason.message || String(e.reason)) : "unhandled rejection";
+    post("GAME_ERROR", { error: String(r).slice(0,500) });
+  });
+  function ready(){ post("GAME_READY"); }
+  if (document.readyState === "complete") setTimeout(ready, 0);
+  else window.addEventListener("load", () => setTimeout(ready, 0));
+})();
+</script>
+</body>
 </html>

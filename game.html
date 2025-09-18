@@ -156,6 +156,14 @@
         const legacySrc = `./games/${slug}/index.html`;
 
         write(`checking modern wrapper → ${modernSrc}`);
+
+        const forceLegacy = qs.has('legacy') || qs.get('shell') === 'legacy';
+        const forceModern = qs.has('modern') || qs.get('shell') === 'modern';
+        if (forceLegacy) {
+          setFrameSrc(legacySrc, "forced legacy");
+        } else if (forceModern) {
+          setFrameSrc(modernSrc, "forced modern");
+        } else {
         fetch(modernSrc, { method: "HEAD" })
           .then((resp) => {
             if (resp.ok) {
@@ -167,7 +175,20 @@
           .catch((err) => {
             setFrameSrc(legacySrc, `legacy fallback (${err && err.message ? err.message : err})`);
           });
+        }
       }
+
+
+      frame.addEventListener("load", () => {
+        write("iframe loaded");
+        try {
+          const mark = frame.contentWindow && frame.contentWindow.__gg_autoSignalInstalled;
+          write("child autosignal: " + (mark ? "present" : "absent/x-origin"));
+        } catch (e) {
+          write("child-access error (likely cross-origin): " + (e && e.message ? e.message : e));
+        }
+      });
+
 
       // Signal handling
       let signalled = false;

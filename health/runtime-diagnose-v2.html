@@ -33,7 +33,7 @@
   <button id="reload-all">Reload All</button>
   <button id="clear-logs">Clear Logs</button>
   <button id="force-nocache">Force No-Cache</button>
-  <label>Shell:
+  <label><input type="checkbox" id="forceLegacy" /> Force legacy&nbsp;&nbsp; Shell:
     <select id="shell">
       <option value="game.html">game.html (prod)</option>
       <option value="play.html">play.html (alt)</option>
@@ -85,13 +85,14 @@ function buildRows(list, shell='game.html', forceNoCache=false) {
 
     name.innerHTML = `<div><strong>${g.title || g.slug}</strong><div class="muted">${g.slug}</div></div>`;
 
-    const url = `/${shell}?slug=${encodeURIComponent(g.slug)}&diag_v=2&cb=${Date.now()}`;
+    const root = (location.pathname.replace(/\/health\/.*$/, "/")); const url = root + `${shell}?slug=${encodeURIComponent(g.slug)}&diag_v=2&cb=${Date.now()}`;
     const open = mk('a', { href: url, textContent: 'Open', target: '_blank', rel: 'noopener' });
     const iframe = mk('iframe');
     iframe.referrerPolicy = 'no-referrer';
     if (forceNoCache) {
       iframe.loading = 'eager';
     }
+    if (document.getElementById('forceLegacy')?.checked) { url += '&legacy=1'; open.href = url; }
     iframe.src = url;
     iframeCell.append(iframe, mk('div', { style:'margin-top:6px' , appendChild: open }));
 
