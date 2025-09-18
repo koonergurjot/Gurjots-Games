@@ -83,19 +83,51 @@
   function clearResults(){ list.innerHTML = ''; jsonPreview.textContent=''; jsonInfo.textContent=''; }
   function preview(obj){ try{ const s=JSON.stringify(obj, null, 2); jsonPreview.innerHTML='<pre>'+s+'</pre>'; }catch(e){ err('preview stringify failed: '+e.message); } }
 
-  function normalizeToSlugs(data){
-    const slugs = [];
-    const pushMaybe = (s) => { if (s && typeof s === 'string') slugs.push(s.trim()); };
+  const fallbackEntryForSlug = (slug) => `/games/${slug}/index.html`;
+
+  function normalizeToDescriptors(data){
+    const out = [];
+    const coerceSlug = (value, fallback) => {
+      if (typeof value === 'string') return value.trim();
+      if (value && typeof value === 'object'){
+        const candidate = value.slug || value.id || value.name || (value.path && String(value.path).split('/').filter(Boolean).slice(-2,-1)[0]);
+        if (candidate) return String(candidate).trim();
+      }
+      if (fallback) return String(fallback).trim();
+      return '';
+    };
+    const pushDescriptor = (slug, entry) => {
+      const cleanSlug = coerceSlug(slug);
+      if (!cleanSlug) return;
+      const preferred = entry && typeof entry === 'string' ? entry.trim() : '';
+      out.push({ slug: cleanSlug, url: preferred || fallbackEntryForSlug(cleanSlug) });
+    };
+
     if (Array.isArray(data)){
-      data.forEach(g => {
-        if (typeof g === 'string'){ pushMaybe(g); }
-        else if (g && typeof g === 'object'){ pushMaybe(g.slug || g.id || g.name || (g.path && String(g.path).split('/').filter(Boolean).slice(-2,-1)[0])); }
+      data.forEach(item => {
+        if (typeof item === 'string'){
+          pushDescriptor(item);
+        } else if (item && typeof item === 'object'){
+          const slug = coerceSlug(item);
+          pushDescriptor(slug, item.entry || item.url || item.href || item.path);
+        }
       });
     } else if (data && typeof data === 'object'){
-      if (Array.isArray(data.games)) return normalizeToSlugs(data.games);
-      Object.keys(data).forEach(k => pushMaybe(k));
+      if (Array.isArray(data.games)) return normalizeToDescriptors(data.games);
+      Object.keys(data).forEach(key => {
+        const value = data[key];
+        if (typeof value === 'string'){
+          pushDescriptor(key, value);
+        } else if (value && typeof value === 'object'){
+          const slug = coerceSlug(value, key);
+          pushDescriptor(slug || key, value.entry || value.url || value.href || value.path);
+        } else {
+          pushDescriptor(key);
+        }
+      });
     }
-    return slugs.filter(Boolean);
+
+    return out;
   }
 
   async function probe(url){
@@ -111,28 +143,29 @@
   function row(slug, path, out){
     const div = document.createElement('div');
     div.className = 'row';
-    div.innerHTML = \`
-      <div class="slug">\${slug}</div>
-      <div class="small">\${path}</div>
-      <div class="status \${out.status}">\${out.status.toUpperCase()}</div>
-      <div class="small">\${out.code}</div>
-    \`;
+    div.innerHTML = `
+      <div class="slug">${slug}</div>
+      <div class="small">${path}</div>
+      <div class="status ${out.status}">${out.status.toUpperCase()}</div>
+      <div class="small">${out.code}</div>
+    `;
     return div;
   }
 
-  async function runForSlugs(slugs){
-    if (!slugs.length){
-      warn('runForSlugs: no slugs provided');
+  async function runForDescriptors(descriptors){
+    if (!descriptors.length){
+      warn('runForDescriptors: no descriptors provided');
       const div = document.createElement('div');
       div.className = 'row';
       div.innerHTML = '<div class="slug">No slugs found</div><div class="small">Provide games.json or paste list above.</div><div class="status warn">WARN</div><div class="small">N/A</div>';
       list.append(div);
       return;
     }
-    for (const slug of slugs){
-      const path = \`../games/\${slug}/index.html\`;
-      const out = await probe(path);
-      list.append(row(slug, path, out));
+    for (const descriptor of descriptors){
+      const slug = descriptor && descriptor.slug ? descriptor.slug : '(unknown)';
+      const target = descriptor && descriptor.url ? descriptor.url : fallbackEntryForSlug(slug);
+      const out = await probe(target);
+      list.append(row(slug, target, out));
     }
   }
 
@@ -147,10 +180,10 @@
       const data = await res.json();
       ok('Parsed JSON from '+url);
       preview(data);
-      const slugs = normalizeToSlugs(data);
-      ok('Extracted '+slugs.length+' slug(s)');
-      jsonInfo.textContent = 'Loaded '+slugs.length+' slug(s) from '+url;
-      await runForSlugs(slugs);
+      const descriptors = normalizeToDescriptors(data);
+      ok('Extracted '+descriptors.length+' slug(s)');
+      jsonInfo.textContent = 'Loaded '+descriptors.length+' slug(s) from '+url;
+      await runForDescriptors(descriptors);
     }catch(e){
       err('Fetch failed: '+(e.message||e));
       jsonInfo.textContent = 'Error fetching '+url+' — see console below.';
@@ -172,16 +205,17 @@
   document.getElementById('btn-run').addEventListener('click', async () => {
     const text = document.getElementById('manual').value.trim();
     info('Manual run clicked; input length='+text.length);
-    let slugs = [];
+    let descriptors = [];
     try {
       if (text.startsWith('[') || text.startsWith('{')){
         const data = JSON.parse(text);
-        slugs = normalizeToSlugs(data);
+        descriptors = normalizeToDescriptors(data);
       } else {
-        slugs = text.split(/\s|,|;|\n|\r/).map(s=>s.trim()).filter(Boolean);
+        const slugs = text.split(/\s|,|;|\n|\r/).map(s=>s.trim()).filter(Boolean);
+        descriptors = slugs.map(slug => ({ slug, url: fallbackEntryForSlug(slug) }));
       }
-      ok('Manual parse got '+slugs.length+' slug(s)');
-      await runForSlugs(slugs);
+      ok('Manual parse got '+descriptors.length+' slug(s)');
+      await runForDescriptors(descriptors);
     } catch (e) {
       err('Manual parse failed: '+e.message);
     }
