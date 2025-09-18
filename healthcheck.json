@@ -1,0 +1,62 @@
+[
+  {
+    "id": "pong",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "snake",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "tetris",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "breakout",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "chess",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "chess3d",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "g2048",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "asteroids",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "maze3d",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "platformer",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "runner",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "shooter",
+    "status": "ok",
+    "reason": ""
+  }
+]
