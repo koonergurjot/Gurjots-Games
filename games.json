@@ -1,73 +1,142 @@
 [
   {
+    "id": "pong",
     "title": "Pong Classic",
-    "slug": "pong",
-    "entry": "/games/pong/main.js",
-    "module": true
+    "short": "A snappy canvas remake of the arcade legend.",
+    "tags": [
+      "classic",
+      "2D"
+    ],
+    "difficulty": "easy",
+    "released": "2025-08-20",
+    "playUrl": "/games/pong/"
   },
   {
-  "title": "Snake",
-  "slug": "snake",
-  "entry": "/games/snake/index.html"
+    "id": "snake",
+    "title": "Snake",
+    "short": "Eat, grow, don't bonk into yourself.",
+    "tags": [
+      "classic",
+      "2D"
+    ],
+    "difficulty": "easy",
+    "released": "2025-08-25",
+    "playUrl": "/games/snake/"
   },
   {
+    "id": "tetris",
     "title": "Tetris",
-    "slug": "tetris",
-    "entry": "/games/tetris/tetris.js",
-    "module": true
+    "short": "Classic falling blocks. Clear lines, level up.",
+    "tags": [
+      "classic",
+      "2D"
+    ],
+    "difficulty": "medium",
+    "released": "2025-08-26",
+    "playUrl": "/games/tetris/"
   },
   {
+    "id": "breakout",
     "title": "Breakout",
-    "slug": "breakout",
-    "entry": "/games/breakout/breakout.js",
-    "module": true
+    "short": "Smash bricks, power-ups, chase the score.",
+    "tags": [
+      "classic",
+      "2D"
+    ],
+    "difficulty": "medium",
+    "released": "2025-08-26",
+    "playUrl": "/games/breakout/"
   },
   {
+    "id": "chess",
     "title": "Chess (2D)",
-    "slug": "chess",
-    "entry": "/games/chess/chess.js",
-    "module": true
+    "short": "Traditional chess for two players.",
+    "tags": [
+      "classic",
+      "board"
+    ],
+    "difficulty": "hard",
+    "released": "2025-08-20",
+    "playUrl": "/games/chess/"
   },
   {
+    "id": "chess3d",
     "title": "Chess 3D (Local)",
-    "slug": "chess3d",
-    "entry": "/games/chess3d/main.js",
-    "module": true
+    "short": "A three-dimensional chess experiment.",
+    "tags": [
+      "3D",
+      "offline"
+    ],
+    "difficulty": "hard",
+    "released": "2025-08-27",
+    "playUrl": "/games/chess3d/"
   },
   {
+    "id": "g2048",
     "title": "2048",
-    "slug": "g2048",
-    "entry": "/games/2048/2048.js",
-    "module": false
+    "short": "Slide numbers to reach 2048.",
+    "tags": [
+      "puzzle",
+      "2D"
+    ],
+    "difficulty": "medium",
+    "released": "2025-08-20",
+    "playUrl": "/games/2048/"
   },
   {
+    "id": "asteroids",
     "title": "Asteroids",
-    "slug": "asteroids",
-    "entry": "/games/asteroids/main.js",
-    "module": true
+    "short": "Pilot your ship and blast space rocks.",
+    "tags": [
+      "classic",
+      "2D"
+    ],
+    "difficulty": "hard",
+    "released": "2025-08-27",
+    "playUrl": "/games/asteroids/"
   },
   {
+    "id": "maze3d",
     "title": "Maze 3D",
-    "slug": "maze3d",
-    "entry": "/games/maze3d/main.js",
-    "module": true
+    "short": "Wander a first-person labyrinth to find the exit.",
+    "tags": [
+      "3D"
+    ],
+    "difficulty": "medium",
+    "released": "2025-08-27",
+    "playUrl": "/games/maze3d/"
   },
   {
+    "id": "platformer",
     "title": "Pixel Platformer",
-    "slug": "platformer",
-    "entry": "/games/platformer/main.js",
-    "module": true
+    "short": "Run and jump across platforms to reach the goal.",
+    "tags": [
+      "2D"
+    ],
+    "difficulty": "medium",
+    "released": "2025-08-27",
+    "playUrl": "/games/platformer/"
   },
   {
+    "id": "runner",
     "title": "City Runner",
-    "slug": "runner",
-    "entry": "/games/runner/main.js",
-    "module": true
+    "short": "Dash through the city and avoid obstacles.",
+    "tags": [
+      "2D"
+    ],
+    "difficulty": "medium",
+    "released": "2025-08-27",
+    "playUrl": "/games/runner/"
   },
   {
+    "id": "shooter",
     "title": "Alien Shooter",
-    "slug": "shooter",
-    "entry": "/games/shooter/main.js",
-    "module": true
+    "short": "Blast waves of invaders and survive.",
+    "tags": [
+      "2D"
+    ],
+    "difficulty": "hard",
+    "released": "2025-08-27",
+    "playUrl": "/games/shooter/"
   }
 ]
