@@ -143,9 +143,31 @@
 
       // Load the game iframe
       pillSlug.textContent = "slug: " + (slug || "—");
-      const src = slug ? `./games/${slug}/index.html` : "./404.html";
-      frame.src = src;
-      write(`iframe src set → ${src}`);
+
+      function setFrameSrc(src, note) {
+        frame.src = src;
+        write(`iframe src set → ${src}${note ? ` (${note})` : ""}`);
+      }
+
+      if (!slug) {
+        setFrameSrc("./404.html");
+      } else {
+        const modernSrc = `./gameshells/${slug}/index.html`;
+        const legacySrc = `./games/${slug}/index.html`;
+
+        write(`checking modern wrapper → ${modernSrc}`);
+        fetch(modernSrc, { method: "HEAD" })
+          .then((resp) => {
+            if (resp.ok) {
+              setFrameSrc(modernSrc, "modern wrapper");
+            } else {
+              setFrameSrc(legacySrc, `legacy fallback (status ${resp.status})`);
+            }
+          })
+          .catch((err) => {
+            setFrameSrc(legacySrc, `legacy fallback (${err && err.message ? err.message : err})`);
+          });
+      }
 
       // Signal handling
       let signalled = false;
