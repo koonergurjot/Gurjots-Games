@@ -1,0 +1,64 @@
+{
+  "games": [
+    {
+      "slug": "pong",
+      "title": "Pong Classic",
+      "path": "games/pong/index.html"
+    },
+    {
+      "slug": "snake",
+      "title": "Snake",
+      "path": "games/snake/index.html"
+    },
+    {
+      "slug": "tetris",
+      "title": "Tetris",
+      "path": "games/tetris/index.html"
+    },
+    {
+      "slug": "breakout",
+      "title": "Breakout",
+      "path": "games/breakout/index.html"
+    },
+    {
+      "slug": "chess",
+      "title": "Chess (2D)",
+      "path": "games/chess/index.html"
+    },
+    {
+      "slug": "chess3d",
+      "title": "Chess 3D",
+      "path": "games/chess3d/index.html"
+    },
+    {
+      "slug": "g2048",
+      "title": "2048",
+      "path": "games/g2048/index.html"
+    },
+    {
+      "slug": "asteroids",
+      "title": "Asteroids",
+      "path": "games/asteroids/index.html"
+    },
+    {
+      "slug": "maze3d",
+      "title": "Maze 3D",
+      "path": "games/maze3d/index.html"
+    },
+    {
+      "slug": "platformer",
+      "title": "Pixel Platformer",
+      "path": "games/platformer/index.html"
+    },
+    {
+      "slug": "runner",
+      "title": "City Runner",
+      "path": "games/runner/index.html"
+    },
+    {
+      "slug": "shooter",
+      "title": "Alien Shooter",
+      "path": "games/shooter/index.html"
+    }
+  ]
+}

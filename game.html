@@ -1,80 +1,190 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Gurjot's Games — Play</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/game-shell.css">
-  <script src="/js/three-global-shim.js"></script>
-  <script src="/shared/gg-shim.js"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Play — Gurjot’s Games</title>
+  <style>
+    :root { --bg:#0b0f14; --card:#121821; --muted:#9db0c5; --accent:#4cc9f0; --error:#ff6b6b; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: linear-gradient(180deg, #0b0f14, #111827 35%, #0b0f14);
+      color: #e5f0ff; font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      display: grid; grid-template-rows: auto 1fr auto; gap: 8px;
+    }
+    header, footer {
+      backdrop-filter: blur(6px); background: rgba(17,24,39,0.6); border-bottom: 1px solid #243042;
+    }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; }
+    header .title { display:flex; align-items:center; gap:10px; }
+    header .title h1 { font-size: 16px; margin: 0; font-weight: 600; }
+    header nav { display:flex; gap:8px; }
+    a.btn, button.btn {
+      appearance: none; border: 1px solid #2a3b54; background: #0f1622; color: #e5f0ff;
+      padding: 8px 10px; border-radius: 10px; cursor: pointer; text-decoration: none;
+    }
+    a.btn:hover, button.btn:hover { border-color: #3b5172; }
+    main { display:grid; place-items:center; padding: 8px; }
+    .game-card {
+      width: min(1280px, 100%); aspect-ratio: 16/9; background: #0b0f14; border: 1px solid #1e2a3b;
+      border-radius: 14px; overflow: clip; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.45);
+    }
+    iframe#game-frame { width: 100%; height: 100%; border: 0; background: #000; display:block; }
+    .overlay {
+      position:absolute; inset:0; display:grid; place-items:center; pointer-events:none;
+    }
+    .status {
+      pointer-events:auto; background: rgba(12,18,28,0.92); border:1px solid #223049; border-radius:12px;
+      padding:16px; width:min(560px, 90%);
+    }
+    .status h2 { margin:0 0 6px; font-size:16px; }
+    .status p { margin:6px 0 0; color: var(--muted); }
+    .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .pill { border:1px solid #2a3b54; padding:6px 8px; border-radius:999px; font-size:12px; color:#cfe2ff; }
+    .logbox {
+      margin-top:10px; max-height:160px; overflow:auto; background:#0b1018; border:1px solid #203049; border-radius:8px; padding:8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px;
+    }
+    .hidden { display:none; }
+    footer { padding: 10px 14px; border-top: 1px solid #243042; color: #a8c3df; }
+    @media (max-width: 768px) {
+      header .title h1 { font-size: 14px; }
+      .game-card { aspect-ratio: 3/4; }
+    }
+  </style>
 </head>
 <body>
-  <header class="header">
-    <div class="container nav">
-      <div class="brand"><a href="./" aria-label="Home">Gurjot's Games</a></div>
-      <nav class="nav-links" aria-label="Main">
-        <a href="./">Home</a>
-        <a href="./achievements.html">Achievements</a>
-        <a href="./cabinet.html">Cabinet</a>
-      </nav>
+  <header aria-label="Game Shell Header">
+    <div class="title">
+      <a id="backLink" class="btn" href="./index.html" aria-label="Back to home">← Back</a>
+      <h1 id="gameTitle">Loading…</h1>
     </div>
+    <nav>
+      <button id="btnReload" class="btn" aria-label="Reload game">Reload</button>
+      <button id="btnDiag" class="btn" aria-label="Show diagnostics">Diagnostics</button>
+    </nav>
   </header>
 
-  <main id="app" class="container" role="main">
-    <section class="hero" aria-labelledby="title">
-      <h1 id="title">Loading…</h1>
-      <div class="tags" aria-label="Game tags"></div>
-    </section>
-
-    <section class="shell" aria-label="Game and controls">
-      <div class="box">
-        <div class="aspect" id="frame-holder">
-          <div class="stage" id="stage" aria-live="polite" aria-label="Game area">
-            <!-- iframe or #game-root inserted here -->
-            <div class="loader" id="loader" aria-label="Loading">
-              <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-            </div>
-            <div class="error" id="error" role="alert">
-              <div class="panel">
-                <div class="message">An error occurred.</div>
-                <div class="toggle">Show details</div>
-                <pre class="details"></pre>
-                <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
-                  <button class="btn" id="btn-restart">Retry</button>
-                  <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>
-                </div>
-              </div>
-            </div>
+  <main>
+    <section class="game-card" aria-live="polite">
+      <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
+      <div class="overlay" id="overlay">
+        <div class="status" id="statusPanel">
+          <h2 id="statusTitle">Starting…</h2>
+          <p id="statusText">We’re booting the game. First load may take a bit longer.</p>
+          <div class="row">
+            <span class="pill" id="pillSlug">slug: —</span>
+            <span class="pill" id="pillTimer">t+0.0s</span>
+            <span class="pill" id="pillSignal">signal: —</span>
           </div>
-        </div>
-        <div class="controls" role="toolbar" aria-label="Game controls">
-          <button class="btn primary" id="btn-restart" aria-label="Restart game">⟲ Restart</button>
-          <button class="btn" id="btn-fullscreen" aria-label="Enter fullscreen">⛶ Fullscreen</button>
-          <button class="btn" id="btn-mute" aria-label="Toggle mute">Mute</button>
-          <button class="btn" id="btn-how" aria-controls="about" aria-label="How to play">❓ How to Play</button>
-          <a class="btn" href="./" aria-label="Back to home">← Back</a>
+          <div class="logbox" id="logbox" role="log" aria-live="polite"></div>
         </div>
       </div>
-
-      <aside class="sidebar">
-        <div class="card about" id="about">
-          <h3>About this game</h3>
-          <p id="about-text">Loading details…</p>
-        </div>
-        <div class="card">
-          <h3>Controls</h3>
-          <ul id="controls-list" style="margin:0;padding-left:18px">
-            <li>Loading…</li>
-          </ul>
-        </div>
-      </aside>
     </section>
   </main>
 
-  <script src="/js/game-shell.js" type="module"></script>
-  <script src="js/auto-diag-inject.js" defer></script>
+  <footer>
+    Standard shell + diagnostics active. Press <strong>Diagnostics</strong> to copy details.
+  </footer>
+
+  <script>
+    (function () {
+      const qs = new URLSearchParams(location.search);
+      let slug = (qs.get("slug") || "").trim();
+      const title = qs.get("title") || "";
+      const gameTitleEl = document.getElementById("gameTitle");
+      const frame = document.getElementById("game-frame");
+      const overlay = document.getElementById("overlay");
+      const statusTitle = document.getElementById("statusTitle");
+      const statusText = document.getElementById("statusText");
+      const pillSlug = document.getElementById("pillSlug");
+      const pillTimer = document.getElementById("pillTimer");
+      const pillSignal = document.getElementById("pillSignal");
+      const logbox = document.getElementById("logbox");
+      const btnReload = document.getElementById("btnReload");
+      const btnDiag = document.getElementById("btnDiag");
+
+      // Normalize 2048 → g2048 (keeps existing links working)
+      if (slug === "2048") slug = "g2048";
+
+      // Fallback title
+      gameTitleEl.textContent = title || (slug ? slug.replace(/[-_]/g, " ") : "Unknown Game");
+
+      // Helper: log
+      const t0 = performance.now();
+      function secs() { return ((performance.now() - t0) / 1000).toFixed(1) + "s"; }
+      function setTimer() { pillTimer.textContent = "t+" + secs(); }
+      setInterval(setTimer, 100);
+
+      function write(line) {
+        const ts = secs();
+        const msg = `[${ts}] ${line}`;
+        const div = document.createElement("div");
+        div.textContent = msg;
+        logbox.appendChild(div);
+        logbox.scrollTop = logbox.scrollHeight;
+      }
+
+      // Wire buttons
+      btnReload.addEventListener("click", () => {
+        write("manual: reload requested");
+        frame.contentWindow?.location.reload();
+      });
+      btnDiag.addEventListener("click", () => {
+        const payload = [
+          `slug=${slug}`, `title=${gameTitleEl.textContent}`, `signal=${pillSignal.textContent.replace("signal: ","")}`,
+          `time=${secs()}`, `userAgent=${navigator.userAgent}`, `href=${location.href}`,
+          `logs:`, ...Array.from(logbox.querySelectorAll("div")).map(d => "- " + d.textContent)
+        ].join("\n");
+        navigator.clipboard.writeText(payload).catch(()=>{});
+        btnDiag.textContent = "Copied!";
+        setTimeout(()=>btnDiag.textContent="Diagnostics", 1200);
+      });
+
+      // Load the game iframe
+      pillSlug.textContent = "slug: " + (slug || "—");
+      const src = slug ? `./games/${slug}/index.html` : "./404.html";
+      frame.src = src;
+      write(`iframe src set → ${src}`);
+
+      // Signal handling
+      let signalled = false;
+      window.addEventListener("message", (ev) => {
+        if (ev.source !== frame.contentWindow) return;
+        const data = ev.data;
+        if (!data || typeof data !== "object") return;
+        if (data.type === "GAME_READY") {
+          signalled = true;
+          pillSignal.textContent = "signal: GAME_READY";
+          statusTitle.textContent = "Ready";
+          statusText.textContent = "Have fun!";
+          overlay.classList.add("hidden");
+          write("signal: GAME_READY");
+        } else if (data.type === "GAME_ERROR") {
+          signalled = true;
+          pillSignal.textContent = "signal: GAME_ERROR";
+          statusTitle.textContent = "Oops, this game didn't load.";
+          statusText.textContent = data.error ? String(data.error) : "Check the console for details.";
+          overlay.classList.remove("hidden");
+          write("signal: GAME_ERROR " + (data.error || ""));
+        }
+      });
+
+      // Timeout if no signal in 6s
+      setTimeout(() => {
+        if (!signalled) {
+          pillSignal.textContent = "signal: (none)";
+          statusTitle.textContent = "No signal from game";
+          statusText.textContent = "We didn’t receive GAME_READY/ERROR within 6 seconds. The game may still be loading or failed silently.";
+          overlay.classList.remove("hidden");
+          write("timeout: no GAME_READY/ERROR within 6s");
+        }
+      }, 6000);
+
+      // Bubble up errors from shell too
+      window.addEventListener("error", (e) => write("shell error: " + (e.message || e.error || e)));
+      window.addEventListener("unhandledrejection", (e) => write("shell rejection: " + (e.reason || e)));
+    })();
+  </script>
 </body>
 </html>
