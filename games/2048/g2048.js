@@ -164,6 +164,19 @@ let anim=null;
 let newTileAnim = null;   // Animation for new tiles scaling in
 let mergedAnim = new Map(); // Track merged tiles animation with decay timing
 
+// Performance optimization caches
+let renderCache = {
+  theme: null,
+  tileColors: new Map(),
+  formattedStrings: new Map(),
+  roundRectPaths: new Map(),
+  lastFrameTime: 0,
+  skipFrames: 0
+};
+
+// History size limit for memory management
+const MAX_HISTORY_SIZE = 50;
+
 function updateStatus(){
   const el=document.getElementById('status');
   if(el) el.textContent=`You: ${score} Opponent: ${oppScore||0}`;
@@ -309,7 +322,11 @@ function undoMove(){
 
 function move(dir){
   if(over||won||anim) return;
-  history = pushState(history, grid, score);
+  // Limit history size for memory management
+  history.push({grid: grid.map(row => [...row]), score});
+  if (history.length > MAX_HISTORY_SIZE) {
+    history = history.slice(-MAX_HISTORY_SIZE);
+  }
   const {after, animations, moved, gained}=computeMove(grid,dir);
   if(!moved){ history = history.slice(0,-1); return; }
   
@@ -457,13 +474,50 @@ c.addEventListener('touchend',e=>{
 });
 
 function draw(anim){
-  const theme=themes[currentTheme];
-  ctx.fillStyle=theme.boardBg;
-  ctx.fillRect(0,0,c.width,c.height);
-  ctx.fillStyle=theme.text;
-  ctx.font='16px Inter,system-ui';
+  // Frame rate optimization - skip frames when performance is poor
+  const now = performance.now();
+  if (renderCache.skipFrames > 0) {
+    renderCache.skipFrames--;
+    return;
+  }
+  
+  // Adaptive frame rate based on performance
+  const deltaTime = now - renderCache.lastFrameTime;
+  if (deltaTime < 16) { // Running above 60 FPS
+    renderCache.skipFrames = 0;
+  } else if (deltaTime > 33) { // Running below 30 FPS
+    renderCache.skipFrames = 1; // Skip every other frame
+  }
+  renderCache.lastFrameTime = now;
+  
+  // Cache theme and computed values
+  const theme = themes[currentTheme];
+  if (renderCache.theme !== currentTheme) {
+    renderCache.theme = currentTheme;
+    renderCache.formattedStrings.clear(); // Clear string cache on theme change
+  }
+  
+  // Clear canvas efficiently
+  ctx.fillStyle = theme.boardBg;
+  ctx.fillRect(0, 0, c.width, c.height);
+  
+  // Cache formatted strings for UI text
   const streakText = FEATURES.mergeStreaks && mergeStreak > 1 ? ` Streak:x${mergeStreak}` : '';
-  ctx.fillText(`Score: ${score} Best: ${best} Undo:${undoLeft}${streakText}`,12,20);
+  const scoreKey = `${score}_${best}_${undoLeft}_${streakText}`;
+  let scoreText = renderCache.formattedStrings.get(scoreKey);
+  if (!scoreText) {
+    scoreText = `Score: ${score.toLocaleString()} Best: ${best.toLocaleString()} Undo:${undoLeft}${streakText}`;
+    renderCache.formattedStrings.set(scoreKey, scoreText);
+    // Limit cache size
+    if (renderCache.formattedStrings.size > 20) {
+      renderCache.formattedStrings.clear();
+    }
+  }
+  
+  // Draw UI text with cached string
+  ctx.fillStyle = theme.text;
+  ctx.font = '16px Inter,system-ui';
+  ctx.fillText(scoreText, 12, 20);
   const base=anim?anim.base:grid;
   for(let y=0;y<N;y++) for(let x=0;x<N;x++){
     // Skip rendering base tile if new tile animation is active at this position
@@ -548,12 +602,34 @@ function draw(anim){
 }
 
 function tileColor(v){
-  const m=themes[currentTheme].tileColors;
-  return m[v]||m.default;
+  // Cache tile colors for performance
+  const cacheKey = `${currentTheme}_${v}`;
+  if (renderCache.tileColors.has(cacheKey)) {
+    return renderCache.tileColors.get(cacheKey);
+  }
+  
+  const m = themes[currentTheme].tileColors;
+  const color = m[v] || m.default;
+  renderCache.tileColors.set(cacheKey, color);
+  return color;
 }
 
 function roundRect(ctx,x,y,w,h,r,fill,stroke,scale=1){
   if(typeof r==='number'){ r={tl:r,tr:r,br:r,bl:r}; }
+  
+  // Cache path for standard tiles (most common case)
+  const pathKey = `${w}_${h}_${r.tl}`;
+  let pathCached = false;
+  
+  if(scale === 1 && renderCache.roundRectPaths.has(pathKey)) {
+    const path = renderCache.roundRectPaths.get(pathKey);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fill(path);
+    if(stroke) ctx.stroke(path);
+    ctx.restore();
+    return;
+  }
   
   if(scale !== 1) {
     ctx.save();
@@ -574,6 +650,23 @@ function roundRect(ctx,x,y,w,h,r,fill,stroke,scale=1){
   ctx.lineTo(x,y+r.tl);
   ctx.quadraticCurveTo(x,y,x+r.tl,y);
   ctx.closePath();
+  
+  // Cache the path for reuse (only for standard scale)
+  if(scale === 1 && !renderCache.roundRectPaths.has(pathKey)) {
+    const translatedPath = new Path2D();
+    translatedPath.moveTo(r.tl,0);
+    translatedPath.lineTo(w-r.tr,0);
+    translatedPath.quadraticCurveTo(w,0,w,r.tr);
+    translatedPath.lineTo(w,h-r.br);
+    translatedPath.quadraticCurveTo(w,h,w-r.br,h);
+    translatedPath.lineTo(r.bl,h);
+    translatedPath.quadraticCurveTo(0,h,0,h-r.bl);
+    translatedPath.lineTo(0,r.tl);
+    translatedPath.quadraticCurveTo(0,0,r.tl,0);
+    translatedPath.closePath();
+    renderCache.roundRectPaths.set(pathKey, translatedPath);
+  }
+  
   if(fill) ctx.fill();
   if(stroke) ctx.stroke();
   
@@ -588,8 +681,12 @@ function getHint(){
 
 const gameLoop=new GameEngine();
 gameLoop.update=dt=>{
+  // Animation optimization - batch updates
+  let needsRedraw = false;
+  
   if(anim){
     anim.p+=dt*1000/ANIM_TIME;
+    needsRedraw = true;
     if(anim.p>=1){
       grid=anim.after;
       anim=null;
@@ -610,6 +707,7 @@ gameLoop.update=dt=>{
   if(newTileAnim){
     newTileAnim.p += dt*1000/(ANIM_TIME*1.5); // Slower for better visibility
     newTileAnim.scale = Math.min(newTileAnim.p, 1);
+    needsRedraw = true;
     if(newTileAnim.p >= 1){
       newTileAnim = null;
     }
@@ -617,14 +715,24 @@ gameLoop.update=dt=>{
   
   // Update merged tile pulse animations (decay from 1.1 to 1.0 over ~150ms)
   const MERGE_ANIM_TIME = ANIM_TIME * 1.25;
-  for(const [key, anim] of mergedAnim.entries()) {
-    anim.p += dt*1000/MERGE_ANIM_TIME;
-    if(anim.p >= 1) {
-      mergedAnim.delete(key);
+  const keysToDelete = [];
+  for(const [key, animObj] of mergedAnim.entries()) {
+    animObj.p += dt*1000/MERGE_ANIM_TIME;
+    needsRedraw = true;
+    if(animObj.p >= 1) {
+      keysToDelete.push(key);
     } else {
       // Decay scale from 1.1 to 1.0
-      anim.scale = 1.1 - (anim.p * 0.1);
+      animObj.scale = 1.1 - (animObj.p * 0.1);
     }
+  }
+  
+  // Clean up completed animations in batch
+  keysToDelete.forEach(key => mergedAnim.delete(key));
+  
+  // Only render if animations need updating or it's the first frame
+  if(needsRedraw || renderCache.lastFrameTime === 0) {
+    gameLoop.render();
   }
 };
 gameLoop.render=()=>{ draw(anim?{base:anim.base,tiles:anim.tiles,p:Math.min(anim.p,1)}:null); };
