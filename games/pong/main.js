@@ -51,6 +51,50 @@ function createCanvas() {
   }
 }
 
+function sizeCanvasToCss(canvas) {
+  if (!(canvas instanceof HTMLCanvasElement)) {
+    return { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT };
+  }
+  let cssWidth = 0;
+  let cssHeight = 0;
+  try {
+    const rect = canvas.getBoundingClientRect?.();
+    cssWidth = Math.round(rect?.width || 0);
+    cssHeight = Math.round(rect?.height || 0);
+  } catch (err) {
+    cssWidth = 0;
+    cssHeight = 0;
+  }
+
+  const styleWidth = Number.parseFloat(canvas.style?.width || '') || 0;
+  const styleHeight = Number.parseFloat(canvas.style?.height || '') || 0;
+  const fallbackWidth = Math.round(canvas.clientWidth || canvas.width || DEFAULT_WIDTH);
+  const fallbackHeight = Math.round(canvas.clientHeight || canvas.height || DEFAULT_HEIGHT);
+
+  const targetWidth = cssWidth > 0 ? cssWidth : styleWidth > 0 ? Math.round(styleWidth) : fallbackWidth;
+  const targetHeight = cssHeight > 0 ? cssHeight : styleHeight > 0 ? Math.round(styleHeight) : fallbackHeight;
+
+  if (targetWidth > 0) {
+    canvas.width = targetWidth;
+    if (!cssWidth && !canvas.style.width) {
+      canvas.style.width = `${targetWidth}px`;
+    }
+  } else if (!canvas.width) {
+    canvas.width = DEFAULT_WIDTH;
+  }
+
+  if (targetHeight > 0) {
+    canvas.height = targetHeight;
+    if (!cssHeight && !canvas.style.height) {
+      canvas.style.height = `${targetHeight}px`;
+    }
+  } else if (!canvas.height) {
+    canvas.height = DEFAULT_HEIGHT;
+  }
+
+  return { width: canvas.width, height: canvas.height };
+}
+
 export function boot(configOverrides = {}) {
   if (typeof previousCleanup === 'function') {
     previousCleanup();
@@ -67,15 +111,14 @@ export function boot(configOverrides = {}) {
     return;
   }
 
-  canvas.width = canvas.width || DEFAULT_WIDTH;
-  canvas.height = canvas.height || DEFAULT_HEIGHT;
-
   const ctx = canvas.getContext?.('2d');
   if (!ctx) {
     reportFatal('canvas 2D context is unavailable');
     return;
   }
-  const W = canvas.width, H = canvas.height;
+  const { width: canvasWidth, height: canvasHeight } = sizeCanvasToCss(canvas);
+  let W = canvasWidth;
+  let H = canvasHeight;
 
   const paddleW = 14, paddleH = Math.floor(H * 0.2);
   const ballR = 8;
@@ -193,6 +236,19 @@ export function boot(configOverrides = {}) {
     overlayNeedsDraw = true;
   }
 
+  function handleResize() {
+    const { width: nextWidth, height: nextHeight } = sizeCanvasToCss(canvas);
+    if (nextWidth === W && nextHeight === H) return;
+    W = nextWidth;
+    H = nextHeight;
+    right.x = W - 24 - paddleW;
+    left.y = Math.max(0, Math.min(H - paddleH, left.y));
+    right.y = Math.max(0, Math.min(H - paddleH, right.y));
+    ball.x = Math.max(ballR, Math.min(W - ballR, ball.x));
+    ball.y = Math.max(ballR, Math.min(H - ballR, ball.y));
+    overlayNeedsDraw = true;
+  }
+
   function hasPlayerWon(score, opponentScore) {
     if (score < matchConfig.targetScore) return false;
     if (matchConfig.winByTwo && score - opponentScore < 2) return false;
@@ -234,6 +290,7 @@ export function boot(configOverrides = {}) {
   }
 
   awaitServe(serveDirection);
+  addEventListener('resize', handleResize);
 
   function handleKeydown(e) {
     const key = e.key;
@@ -497,6 +554,7 @@ export function boot(configOverrides = {}) {
     cancelAnimationFrame(raf);
     removeEventListener('keydown', handleKeydown);
     removeEventListener('keyup', handleKeyup);
+    removeEventListener('resize', handleResize);
     removeEventListener('beforeunload', handleUnload);
     if (typeof window !== 'undefined' && window.__pongTest === testHooks) {
       delete window.__pongTest;
