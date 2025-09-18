@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Missing Games Checker v3</title>
+<style>
+  :root{--bg:#0b0f1a;--fg:#e6edf3;--muted:#9aa4b2;--bad:#ff6b6b;--ok:#8de77b;--warn:#ffd166;--card:#111726;}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,Ubuntu;color:var(--fg);background:radial-gradient(900px 600px at 50% -150px,#162042,var(--bg));}
+  header{padding:1rem 1.25rem;background:linear-gradient(180deg,#0f1730,var(--card));border-bottom:1px solid #1b2440;}
+  h1{margin:0;font-size:1.25rem}
+  main{padding:1rem 1.25rem;max-width:1100px;margin:auto}
+  .row{display:grid;grid-template-columns:1fr auto auto auto;gap:.75rem;align-items:center;padding:.6rem .75rem;border:1px solid #1b2440;background:#0f1426;border-radius:.75rem;margin:.5rem 0}
+  .slug{font-weight:700}
+  .status.ok{color:var(--ok)} .status.missing{color:var(--bad)} .status.warn{color:var(--warn)}
+  .small{color:var(--muted);font-size:.9rem}
+  code{background:#0b1120;border:1px solid #1b2440;padding:.1rem .35rem;border-radius:.35rem}
+  .legend{display:flex;gap:1rem;margin:1rem 0}
+  .bar{margin-top:1rem;opacity:.85}
+  .card{padding:1rem;border:1px solid #1b2440;background:#0f1426;border-radius:.75rem;margin:1rem 0}
+  .controls{display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0}
+  textarea, input[type="text"]{width:100%;background:#0b1120;color:var(--fg);border:1px solid #1b2440;border-radius:.5rem;padding:.5rem}
+  textarea{min-height:100px}
+  button{background:#6ea8fe;color:#081121;border:none;padding:.5rem .8rem;border-radius:.5rem;font-weight:600;cursor:pointer}
+  pre{white-space:pre-wrap;word-break:break-word;background:#0b1120;border:1px solid #1b2440;padding:.5rem;border-radius:.5rem;max-height:300px;overflow:auto}
+  .pill{display:inline-flex;gap:.35rem;align-items:center;background:#0b1120;border:1px solid #1b2440;border-radius:999px;padding:.25rem .5rem;font-size:.8rem}
+  .logline{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size:.88rem; margin:.2rem 0}
+  .spin{display:inline-block;width:1em;height:1em;border:.2em solid #355;border-top-color:#9cf;border-radius:50%;animation:rot 1s linear infinite;vertical-align:-.2em;margin-right:.5rem}
+  @keyframes rot{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Missing Games Checker v3</h1>
+  <div class="small bar">Checks <code>games.json</code> vs. <code>/games/&lt;slug&gt;/index.html</code> with explicit URL input + full error logs.</div>
+</header>
+<main>
+  <div class="legend small">
+    <div><span class="status ok">●</span> OK: index.html found</div>
+    <div><span class="status missing">●</span> Missing: 404 or not reachable</div>
+    <div><span class="status warn">●</span> Warn: Non-200/404 (e.g., 500/CORS)</div>
+  </div>
+
+  <div class="card">
+    <div class="small">games.json URL (try these):</div>
+    <div class="controls">
+      <span class="pill">../games.json</span>
+      <span class="pill">./games.json</span>
+      <span class="pill">/games.json</span>
+      <span class="pill">../assets/games.json</span>
+      <span class="pill">../public/games.json</span>
+    </div>
+    <input id="jsonUrl" type="text" placeholder="../games.json" value="../games.json"/>
+    <div class="controls">
+      <button id="btn-load">Load from URL</button>
+      <button id="btn-test">Test candidates</button>
+      <button id="btn-clear">Clear</button>
+    </div>
+    <div id="json-info" class="small"></div>
+    <div id="json-preview"></div>
+  </div>
+
+  <div class="card">
+    <div class="small">Or paste slugs (comma/space/newline separated), or a JSON array/object with slug fields:</div>
+    <textarea id="manual" placeholder="e.g. pong,snake,tetris  OR  [{&quot;slug&quot;:&quot;pong&quot;},{&quot;id&quot;:&quot;snake&quot;}]"></textarea>
+    <div class="controls">
+      <button id="btn-run">Run check on pasted list</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="small">Logs</div>
+    <div id="logs"></div>
+  </div>
+
+  <div id="list"></div>
+</main>
+<script>
+const list = document.getElementById('list');
+const jsonInfo = document.getElementById('json-info');
+const jsonPreview = document.getElementById('json-preview');
+const logs = document.getElementById('logs');
+const jsonUrl = document.getElementById('jsonUrl');
+
+function log(msg){ const d = document.createElement('div'); d.className='logline'; d.textContent=msg; logs.append(d); }
+function clearResults(){ list.innerHTML = ''; }
+function clearLogs(){ logs.innerHTML = ''; }
+function preview(obj){ const s = JSON.stringify(obj, null, 2); jsonPreview.innerHTML = '<pre>'+s.slice(0, 2400) + (s.length>2400 ? '\n…(truncated)…' : '') + '</pre>'; }
+
+function normalizeToSlugs(data){
+  const slugs = [];
+  const pushMaybe = (s) => { if (s && typeof s === 'string') slugs.push(s.trim()); };
+  if (Array.isArray(data)){
+    for (const g of data){
+      if (typeof g === 'string'){ pushMaybe(g); continue; }
+      if (!g || typeof g !== 'object') continue;
+      pushMaybe(g.slug || g.id || g.name || (g.path && String(g.path).split('/').filter(Boolean).slice(-2,-1)[0]));
+    }
+  } else if (data && typeof data === 'object'){
+    if (Array.isArray(data.games)) return normalizeToSlugs(data.games);
+    for (const k of Object.keys(data)){ pushMaybe(k); }
+  }
+  return slugs.filter(Boolean);
+}
+
+async function probe(url){
+  try {
+    const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    if (res.status === 200) return {status:'ok', code:200};
+    if (res.status === 404) return {status:'missing', code:404};
+    return {status:'warn', code:res.status};
+  } catch (e) { return {status:'warn', code:'ERR'}; }
+}
+
+function row(slug, path, out){
+  const div = document.createElement('div');
+  div.className = 'row';
+  div.innerHTML = \`
+    <div class="slug">\${slug}</div>
+    <div class="small">\${path}</div>
+    <div class="status \${out.status}">\${out.status.toUpperCase()}</div>
+    <div class="small">\${out.code}</div>
+  \`;
+  return div;
+}
+
+async function runForSlugs(slugs){
+  if (!slugs.length){
+    const div = document.createElement('div');
+    div.className = 'row';
+    div.innerHTML = '<div class="slug">No slugs found</div><div class="small">Provide games.json or paste list above.</div><div class="status warn">WARN</div><div class="small">N/A</div>';
+    list.append(div);
+    return;
+  }
+  for (const slug of slugs){
+    const path = \`../games/\${slug}/index.html\`;
+    const out = await probe(path);
+    list.append(row(slug, path, out));
+  }
+}
+
+async function loadFromUrl(url){
+  clearResults();
+  jsonInfo.innerHTML = '<span class="spin"></span>Loading ' + url + '…';
+  try{
+    const res = await fetch(url, { cache: 'no-store' });
+    log('GET ' + url + ' → ' + res.status);
+    if (!res.ok){ jsonInfo.textContent = 'HTTP ' + res.status + ' from ' + url; preview({error:'non-ok', status:res.status}); return; }
+    const data = await res.json();
+    const slugs = normalizeToSlugs(data);
+    jsonInfo.textContent = 'Loaded ' + slugs.length + ' slug(s) from ' + url;
+    preview(data);
+    await runForSlugs(slugs);
+  }catch(e){
+    log('ERR ' + url + ' → ' + (e && e.message ? e.message : 'ERR'));
+    jsonInfo.textContent = 'Error fetching ' + url + '. See logs below.';
+    preview({error:String(e)});
+  }
+}
+
+async function testCandidates(){
+  clearLogs();
+  const cands = ['../games.json','./games.json','/games.json','../assets/games.json','../public/games.json'];
+  for (const u of cands){
+    try{
+      const res = await fetch(u, { cache: 'no-store' });
+      log('TEST ' + u + ' → ' + res.status);
+    }catch(e){
+      log('TEST ' + u + ' → ERR');
+    }
+  }
+}
+
+document.getElementById('btn-load').addEventListener('click', () => loadFromUrl(jsonUrl.value.trim() || '../games.json'));
+document.getElementById('btn-test').addEventListener('click', testCandidates);
+document.getElementById('btn-clear').addEventListener('click', () => { clearResults(); jsonInfo.textContent=''; jsonPreview.textContent=''; clearLogs(); });
+
+document.getElementById('btn-run').addEventListener('click', async () => {
+  clearResults();
+  jsonInfo.textContent = 'Using pasted list';
+  let text = document.getElementById('manual').value.trim();
+  let slugs = [];
+  try {
+    if (text.startsWith('[') || text.startsWith('{')){
+      const data = JSON.parse(text);
+      slugs = normalizeToSlugs(data);
+    } else {
+      slugs = text.split(/\s|,|;|\n|\r/).map(s=>s.trim()).filter(Boolean);
+    }
+  } catch (e) {
+    jsonInfo.textContent = 'Could not parse pasted JSON. Falling back to split by commas/space/newlines.';
+    slugs = text.split(/\s|,|;|\n|\r/).map(s=>s.trim()).filter(Boolean);
+  }
+  preview({ inputCount: slugs.length, sample: slugs.slice(0,10) });
+  await runForSlugs(slugs);
+});
+</script>
+</body>
+</html>
