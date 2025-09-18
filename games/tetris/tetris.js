@@ -366,8 +366,10 @@ function applyAction(a){
 addEventListener('keydown',e=>{
   const key=e.key||'';
   const keyLower=key.toLowerCase();
-  const shouldPrevent=e.code==='Space'||key.startsWith('Arrow');
-  if(shouldPrevent) e.preventDefault();
+  const preventKeys=new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ']);
+  if(e.code==='Space' || preventKeys.has(key) || key==='Spacebar'){
+    e.preventDefault();
+  }
   if(keyLower==='g'){
     showGhost=!showGhost;
     localStorage.setItem('tetris:ghost',showGhost?'1':'0');
