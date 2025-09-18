@@ -1,0 +1,64 @@
+You are contributing to a multi-game web arcade repo named “Gurjot’s Games.” Each game lives under /games/<slug>/ with its own index.html and assets. Work STRICTLY one game at a time. Do not break other games.
+
+### Workflow Rules
+1) Pick the next game from /games/* (alphabetical or provided list). Work only on that game’s folder + shared UI shell when needed.
+2) Create or switch to a feature branch: feat/<slug>-upgrade
+3) Implement changes in SMALL, ATOMIC commits. After each cohesive step, run, test, and commit.
+4) When the game is playable and passes checks, open a PR (or prepare a clean diff) with a clear summary. Then move to the next game.
+
+### Mandatory Constraints
+- Mobile-first responsive (targets: 360, 768, 1280 widths).
+- Do not break existing routes, loaders, or diagnostics. Retain current message bus events (e.g., GAME_READY / GAME_ERROR) if present.
+- Keep dependencies minimal. If adding any, justify in one short line inside the PR description.
+- Prefer progressive enhancement: feature flags or fallbacks if risky.
+- Accessibility: keyboard support, focus states, ARIA where relevant, readable contrast (WCAG AA or better).
+- Performance: lazy-load heavy assets, defer non-critical scripts, avoid layout thrash, compress images (if pipeline available), reuse spritesheets where possible.
+
+### Required Enhancements (per game)
+A) Mechanics & Feel
+- Fix broken gameplay loops or inputs.
+- Tighten controls (debounce, input buffering as needed).
+- Add at least 1–2 tasteful mechanics upgrades (examples: power-ups, difficulty curves, combo/score multipliers, pause/resume, save state, ghost/preview piece for Tetris-like, auto-pause when window hidden).
+- Add robust error guards; fail safe if assets missing.
+
+B) Graphics & Audio
+- Improve visuals with lightweight techniques: canvas polish, particle bursts, screen shake with clamped intensity, shadow/outline text, sprite tinting, trail effects, simple shaders if already supported.
+- Respect user motion preferences (reduce motion if prefers-reduced-motion).
+- Ensure all UI text remains readable over backgrounds (safe contrast, backplates/blur).
+
+C) UI/UX Shell (consistent across games)
+- Title/header, centered canvas/iframe region, footer with controls/help.
+- In-game controls overlay: show keys/gamepad mapping + touch controls where applicable.
+- Pause menu with Resume / Restart / Home.
+- Non-blocking “loading…” state with retry if loader times out (e.g., 6–8s).
+- Diagnostics button (if not present): prints environment, missing assets, last error, init timings.
+
+D) Telemetry & Diagnostics (lightweight)
+- Console info: boot time, asset counts, ready/error signals.
+- If the project already has a diag module, call into it; otherwise add a tiny local helper limited to this game.
+
+### Acceptance Checklist (run before each commit)
+- [ ] Loads without console errors
+- [ ] GAME_READY (or equivalent) fires within 6–8 seconds
+- [ ] Keyboard & (if applicable) touch/gamepad work
+- [ ] Pause/Resume/Restart behave correctly
+- [ ] Readable UI (contrast, scaling) at 360/768/1280
+- [ ] No blocking network calls; assets 404s handled
+- [ ] Accessibility: focus order, focus outline, labels/ARIA where meaningful
+
+### Git Hygiene
+- Commit style: <type>(<slug>): short summary
+  - types: feat, fix, refactor, style, perf, docs, chore
+  - examples:
+    - feat(pong): add paddle spin + screen shake (clamped)
+    - fix(snake): resolve stuck “loading…” by guarding asset init
+- For each commit, include a 1–2 line “What changed / Why” note.
+
+### Output for Each Game
+- A short changelog (bulleted).
+- Files touched with paths + concise notes.
+- Any new assets referenced (paths + reason).
+- Risks & quick rollback notes.
+- Manual test steps.
+
+Begin by listing the detected game slugs from /games/* and confirming the first target. Then wait for my per-game task card before starting changes.
