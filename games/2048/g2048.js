@@ -2,6 +2,13 @@
 import { GameEngine } from '../../shared/gameEngine.js';
 import { copyGrid, computeMove, pushState, undo as undoState, getHint as engineHint, canMove } from './engine.js';
 
+// Feature Configuration (all feature-flagged)
+const FEATURES = {
+  oneStepUndo: true,      // Enable 1-step undo (default ON)
+  mergeStreaks: true,     // Enable merge-streak multiplier (default ON)  
+  boardSizeToggle: true   // Enable 4x4/5x5 board size toggle (default ON)
+};
+
 const c=document.getElementById('board'), ctx=c.getContext('2d');
 const oppC=document.getElementById('oppBoard'), oppCtx=oppC?.getContext('2d');
 const net=window.Net;
@@ -11,10 +18,22 @@ const LS_SIZE='g2048.size';
 const sizeSel=document.getElementById('sizeSel');
 const diffSel=document.getElementById('diffSel');
 let N=parseInt(localStorage.getItem(LS_SIZE) || '4');
+
+// Apply board size restrictions if feature enabled
+if(FEATURES.boardSizeToggle && sizeSel) {
+  // Remove all options and add only 4x4 and 5x5
+  sizeSel.innerHTML = '<option value="4">4×4</option><option value="5">5×5</option>';
+  // Validate and set current size
+  N = (N === 5) ? 5 : 4;  // Default to 4x4 if not 5x5
+}
+
 if(sizeSel){
   sizeSel.value=String(N);
   sizeSel.addEventListener('change',()=>{
-    N=parseInt(sizeSel.value)||4;
+    const newN = parseInt(sizeSel.value)||4;
+    // Additional validation for restricted feature
+    if(FEATURES.boardSizeToggle && newN !== 4 && newN !== 5) return;
+    N = newN;
     localStorage.setItem(LS_SIZE,N);
     reset();
   });
@@ -32,7 +51,7 @@ const overlayRestartBtn=document.getElementById('overlayRestart');
 const overlayBackBtn=document.getElementById('overlayBack');
 let gameOverShown=false;
 
-const MAX_UNDO=3;
+const MAX_UNDO = FEATURES.oneStepUndo ? 1 : 3;
 const LS_UNDO='g2048.undo', LS_BEST='g2048.best', LS_THEME='g2048.theme';
 const ANIM_TIME=120;
 
@@ -64,7 +83,14 @@ let best=parseInt(localStorage.getItem(LS_BEST) ?? 0);
 if(isNaN(undoLeft)) undoLeft=MAX_UNDO;
 if(isNaN(best)) best=0;
 
+// Merge-streak multiplier system
+let mergeStreak = 1;      // Current streak multiplier (x1, x2, x3...)
+let lastMoveHadMerge = false;
+
+// Animation state
 let anim=null;
+let newTileAnim = null;   // Animation for new tiles scaling in
+let mergedAnim = new Map(); // Track merged tiles animation with decay timing
 
 function updateStatus(){
   const el=document.getElementById('status');
@@ -135,6 +161,15 @@ function reset(keepUndo=false){
   updateCanvas();
   grid=Array.from({length:N},()=>Array(N).fill(0));
   score=0; over=false; won=false; hintDir=null; anim=null;
+  
+  // Clean up animation state
+  newTileAnim = null;
+  mergedAnim.clear();
+  
+  // Reset merge-streak system
+  mergeStreak = 1;
+  lastMoveHadMerge = false;
+  
   addTile(); addTile();
   history=[{grid:copyGrid(grid), score:0}];
   if(!keepUndo){ undoLeft=MAX_UNDO; localStorage.setItem(LS_UNDO,undoLeft); }
@@ -147,7 +182,15 @@ function addTile(){
   for(let y=0;y<N;y++) for(let x=0;x<N;x++) if(!grid[y][x]) empty.push([x,y]);
   if(!empty.length) return;
   const [x,y]=empty[(Math.random()*empty.length)|0];
-  grid[y][x]=Math.random()<0.9?2:4;
+  const value = Math.random()<0.9?2:4;
+  grid[y][x] = value;
+  
+  // Create scale-in animation for new tile
+  newTileAnim = {
+    x, y, value,
+    scale: 0,
+    p: 0
+  };
 }
 
 function undoMove(){
@@ -158,6 +201,15 @@ function undoMove(){
       ({grid,score,history}=res);
       undoLeft--; localStorage.setItem(LS_UNDO,undoLeft);
       over=false; won=false; hintDir=null;
+      
+      // Clean up animation state on undo
+      newTileAnim = null;
+      mergedAnim.clear();
+      
+      // Reset merge-streak system on undo
+      mergeStreak = 1;
+      lastMoveHadMerge = false;
+      
       hideGameOverModal();
       net?.send('move',{grid,score});
     }
@@ -169,7 +221,34 @@ function move(dir){
   history = pushState(history, grid, score);
   const {after, animations, moved, gained}=computeMove(grid,dir);
   if(!moved){ history = history.slice(0,-1); return; }
-  score+=gained;
+  
+  // Track merged tiles for animation
+  mergedAnim.clear();
+  animations.forEach(a => {
+    if(after[a.toY][a.toX] !== a.value) { // This is a merge
+      mergedAnim.set(`${a.toX},${a.toY}`, { p: 0, scale: 1.1 });
+    }
+  });
+
+  // Merge-streak multiplier system
+  if(FEATURES.mergeStreaks) {
+    const hadMerge = gained > 0;
+    if(hadMerge && lastMoveHadMerge) {
+      mergeStreak = Math.min(mergeStreak + 1, 10); // Cap at x10
+    } else if(hadMerge) {
+      mergeStreak = 2; // Start streak at x2
+    } else {
+      mergeStreak = 1; // Reset streak
+    }
+    lastMoveHadMerge = hadMerge;
+    
+    // Apply multiplier to gained score
+    const multipliedGain = Math.floor(gained * mergeStreak);
+    score += multipliedGain;
+  } else {
+    score += gained;
+  }
+  
   if(score>best){ best=score; localStorage.setItem(LS_BEST,best); }
   if(gained>=128) net?.send('garbage',{count:1});
   const base=copyGrid(grid);
@@ -227,13 +306,44 @@ function draw(anim){
   ctx.fillRect(0,0,c.width,c.height);
   ctx.fillStyle=theme.text;
   ctx.font='16px Inter,system-ui';
-  ctx.fillText(`Score: ${score} Best: ${best} Undo:${undoLeft}`,12,20);
+  const streakText = FEATURES.mergeStreaks && mergeStreak > 1 ? ` Streak:x${mergeStreak}` : '';
+  ctx.fillText(`Score: ${score} Best: ${best} Undo:${undoLeft}${streakText}`,12,20);
   const base=anim?anim.base:grid;
   for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    // Skip rendering base tile if new tile animation is active at this position
+    if(newTileAnim && newTileAnim.x === x && newTileAnim.y === y) {
+      // Draw empty cell background only
+      const px=PAD + x*(S+GAP); const py=40 + y*(S+GAP);
+      ctx.fillStyle=theme.empty; ctx.strokeStyle=c.style.borderColor; ctx.lineWidth=1;
+      roundRect(ctx,px,py,S,S,10,true,true);
+      continue;
+    }
+    
     const v=base[y][x]; const px=PAD + x*(S+GAP); const py=40 + y*(S+GAP);
+    
+    // Check if this is a merged tile for scale effect
+    let scale = 1;
+    const mergedKey = `${x},${y}`;
+    if(mergedAnim.has(mergedKey) && !anim) {
+      scale = mergedAnim.get(mergedKey).scale;
+    }
+    
     ctx.fillStyle=v?tileColor(v):theme.empty; ctx.strokeStyle=c.style.borderColor; ctx.lineWidth=1;
-    roundRect(ctx,px,py,S,S,10,true,true);
-    if(v){ ctx.fillStyle=(v<=4)?theme.tileTextDark:theme.tileTextLight; ctx.font=(v<100)?'28px Inter':'24px Inter'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(v,px+S/2,py+S/2+2); }
+    roundRect(ctx,px,py,S,S,10,true,true,scale);
+    if(v){ 
+      if(scale !== 1) {
+        ctx.save();
+        const cx = px + S/2, cy = py + S/2;
+        ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
+        ctx.translate(-cx, -cy);
+      }
+      ctx.fillStyle=(v<=4)?theme.tileTextDark:theme.tileTextLight; 
+      ctx.font=(v<100)?'28px Inter':'24px Inter'; 
+      ctx.textAlign='center'; ctx.textBaseline='middle'; 
+      ctx.fillText(v,px+S/2,py+S/2+2);
+      if(scale !== 1) ctx.restore();
+    }
   }
   if(anim){
     for(const t of anim.tiles){
@@ -246,6 +356,36 @@ function draw(anim){
       ctx.font=(v<100)?'28px Inter':'24px Inter'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(v,px+S/2,py+S/2+2);
     }
   }
+  
+  // Render new tile scale-in animation
+  if(newTileAnim && newTileAnim.scale > 0) {
+    const px = PAD + newTileAnim.x * (S + GAP);
+    const py = 40 + newTileAnim.y * (S + GAP);
+    const v = newTileAnim.value;
+    const scale = newTileAnim.scale;
+    
+    ctx.fillStyle = tileColor(v);
+    ctx.strokeStyle = c.style.borderColor;
+    ctx.lineWidth = 1;
+    roundRect(ctx, px, py, S, S, 10, true, true, scale);
+    
+    if(scale > 0.3) { // Only show text when tile is big enough
+      ctx.save();
+      const cx = px + S/2, cy = py + S/2;
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+      ctx.translate(-cx, -cy);
+      
+      ctx.fillStyle = (v <= 4) ? theme.tileTextDark : theme.tileTextLight;
+      ctx.font = (v < 100) ? '28px Inter' : '24px Inter';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(v, px + S/2, py + S/2 + 2);
+      
+      ctx.restore();
+    }
+  }
+  
   if(hintDir!=null){ ctx.fillText('Hint: '+['Left','Up','Right','Down'][hintDir],12,c.height-12); }
   updateStatus();
   drawOpponent();
@@ -256,8 +396,17 @@ function tileColor(v){
   return m[v]||m.default;
 }
 
-function roundRect(ctx,x,y,w,h,r,fill,stroke){
+function roundRect(ctx,x,y,w,h,r,fill,stroke,scale=1){
   if(typeof r==='number'){ r={tl:r,tr:r,br:r,bl:r}; }
+  
+  if(scale !== 1) {
+    ctx.save();
+    const cx = x + w/2, cy = y + h/2;
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.translate(-cx, -cy);
+  }
+  
   ctx.beginPath();
   ctx.moveTo(x+r.tl,y);
   ctx.lineTo(x+w-r.tr,y);
@@ -271,6 +420,10 @@ function roundRect(ctx,x,y,w,h,r,fill,stroke){
   ctx.closePath();
   if(fill) ctx.fill();
   if(stroke) ctx.stroke();
+  
+  if(scale !== 1) {
+    ctx.restore();
+  }
 }
 
 function getHint(){
@@ -284,9 +437,37 @@ gameLoop.update=dt=>{
     if(anim.p>=1){
       grid=anim.after;
       anim=null;
+      
+      // Reset merge animations to start the pulse effect now that slide is complete
+      for(const [key, mergeAnim] of mergedAnim.entries()) {
+        mergeAnim.p = 0;
+        mergeAnim.scale = 1.1;
+      }
+      
       addTile();
       check();
       net?.send('move',{grid,score});
+    }
+  }
+  
+  // Update new tile scale-in animation
+  if(newTileAnim){
+    newTileAnim.p += dt*1000/(ANIM_TIME*1.5); // Slower for better visibility
+    newTileAnim.scale = Math.min(newTileAnim.p, 1);
+    if(newTileAnim.p >= 1){
+      newTileAnim = null;
+    }
+  }
+  
+  // Update merged tile pulse animations (decay from 1.1 to 1.0 over ~150ms)
+  const MERGE_ANIM_TIME = ANIM_TIME * 1.25;
+  for(const [key, anim] of mergedAnim.entries()) {
+    anim.p += dt*1000/MERGE_ANIM_TIME;
+    if(anim.p >= 1) {
+      mergedAnim.delete(key);
+    } else {
+      // Decay scale from 1.1 to 1.0
+      anim.scale = 1.1 - (anim.p * 0.1);
     }
   }
 };

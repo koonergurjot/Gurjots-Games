@@ -1,0 +1,41 @@
+Target game slug: g2048
+
+Goals for this game:
+- Mechanics:
+  - Add 1-step Undo (feature-flagged: default ON).
+  - Add merge-streak multiplier (x1, x2, x3… decays after a non-merge move).
+  - Optional board size toggle 4x4 / 5x5 (feature-flagged; default 4x4).
+- Graphics:
+  - Smooth slide + scale-in animations for new/merged tiles.
+  - High-contrast, WCAG-AA palette; readable tile labels at small sizes.
+- UI/UX:
+  - Consistent header with Score, Best, Streak; footer with Restart, Undo, Size, Help.
+  - Controls overlay (Arrows/WASD, swipe on touch).
+  - Loading state with timeout + Retry; Diagnostics button (prints env + last error).
+- Accessibility:
+  - Full keyboard navigation; focus styles; ARIA live region announcing merges/spawns.
+  - Respects `prefers-reduced-motion`.
+- Performance:
+  - `requestAnimationFrame` orchestrated animations; input debouncing.
+  - Minimize layout thrash using transform-based movement; reuse DOM nodes.
+
+Constraints:
+- Preserve existing routes/loader events and diagnostics hooks (`GAME_READY`, `GAME_ERROR` if present).
+- Keep changes local to /games/g2048/ unless adding tiny, backward-compatible helpers in /games/common/.
+- New features must be behind flags in a small config block.
+
+Steps:
+1) Create/switch branch: feat/g2048-upgrade
+2) Audit current code: entry, grid model, input handlers, render pipeline, storage.
+3) Implement in small commits following Acceptance Checklist.
+4) Verify at 360 / 768 / 1280 widths.
+5) Prepare summary: changes, files, assets, risks, test steps.
+6) Open PR and await approval before moving to the next game.
+
+Acceptance Checklist (before each commit):
+- [ ] Loads without console errors within 6–8s; emits GAME_READY (or equivalent)
+- [ ] Keyboard + touch swipe work; inputs debounced
+- [ ] Undo respects invariants; multiplier resets appropriately
+- [ ] Responsive layout readable at 360/768/1280; contrast AA+
+- [ ] `prefers-reduced-motion` honored; ARIA live updates
+- [ ] No blocking asset calls; graceful on 404s
