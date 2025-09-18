@@ -17,6 +17,7 @@
     "vitest": "^1.6.0"
   },
   "dependencies": {
-    "console-signature": "^1.5.0"
+    "console-signature": "^1.5.0",
+    "serve": "^14.2.5"
   }
 }
