@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Missing Games Checker</title>
+<style>
+  :root{--bg:#0b0f1a;--fg:#e6edf3;--muted:#9aa4b2;--bad:#ff6b6b;--ok:#8de77b;--warn:#ffd166;--card:#111726;}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,Ubuntu;color:var(--fg);background:radial-gradient(900px 600px at 50% -150px,#162042,var(--bg));}
+  header{padding:1rem 1.25rem;background:linear-gradient(180deg,#0f1730,var(--card));border-bottom:1px solid #1b2440;}
+  h1{margin:0;font-size:1.25rem}
+  main{padding:1rem 1.25rem;max-width:1000px;margin:auto}
+  .row{display:grid;grid-template-columns:1fr auto auto auto;gap:.75rem;align-items:center;padding:.6rem .75rem;border:1px solid #1b2440;background:#0f1426;border-radius:.75rem;margin:.5rem 0}
+  .slug{font-weight:700}
+  .status.ok{color:var(--ok)} .status.missing{color:var(--bad)} .status.warn{color:var(--warn)}
+  .small{color:var(--muted);font-size:.9rem}
+  .legend{display:flex;gap:1rem;margin:1rem 0}
+  code{background:#0b1120;border:1px solid #1b2440;padding:.1rem .35rem;border-radius:.35rem}
+  .bar{margin-top:1rem;opacity:.85}
+</style>
+</head>
+<body>
+<header>
+  <h1>Missing Games Checker</h1>
+  <div class="small bar">Checks <code>games.json</code> vs. the presence of <code>/games/&lt;slug&gt;/index.html</code>. Uses <code>HEAD</code> requests for speed.</div>
+</header>
+<main>
+  <div class="legend small">
+    <div><span class="status ok">●</span> OK: index.html found</div>
+    <div><span class="status missing">●</span> Missing: 404 or not reachable</div>
+    <div><span class="status warn">●</span> Warn: Non-200/404 (e.g., 500/CORS)</div>
+  </div>
+  <div id="list"></div>
+</main>
+<script>
+const list = document.getElementById('list');
+const probe = async (url) => {
+  try {
+    const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    if (res.status === 200) return {status:'ok', code:200};
+    if (res.status === 404) return {status:'missing', code:404};
+    return {status:'warn', code:res.status};
+  } catch (e) {
+    return {status:'warn', code:'ERR'};
+  }
+};
+
+const row = (slug, path, out) => {
+  const div = document.createElement('div');
+  div.className = 'row';
+  div.innerHTML = \`
+    <div class="slug">\${slug}</div>
+    <div class="small">\${path}</div>
+    <div class="status \${out.status}">\${out.status.toUpperCase()}</div>
+    <div class="small">\${out.code}</div>
+  \`;
+  return div;
+};
+
+(async () => {
+  let games = [];
+  try {
+    const j = await fetch('../games.json', { cache: 'no-store' });
+    games = await j.json();
+  } catch (e) {
+    const err = document.createElement('div');
+    err.className = 'row';
+    err.innerHTML = '<div class="slug">ERROR</div><div>Failed to load games.json</div><div class="status missing">MISSING</div><div class="small">games.json</div>';
+    list.append(err);
+    return;
+  }
+  for (const g of games) {
+    const slug = g.slug || g.id || g.name || 'unknown';
+    const path = \`../games/\${slug}/index.html\`;
+    const out = await probe(path);
+    list.append(row(slug, path, out));
+  }
+})();
+</script>
+</body>
+</html>
