@@ -1,12 +1,11 @@
 
-// Upgraded Pong v3 — module-compatible. Auto-boots and posts GAME_READY/ERROR.
-// Exposes window.boot for the site loader, but also starts when DOM is ready.
+// Upgraded Pong v3 — module-compatible with centering/scaling fix.
+// Replaces Game-main/games/pong/main.js
 (() => {
   const SLUG = "pong";
   const LS_KEY = "pong.v3";
   const W = 1280, H = 720;
 
-  // Create root
   function ensureRoot() {
     let root = document.getElementById('game-root');
     if (!root) { root = document.createElement('div'); root.id='game-root'; document.body.appendChild(root); }
@@ -14,8 +13,9 @@
     return root;
   }
 
-  // Inject CSS (scoped-ish)
+  // Inject CSS (includes centering fix)
   function injectCSS() {
+    if (document.querySelector('style[data-pong="v3"]')) return;
     const style = document.createElement('style');
     style.setAttribute('data-pong', 'v3');
     style.textContent = `
@@ -26,29 +26,57 @@
 .theme-vapor { --pong-bg:#0b0012; --pong-fg:#ffe8ff; --pong-accent:#ff66cc; --pong-grid:#2a0a3a; --pong-glow: rgba(255,102,204,0.28); }
 .theme-crt { --pong-bg:#000; --pong-fg:#e0ffe0; --pong-accent:#7cff7c; --pong-grid:#002200; --pong-glow: rgba(124,255,124,0.18); }
 .theme-minimal { --pong-bg:#f7f8fb; --pong-fg:#0b1220; --pong-accent:#2b6cff; --pong-grid:#e6e9f2; --pong-glow: rgba(43,108,255,0.12); }
-.pong-root{background:var(--pong-bg); color:var(--pong-fg); min-height:100svh; font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
-.pong-app{display:grid; grid-template-rows:auto 1fr auto; min-height:100svh;}
+
+html, body { height: 100%; }
+.pong-root{background:var(--pong-bg); color:var(--pong-fg); min-height:100%; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+.pong-app{display:grid; grid-template-rows:auto 1fr auto; min-height:100%;}
+
 .pong-bar{display:flex; align-items:center; gap:.5rem; padding:.75rem 1rem; border-bottom:1px solid #1b2533;}
 .pong-title{font-weight:800; letter-spacing:.3px;}
 .pong-spacer{flex:1}
 .pong-kbd{padding:.15rem .4rem; border:1px solid #324356; border-bottom-width:2px; border-radius:.35rem; background:#0e1622; font-size:.85rem}
+
 .pong-btn{cursor:pointer; border:1px solid #243043; background:#111a28; color:var(--pong-fg); border-radius:.6rem; padding:.5rem .8rem; font:inherit}
 .pong-btn:hover{background:#172334}
 .pong-btn[aria-pressed="true"]{outline:2px solid var(--pong-accent); box-shadow:0 0 0 6px var(--pong-glow);}
-.pong-canvas-wrap{display:grid; place-items:center; padding:10px}
-.pong-canvas{width:100%; max-width:1100px; aspect-ratio:16/9; touch-action:none; background:var(--pong-bg); border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.03);}
+
+.pong-canvas-wrap{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:10px;
+  width:100%;
+  min-height: 360px; /* helps when parent has auto height */
+  height: 100%;
+}
+.pong-canvas{
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 16/9;
+  touch-action: none;
+  background: var(--pong-bg);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.03);
+}
+
 .pong-hud{display:flex; align-items:center; justify-content:center; gap:2rem; padding:.4rem 0; font-weight:700}
 .pong-score{font-size:1.25rem}
 .pong-mid{color:var(--pong-muted)}
+
 .pong-menu{padding:.75rem 1rem; border-top:1px solid #1b2533; display:flex; gap:.5rem; flex-wrap:wrap; align-items:center}
 .pong-select,.pong-input{background:#131a24; color:var(--pong-fg); border:1px solid #243043; border-radius:.5rem; padding:.5rem .6rem; font:inherit}
 .pong-row{display:flex; align-items:center; gap:.5rem; flex-wrap:wrap}
+
 .pong-modal{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.5); backdrop-filter: blur(4px);}
 .pong-modal.show{display:grid}
 .pong-card{min-width:min(700px, 95vw); max-width:95vw; background:#0e1622; border:1px solid #243043; border-radius:12px; padding:1rem; box-shadow: 0 10px 40px rgba(0,0,0,.55);}
+
 .pong-diag{position:fixed; inset:auto 12px 12px auto; width:min(520px, 95vw); max-height:60vh; overflow:auto; background:#0e1622; border:1px solid #243043; border-radius:12px; padding:.75rem; display:none; white-space:pre-wrap}
 .pong-diag.show{display:block}
 .pong-diag pre{white-space:pre-wrap;}
+
 .theme-crt .pong-canvas{position:relative; overflow:hidden;}
 .theme-crt .pong-canvas::after{content:""; position:absolute; inset:0;
   background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(255,255,255,0.05) 2px, transparent 2px, transparent 4px);
@@ -169,7 +197,7 @@
   function drawPowerups(){ for(const pu of powerups){ const c=state.ctx; c.globalAlpha=Math.min(1,pu.life/8+0.2); circle(pu.x,pu.y,pu.r+2,'rgba(0,0,0,0.3)'); circle(pu.x,pu.y,pu.r,getCSS('--pong-accent')); c.globalAlpha=1; } }
   function checkPowerupCollisions(){
     for(let i=powerups.length-1;i>=0;i--){ const pu=powerups[i];
-      for(const b of state.balls){ const d=Math.hypot(b.x-pu.x,b.y-pu.y); if(d < b.r+pu.r+2){ const who=b.lastHit || (b.dx>0?'p2':'p1'); applyPowerup(pu.kind, who); addParticles(pu.x,pu.y,getCSS('--pong-good')||getCSS('--pong-accent'),20,260); beep(880,0.08,'sawtooth',0.1); powerups.splice(i,1); break; } } }
+      for(const b of state.balls){ const d=Math.hypot(b.x-pu.x,b.y-pu.y); if(d < b.r+pu.r+2){ const who=b.lastHit || (b.dx>0?'p2':'p1'); applyPowerup(pu.kind, who); addParticles(pu.x,pu.y,getCSS('--pong-accent'),20,260); beep(880,0.08,'sawtooth',0.1); powerups.splice(i,1); break; } } }
   }
   function applyPowerup(kind, who){ const p=(who==='p1'?state.p1:state.p2); switch(kind){ case 'grow': p.h=Math.min(p.h+40,p.maxH); break; case 'shrink': p.h=Math.max(p.h-40,p.minH); break; case 'slow': for(const b of state.balls){ b.dx*=0.85; b.dy*=0.85; } break; case 'fast': for(const b of state.balls){ b.dx*=1.15; b.dy*=1.15; } break; case 'multiball': if(state.balls.length<3){ spawnBall(Math.random()<0.5?-1:1, 400); } break; case 'ghost': state[who+'_ghost']=1.0; break; } }
 
@@ -228,44 +256,8 @@
     state.ctx.setTransform(targetW/W,0,0,targetH/H,0,0); state.ratio=(targetW/W);
   }
 
-  // Powerups driver
-  const powerupsArr=[];
-  function maybeSpawnPowerup(dt){ if(!state.powerups) return; if(Math.random()<dt*0.25){ const kinds=['grow','shrink','slow','fast','multiball','ghost']; const kind=kinds[(Math.random()*kinds.length)|0]; powerupsArr.push({x:200+Math.random()*(W-400),y:120+Math.random()*(H-240),r:10,kind,life:8}); } }
-  function updatePowerups(dt){ for(const pu of powerupsArr){ pu.life-=dt; } for(let i=powerupsArr.length-1;i>=0;i--) if(powerupsArr[i].life<=0) powerupsArr.splice(i,1); }
-  function drawPowerups(){ for(const pu of powerupsArr){ const c=state.ctx; c.globalAlpha=Math.min(1,pu.life/8+0.2); circle(pu.x,pu.y,pu.r+2,'rgba(0,0,0,0.3)'); circle(pu.x,pu.y,pu.r,getCSS('--pong-accent')); c.globalAlpha=1; } }
-  function checkPowerupCollisions(){
-    for(let i=powerupsArr.length-1;i>=0;i--){ const pu=powerupsArr[i];
-      for(const b of state.balls){ const d=Math.hypot(b.x-pu.x,b.y-pu.y); if(d< b.r+pu.r+2){ const who=b.lastHit || (b.dx>0?'p2':'p1'); applyPowerup(pu.kind, who); addParticles(pu.x,pu.y,getCSS('--pong-accent'),20,260); beep(880,0.08,'sawtooth',0.1); powerupsArr.splice(i,1); break; } } }
-  }
-  function applyPowerup(kind, who){ const p=(who==='p1'?state.p1:state.p2); switch(kind){ case 'grow': p.h=Math.min(p.h+40,p.maxH); break; case 'shrink': p.h=Math.max(p.h-40,p.minH); break; case 'slow': for(const b of state.balls){ b.dx*=0.85; b.dy*=0.85; } break; case 'fast': for(const b of state.balls){ b.dx*=1.15; b.dy*=1.15; } break; case 'multiball': if(state.balls.length<3){ spawnBall(Math.random()<0.5?-1:1, 400); } break; case 'ghost': state[who+'_ghost']=1.0; break; } }
-
-  // Game loop
-  function frame(t){
-    state.loopId=requestAnimationFrame(frame);
-    state.dt=Math.min(0.033,(t-(state.last||t))/1000); state.last=t;
-    if(!state.running || state.paused) return;
-    // update
-    state.p1.y = Math.max(0, Math.min(H-state.p1.h, state.p1.y + state.p1.dy*state.p1.speed*state.dt));
-    if(state.mode==='2P'){ state.p2.y = Math.max(0, Math.min(H-state.p2.h, state.p2.y + state.p2.dy*state.p2.speed*state.dt)); }
-    else { moveAI(state.dt); }
-    maybeSpawnPowerup(state.dt); updatePowerups(state.dt);
-    for(const b of state.balls){ updateBall(b, state.dt); }
-    checkPowerupCollisions();
-    // render
-    const c=state.ctx; c.save(); clear(); applyShake(); drawNet();
-    rect(state.p1.x,state.p1.y,state.p1.w,state.p1.h,getCSS('--pong-fg')); rect(state.p2.x,state.p2.y,state.p2.w,state.p2.h,getCSS('--pong-fg'));
-    // trails
-    if(!state.reduceMotion){ for(const b of state.balls){ state.trail.push({x:b.x,y:b.y,r:b.r,life:0.35}); } const t2=[]; for(const t of state.trail){ t.life-=state.dt; if(t.life>0){ c.globalAlpha=Math.max(0,Math.min(1,t.life*1.8)); circle(t.x,t.y,t.r,getCSS('--pong-accent')); t2.push(t);} } state.trail=t2.slice(-120); c.globalAlpha=1; }
-    for(const b of state.balls){ circle(b.x,b.y,b.r,getCSS('--pong-fg')); }
-    drawPowerups(); drawParticles(); endShake(); c.restore();
-  }
-
-  // Particles driver
-  function drawParticles(){ const c=state.ctx; for(const p of state.particles){ c.globalAlpha=Math.max(0,Math.min(1,p.life*1.8)); circle(p.x,p.y,p.r,p.color);} c.globalAlpha=1; }
-  function updateParticles(dt){ const a=[]; const g=800; for(const p of state.particles){ p.life-=dt; p.vy+=g*dt*0.25; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life>0 && p.x>-40 && p.x<W+40 && p.y>-40 && p.y<H+40) a.push(p);} state.particles=a; }
-
-  // Shake
-  function shake(px){ if(state.reduceMotion) return; state.shakes=Math.max(state.shakes,px); }
+  // Game loop pieces omitted for brevity in comments (unchanged from previous build)
+  // --- Powerups, physics, render, AI, replay as defined above ---
 
   // Replay
   function playReplay(){
@@ -278,7 +270,7 @@
     }; requestAnimationFrame(step);
   }
 
-  // UI, diag, controls
+  // Diag & controls
   function togglePause(){ state.paused=!state.paused; if(!state.paused){ state.last=performance.now(); } }
   function toggleDiag(){ state.debug=!state.debug; state.diag.classList.toggle('show', state.debug); }
   function copyDiag(){ const pre=state.diag?.querySelector('pre'); if(pre && navigator.clipboard) navigator.clipboard.writeText(pre.textContent).catch(()=>{}); }
@@ -287,11 +279,8 @@
   function start(){
     const root = ensureRoot();
     injectCSS();
-    const app = document.createElement('div'); app.className='pong-app'; root.appendChild(app);
-    // Build UI inside the existing root
-    app.remove();
     buildUI(root);
-    state.canvas=document.getElementById('game'); ensureContext();
+    ensureContext();
     // Events
     window.addEventListener('resize', onResize);
     document.addEventListener('visibilitychange', ()=>{ state.paused = document.hidden || state.paused; });
@@ -303,9 +292,34 @@
     try{ window.parent?.postMessage?.({type:'GAME_READY', slug:SLUG}, '*'); }catch{}
   }
 
-  // expose for loader
+  // Main loop (includes particles & powerups updates)
+  function frame(t){
+    state.loopId=requestAnimationFrame(frame);
+    state.dt=Math.min(0.033,(t-(state.last||t))/1000); state.last=t;
+    if(!state.running || state.paused) return;
+
+    // Update
+    updatePaddle(state.p1, state.dt);
+    if(state.mode==='2P') updatePaddle(state.p2, state.dt); else moveAI(state.dt);
+    maybeSpawnPowerup(state.dt);
+    updatePowerups(state.dt);
+    for(const b of state.balls){ updateBall(b, state.dt); }
+    updateParticles(state.dt);
+    checkPowerupCollisions();
+
+    // Render
+    const c=state.ctx; c.save(); clear(); applyShake(); drawNet();
+    rect(state.p1.x,state.p1.y,state.p1.w,state.p1.h,getCSS('--pong-fg')); rect(state.p2.x,state.p2.y,state.p2.w,state.p2.h,getCSS('--pong-fg'));
+    if(!state.reduceMotion){
+      for(const b of state.balls){ state.trail.push({x:b.x,y:b.y,r:b.r,life:0.35}); }
+      const t2=[]; for(const t of state.trail){ t.life-=state.dt; if(t.life>0){ c.globalAlpha=Math.max(0,Math.min(1,t.life*1.8)); circle(t.x,t.y,t.r,getCSS('--pong-accent')); t2.push(t);} } state.trail=t2.slice(-120); c.globalAlpha=1;
+    }
+    for(const b of state.balls){ circle(b.x,b.y,b.r,getCSS('--pong-fg')); }
+    drawPowerups(); drawParticles(); endShake(); c.restore();
+  }
+
+  // expose boot for loader and auto boot
   window.boot = () => { try{ start(); }catch(err){ console.error('[pong] boot error', err); window.parent?.postMessage?.({type:'GAME_ERROR', slug:SLUG, message:String(err?.message||err)}, '*'); } };
-  // auto boot too
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => window.boot(), { once: true });
   else window.boot();
 })();
