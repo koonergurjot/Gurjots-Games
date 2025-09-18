@@ -19,5 +19,34 @@ canvas{background:#0f1320;border:1px solid rgba(255,255,255,.08);border-radius:1
 <script src="../../shared/leaderboard.js"></script>
 <script type="module" src="./breakout.js"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="breakout"></script>
+
+<!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
+<script>
+(function(){
+  if (window.__gg_autoSignalInstalled) return; window.__gg_autoSignalInstalled = true;
+  function send(type, payload){
+    try {
+      if (window.parent) window.parent.postMessage(Object.assign({ type }, payload || {}), "*");
+    } catch(e){ /* noop */ }
+  }
+  // Bubble uncaught errors to shell
+  window.addEventListener("error", function(e){
+    send("GAME_ERROR", { error: (e.message || String(e.error || e)).slice(0, 500) });
+  });
+  window.addEventListener("unhandledrejection", function(e){
+    var reason = e && e.reason ? (e.reason.message || String(e.reason)) : "unhandled rejection";
+    send("GAME_ERROR", { error: String(reason).slice(0, 500) });
+  });
+  // If the game hasn't sent a signal by load, emit READY as a fallback
+  var signalled = false;
+  window.addEventListener("message", function(ev){
+    if (!ev || !ev.data) return;
+    if (ev.data.type === "GAME_READY" || ev.data.type === "GAME_ERROR") signalled = true;
+  });
+  function emitReadyOnce(){ if (!signalled) { send("GAME_READY"); signalled = true; } }
+  if (document.readyState === "complete") { setTimeout(emitReadyOnce, 0); }
+  else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
+})();
+</script>
 </body>
 </html>
