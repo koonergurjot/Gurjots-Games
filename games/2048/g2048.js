@@ -54,17 +54,28 @@ function updateUI() {
 function updateScoreDisplay() {
   const currentScoreEl = document.getElementById('currentScore');
   const bestScoreEl = document.getElementById('bestScore');
-  if(currentScoreEl) currentScoreEl.textContent = score.toLocaleString();
-  if(bestScoreEl) bestScoreEl.textContent = best.toLocaleString();
+  if(currentScoreEl) {
+    currentScoreEl.textContent = score.toLocaleString();
+    currentScoreEl.setAttribute('aria-label', `Current score: ${score.toLocaleString()}`);
+  }
+  if(bestScoreEl) {
+    bestScoreEl.textContent = best.toLocaleString();
+    bestScoreEl.setAttribute('aria-label', `Best score: ${best.toLocaleString()}`);
+  }
 }
 
 function updateUndoDisplay() {
   const undoCountEl = document.getElementById('undoCount');
   const undoBtn = document.getElementById('undoBtn');
-  if(undoCountEl) undoCountEl.textContent = undoLeft;
+  if(undoCountEl) {
+    undoCountEl.textContent = undoLeft;
+    undoCountEl.setAttribute('aria-label', `Undo moves remaining: ${undoLeft}`);
+  }
   if(undoBtn) {
-    undoBtn.disabled = undoLeft <= 0;
+    const isDisabled = undoLeft <= 0;
+    undoBtn.disabled = isDisabled;
     undoBtn.textContent = undoLeft > 0 ? `Undo (${undoLeft})` : 'No Undo';
+    undoBtn.setAttribute('aria-label', isDisabled ? 'No undo moves available' : `Undo last move, ${undoLeft} remaining`);
   }
 }
 
@@ -73,6 +84,7 @@ function updateStreakDisplay() {
   if(streakEl) {
     const span = streakEl.querySelector('span');
     if(span) span.textContent = `×${mergeStreak}`;
+    streakEl.setAttribute('aria-label', `Streak multiplier: ${mergeStreak}x`);
   }
 }
 
@@ -208,6 +220,13 @@ function applyTheme(){
   
   // Update body background and text
   document.body.style.background = root.style.getPropertyValue('--bg-primary');
+  
+  // Update theme toggle aria-label dynamically
+  const themeToggle = document.getElementById('themeToggle');
+  if (themeToggle) {
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
+  }
   document.body.style.color = t.text;
   
   // Update canvas border
@@ -333,8 +352,15 @@ function hideGameOverModal(){
   if(gameOverOverlay){
     gameOverOverlay.classList.add('hidden');
     gameOverOverlay.setAttribute('aria-hidden','true');
+    
+    // Remove focus trap
+    removeModalFocusTrap();
   }
   gameOverShown=false;
+  
+  // Return focus to the game canvas
+  const gameCanvas = document.getElementById('board');
+  gameCanvas?.focus();
 }
 
 function showGameOverModal(title,message){
@@ -343,8 +369,15 @@ function showGameOverModal(title,message){
   if(gameOverMessage) gameOverMessage.textContent=message;
   gameOverOverlay.classList.remove('hidden');
   gameOverOverlay.setAttribute('aria-hidden','false');
+  
+  // Setup focus trap for modal
+  setupModalFocusTrap();
+  
   overlayRestartBtn?.focus();
   gameOverShown=true;
+  
+  // Announce game over to screen readers
+  announceToScreenReader(`${title} ${message} Focus is on the Restart button.`);
 }
 
 function check(){
@@ -356,12 +389,62 @@ function check(){
 }
 
 addEventListener('keydown', e=>{
-  if(e.key==='ArrowLeft') move(0);
-  if(e.key==='ArrowUp') move(1);
-  if(e.key==='ArrowRight') move(2);
-  if(e.key==='ArrowDown') move(3);
-  if(e.key==='r'||e.key==='R') reset();
-  if(e.key.toLowerCase()==='u') undoMove();
+  // Handle escape key to close modal
+  if(e.key === 'Escape' && gameOverShown) {
+    e.preventDefault();
+    hideGameOverModal();
+    return;
+  }
+  
+  // Only handle game keys when game canvas is focused or no form elements are focused
+  const activeEl = document.activeElement;
+  const isFormElement = activeEl && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(activeEl.tagName);
+  const gameCanvas = document.getElementById('board');
+  const isGameFocused = activeEl === gameCanvas || activeEl === document.body;
+  
+  // Don't steal arrow keys from form controls
+  if(isFormElement && !isGameFocused) {
+    return;
+  }
+  
+  if(e.key==='ArrowLeft') {
+    e.preventDefault();
+    move(0);
+    announceGameMove();
+  }
+  if(e.key==='ArrowUp') {
+    e.preventDefault();
+    move(1);
+    announceGameMove();
+  }
+  if(e.key==='ArrowRight') {
+    e.preventDefault();
+    move(2);
+    announceGameMove();
+  }
+  if(e.key==='ArrowDown') {
+    e.preventDefault();
+    move(3);
+    announceGameMove();
+  }
+  if(e.key==='r'||e.key==='R') {
+    reset();
+    announceToScreenReader('Game restarted. New game board ready.');
+  }
+  if(e.key.toLowerCase()==='u') {
+    const beforeUndo = undoLeft;
+    undoMove();
+    if(undoLeft !== beforeUndo) {
+      announceToScreenReader('Move undone.');
+    } else {
+      announceToScreenReader('No moves to undo.');
+    }
+  }
+  if(e.key==='h'||e.key==='H') {
+    e.preventDefault();
+    showHint();
+    announceToScreenReader('Hint shown on board.');
+  }
 });
 
 let touchStart=null;
@@ -585,6 +668,109 @@ window.addEventListener('resize', () => {
   }, 100);
 });
 
+// Screen reader announcements
+function announceToScreenReader(message) {
+  // Create or update live region for announcements
+  let liveRegion = document.getElementById('srAnnouncements');
+  if (!liveRegion) {
+    liveRegion = document.createElement('div');
+    liveRegion.id = 'srAnnouncements';
+    liveRegion.setAttribute('aria-live', 'polite');
+    liveRegion.setAttribute('aria-atomic', 'true');
+    liveRegion.style.position = 'absolute';
+    liveRegion.style.left = '-10000px';
+    liveRegion.style.width = '1px';
+    liveRegion.style.height = '1px';
+    liveRegion.style.overflow = 'hidden';
+    document.body.appendChild(liveRegion);
+  }
+  
+  // Clear and set new message
+  liveRegion.textContent = '';
+  setTimeout(() => {
+    liveRegion.textContent = message;
+  }, 100);
+}
+
+function announceGameMove() {
+  const maxTile = Math.max(...grid.flat().filter(v => v > 0));
+  if (maxTile >= 2048 && !won) {
+    announceToScreenReader(`Congratulations! You reached ${maxTile}! Current score: ${score.toLocaleString()}`);
+  }
+  // Announce score changes on significant increases
+  const scoreIncrease = score - (lastAnnouncedScore || 0);
+  if (scoreIncrease >= 100) {
+    lastAnnouncedScore = score;
+    announceToScreenReader(`Score: ${score.toLocaleString()}`);
+  }
+}
+
+// Track last announced score for game state announcements
+let lastAnnouncedScore = 0;
+
+// Add canvas focus styles and handlers
+const gameCanvas = document.getElementById('board');
+if (gameCanvas) {
+  gameCanvas.addEventListener('focus', () => {
+    announceToScreenReader(`2048 game board focused. Current score: ${score.toLocaleString()}. Use arrow keys to move tiles.`);
+  });
+  
+  gameCanvas.addEventListener('blur', () => {
+    hideHint(); // Hide hint when canvas loses focus
+  });
+}
+
+// Focus trap management for modal
+function setupModalFocusTrap() {
+  const modal = gameOverOverlay;
+  const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  const firstFocusable = focusableElements[0];
+  const lastFocusable = focusableElements[focusableElements.length - 1];
+  
+  function trapFocus(e) {
+    if (e.key === 'Tab') {
+      if (e.shiftKey) {
+        if (document.activeElement === firstFocusable) {
+          e.preventDefault();
+          lastFocusable?.focus();
+        }
+      } else {
+        if (document.activeElement === lastFocusable) {
+          e.preventDefault();
+          firstFocusable?.focus();
+        }
+      }
+    }
+  }
+  
+  // Store trap function to remove later
+  modal._focusTrap = trapFocus;
+  modal.addEventListener('keydown', trapFocus);
+}
+
+function removeModalFocusTrap() {
+  if (gameOverOverlay && gameOverOverlay._focusTrap) {
+    gameOverOverlay.removeEventListener('keydown', gameOverOverlay._focusTrap);
+    gameOverOverlay._focusTrap = null;
+  }
+}
+
+// Theme toggle accessibility
+const themeToggle = document.getElementById('themeToggle');
+if (themeToggle) {
+  const originalClickHandler = themeToggle.onclick;
+  themeToggle.addEventListener('click', () => {
+    // Allow original handler to run first
+    setTimeout(() => {
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      // Update both text and ARIA label
+      themeToggle.textContent = newTheme === 'dark' ? 'Light' : 'Dark';
+      themeToggle.setAttribute('aria-label', `Switch to ${newTheme === 'dark' ? 'light' : 'dark'} theme`);
+      announceToScreenReader(`Switched to ${newTheme} theme.`);
+    }, 100);
+  });
+}
+
 // Initialize the game
 updateCanvas();
 applyTheme();
@@ -592,3 +778,6 @@ reset(true);
 gameLoop.start();
 net?.send('move',{grid,score});
 window.DIAG?.ready?.();
+
+// Initial accessibility announcement
+announceToScreenReader('2048 game loaded. Press Tab to navigate controls or focus the game board to start playing.');

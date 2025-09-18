@@ -334,56 +334,56 @@
   </div>
   
   <!-- Main game container -->
-  <div id="game" class="game-container">
+  <div id="game" class="game-container" role="application" aria-label="2048 puzzle game">
     <!-- Header -->
-    <header class="game-header">
+    <header class="game-header" role="banner">
       <div class="header-top">
         <h1 class="game-title">2048</h1>
-        <button id="themeToggle" class="theme-toggle">Dark</button>
+        <button id="themeToggle" class="theme-toggle" aria-label="Switch to light theme">Dark</button>
       </div>
-      <div class="score-bar">
+      <div class="score-bar" role="region" aria-label="Game scores and statistics">
         <div class="score-item">
           <div class="score-label">Score</div>
-          <div class="score-value" id="currentScore">0</div>
+          <div class="score-value" id="currentScore" role="status" aria-live="polite" aria-label="Current score: 0">0</div>
         </div>
         <div class="score-item">
           <div class="score-label">Best</div>
-          <div class="score-value" id="bestScore">0</div>
+          <div class="score-value" id="bestScore" role="status" aria-label="Best score: 0">0</div>
         </div>
         <div class="score-item">
           <div class="score-label">Undo</div>
-          <div class="score-value" id="undoCount">1</div>
+          <div class="score-value" id="undoCount" role="status" aria-label="Undo moves remaining: 1">1</div>
         </div>
-        <div class="streak-display" id="streakDisplay">
+        <div class="streak-display" id="streakDisplay" role="status" aria-label="Streak multiplier: 1x">
           <span>×1</span>
         </div>
       </div>
     </header>
     
     <!-- Main game area -->
-    <main class="game-main">
-      <canvas id="board" width="360" height="420" class="game-canvas"></canvas>
+    <main class="game-main" role="main">
+      <canvas id="board" width="360" height="420" class="game-canvas" role="img" aria-label="2048 game board - Use arrow keys to move tiles" tabindex="0"></canvas>
       <canvas id="oppBoard" width="360" height="420" style="display: none;"></canvas>
       <div id="status" style="display: none;"></div>
     </main>
     
     <!-- Footer controls -->
-    <footer class="game-footer">
+    <footer class="game-footer" role="contentinfo">
       <div class="controls-grid">
         <div class="control-group">
           <div class="control-label">Hint</div>
-          <button id="hintBtn" class="control-button">Show Hint</button>
+          <button id="hintBtn" class="control-button" aria-label="Show hint for next move">Show Hint</button>
         </div>
         <div class="control-group">
           <div class="control-label">Board Size</div>
-          <select id="sizeSel" class="control-select">
+          <select id="sizeSel" class="control-select" aria-label="Select board size">
             <option value="4">4×4</option>
             <option value="5">5×5</option>
           </select>
         </div>
         <div class="control-group">
           <div class="control-label">AI Difficulty</div>
-          <select id="diffSel" class="control-select">
+          <select id="diffSel" class="control-select" aria-label="Select AI difficulty level">
             <option value="1">Easy</option>
             <option value="3" selected>Medium</option>
             <option value="5">Hard</option>
@@ -391,7 +391,7 @@
         </div>
         <div class="control-group">
           <div class="control-label">Actions</div>
-          <button id="undoBtn" class="control-button">Undo Move</button>
+          <button id="undoBtn" class="control-button" aria-label="Undo last move">Undo Move</button>
         </div>
       </div>
       <p class="help-text">
@@ -399,13 +399,13 @@
       </p>
     </footer>
   </div>
-  <div id="gameOverOverlay" class="hidden" role="dialog" aria-modal="true" aria-hidden="true" tabindex="-1">
+  <div id="gameOverOverlay" class="hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="gameOverTitle" aria-describedby="gameOverMessage" tabindex="-1">
     <div class="modal-panel" role="document">
       <h3 id="gameOverTitle">Game over</h3>
       <p id="gameOverMessage">No moves left. Try again?</p>
       <div class="overlay-actions">
-        <button id="overlayRestart" type="button">Restart</button>
-        <button id="overlayBack" type="button">Back</button>
+        <button id="overlayRestart" type="button" aria-label="Start a new game">Restart</button>
+        <button id="overlayBack" type="button" aria-label="Return to games menu">Back</button>
       </div>
     </div>
   </div>
