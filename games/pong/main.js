@@ -1,8 +1,4 @@
-
-// Pong v3 hotfix — centers inside the iframe and fixes missing functions.
-// - Adds updateHUD() early
-// - Ensures drawParticles() exists
-// - Fully includes replay/diagnostics (no truncation)
+// Pong v3 hotfix + parent-centering — injects CSS for #stage so the game centers
 (() => {
   const SLUG = "pong";
   const LS_KEY = "pong.v3";
@@ -20,6 +16,23 @@
     const style = document.createElement('style');
     style.setAttribute('data-pong', 'v3');
     style.textContent = `
+/* ==== Parent page stage centering (outside the game canvas) ==== */
+#stage.stage {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100%;
+  height: 100%;
+}
+#stage.stage > #game-root {
+  max-width: 1100px;
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ==== Game theming + canvas layout ==== */
 :root {
   --pong-bg:#0b0f14; --pong-fg:#e8f1ff; --pong-accent:#69e1ff; --pong-muted:#7a8aa0; --pong-grid:#132033; --pong-glow: rgba(105,225,255,0.28);
 }
@@ -211,12 +224,10 @@ html, body { height: 100%; }
     );
     const diag=state.diag=h('div',{class:'pong-diag',role:'region','aria-label':'Diagnostics'},
       h('div',{class:'pong-row'}, h('strong',{},'Diagnostics'), h('span',{class:'pong-spacer'}), h('button',{class:'pong-btn',onclick:copyDiag},'Copy'), h('button',{class:'pong-btn',onclick:()=>{state.debug=false; state.diag.classList.remove('show');}},'Close')), h('pre',{},'Diagnostics ready.'));
-
     const keyModal=state.keyModal=h('div',{class:'pong-modal',id:'key-modal'},
       h('div',{class:'pong-card'}, h('h3',{},'Rebind Keys'), keyRow('P1 Up','p1Up'), keyRow('P1 Down','p1Down'), keyRow('P2 Up','p2Up'), keyRow('P2 Down','p2Down'), keyRow('Pause','pause'),
         h('div',{class:'pong-row'}, h('button',{class:'pong-btn',onclick:()=>{saveLS(); closeKeybinds();}},'Done'), h('button',{class:'pong-btn',onclick:()=>{Object.assign(state.keys,{p1Up:"KeyW",p1Down:"KeyS",p2Up:"ArrowUp",p2Down:"ArrowDown",pause:"Space"}); renderKeyRows();}},'Reset'))
     ));
-
     const app=h('div',{class:'pong-app'}, bar, wrap, hud, menu, diag, keyModal);
     root.innerHTML=''; root.append(app);
     state.hud={p1:hud.querySelector('#score-p1'), p2:hud.querySelector('#score-p2')};
