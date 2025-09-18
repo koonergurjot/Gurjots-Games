@@ -14,22 +14,15 @@
   };
 
   function formatArg(arg) {
-    if (arg === null) return 'null';
-    const type = typeof arg;
-    if (type === 'string') return arg;
-    if (type === 'number' || type === 'boolean' || type === 'bigint') return String(arg);
-    if (type === 'undefined') return 'undefined';
-    if (type === 'symbol') {
-      try { return arg.toString(); } catch(_) { return 'Symbol()'; }
-    }
+    if (typeof arg === 'string') return arg;
     if (arg instanceof Error) {
-      return arg.stack || arg.message || arg.toString();
+      if (arg.stack) return String(arg.stack);
+      if (arg.message) return String(arg.message);
     }
     try {
-      const json = JSON.stringify(arg);
-      return typeof json === 'string' ? json : String(json);
-    } catch(_) {
-      try { return String(arg); } catch(__) { return '[unstringifiable]'; }
+      return String(arg);
+    } catch (_) {
+      try { return Object.prototype.toString.call(arg); } catch (__) { return '[unrenderable]'; }
     }
   }
 
