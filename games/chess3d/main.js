@@ -9,7 +9,7 @@ import { mountCameraPresets } from "./ui/cameraPresets.js";
 import { envDataUrl } from "./textures/env.js";
 import { log, warn } from '../../tools/reporters/console-signature.js';
 import { injectHelpButton } from '../../shared/ui.js';
-const games = await fetch(new URL('../../games.json', import.meta.url)).then(r => r.json());
+const games = await fetch('/public/games.json').then(r => r.json());
 
 log('chess3d', '[Chess3D] booting');
 

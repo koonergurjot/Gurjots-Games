@@ -108,7 +108,7 @@ function buildFilterChips(tags){
 
 async function boot(){
   try {
-    const res = await fetch('./games.json?v=20250911175011', { cache:'no-cache' });
+    const res = await fetch('./public/games.json?v=20250911175011', { cache:'no-cache' });
     if (!res.ok) throw new Error('Failed to load games.json');
     const data = await res.json();
     const list = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);

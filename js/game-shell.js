@@ -149,7 +149,7 @@ async function boot(){
   if(!slug){ return render404("Missing ?slug= parameter"); }
   var catalog;
   try{
-    var res = await fetch('/games.json', {cache:'no-cache'});
+    var res = await fetch('/public/games.json', {cache:'no-cache'});
     catalog = await res.json();
   }catch(e){ return renderError("Could not load games.json", e); }
   var list = Array.isArray(catalog) ? catalog : (catalog.games || []);

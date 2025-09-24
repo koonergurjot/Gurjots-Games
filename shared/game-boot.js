@@ -17,7 +17,7 @@ recordLastPlayed(slug);
 async function track(){
   let tags = [];
   try {
-    const res = await fetch('/games.json');
+    const res = await fetch('/public/games.json');
     const data = await res.json();
     const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
     const g = games.find(g => g.slug === slug);

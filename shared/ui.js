@@ -267,7 +267,7 @@ export async function shareScore(slug, score) {
   let text = `I scored ${score} in ${slug}!`;
   try {
     // Attempt to grab a nicer title from games.json
-    const res = await fetch(new URL('../games.json', import.meta.url));
+    const res = await fetch(new URL('../public/games.json', import.meta.url));
     const data = await res.json();
     const game = (data.games || data).find?.(g => g.slug === slug);
     if (game?.title) text = `I scored ${score} in ${game.title}!`;

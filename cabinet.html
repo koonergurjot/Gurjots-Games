@@ -43,7 +43,7 @@
 
     async function loadGames(){
       try {
-        const res = await fetch('./games.json', { cache: 'no-store' });
+        const res = await fetch('./public/games.json', { cache: 'no-store' });
         const data = await res.json();
         games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
       } catch { games = []; }

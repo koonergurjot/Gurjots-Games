@@ -1,6 +1,6 @@
 import { normalizeCatalogEntries, toNormalizedList } from './game-catalog-core.js';
 
-const CATALOG_URL = '/games.json';
+const CATALOG_URL = '/public/games.json';
 let catalogPromise = null;
 
 async function fetchCatalogSource() {

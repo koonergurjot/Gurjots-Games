@@ -51,11 +51,8 @@
 
   async function scan(){
     const { list, src } = await (async ()=>{
-      const bases=['/games.json','/public/games.json',(location.pathname.replace(/[^\\/]+$/,'')+'games.json')];
-      for (const b of bases){
-        try{ const j=await fetchJSON(b+'?t='+now); return {list:j, src:b}; }catch(e){}
-      }
-      throw new Error('Unable to fetch games.json');
+      const url = `/public/games.json?t=${now}`;
+      return { list: await fetchJSON(url), src: '/public/games.json' };
     })();
 
     const arr = Array.isArray(list) ? list : Object.keys(list).map(k => ({ slug:k, ...list[k] }));
