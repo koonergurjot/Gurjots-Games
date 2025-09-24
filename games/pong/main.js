@@ -52,7 +52,13 @@ function ensureRoot() {
   if (!root) {
     root = document.createElement('div');
     root.id = 'game-root';
-    document.body.appendChild(root);
+    const host = document.getElementById('stage') || document.body;
+    if (host.firstChild) host.insertBefore(root, host.firstChild);
+    else host.appendChild(root);
+  }
+  const parent = root.parentElement;
+  if (parent && parent.firstChild !== root) {
+    parent.insertBefore(root, parent.firstChild);
   }
   return root;
 }
@@ -60,6 +66,22 @@ function ensureRoot() {
 function ensureRealGameShell() {
   injectLayoutPatch();
   const root = ensureRoot();
+
+  const legacySelectors = [
+    'body > canvas#gameCanvas',
+    'body > canvas#game-canvas',
+    'body > div#hud',
+  ];
+  legacySelectors.forEach((selector) => {
+    const el = document.querySelector(selector);
+    if (el && el !== root) {
+      el.remove();
+    }
+  });
+  const legacyGameDiv = document.querySelector('body > div#game');
+  if (legacyGameDiv && legacyGameDiv !== root) {
+    legacyGameDiv.remove();
+  }
 
   if (!document.body.classList.contains('pong-root')) {
     document.body.classList.add('pong-root');
