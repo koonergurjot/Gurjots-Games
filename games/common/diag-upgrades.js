@@ -83,5 +83,4 @@
   window.GameDiag.copy = () => navigator.clipboard?.writeText(reportText());
   window.GameDiag.save = downloadReport;
 
-  const bootReadyTimer = setTimeout(()=>{}, 0);
 })();
