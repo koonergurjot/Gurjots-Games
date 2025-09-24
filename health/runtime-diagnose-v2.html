@@ -75,18 +75,17 @@ async function loadCatalog() {
       return Array.isArray(j) ? j : [];
     } catch (_) { return []; }
   };
-  // Prefer root, fallback to /data
+  // Load the primary catalog
   const root = location.pathname.replace(/\/health\/.*$/, '/');
   const primary = await tryFetch(root + 'games.json');
-  const fallback = await tryFetch(root + 'data/games.json');
-  // Union by slug
+  // De-duplicate by slug
   const map = new Map();
-  for (const g of [...primary, ...fallback]) {
+  for (const g of primary) {
     if (g && g.slug) map.set(g.slug, g);
   }
   const list = Array.from(map.values());
   // expose count
-  window.__diag_catalog_info = { primaryCount: primary.length, fallbackCount: fallback.length, total: list.length };
+  window.__diag_catalog_info = { primaryCount: primary.length, total: list.length };
   return list;
 }
 

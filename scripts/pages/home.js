@@ -4,7 +4,7 @@ import { createGameCard } from '../components/game-card.js';
 export default async function(outlet){
   loadStyle('styles/pages/home.css');
   loadStyle('styles/components/game-grid.css');
-  const res = await fetch('/data/games.json');
+  const res = await fetch('/games.json');
   const games = await res.json();
   const section = document.createElement('section');
   section.innerHTML = '<h2>Play Now</h2>';

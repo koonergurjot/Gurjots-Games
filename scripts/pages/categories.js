@@ -2,7 +2,7 @@ import { loadStyle } from '../utils.js';
 
 export default async function(outlet){
   loadStyle('styles/pages/categories.css');
-  const res = await fetch('/data/games.json');
+  const res = await fetch('/games.json');
   const games = await res.json();
   const tags = new Map();
   games.forEach(g => (g.tags||[]).forEach(t => tags.set(t, (tags.get(t)||0)+1)));

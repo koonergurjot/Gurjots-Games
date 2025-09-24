@@ -13,10 +13,10 @@ The client-side interface communicates with modular game logic. State is saved l
 
 ## Updating Game Data
 
-Game metadata displayed on the landing page lives in `/data/games.json`.
+Game metadata displayed on the landing page lives in `/games.json`.
 To add a new entry:
 
-1. Open `data/games.json`.
+1. Open `games.json`.
 2. Copy an existing object and update its fields:
    - `id` – unique slug for the game
    - `title` – display name
