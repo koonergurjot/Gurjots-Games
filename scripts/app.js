@@ -1,5 +1,6 @@
 import { createRouter } from './router.js';
 import { toggleTheme, toggleMotion } from './theme.js';
+import { getGameById } from '../shared/game-catalog.js';
 
 const outlet = document.getElementById('app');
 const router = createRouter(outlet);
@@ -10,13 +11,8 @@ router.register('/categories', () => import('./pages/categories.js'));
 router.register('/leaderboards', () => import('./pages/leaderboards.js'));
 router.register('/about', () => import('./pages/about.js'));
 router.register('/game/:id', () => import('./pages/game.js'), async ({ id }) => {
-  try {
-    const res = await fetch('/games.json');
-    const games = await res.json();
-    return Array.isArray(games) && games.some(g => g.id === id);
-  } catch {
-    return false;
-  }
+  const game = await getGameById(id);
+  return Boolean(game);
 });
 
 router.resolve(location.pathname);

@@ -1,4 +1,5 @@
 import { loadStyle } from '../utils.js';
+import { getGameById } from '../../shared/game-catalog.js';
 
 export default async function(outlet, params){
   loadStyle('styles/pages/game.css');
@@ -11,14 +12,10 @@ export default async function(outlet, params){
     return `${url.pathname}${url.search}`;
   };
   let src = forceLegacy ? `/games/${slug}/` : buildShellUrl(slug);
-  try {
-    const res = await fetch('/games.json');
-    const games = await res.json();
-    const game = Array.isArray(games) ? games.find(g => g.id === params.id) : null;
-    if (game && game.playUrl){
-      if (forceLegacy) src = String(game.playUrl);
-    }
-  } catch {}
+  const game = await getGameById(params.id);
+  if (game && forceLegacy){
+    src = game.playPath || game.playUrl || src;
+  }
   const frame = document.createElement('iframe');
   frame.id = 'game-frame';
   frame.src = src;
