@@ -11,7 +11,22 @@ async function exists(p){
 async function checkGame(root, game){
   const result = { id: game.id || game.slug || game.title || 'unknown', status: 'ok', reason: '' };
   const entryRel = typeof game.entry === 'string' ? game.entry.replace(/^\//, '') : null;
-  const indexRel = typeof game.path === 'string' ? game.path.replace(/^\//, '') : null;
+  const indexRel = (() => {
+    if (typeof game.path === 'string'){
+      return game.path.replace(/^\//, '');
+    }
+    if (typeof game.playUrl === 'string'){
+      const cleaned = game.playUrl.replace(/^\//, '');
+      if (cleaned.endsWith('/')){
+        return path.join(cleaned, 'index.html');
+      }
+      if (cleaned.endsWith('.html')){
+        return cleaned;
+      }
+      return path.join(cleaned, 'index.html');
+    }
+    return null;
+  })();
   const indexPath = indexRel
     ? path.join(root, indexRel)
     : entryRel
