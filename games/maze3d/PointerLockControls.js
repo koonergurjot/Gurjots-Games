@@ -3,7 +3,7 @@ import {
         Euler,
         EventDispatcher,
         Vector3
-} from 'https://unpkg.com/three@0.161.0/build/three.module.js?module';
+} from '/vendor/three/0.161.0/build/three.module.js';
 
 const _euler = new Euler( 0, 0, 0, 'YXZ' );
 const _vector = new Vector3();
@@ -161,3 +161,11 @@ function onPointerlockError() {
 }
 
 export { PointerLockControls };
+
+if (typeof window !== 'undefined' && window.THREE && !window.THREE.PointerLockControls) {
+        Object.defineProperty(window.THREE, 'PointerLockControls', {
+                value: PointerLockControls,
+                configurable: true,
+                writable: true
+        });
+}
