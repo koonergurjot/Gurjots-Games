@@ -19,28 +19,48 @@
 <script>
 (function(){
   if (window.__gg_autoSignalInstalled) return; window.__gg_autoSignalInstalled = true;
-  function send(type, payload){
+  function postToParent(type, payload){
     try {
-      if (window.parent) window.parent.postMessage(Object.assign({ type }, payload || {}), "*");
-    } catch(e){ /* noop */ }
+      if (window.parent) window.parent.postMessage(Object.assign({ type: type }, payload || {}), "*");
+    } catch(_) { /* noop */ }
   }
-  // Bubble uncaught errors to shell
-  window.addEventListener("error", function(e){
-    send("GAME_ERROR", { error: (e.message || String(e.error || e)).slice(0, 500) });
+  function sendGameError(summary, reason, detail){
+    var headline = summary && reason ? summary + ': ' + reason : (summary || reason || 'Game error');
+    var message = String(headline).slice(0, 240);
+    var fullDetail = String(detail || reason || '').slice(0, 4000);
+    postToParent('GAME_ERROR', {
+      message: message,
+      userMessage: summary || message,
+      detail: fullDetail,
+      error: fullDetail
+    });
+  }
+  window.addEventListener('error', function(e){
+    var primary = e && e.message ? String(e.message) : String(e && e.error || e || 'Unknown error');
+    var parts = [primary];
+    if (e && e.filename){
+      var pos = [e.lineno, e.colno].filter(Boolean).join(':');
+      parts.push('Source: ' + e.filename + (pos ? ':' + pos : ''));
+    }
+    if (e && e.error && e.error.stack) parts.push(String(e.error.stack));
+    sendGameError('Script error', primary, parts.join('
+'));
   });
-  window.addEventListener("unhandledrejection", function(e){
-    var reason = e && e.reason ? (e.reason.message || String(e.reason)) : "unhandled rejection";
-    send("GAME_ERROR", { error: String(reason).slice(0, 500) });
+  window.addEventListener('unhandledrejection', function(e){
+    var reason = e && e.reason ? (e.reason.message || String(e.reason)) : 'Unknown rejection';
+    var stack = e && e.reason && e.reason.stack ? String(e.reason.stack) : '';
+    var detail = stack ? reason + '
+' + stack : reason;
+    sendGameError('Unhandled rejection', reason, detail);
   });
-  // If the game hasn't sent a signal by load, emit READY as a fallback
   var signalled = false;
-  window.addEventListener("message", function(ev){
+  window.addEventListener('message', function(ev){
     if (!ev || !ev.data) return;
-    if (ev.data.type === "GAME_READY" || ev.data.type === "GAME_ERROR") signalled = true;
+    if (ev.data.type === 'GAME_READY' || ev.data.type === 'GAME_ERROR') signalled = true;
   });
-  function emitReadyOnce(){ if (!signalled) { send("GAME_READY"); signalled = true; } }
-  if (document.readyState === "complete") { setTimeout(emitReadyOnce, 0); }
-  else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
+  function emitReadyOnce(){ if (!signalled) { postToParent('GAME_READY'); signalled = true; } }
+  if (document.readyState === 'complete') { setTimeout(emitReadyOnce, 0); }
+  else { window.addEventListener('load', function(){ setTimeout(emitReadyOnce, 0); }); }
 })();
 </script>
 </body>

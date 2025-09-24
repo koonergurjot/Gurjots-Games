@@ -40,7 +40,24 @@
   const FULL = params.has("diag") && params.get("diag") !== "0" && params.get("diag") !== "off";
   const BOOT_READY_TIMEOUT_MS = 5000, NOFRAME_TIMEOUT_MS = 2000, MAX_NET = 30;
 
-  function post(type, message=""){ try { parent && parent.postMessage({type, slug, message}, "*"); } catch(_) {} }
+  function post(type, message = "", meta){
+    try {
+      const payload = { type, slug };
+      if (typeof message === "object" && message && !Array.isArray(message)) {
+        Object.assign(payload, message);
+        if (!Object.prototype.hasOwnProperty.call(payload, "message")) payload.message = "";
+      } else if (message !== undefined) {
+        payload.message = message;
+      }
+      if (meta !== undefined) {
+        payload.extra = meta;
+        if (meta && typeof meta === "object" && meta.detail && !payload.detail) {
+          payload.detail = meta.detail;
+        }
+      }
+      parent && parent.postMessage(payload, "*");
+    } catch(_) {}
+  }
   function stringify(x){ try{ if (x instanceof Error) return x.stack||x.message||String(x); if (typeof x==="object") return JSON.stringify(x); return String(x);}catch(_){return String(x);} }
 
   const box = document.createElement("div");
@@ -65,15 +82,13 @@
   };
   function reportText(){ try { return JSON.stringify(report, null, 2); } catch(_){ return "{}"; } }
   function downloadReport(){ const blob = new Blob([reportText()], {type:"application/json"}); const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(blob), download: `${slug}-diag.json`}); a.click(); URL.revokeObjectURL(a.href); }
-  function emit(type, message=""){ report.last = {type, message, at: Date.now()}; post(type, message); overlayLine(`[${type}] ${message}`); }
+  function emit(type, message="", meta){
+    report.last = {type, message, at: Date.now(), meta: meta || null};
+    post(type, message, meta);
+    const extra = meta && meta.detail ? ` — ${meta.detail}` : "";
+    overlayLine(`[${type}] ${message}${extra}`);
+  }
 
-  window.addEventListener("error", (e) => {
-    const t = e.target;
-    if (t && (t.tagName==="IMG"||t.tagName==="LINK"||t.tagName==="SCRIPT")) return emit("GAME_RES_ERROR", `${t.tagName} failed: ${t.src||t.href||"(inline)"}`);
-    emit("GAME_ERROR", stringify(e.error||e.message||e));
-  }, {capture:true});
-  window.addEventListener("unhandledrejection", (e) => emit("GAME_ERROR", "unhandledrejection: " + stringify(e.reason)));
-  document.addEventListener("securitypolicyviolation", (e) => emit("GAME_CSP", `${e.effectiveDirective}: ${e.blockedURI||"(inline)"}`));
 
   const bootReadyTimer = setTimeout(() => { if (!report.boot.ready) emit("GAME_HUNG", `No GAME_READY in 5000ms`); }, 5000);
   let firstFrameFired=false; requestAnimationFrame(()=>{ firstFrameFired=true; report.boot.firstFrame=true; });
@@ -102,7 +117,14 @@
 
   if(FULL && 'fetch' in window){ const _fetch=window.fetch; window.fetch=async function(i,init){ const t0=performance.now(); try{ const r=await _fetch(i,init); if(!r.ok) net("fetch",i,r.status,performance.now()-t0); return r; }catch(err){ net("fetch",i,"ERR",performance.now()-t0,err); throw err; } }; }
   if(FULL && 'XMLHttpRequest' in window){ const _open=XMLHttpRequest.prototype.open; XMLHttpRequest.prototype.open=function(m,u,...rest){ this.__url=u; return _open.call(this,m,u,...rest); }; const _send=XMLHttpRequest.prototype.send; XMLHttpRequest.prototype.send=function(...args){ const url=this.__url||this.responseURL||"(unknown)"; const t0=performance.now(); this.addEventListener("loadend",()=>{ const code=this.status||"ERR"; if(code!==200) net("xhr",url,code,performance.now()-t0); }); return _send.apply(this,args); }; }
-  function net(kind,url,code,ms,err){ report.net.push({kind, url:String(url), code, ms:Math.round(ms), err:err?.message}); if(report.net.length>30) report.net.shift(); emit("GAME_NET", `${kind} ${String(url)} -> ${code} (${Math.round(ms)}ms)`); }
+  function net(kind,url,code,ms,err){
+    const entry = {kind, url:String(url), code, ms:Math.round(ms), err:err?.message};
+    report.net.push(entry);
+    if(report.net.length>30) report.net.shift();
+    const meta = { origin:"network", kind, url:String(url), code, ms:entry.ms };
+    if (err && err.message) meta.detail = err.message;
+    emit("GAME_NET", `${kind} ${String(url)} -> ${code} (${entry.ms}ms)`, meta);
+  }
 
   (function audioInit(){ try{ const ac=new (window.AudioContext||window.webkitAudioContext)(); if(ac.state!=="running"){ emit("GAME_AUDIO_SUSPENDED", ac.state); const unlock=()=>ac.resume().then(()=>emit("GAME_AUDIO_RESUMED")).catch(()=>{}); window.addEventListener("pointerdown", unlock, {once:true}); } }catch(_){ emit("GAME_AUDIO_UNAVAILABLE"); } })();
 
@@ -115,4 +137,34 @@
   window.GameDiag.copy = () => navigator.clipboard?.writeText(reportText());
   window.GameDiag.save = downloadReport;
 
+  window.addEventListener("error", (e) => {
+    const t = e.target;
+    if (t && (t.tagName==="IMG"||t.tagName==="LINK"||t.tagName==="SCRIPT")) {
+      const url = t.src || t.href || "(inline)";
+      const meta = { tag: t.tagName, url, origin: "resource", detail: `${t.tagName} → ${url}` };
+      emit("GAME_RES_ERROR", `${t.tagName} failed: ${url}`, meta);
+      return;
+    }
+    const base = stringify(e.error||e.message||e);
+    const meta = { origin: "window.error" };
+    const extra = [];
+    if (e.filename) {
+      const pos = [e.lineno, e.colno].filter(Boolean).join(":");
+      extra.push(`Source: ${e.filename}${pos?":"+pos:""}`);
+    }
+    if (e.error && e.error.stack) extra.push(e.error.stack);
+    if (extra.length) meta.detail = extra.join("\n");
+    emit("GAME_ERROR", base, meta);
+  }, {capture:true});
+  window.addEventListener("unhandledrejection", (e) => {
+    const reason = e?.reason;
+    const base = "unhandledrejection: " + stringify(reason);
+    const meta = { origin: "unhandledrejection" };
+    if (reason && typeof reason === "object" && reason.stack) meta.detail = reason.stack;
+    emit("GAME_ERROR", base, meta);
+  });
+  document.addEventListener("securitypolicyviolation", (e) => {
+    const detail = `${e.effectiveDirective}: ${e.blockedURI||"(inline)"}`;
+    emit("GAME_CSP", detail, { origin: "csp", detail });
+  });
 })();

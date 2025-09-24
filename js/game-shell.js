@@ -8,8 +8,41 @@ var $ = function(s){ return document.querySelector(s); };
 
 function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className = cls; return e; }
 
-var state = { timer:null, muted:true, gameInfo:null, iframe:null };
+var state = { timer:null, muted:true, gameInfo:null, iframe:null, lastErrorKey:null };
 var diagState = { sink:null, listenerBound:false, errorListenerBound:false };
+
+var DEFAULT_ERROR_STEPS = [
+  'Click Retry to download the game files again.',
+  'Temporarily disable VPNs, ad blockers, or privacy filters and reload.',
+  'Open Diagnostics to copy the error log and share it with support.'
+];
+
+var SOFT_LOADING_STEPS = [
+  'Keep this tab open—the first load can take up to a minute on slow connections.',
+  'Try “Open in new tab” to launch the game directly.',
+  'If nothing changes, choose Retry or open Diagnostics for more detail.'
+];
+
+function friendlyResourceName(url){
+  if (!url) return 'the game files';
+  try {
+    var parsed = new URL(url, location.href);
+    url = parsed.pathname + (parsed.search || '');
+  } catch(_) {}
+  var clean = String(url || '').split('#')[0];
+  if (clean.indexOf('/') >= 0){
+    var parts = clean.split('/').filter(Boolean);
+    if (parts.length) clean = parts[parts.length - 1];
+  }
+  if (clean.length > 60) clean = clean.slice(0, 57) + '…';
+  return '“' + clean + '”';
+}
+
+function createStepsOverride(first){
+  var steps = DEFAULT_ERROR_STEPS.slice();
+  if (first) steps[0] = first;
+  return steps;
+}
 
 // NEW: inject high-contrast styles for shell overlays
 function injectShellStyles(){
@@ -31,8 +64,13 @@ function injectShellStyles(){
     line-height: 1.4;
     font-size: 15px;
   }
-  #error .message{ font-weight:700; margin-bottom:6px; }
-  #error .toggle{ margin-top:8px; cursor:pointer; opacity:.9; text-decoration:underline; }
+  #error .message{ font-weight:700; margin-bottom:8px; }
+  #error .next-steps{ margin: 8px 0 4px; font-size: 14px; color:#dfe5ff; }
+  #error .next-steps.hidden{ display:none; }
+  #error .next-steps .title{ font-weight:600; margin-bottom:4px; }
+  #error .next-steps ul{ margin:0; padding-left:18px; list-style:disc; }
+  #error .next-steps li{ margin:4px 0; }
+  #error .toggle{ margin-top:8px; cursor:pointer; opacity:.9; text-decoration:underline; display:inline-block; }
   #error .details{
     background: #0b133b;
     border: 1px solid #2a3a7a;
@@ -98,7 +136,11 @@ async function boot(){
   try{
     var res = await fetch('/games.json', {cache:'no-cache'});
     catalog = await res.json();
-  }catch(e){ return renderError("Could not load games.json", e); }
+  }catch(e){ return renderError('We could not load the games list.', e, {
+    detail: 'Fetching /games.json failed. Check network connectivity and CORS rules.',
+    steps: createStepsOverride('Click Retry to fetch the games list again.'),
+    key: 'CATALOG_FETCH'
+  }); }
   var list = Array.isArray(catalog) ? catalog : (catalog.games || []);
   var info = list.find(function(g){ return (g.slug||g.id) === slug; });
   if(!info){ return render404("Unknown game: "+slug); }
@@ -158,6 +200,15 @@ function loadGame(info){
     iframe.allow = 'autoplay; fullscreen';
     iframe.src = cacheBust(debugEntry);
     iframe.onload = function(){ /* wait for GAME_READY */ };
+    iframe.addEventListener('error', function(e){
+      var info = (e && e.message) || (e && e.type ? 'Event type: ' + e.type : 'Frame load error');
+      renderError('We could not load the game frame.', info, {
+        detail: 'iframe src failed: ' + debugEntry,
+        steps: createStepsOverride('Click Retry to download ' + friendlyResourceName(debugEntry) + ' again.'),
+        extraSteps: ['Use “Open in new tab” to launch the game directly if the problem continues.'],
+        key: 'IFRAME_LOAD|' + debugEntry
+      });
+    });
     iframe.addEventListener('load', function(){
       try {
         var doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
@@ -175,7 +226,16 @@ function loadGame(info){
     var useModule = (FORCE_MODULE !== null) ? FORCE_MODULE : isModule;
     if(useModule){ s.type='module'; }
     s.src = cacheBust(entry);
-    s.onerror = function(e){ renderError('Failed to load game script', e); };
+    s.onerror = function(e){
+      var resource = friendlyResourceName(entry);
+      var eventInfo = (e && e.message) || (e && e.type ? 'Event type: ' + e.type : 'Script load error');
+      renderError('We could not load the game files.', eventInfo, {
+        detail: 'Script failed to download: ' + entry,
+        steps: createStepsOverride('Click Retry to download ' + resource + ' again.'),
+        extraSteps: ['Use “Open in new tab” to launch the game directly if the problem continues.'],
+        key: 'SCRIPT_LOAD|' + entry
+      });
+    };
     document.body.appendChild(s);
     createDiagUI(info, type, entry);
   }
@@ -229,7 +289,7 @@ function ensureOverlays(){
     err = document.createElement('div');
     err.id = 'error';
     err.className = 'error';
-    err.innerHTML = '\n      <div class="panel">\n        <div class="message"></div>\n        <div class="toggle">Show details</div>\n        <pre class="details"></pre>\n        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">\n          <button class="btn" id="btn-restart">Retry</button>\n          <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>\n        </div>\n      </div>';
+    err.innerHTML = '\n      <div class="panel">\n        <div class="message" role="alert"></div>\n        <div class="next-steps hidden">\n          <div class="title">Try these fixes:</div>\n          <ul class="list"></ul>\n        </div>\n        <div class="toggle" role="button" tabindex="0">Show technical details</div>\n        <pre class="details"></pre>\n        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">\n          <button class="btn" id="btn-restart">Retry</button>\n          <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>\n        </div>\n      </div>';
     stage.appendChild(err);
   }
 
@@ -241,37 +301,178 @@ function ensureOverlays(){
   return { loader: loader, err: err };
 }
 
+function clearLoadingTimer(){
+  if (state.timer) {
+    try { clearTimeout(state.timer); } catch(_) {}
+    state.timer = null;
+  }
+}
+
+function applyNextSteps(errEl, steps){
+  if (!errEl) return;
+  var next = errEl.querySelector('.next-steps');
+  if (!next) return;
+  var list = next.querySelector('ul');
+  if (!steps || !steps.length){
+    next.classList.add('hidden');
+    if (list) list.innerHTML = '';
+    return;
+  }
+  next.classList.remove('hidden');
+  if (list){
+    list.innerHTML = '';
+    steps.forEach(function(step){
+      var li = document.createElement('li');
+      li.textContent = step;
+      list.appendChild(li);
+    });
+  }
+}
+
+function formatErrorDetails(err, options){
+  var extra = options && options.detail;
+  var parts = [];
+  if (extra){
+    if (typeof extra === 'string') {
+      parts.push(extra);
+    } else {
+      try { parts.push(JSON.stringify(extra, null, 2)); }
+      catch(_) { parts.push(String(extra)); }
+    }
+  }
+  if (err){
+    if (typeof err === 'string') {
+      parts.push(err);
+    } else if (err instanceof Error) {
+      if (err.stack) parts.push(err.stack);
+      else if (err.message) parts.push(err.message);
+    } else if (typeof err.message === 'string') {
+      parts.push(err.message);
+    } else {
+      try { parts.push(JSON.stringify(err, null, 2)); }
+      catch(_) { parts.push(String(err)); }
+    }
+  }
+  if (!parts.length && options && options.fallback){
+    parts.push(options.fallback);
+  }
+  return parts.join('\n\n');
+}
+
 function showSoftLoading(){
   var _ov = ensureOverlays();
   var loader = _ov.loader, err = _ov.err;
   try { loader.style.display = 'none'; } catch(_) {}
   try { err.classList.add('show'); } catch(_) {}
   var msg = err.querySelector('.message'); if (msg) msg.textContent = 'Still loading… This game may take longer on first load.';
-  var details = err.querySelector('.details'); if (details) details.style.display = 'none';
-  var toggle = err.querySelector('.toggle'); if (toggle) toggle.style.display = 'none';
+  applyNextSteps(err, SOFT_LOADING_STEPS);
+  var details = err.querySelector('.details'); if (details) { details.style.display = 'none'; details.textContent = ''; }
+  var toggle = err.querySelector('.toggle');
+  if (toggle) {
+    toggle.style.display = 'none';
+    toggle.removeAttribute('aria-expanded');
+    toggle.onclick = null;
+    toggle.onkeydown = null;
+  }
+  state.timer = null;
 }
 
-function renderError(msg, e){
+function renderError(msg, errLike, options){
   var _ov = ensureOverlays();
   var loader = _ov.loader, err = _ov.err;
+  clearLoadingTimer();
   try { loader.style.display='none'; } catch(_) {}
   try { err.classList.add('show'); } catch(_) {}
+  var steps = options && options.steps ? options.steps.slice() : DEFAULT_ERROR_STEPS.slice();
+  if (options && Array.isArray(options.extraSteps)) {
+    steps = steps.concat(options.extraSteps.filter(Boolean));
+  }
+  applyNextSteps(err, steps);
   var d = err.querySelector('.details');
-  if (d) { d.textContent = (e && (e.message || e.toString())) || ''; d.style.display = 'none'; }
+  if (d) {
+    var detailText = formatErrorDetails(errLike, options);
+    d.textContent = detailText;
+    d.style.display = detailText ? 'none' : 'none';
+  }
   var m = err.querySelector('.message'); if (m) m.textContent = msg;
   var tog = err.querySelector('.toggle');
-  if (tog && d) tog.onclick = function(){ d.style.display = (d.style.display==='none' ? 'block' : 'none'); };
+  if (tog && d){
+    var detailText2 = d.textContent;
+    if (detailText2){
+      tog.style.display = 'inline-block';
+      tog.setAttribute('aria-expanded', 'false');
+      var toggleHandler = function(ev){
+        if (ev && ev.type === 'keydown' && ev.key !== 'Enter' && ev.key !== ' ') return;
+        var isHidden = d.style.display === 'none';
+        d.style.display = isHidden ? 'block' : 'none';
+        tog.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+        ev && ev.preventDefault && ev.preventDefault();
+      };
+      tog.onclick = toggleHandler;
+      tog.onkeydown = toggleHandler;
+    } else {
+      tog.style.display = 'none';
+      tog.onclick = null;
+      tog.onkeydown = null;
+      tog.removeAttribute('aria-expanded');
+    }
+  }
+  state.lastErrorKey = (options && options.key) || (msg + '|' + (d && d.textContent || ''));
+  try { console.error('[game-shell]', msg, errLike); } catch(_) {}
 }
 
 window.addEventListener('message', function(ev){
-  var data = ev.data || {};
-  if(data.type === 'GAME_READY'){
-    if (state.timer) { try { clearTimeout(state.timer); } catch(_){} state.timer = null; }
+  var data = ev && ev.data ? ev.data : {};
+  if (!data || typeof data.type !== 'string') return;
+  if (data.type === 'GAME_READY'){
+    clearLoadingTimer();
     var _ov = ensureOverlays();
     try { _ov.loader.style.display='none'; } catch(_) {}
     try { _ov.err.classList.remove('show'); } catch(_) {}
-  } else if(data.type === 'GAME_ERROR'){
-    renderError('Game error', {message: data.message || 'Unknown error'});
+    state.lastErrorKey = null;
+    return;
+  }
+
+  if (data.type === 'GAME_ERROR'){
+    var errMessage = data.userMessage || data.message || data.error || 'The game reported an error.';
+    var detail = data.detail || data.error || '';
+    var key = 'GAME_ERROR|' + errMessage + '|' + detail;
+    if (state.lastErrorKey === key) return;
+    return renderError(errMessage, detail || data, {
+      detail: detail,
+      steps: createStepsOverride('Click Retry to relaunch the game.'),
+      extraSteps: ['If the error returns immediately, open Diagnostics and copy the log for support.'],
+      key: key
+    });
+  }
+
+  if (data.type === 'GAME_RES_ERROR'){
+    var resUrl = data.extra && data.extra.url;
+    var resDetailParts = [];
+    if (data.message) resDetailParts.push(data.message);
+    if (resUrl) resDetailParts.push('Resource: ' + resUrl);
+    if (data.extra && data.extra.code) resDetailParts.push('Status: ' + data.extra.code);
+    var resDetail = resDetailParts.join('\n');
+    var resKey = 'GAME_RES_ERROR|' + (resUrl || '') + '|' + (data.message || '');
+    if (state.lastErrorKey === resKey) return;
+    return renderError('A game asset failed to load.', resDetail || data.error || data.message, {
+      detail: resDetail,
+      steps: createStepsOverride('Click Retry to download ' + friendlyResourceName(resUrl) + ' again.'),
+      extraSteps: ['Use “Open in new tab” to launch the game directly if the issue continues.'],
+      key: resKey
+    });
+  }
+
+  if (data.type === 'GAME_HUNG' || data.type === 'GAME_NOFRAME'){
+    var hangDetail = data.message || data.error || '';
+    var hangKey = data.type + '|' + hangDetail;
+    if (state.lastErrorKey === hangKey) return;
+    return renderError('The game is not responding.', hangDetail || data, {
+      detail: hangDetail,
+      steps: createStepsOverride('Click Retry to relaunch the game.'),
+      extraSteps: ['Open Diagnostics to share the hang report if the game still will not start.'],
+      key: hangKey
+    });
   }
 });
 
