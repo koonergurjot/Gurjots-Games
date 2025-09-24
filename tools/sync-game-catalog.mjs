@@ -7,6 +7,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const gamesPath = path.join(rootDir, 'games.json');
 const offlinePath = path.join(rootDir, 'data', 'games-offline.js');
 const normalizedPath = path.join(rootDir, 'data', 'games-normalized.json');
+const publicGamesPath = path.join(rootDir, 'public', 'games.json');
 
 async function readGames() {
   const source = await readFile(gamesPath, 'utf8');
@@ -30,6 +31,7 @@ async function main() {
 
   await writeFile(offlinePath, buildOfflineModule(games));
   await writeFile(normalizedPath, JSON.stringify({ games: normalizedList }, null, 2) + '\n');
+  await writeFile(publicGamesPath, JSON.stringify(games, null, 2) + '\n');
 
   console.log('Game catalog artifacts updated.');
 }
