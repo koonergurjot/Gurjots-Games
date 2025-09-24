@@ -8,8 +8,23 @@ var $ = function(s){ return document.querySelector(s); };
 
 function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className = cls; return e; }
 
-var state = { timer:null, muted:true, gameInfo:null, iframe:null };
+var state = { timer:null, failTimer:null, muted:true, gameInfo:null, iframe:null };
 var diagState = { sink:null, listenerBound:false, errorListenerBound:false };
+
+function clearBootTimers(){
+  try {
+    if (state.timer) {
+      clearTimeout(state.timer);
+      state.timer = null;
+    }
+  } catch(_){ }
+  try {
+    if (state.failTimer) {
+      clearTimeout(state.failTimer);
+      state.failTimer = null;
+    }
+  } catch(_){ }
+}
 
 function setLoaderVisibility(loader, isVisible) {
   if (!loader) return;
@@ -241,12 +256,17 @@ function loadGame(info){
     ensureCanvasLabels(stage || document);
   }
 
-  if(state.timer) clearTimeout(state.timer);
+  clearBootTimers();
   state.timer = setTimeout(function(){
     var overlays2 = ensureOverlays();
     setLoaderVisibility(overlays2.loader, false);
     showSoftLoading();
   }, 6000);
+  state.failTimer = setTimeout(function(){
+    var overlays3 = ensureOverlays();
+    setLoaderVisibility(overlays3.loader, false);
+    renderError('Game failed to start', {message: 'We never received GAME_READY. The game may have crashed during load.'});
+  }, 15000);
 }
 
 function reloadGame(){
@@ -403,7 +423,7 @@ function renderError(msg, e){
 window.addEventListener('message', function(ev){
   var data = ev.data || {};
   if(data.type === 'GAME_READY'){
-    if (state.timer) { try { clearTimeout(state.timer); } catch(_){} state.timer = null; }
+    clearBootTimers();
     var _ov = ensureOverlays();
     setLoaderVisibility(_ov.loader, false);
     setErrorVisibility(_ov.err, false);
@@ -413,6 +433,7 @@ window.addEventListener('message', function(ev){
     }
     ensureCanvasLabels(document);
   } else if(data.type === 'GAME_ERROR'){
+    clearBootTimers();
     renderError('Game error', {message: data.message || 'Unknown error'});
   }
 });
