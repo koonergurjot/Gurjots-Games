@@ -25,9 +25,9 @@
       padding: 8px 10px; border-radius: 10px; cursor: pointer; text-decoration: none;
     }
     a.btn:hover, button.btn:hover { border-color: #3b5172; }
-    main { display:grid; place-items:center; padding: 8px; }
+    main { display:grid; place-items:stretch; padding: 0; }
     .game-card {
-      width: min(1280px, 100%); aspect-ratio: 16/9; background: #0b0f14; border: 1px solid #1e2a3b;
+      width: 100%; height: 100%; aspect-ratio: auto; background: #0b0f14; border: 1px solid #1e2a3b;
       border-radius: 14px; overflow: clip; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.45);
     }
     iframe#game-frame { width: 100%; height: 100%; border: 0; background: #000; display:block; }
@@ -61,7 +61,6 @@
     }
     @media (max-width: 768px) {
       header .title h1 { font-size: 14px; }
-      .game-card { aspect-ratio: 3/4; }
     }
   </style>
 </head>
