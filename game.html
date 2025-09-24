@@ -37,6 +37,7 @@
     .status {
       pointer-events:auto; background: rgba(12,18,28,0.92); border:1px solid #223049; border-radius:12px;
       padding:16px; width:min(560px, 90%);
+      color:#f3f7ff;
     }
     .status h2 { margin:0 0 6px; font-size:16px; }
     .status p { margin:6px 0 0; color: var(--muted); }
@@ -47,6 +48,17 @@
     }
     .hidden { display:none; }
     footer { padding: 10px 14px; border-top: 1px solid #243042; color: #a8c3df; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+      white-space: nowrap;
+    }
     @media (max-width: 768px) {
       header .title h1 { font-size: 14px; }
       .game-card { aspect-ratio: 3/4; }
@@ -68,9 +80,10 @@
   <main>
     <section class="game-card" aria-live="polite">
       <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
-      <div class="overlay" id="overlay">
-        <div class="status" id="statusPanel">
-          <h2 id="statusTitle">Starting…</h2>
+      <div class="overlay" id="overlay" aria-hidden="false">
+        <div class="status" id="statusPanel" role="status" aria-live="polite" aria-atomic="true">
+          <span class="sr-only" id="statusContext">Game status message</span>
+          <h2 id="statusTitle" aria-describedby="statusContext">Starting…</h2>
           <p id="statusText">We’re booting the game. First load may take a bit longer.</p>
           <div class="row">
             <span class="pill" id="pillSlug">slug: —</span>
@@ -97,6 +110,7 @@
       const overlay = document.getElementById("overlay");
       const statusTitle = document.getElementById("statusTitle");
       const statusText = document.getElementById("statusText");
+      const statusPanel = document.getElementById("statusPanel");
       const pillSlug = document.getElementById("pillSlug");
       const pillTimer = document.getElementById("pillTimer");
       const pillSignal = document.getElementById("pillSignal");
@@ -202,6 +216,8 @@
           statusTitle.textContent = "Ready";
           statusText.textContent = "Have fun!";
           overlay.classList.add("hidden");
+          overlay.setAttribute("aria-hidden", "true");
+          if (statusPanel) statusPanel.setAttribute("aria-hidden", "true");
           write("signal: GAME_READY");
         } else if (data.type === "GAME_ERROR") {
           signalled = true;
@@ -209,6 +225,8 @@
           statusTitle.textContent = "Oops, this game didn't load.";
           statusText.textContent = data.error ? String(data.error) : "Check the console for details.";
           overlay.classList.remove("hidden");
+          overlay.setAttribute("aria-hidden", "false");
+          if (statusPanel) statusPanel.setAttribute("aria-hidden", "false");
           write("signal: GAME_ERROR " + (data.error || ""));
         }
       });
@@ -220,6 +238,8 @@
           statusTitle.textContent = "No signal from game";
           statusText.textContent = "We didn’t receive GAME_READY/ERROR within 6 seconds. The game may still be loading or failed silently.";
           overlay.classList.remove("hidden");
+          overlay.setAttribute("aria-hidden", "false");
+          if (statusPanel) statusPanel.setAttribute("aria-hidden", "false");
           write("timeout: no GAME_READY/ERROR within 6s");
         }
       }, 6000);

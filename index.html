@@ -9,6 +9,26 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/bolt-landing.css?v=20250911175011">
+  <style>
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+      white-space: nowrap;
+    }
+    body.bolt-body {
+      background-color: #050b1f;
+      color: #f3f7ff;
+    }
+    body.bolt-body a {
+      color: #8ec8ff;
+    }
+  </style>
 </head>
 <body class="bolt-body">
   <header class="bolt-nav">
@@ -57,7 +77,10 @@
         <button id="bolt-clear" type="button" title="Clear search">✕</button>
       </form>
       <div id="bolt-filters" class="bolt-filters" aria-label="Filter by category" role="tablist"></div>
-      <div id="bolt-status" class="bolt-status" role="status" aria-live="polite">Loading games…</div>
+      <div id="bolt-status" class="bolt-status" role="status" aria-live="polite" aria-atomic="true">
+        <span class="sr-only">Game loading status:</span>
+        Loading games…
+      </div>
       <div id="bolt-grid" class="bolt-grid" aria-label="Game list"></div>
     </div>
   </section>
