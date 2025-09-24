@@ -50,9 +50,9 @@ function patchGameHTML(file) {
   }
 
   if (!/js\/game-loader\.js/.test(src)) {
-    src = src.replace(/<\/body>/i, (m) => `  <script src="/js/game-loader.js"></script>\n${m}`);
+    src = src.replace(/<\/body>/i, (m) => `  <script type="module" src="./js/game-loader.js"></script>\n${m}`);
     changed = true;
-    log('Injected <script src="/js/game-loader.js">');
+    log('Injected <script type="module" src="./js/game-loader.js">');
   }
 
   if (changed && !DRY) {

@@ -1,17 +1,23 @@
+import { getBasePath, isWithinBasePath, resolveRoutePath, stripBasePath } from '../shared/base-path.js';
+
 export class Router {
-  constructor(outlet) {
+  constructor(outlet, basePath = getBasePath()) {
     this.outlet = outlet;
     this.routes = [];
+    this.basePath = basePath;
     window.addEventListener('popstate', () => this.resolve(location.pathname));
-    document.addEventListener('click', e => {
+    document.addEventListener('click', (e) => {
       const a = e.target.closest('a');
-      if (a && a instanceof HTMLAnchorElement && a.origin === location.origin) {
-        const href = a.getAttribute('href');
-        if (href && href.startsWith('/')) {
-          e.preventDefault();
-          this.navigate(href);
-        }
-      }
+      if (!a || !(a instanceof HTMLAnchorElement)) return;
+      if (a.target && a.target !== '_self') return;
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+      const url = new URL(href, location.href);
+      if (url.origin !== location.origin) return;
+      if (!isWithinBasePath(url.pathname)) return;
+      e.preventDefault();
+      const fullPath = `${url.pathname}${url.search || ''}`;
+      this.navigate(fullPath);
     });
   }
 
@@ -25,19 +31,24 @@ export class Router {
   }
 
   async navigate(path) {
-    history.pushState({}, '', path);
-    await this.resolve(path);
+    const target = resolveRoutePath(path);
+    history.pushState({}, '', target);
+    await this.resolve(target);
   }
 
   async resolve(path) {
+    const normalizedPath = stripBasePath(path);
+    const [pathOnly] = normalizedPath.split('?');
+    const candidatePath = pathOnly || '/';
     for (const r of this.routes) {
-      const match = r.pattern.exec(path);
+      const match = r.pattern.exec(candidatePath);
       if (match) {
         const params = {};
         r.keys.forEach((k, i) => params[k] = decodeURIComponent(match[i + 1]));
         if (r.guard && !(await r.guard(params))) {
-          history.replaceState({}, '', '/');
-          return this.resolve('/');
+          const fallback = resolveRoutePath('/');
+          history.replaceState({}, '', fallback);
+          return this.resolve(fallback);
         }
         const mod = await r.loader(params);
         this.outlet.innerHTML = '';
@@ -53,6 +64,6 @@ export class Router {
   }
 }
 
-export function createRouter(outlet) {
-  return new Router(outlet);
+export function createRouter(outlet, basePath) {
+  return new Router(outlet, basePath);
 }

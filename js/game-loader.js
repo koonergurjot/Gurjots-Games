@@ -1,43 +1,84 @@
-(async function(){
-  const params = new URLSearchParams(location.search);
-  const slug = params.get('id') || params.get('slug');
-  if(!slug){ console.error('[loader] missing slug'); return; }
+import { resolveAssetPath } from '../shared/base-path.js';
+import { resolveGamePaths } from '../shared/game-paths.js';
 
-  function loadModule(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.type='module'; s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
-  function loadClassic(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
-  async function ensureHelpers(){
-    try{ await loadClassic('/shared/gg-shim.js'); }catch{}
-    try{ await loadClassic('/js/preflight.js'); }catch{}
-    try{ await loadClassic('/js/three-global-shim.js'); }catch{}
-  }
+const ABSOLUTE_PROTOCOL = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
+
+const params = new URLSearchParams(location.search);
+const slug = params.get('id') || params.get('slug');
+
+if (!slug) {
+  console.error('[loader] missing slug');
+}
+
+function resolveScriptSource(src) {
+  if (!src || typeof src !== 'string') return src;
+  if (ABSOLUTE_PROTOCOL.test(src) || src.startsWith('//')) return src;
+  const trimmed = src.startsWith('/') ? src.slice(1) : src;
+  return resolveAssetPath(trimmed);
+}
+
+function loadModule(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.type = 'module';
+    s.src = resolveScriptSource(src);
+    s.onload = res;
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+function loadClassic(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = resolveScriptSource(src);
+    s.onload = res;
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+async function ensureHelpers() {
+  try { await loadClassic('shared/gg-shim.js'); } catch (_) {}
+  try { await loadClassic('js/preflight.js'); } catch (_) {}
+  try { await loadClassic('js/three-global-shim.js'); } catch (_) {}
+}
+
+(async function boot() {
+  if (!slug) return;
   await ensureHelpers();
 
-  (function(){
-    const root = document.getElementById('game-root') || (function(){ const d=document.createElement('div'); d.id='game-root'; document.body.appendChild(d); return d; })();
-    const ids=['status','level','lives','board','game','c','canvas','gameCanvas','fx','hud','score'];
-    ids.forEach(id=>{
-      if(document.getElementById(id)) return;
+  (function prepareRoot(){
+    const root = document.getElementById('game-root') || (function(){
+      const d = document.createElement('div');
+      d.id = 'game-root';
+      document.body.appendChild(d);
+      return d;
+    })();
+    const ids = ['status','level','lives','board','game','c','canvas','gameCanvas','fx','hud','score'];
+    ids.forEach(id => {
+      if (document.getElementById(id)) return;
       const el = (id==='c'||id==='board'||id==='game'||id==='canvas'||id==='gameCanvas'||id==='fx') ? document.createElement('canvas') : document.createElement('div');
-      el.id=id; root.appendChild(el);
-      if (el.tagName==='CANVAS' && typeof window.fitCanvasToParent==='function') window.fitCanvasToParent(el);
+      el.id = id;
+      root.appendChild(el);
+      if (el.tagName==='CANVAS' && typeof window.fitCanvasToParent==='function') {
+        window.fitCanvasToParent(el);
+      }
     });
   })();
 
-  try{
-    let basePath = `/games/${slug}`;
-    try{
-      const mod = await import('/shared/game-paths.js');
-      if (mod?.resolveGamePaths){
-        const { basePath: resolvedBase } = await mod.resolveGamePaths(slug);
-        if (resolvedBase) basePath = resolvedBase;
-      }
-    }catch(e0){
+  try {
+    let basePath = resolveAssetPath(`games/${slug}`);
+    try {
+      const { basePath: resolvedBase } = await resolveGamePaths(slug);
+      if (resolvedBase) basePath = resolvedBase;
+    } catch (e0) {
       console.warn('[loader] unable to resolve game directory', e0);
     }
-    basePath = basePath.replace(/\/+$/, '') || `/games/${slug}`;
+    basePath = basePath.replace(/\/+$/, '') || resolveAssetPath(`games/${slug}`);
     const baseLeaf = basePath.split('/').filter(Boolean).pop() || slug;
 
-    const moduleTag = document.querySelector('script[type=\"module\"][data-entry]');
+    const moduleTag = document.querySelector('script[type="module"][data-entry]');
     if (!moduleTag){
       const guess = Array.from(new Set([
         `${basePath}/main.js`,
@@ -46,25 +87,27 @@
         `${basePath}/index.js`,
         `${basePath}/engine.js`
       ]));
-      let loaded=false;
-      for(const url of guess){
-        try{ await loadModule(url); console.log('[loader] loaded (module)', url); loaded=true; break; }catch(e1){
-          try{ await loadClassic(url); console.log('[loader] loaded (classic)', url); loaded=true; break; }catch(e2){}
+      let loaded = false;
+      for (const url of guess) {
+        try { await loadModule(url); console.log('[loader] loaded (module)', url); loaded = true; break; }
+        catch (e1) {
+          try { await loadClassic(url); console.log('[loader] loaded (classic)', url); loaded = true; break; }
+          catch (e2) {}
         }
       }
-      if(!loaded) console.warn('[loader] no known entry found; relying on page self-boot');
+      if (!loaded) console.warn('[loader] no known entry found; relying on page self-boot');
     }
 
     const boot = window.GameInit||window.init||window.startGame||window.start||window.boot;
     let readyToSignal = false;
-    if(typeof boot==='function'){
-      try { boot({ mount:'#game-root', meta:{slug} }); readyToSignal = true; } catch(e){ throw e; }
+    if (typeof boot === 'function') {
+      try { boot({ mount:'#game-root', meta:{slug} }); readyToSignal = true; }
+      catch (e) { throw e; }
     } else {
-      // If no explicit boot, consider it ready only if a script loaded without throwing
       readyToSignal = true;
     }
     if (readyToSignal) window.parent?.postMessage?.({type:'GAME_READY', slug}, '*');
-  }catch(e){
+  } catch (e) {
     console.error('[loader] error', e);
     window.parent?.postMessage?.({type:'GAME_ERROR', slug, message:String(e?.message||e)}, '*');
   }

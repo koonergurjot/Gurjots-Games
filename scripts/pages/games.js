@@ -1,10 +1,11 @@
 import { loadStyle } from '../utils.js';
 import { createGameCard } from '../components/game-card.js';
+import { resolveAssetPath } from '../../shared/base-path.js';
 
 export default async function(outlet){
   loadStyle('styles/pages/games.css');
   loadStyle('styles/components/game-grid.css');
-  const res = await fetch('/games.json');
+  const res = await fetch(resolveAssetPath('games.json'));
   const games = await res.json();
   const section = document.createElement('section');
   section.innerHTML = '<h2>All Games</h2>';

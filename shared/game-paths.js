@@ -1,6 +1,10 @@
+import { resolveAssetPath } from './base-path.js';
+
+const catalogUrl = resolveAssetPath('games.json');
+
 const GAME_SOURCES = [
   {
-    url: '/games.json',
+    url: catalogUrl,
     extractSlug(entry) {
       return (entry?.id || entry?.slug || '').trim();
     },

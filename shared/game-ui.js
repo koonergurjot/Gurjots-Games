@@ -1,5 +1,6 @@
 
 import { resolveGamePaths } from './game-paths.js';
+import { resolveAssetPath, resolveRoutePath } from './base-path.js';
 
 /**
  * Shared Game UI shell for Gurjot's Games
@@ -18,9 +19,9 @@ import { resolveGamePaths } from './game-paths.js';
   // If an iframe is not present, create one targeting conventional path:
   let frame = qs('#game-frame');
   const candidates = [
-    `/games/${slug}/index.html`,
-    `/games/${slug}.html`,
-    `/games/${slug}/game.html`
+    resolveAssetPath(`games/${slug}/index.html`),
+    resolveAssetPath(`games/${slug}.html`),
+    resolveAssetPath(`games/${slug}/game.html`)
   ];
 
   if (!frame) {
@@ -71,7 +72,7 @@ import { resolveGamePaths } from './game-paths.js';
           <p style="margin:0 0 12px 0">Try again, or report the issue in the console logs.</p>
           <div style="display:flex;gap:8px;justify-content:flex-end">
             <button class="gg-btn" id="gg-retry">Retry</button>
-            <a class="gg-btn" href="/" id="gg-go-home">Home</a>
+            <a class="gg-btn" href="${resolveRoutePath('/') || '/'}" id="gg-go-home">Home</a>
           </div>
         </div>
       </div>
@@ -172,7 +173,7 @@ import { resolveGamePaths } from './game-paths.js';
   });
 
   // Buttons
-  root.querySelector('#gg-back').onclick = ()=>location.href = '/';
+  root.querySelector('#gg-back').onclick = ()=>location.href = resolveRoutePath('/') || '/';
   root.querySelector('#gg-restart').onclick = ()=>restart();
   if ($pauseButton){ $pauseButton.onclick = ()=>togglePause(); }
   root.querySelector('#gg-mute').onclick = (ev)=>{

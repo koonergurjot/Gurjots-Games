@@ -6,6 +6,58 @@ const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('mod
 const slug = qs.get('slug') || qs.get('id') || qs.get('game');
 var $ = function(s){ return document.querySelector(s); };
 
+const ABSOLUTE_PROTOCOL = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
+
+function detectBasePath(){
+  if (typeof window !== 'undefined' && typeof window.__GG_BASE_PATH__ === 'string' && window.__GG_BASE_PATH__) {
+    return window.__GG_BASE_PATH__;
+  }
+  try {
+    const current = document.currentScript && document.currentScript.src;
+    if (current) {
+      const url = new URL(current, location.href);
+      const pathname = url.pathname.replace(/\\+/g, '/');
+      const directory = pathname.slice(0, pathname.lastIndexOf('/') + 1);
+      const trimmed = directory.replace(/\/+$/, '');
+      const parts = trimmed.split('/');
+      if (parts.length && parts[parts.length - 1] === 'js') {
+        parts.pop();
+      }
+      const joined = parts.join('/') || '/';
+      return joined.startsWith('/') ? joined : `/${joined}`;
+    }
+  } catch (_) {}
+  if (typeof location !== 'undefined' && location.pathname) {
+    return '/';
+  }
+  return '/';
+}
+
+const GG_BASE_PATH = detectBasePath();
+if (typeof window !== 'undefined') {
+  window.__GG_BASE_PATH__ = GG_BASE_PATH;
+}
+
+const GG_BASE_URL = (() => {
+  try {
+    if (typeof location !== 'undefined' && location.origin) {
+      return new URL(GG_BASE_PATH === '/' ? '/' : `${GG_BASE_PATH.replace(/\/+$/, '')}/`, location.origin);
+    }
+  } catch (_) {}
+  return new URL('/', 'http://localhost');
+})();
+
+function resolveAsset(path){
+  if (!path || typeof path !== 'string') return GG_BASE_URL.pathname;
+  if (ABSOLUTE_PROTOCOL.test(path) || path.startsWith('//')) return path;
+  try {
+    const resolved = new URL(path, GG_BASE_URL);
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch (_) {
+    return path;
+  }
+}
+
 function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className = cls; return e; }
 
 var state = { timer:null, muted:true, gameInfo:null, iframe:null };
@@ -71,7 +123,7 @@ function ensureRuntimeDiagnostics(targetDoc) {
     if (doc.getElementById('__runtime-diag')) return;
     var script = doc.createElement('script');
     script.id = '__runtime-diag';
-    script.src = '/js/runtime-diagnostics.js';
+    script.src = resolveAsset('js/runtime-diagnostics.js');
     var host = doc.body || doc.head || doc.documentElement;
     if (host) {
       host.appendChild(script);
@@ -96,7 +148,7 @@ async function boot(){
   if(!slug){ return render404("Missing ?slug= parameter"); }
   var catalog;
   try{
-    var res = await fetch('/games.json', {cache:'no-cache'});
+    var res = await fetch(resolveAsset('games.json'), {cache:'no-cache'});
     catalog = await res.json();
   }catch(e){ return renderError("Could not load games.json", e); }
   var list = Array.isArray(catalog) ? catalog : (catalog.games || []);

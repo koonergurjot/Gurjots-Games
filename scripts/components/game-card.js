@@ -1,4 +1,5 @@
 import { loadStyle } from '../utils.js';
+import { resolveRoutePath } from '../../shared/base-path.js';
 
 loadStyle('styles/components/game-card.css');
 
@@ -25,7 +26,7 @@ export function createGameCard(game) {
     tagsEl.appendChild(chip);
   });
   const link = card.querySelector('.play');
-  link.href = `/game/${game.id}`;
+  link.href = resolveRoutePath(`game/${game.id}`);
   return card;
 }
 

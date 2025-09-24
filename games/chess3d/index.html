@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chess 3D</title>
-  <link rel="stylesheet" href="/css/styles.css" />
+  <link rel="stylesheet" href="../../css/styles.css" />
   <style>
     #stage{width:100%;height:70vh;}
     #stage canvas{display:block}
@@ -32,8 +32,8 @@
       if(el && !window.__Chess3DBooted){ el.textContent = 'Initializing renderer… if this persists, check network or open console (F12) for errors.'; }
     }, 1800);
   </script>
-  <script src="/js/sfx.js"></script>
-  <script src="/js/hud.js"></script>
+  <script src="../../js/sfx.js"></script>
+  <script src="../../js/hud.js"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="chess3d"></script>
 
 <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->

@@ -18,10 +18,10 @@
   <div id="game-root" aria-live="polite" style="display:block;min-height:100vh"></div>
 
   <!-- Shim first (creates #game / <canvas> and a tiny window.GG if missing) -->
-  <script src="/js/compat-shim.js"></script>
+  <script src="./js/compat-shim.js"></script>
 
   <!-- Universal loader (reads games.json and boots ?id=<slug>) -->
-  <script src="/js/game-loader.js"></script>
-  <script src="/shared/force-unpause.js"></script>
+  <script type="module" src="./js/game-loader.js"></script>
+  <script src="./shared/force-unpause.js"></script>
 </body>
 </html>

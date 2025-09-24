@@ -26,16 +26,16 @@
       <div id="score" aria-live="polite">0</div>
       <button id="pause-btn" aria-pressed="false">Pause</button>
     </div>
-    <script src="/js/bootstrap/gg.js"></script>
-    <script src="/js/preflight.js"></script>
-    <script src="/js/resizeCanvas.global.js"></script>
-    <script src="/js/gameUtil.js"></script>
-    <script src="/js/sfx.js"></script>
-    <script src="/games/tetris/engine.js"></script>
-    <script src="/games/tetris/replay.js"></script>
-    <script type="module" src="/js/three-global-shim.js"></script>
+    <script src="../../js/bootstrap/gg.js"></script>
+    <script src="../../js/preflight.js"></script>
+    <script src="../../js/resizeCanvas.global.js"></script>
+    <script src="../../js/gameUtil.js"></script>
+    <script src="../../js/sfx.js"></script>
+    <script src="../../games/tetris/engine.js"></script>
+    <script src="../../games/tetris/replay.js"></script>
+    <script type="module" src="../../js/three-global-shim.js"></script>
     <script type="module">
-      import { ensureCanvas, ensureElement } from "/js/bootstrap/dom.js";
+      import { ensureCanvas, ensureElement } from "../../js/bootstrap/dom.js";
       window.addEventListener("DOMContentLoaded", () => {
         const { canvas } = ensureCanvas("t");
         const extraCanvas = document.getElementById("gameCanvas");
@@ -43,7 +43,7 @@
         ensureElement("#score");
       });
     </script>
-    <script type="module" src="/games/tetris/tetris.js"></script>
+    <script type="module" src="../../games/tetris/tetris.js"></script>
   
 <!-- Auto-signal bootstrap: emits READY/ERROR to parent -->
 <script>
