@@ -1,19 +1,5 @@
 const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
-const defaultGames=[
-  {id:"pong",title:"Pong Classic",path:"games/pong/index.html",description:"A snappy canvas remake of the arcade legend.",tags:["classic","2D"],new:false,emoji:"🏓",addedAt:"2025-08-20"},
-  {id:"snake",title:"Snake",path:"games/snake/index.html",description:"Eat, grow, don't bonk into yourself.",tags:["classic","2D"],new:true,emoji:"🐍",addedAt:"2025-08-25"},
-  {id:"tetris",title:"Tetris",path:"games/tetris/index.html",description:"Classic falling blocks. Clear lines, level up.",tags:["classic","2D"],new:true,emoji:"🧩",addedAt:"2025-08-26"},
-  {id:"breakout",title:"Breakout",path:"games/breakout/index.html",description:"Smash bricks, power-ups, chase the score.",tags:["classic","2D"],new:true,emoji:"🧱",addedAt:"2025-08-26"},
-  {id:"chess",title:"Chess (2D)",path:"games/chess/index.html"},
-  {id:"chess3d",title:"Chess 3D (Local)",path:"games/chess3d/index.html",new:true,tags:["3D","offline"]},
-  {id:"g2048",title:"2048",path:"games/2048/index.html"},
-  {id:"asteroids",title:"Asteroids",path:"games/asteroids/index.html",description:"Pilot your ship and blast space rocks.",tags:["classic","2D"],new:true,emoji:"☄️",addedAt:"2025-08-27"},
-  {id:"maze3d",title:"Maze 3D",path:"games/maze3d/index.html",description:"Wander a first-person labyrinth to find the exit.",tags:["3D"],new:true,emoji:"🧭",addedAt:"2025-08-27"},
-  {id:"platformer",title:"Pixel Platformer",path:"games/platformer/index.html",description:"Run and jump across platforms to reach the goal.",tags:["2D"],new:true,emoji:"🦘",addedAt:"2025-08-27"},
-  {id:"runner",title:"City Runner",path:"games/runner/index.html",description:"Dash through the city and avoid obstacles.",tags:["2D"],new:true,emoji:"🏃",addedAt:"2025-08-27"},
-  {id:"shooter",title:"Alien Shooter",path:"games/shooter/index.html",description:"Blast waves of invaders and survive.",tags:["2D"],new:true,emoji:"👾",addedAt:"2025-08-27"}
-];
 const state={games:[],tags:new Set(),activeTag:null,search:"",sort:"az"};
 function setTheme(name){document.body.classList.remove("theme-retro","theme-neon","theme-minimal");if(name==="retro")document.body.classList.add("theme-retro");if(name==="neon")document.body.classList.add("theme-neon");if(name==="minimal")document.body.classList.add("theme-minimal");localStorage.setItem("gg:theme",name);}
 function hydrateUI(){$("#year").textContent=new Date().getFullYear();const saved=localStorage.getItem("gg:theme")||"default";$("#theme").value=saved;setTheme(saved);$("#theme").addEventListener("change",e=>setTheme(e.target.value));$("#search").addEventListener("input",e=>{state.search=e.target.value.toLowerCase().trim();render();});$("#sort").addEventListener("change",e=>{state.sort=e.target.value;render();});}
@@ -132,6 +118,30 @@ function readStat(){try{return JSON.parse(localStorage.getItem('gg:xp')||'{"xp":
 function addXP(n){const s=readStat();s.xp+=n|0;localStorage.setItem('gg:xp',JSON.stringify(s));}
 function xpBadge(){const {xp,plays}=readStat();const b=document.createElement('div');b.className='status info';b.style.margin='6px 0 0';b.textContent=`Your XP: ${xp} • Plays: ${plays}`;return b;}
 function render(){const grid=$("#gamesGrid");const status=$("#status");let list=[...state.games];if(state.activeTag)list=list.filter(g=>g.tags.includes(state.activeTag));if(state.search)list=list.filter(g=>g.title.toLowerCase().includes(state.search)||(g.description||g.desc||'').toLowerCase().includes(state.search));if(state.sort==='az')list.sort((a,b)=>a.title.localeCompare(b.title));if(state.sort==='za')list.sort((a,b)=>b.title.localeCompare(a.title));if(state.sort==='new')list.sort((a,b)=>new Date(b.addedAt)-new Date(a.addedAt));status.textContent=list.length?`${list.length} game${list.length>1?'s':''} ready to play`:"No matches. Try a different search or tag.";grid.innerHTML="";list.forEach(game=>{const card=document.createElement('article');card.className='card';const badge=document.createElement('div');badge.className='badge';badge.textContent=game.new?'NEW':'PLAY';card.appendChild(badge);const thumb=document.createElement('div');thumb.className='thumb';if(game.thumb){const img=document.createElement('img');img.src=game.thumb;img.alt=game.title+' thumbnail';img.loading='lazy';img.style.width='100%';img.style.height='100%';img.style.objectFit='cover';thumb.appendChild(img);}else{thumb.textContent=game.emoji||'🎮';}card.appendChild(thumb);const h3=document.createElement('h3');h3.textContent=game.title;card.appendChild(h3);const p=document.createElement('p');p.textContent=game.description||game.desc;card.appendChild(p);const meta=getGameMetaText(game.id);if(meta){const m=document.createElement('p');m.style.margin='6px 0 0';m.style.fontSize='.85rem';m.style.opacity='.85';m.textContent=meta;card.appendChild(m);}const badges=getGameBadges(game.id);if(badges.length){const row=document.createElement('div');row.style.margin='8px 0 0';row.style.display='flex';row.style.gap='6px';badges.forEach(b=>{const s=document.createElement('span');s.className='chip';s.textContent=b;row.appendChild(s);});card.appendChild(row);}const actions=document.createElement('div');actions.className='actions';const play=document.createElement('button');play.className='btn primary';play.textContent='Play';play.onclick=()=>playInModal(game.path,game.id);actions.appendChild(play);const share=document.createElement('button');share.className='btn';share.textContent='Share';share.onclick=()=>shareGame(game);actions.appendChild(share);const open=document.createElement('a');open.href=game.path;open.className='btn';open.textContent='Open Tab';open.target='_blank';open.setAttribute('rel','noopener');actions.appendChild(open);card.appendChild(actions);grid.appendChild(card);});}
-async function loadGames(){skeletonCards();try{const res=await fetch('./games.json',{cache:'no-store'});if(!res.ok)throw 0;const data=await res.json();if(!Array.isArray(data)||!data.length)throw 0;state.games=data;}catch(e){import('../tools/reporters/console-signature.js').then(({ warn })=>warn('app','[games] fallback to default',e));state.games=defaultGames;}state.tags=new Set(state.games.flatMap(g=>g.tags||[]));buildTagChips();render();}
+function adaptGameForLanding(raw){
+  if(!raw)return null;
+  const description=raw.description||raw.short||raw.desc||'';
+  const tags=Array.isArray(raw.tags)?raw.tags.filter(Boolean):[];
+  let path=raw.playPath||raw.path||raw.playUrl||raw.url||null;
+  if(!path&&raw.basePath){
+    const base=String(raw.basePath).replace(/\/+$/,'');
+    path=base&&base!=='/'?`${base}/index.html`:'/index.html';
+  }
+  return {...raw,description,desc:description,tags,path};
+}
+async function loadGames(){
+  skeletonCards();
+  try{
+    const { loadGameCatalog }=await import('../shared/game-catalog.js');
+    const catalog=await loadGameCatalog();
+    state.games=catalog.games.map(adaptGameForLanding).filter(Boolean);
+  }catch(e){
+    import('../tools/reporters/console-signature.js').then(({ warn })=>warn('app','[games] catalog unavailable',e));
+    state.games=[];
+  }
+  state.tags=new Set(state.games.flatMap(g=>g.tags||[]));
+  buildTagChips();
+  render();
+}
 document.addEventListener('DOMContentLoaded',()=>{particleBG();const status=document.getElementById('status');status.parentElement.insertBefore(xpBadge(),status.nextSibling);});
 hydrateUI();loadGames();

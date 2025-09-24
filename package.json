@@ -7,7 +7,8 @@
     "test:unit": "vitest run",
     "test:smoke": "vitest run tests/runner.smoke.test.js",
     "sitemap": "node tools/generate-sitemap.mjs",
-    "health": "node tools/healthcheck.mjs"
+    "health": "node tools/healthcheck.mjs",
+    "sync:games": "node tools/sync-game-catalog.mjs"
   },
   "devDependencies": {
     "acorn": "^8.15.0",
