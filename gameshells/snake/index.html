@@ -7,7 +7,7 @@
     <script type="importmap">
     {
       "imports": {
-        "console-signature": "/js/vendor/console-signature.js",
+        "console-signature": "../../js/vendor/console-signature.js",
         "three": "https://unpkg.com/three@0.161.0/build/three.module.js"
       }
     }
@@ -19,17 +19,17 @@
       <div id="score" aria-live="polite">0</div>
       <button id="pause-btn" aria-pressed="false">Pause</button>
     </div>
-    <script src="/js/bootstrap/gg.js"></script>
-    <script src="/js/preflight.js"></script>
-    <script type="module" src="/js/three-global-shim.js"></script>
+    <script src="../../js/bootstrap/gg.js"></script>
+    <script src="../../js/preflight.js"></script>
+    <script type="module" src="../../js/three-global-shim.js"></script>
     <script type="module">
-      import { ensureCanvas, ensureElement } from "/js/bootstrap/dom.js";
+      import { ensureCanvas, ensureElement } from "../../js/bootstrap/dom.js";
       window.addEventListener("DOMContentLoaded", () => {
         ensureCanvas("game-canvas");
         ensureElement("#score");
       });
     </script>
-    <script type="module" src="/games/snake/snake.js"></script>
+    <script type="module" src="../../games/snake/snake.js"></script>
   
 <!-- Auto-signal bootstrap: emits READY/ERROR to parent -->
 <script>
