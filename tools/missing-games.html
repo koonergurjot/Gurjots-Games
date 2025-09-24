@@ -22,7 +22,7 @@
 <body>
 <header>
   <h1>Missing Games Checker</h1>
-  <div class="small bar">Checks <code>games.json</code> vs. the presence of <code>/games/&lt;slug&gt;/index.html</code>. Uses <code>HEAD</code> requests for speed.</div>
+  <div class="small bar">Checks <code>games.json</code> vs. the resolved <code>playUrl</code> (falls back to <code>/games/&lt;slug&gt;/index.html</code>). Uses <code>HEAD</code> requests for speed.</div>
 </header>
 <main>
   <div class="legend small">
@@ -32,8 +32,24 @@
   </div>
   <div id="list"></div>
 </main>
-<script>
+<script type="module">
+import { resolveGamePaths } from '../shared/game-paths.js';
+
 const list = document.getElementById('list');
+
+const fallbackPathForSlug = (slug) => `/games/${slug}/index.html`;
+
+async function resolvePath(slug) {
+  if (!slug) return fallbackPathForSlug('unknown');
+  try {
+    const { playPath } = await resolveGamePaths(slug);
+    if (playPath) return playPath;
+  } catch (err) {
+    console.warn('[GG][missing-games] Unable to resolve play path for slug', slug, err);
+  }
+  return fallbackPathForSlug(slug);
+}
+
 const probe = async (url) => {
   try {
     const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
@@ -48,12 +64,12 @@ const probe = async (url) => {
 const row = (slug, path, out) => {
   const div = document.createElement('div');
   div.className = 'row';
-  div.innerHTML = \`
-    <div class="slug">\${slug}</div>
-    <div class="small">\${path}</div>
-    <div class="status \${out.status}">\${out.status.toUpperCase()}</div>
-    <div class="small">\${out.code}</div>
-  \`;
+  div.innerHTML = `
+    <div class="slug">${slug}</div>
+    <div class="small">${path}</div>
+    <div class="status ${out.status}">${out.status.toUpperCase()}</div>
+    <div class="small">${out.code}</div>
+  `;
   return div;
 };
 
@@ -71,7 +87,7 @@ const row = (slug, path, out) => {
   }
   for (const g of games) {
     const slug = g.slug || g.id || g.name || 'unknown';
-    const path = \`../games/\${slug}/index.html\`;
+    const path = await resolvePath(slug);
     const out = await probe(path);
     list.append(row(slug, path, out));
   }

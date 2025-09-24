@@ -1,4 +1,5 @@
 import { warn } from '../tools/reporters/console-signature.js';
+import { resolveGamePaths } from './game-paths.js';
 
 export function registerSW() {
   if ('serviceWorker' in navigator) {
@@ -9,10 +10,21 @@ export function registerSW() {
   }
 }
 
-export function cacheGameAssets(slug, files = ['index.html', 'main.js', 'thumb.png']) {
+export async function cacheGameAssets(slug, files = ['index.html', 'main.js', 'thumb.png']) {
   if (!('serviceWorker' in navigator)) return;
-  const base = `/games/${slug}/`;
-  const assets = files.map(f => base + f);
+  let base = `/games/${slug}/`;
+  try {
+    const { basePath } = await resolveGamePaths(slug);
+    if (basePath) {
+      base = basePath.endsWith('/') ? basePath : `${basePath}/`;
+    }
+  } catch (err) {
+    warn('shared', 'Failed to resolve cache base path', err);
+  }
+  const assets = files.map((f) => {
+    const trimmed = String(f || '').replace(/^\/+/, '');
+    return `${base}${trimmed}`;
+  });
   if (navigator.serviceWorker.controller) {
     navigator.serviceWorker.controller.postMessage({ type: 'PRECACHE', assets });
   }

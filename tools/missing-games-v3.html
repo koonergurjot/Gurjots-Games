@@ -32,7 +32,7 @@
 <body>
 <header>
   <h1>Missing Games Checker v3</h1>
-  <div class="small bar">Checks <code>games.json</code> vs. <code>/games/&lt;slug&gt;/index.html</code> with explicit URL input + full error logs.</div>
+  <div class="small bar">Checks <code>games.json</code> vs. each game's resolved <code>playUrl</code> (fallback: <code>/games/&lt;slug&gt;/index.html</code>) with explicit URL input + full error logs.</div>
 </header>
 <main>
   <div class="legend small">
@@ -75,12 +75,27 @@
 
   <div id="list"></div>
 </main>
-<script>
+<script type="module">
+import { resolveGamePaths } from '../shared/game-paths.js';
 const list = document.getElementById('list');
 const jsonInfo = document.getElementById('json-info');
 const jsonPreview = document.getElementById('json-preview');
 const logs = document.getElementById('logs');
 const jsonUrl = document.getElementById('jsonUrl');
+
+const fallbackPathForSlug = (slug) => `/games/${slug}/index.html`;
+
+async function resolvePath(slug) {
+  const cleanSlug = (slug || '').trim();
+  if (!cleanSlug) return fallbackPathForSlug('unknown');
+  try {
+    const { playPath } = await resolveGamePaths(cleanSlug);
+    if (playPath) return playPath;
+  } catch (err) {
+    console.warn('[GG][missing-games-v3] Unable to resolve play path for slug', slug, err);
+  }
+  return fallbackPathForSlug(cleanSlug);
+}
 
 function log(msg){ const d = document.createElement('div'); d.className='logline'; d.textContent=msg; logs.append(d); }
 function clearResults(){ list.innerHTML = ''; }
@@ -133,9 +148,11 @@ async function runForSlugs(slugs){
     return;
   }
   for (const slug of slugs){
-    const path = \`../games/\${slug}/index.html\`;
+    const cleanSlug = (slug || '').trim();
+    const label = cleanSlug || '(unknown)';
+    const path = await resolvePath(cleanSlug);
     const out = await probe(path);
-    list.append(row(slug, path, out));
+    list.append(row(label, path, out));
   }
 }
 

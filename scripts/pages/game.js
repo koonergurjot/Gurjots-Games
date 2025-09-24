@@ -1,14 +1,17 @@
 import { loadStyle } from '../utils.js';
+import { resolveGamePaths } from '../../shared/game-paths.js';
 
 export default async function(outlet, params){
   loadStyle('styles/pages/game.css');
-  let src = `/games/${params.id}/`;
+  let src = `/games/${params.id}/index.html`;
   try {
-    const res = await fetch('/games.json');
-    const games = await res.json();
-    const game = Array.isArray(games) ? games.find(g => g.id === params.id) : null;
-    if (game && game.playUrl) src = game.playUrl;
-  } catch {}
+    const { playPath } = await resolveGamePaths(params.id);
+    if (playPath) {
+      src = playPath;
+    }
+  } catch (err) {
+    console.warn('[GG] unable to resolve game frame path', params?.id, err);
+  }
   const frame = document.createElement('iframe');
   frame.id = 'game-frame';
   frame.src = src;

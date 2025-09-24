@@ -59,7 +59,8 @@
 
   <div id="list"></div>
 </main>
-<script>
+<script type="module">
+import { resolveGamePaths } from '../shared/game-paths.js';
 (function(){
   const logEl = document.getElementById('log');
   function log(msg, cls=''){ const d=document.createElement('div'); d.className='line '+cls; d.textContent = '['+new Date().toISOString().slice(11,19)+'] '+msg; logEl.append(d); logEl.scrollTop = logEl.scrollHeight; }
@@ -83,7 +84,21 @@
   function clearResults(){ list.innerHTML = ''; jsonPreview.textContent=''; jsonInfo.textContent=''; }
   function preview(obj){ try{ const s=JSON.stringify(obj, null, 2); jsonPreview.innerHTML='<pre>'+s+'</pre>'; }catch(e){ err('preview stringify failed: '+e.message); } }
 
-  const fallbackEntryForSlug = (slug) => `/games/${slug}/index.html`;
+  const fallbackPathForSlug = (slug) => `/games/${slug}/index.html`;
+
+  async function resolveTargetUrl(slug, candidate){
+    const cleanSlug = (slug || '').trim();
+    const preferred = candidate && typeof candidate === 'string' ? candidate.trim() : '';
+    const fallback = preferred || fallbackPathForSlug(cleanSlug || 'unknown');
+    if (!cleanSlug) return fallback;
+    try {
+      const { playPath } = await resolveGamePaths(cleanSlug);
+      if (playPath) return playPath;
+    } catch (e) {
+      warn('resolveTargetUrl: failed for '+cleanSlug+': '+(e && e.message || e));
+    }
+    return fallback;
+  }
 
   function normalizeToDescriptors(data){
     const out = [];
@@ -100,7 +115,7 @@
       const cleanSlug = coerceSlug(slug);
       if (!cleanSlug) return;
       const preferred = entry && typeof entry === 'string' ? entry.trim() : '';
-      out.push({ slug: cleanSlug, url: preferred || fallbackEntryForSlug(cleanSlug) });
+      out.push({ slug: cleanSlug, url: preferred || fallbackPathForSlug(cleanSlug) });
     };
 
     if (Array.isArray(data)){
@@ -162,10 +177,12 @@
       return;
     }
     for (const descriptor of descriptors){
-      const slug = descriptor && descriptor.slug ? descriptor.slug : '(unknown)';
-      const target = descriptor && descriptor.url ? descriptor.url : fallbackEntryForSlug(slug);
+      const cleanSlug = descriptor && descriptor.slug ? String(descriptor.slug).trim() : '';
+      const label = cleanSlug || '(unknown)';
+      const candidate = descriptor && descriptor.url ? descriptor.url : '';
+      const target = await resolveTargetUrl(cleanSlug, candidate);
       const out = await probe(target);
-      list.append(row(slug, target, out));
+      list.append(row(label, target, out));
     }
   }
 
@@ -212,7 +229,7 @@
         descriptors = normalizeToDescriptors(data);
       } else {
         const slugs = text.split(/\s|,|;|\n|\r/).map(s=>s.trim()).filter(Boolean);
-        descriptors = slugs.map(slug => ({ slug, url: fallbackEntryForSlug(slug) }));
+        descriptors = slugs.map(slug => ({ slug, url: fallbackPathForSlug(slug) }));
       }
       ok('Manual parse got '+descriptors.length+' slug(s)');
       await runForDescriptors(descriptors);
