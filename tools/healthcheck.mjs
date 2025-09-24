@@ -53,6 +53,24 @@ async function checkGame(root, game){
   const slugRel = typeof game.slug === 'string' ? path.join('games', game.slug, 'index.html') : null;
   const fallbackRel = typeof game.id === 'string' ? path.join('games', game.id, 'index.html') : null;
 
+  if (pathRel){
+    const target = path.join(root, pathRel);
+    if (!(await exists(target))){
+      result.status = 'fail';
+      result.reason = `missing path ${pathRel}`;
+      return result;
+    }
+  }
+
+  if (playRel){
+    const target = path.join(root, playRel);
+    if (!(await exists(target))){
+      result.status = 'fail';
+      result.reason = `missing playUrl ${playRel}`;
+      return result;
+    }
+  }
+
   const indexRel = pathRel
     || playRel
     || (entryRel ? path.join(path.dirname(entryRel), 'index.html') : null)
