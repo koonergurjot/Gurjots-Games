@@ -5,6 +5,8 @@ import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { showToast, showModal, clearHud } from '../../shared/ui/hud.js';
 import { createParticleSystem } from '../../shared/fx/canvasFx.js';
 
+window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
+
 const GAME_ID='breakout';GG.incPlays();
 const BASE_W=1000;
 const BASE_H=800;

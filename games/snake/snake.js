@@ -3,6 +3,8 @@ import { createParticleSystem } from '../../shared/fx/canvasFx.js';
 import getThemeTokens from '../../shared/skins/index.js';
 import '../../shared/ui/hud.js';
 
+window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
+
 const hud = document.querySelector('.hud');
 hud.innerHTML = `Arrows/WASD or swipe • R restart • P pause
   <label><input type="checkbox" id="dailyToggle"/> Daily</label>
