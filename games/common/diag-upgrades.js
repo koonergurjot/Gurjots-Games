@@ -4,7 +4,39 @@
 */
 (function(){
   const params = new URLSearchParams(location.search);
-  const slug = params.get("slug") || document.currentScript?.dataset?.slug || document.body?.dataset?.slug || "unknown";
+  const scriptEl = document.currentScript;
+  const slugFromPath = (() => {
+    try {
+      const match = location.pathname.match(/\/games\/([^\/?#]+)/i);
+      return match ? match[1] : null;
+    } catch (_) {
+      return null;
+    }
+  })();
+  const rawSlug = params.get("slug") || scriptEl?.dataset?.slug || document.body?.dataset?.slug || slugFromPath || "";
+  const slug = String(rawSlug || "").trim() || "unknown";
+  const disableShell = (() => {
+    if (window.self !== window.top) return true;
+    if (!slug || slug === "unknown") return true;
+    const shellMode = (params.get("shell") || "").toLowerCase();
+    if (shellMode && shellMode !== "" && shellMode !== "modern") return true;
+    if (params.has("noshell")) return true;
+    if (params.has("legacy")) return true;
+    return false;
+  })();
+  if (!disableShell){
+    try {
+      const target = new URL("/game.html", location.origin);
+      target.searchParams.set("slug", slug);
+      for (const [key, value] of params.entries()){
+        if (key === "slug" || key === "shell" || key === "noshell") continue;
+        target.searchParams.append(key, value);
+      }
+      const hash = location.hash || "";
+      location.replace(`${target.pathname}${target.search}${hash}`);
+      return;
+    } catch(_) { /* ignore */ }
+  }
   const FULL = params.has("diag") && params.get("diag") !== "0" && params.get("diag") !== "off";
   const BOOT_READY_TIMEOUT_MS = 5000, NOFRAME_TIMEOUT_MS = 2000, MAX_NET = 30;
 
