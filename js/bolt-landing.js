@@ -8,16 +8,7 @@ const GAME_COUNT = document.getElementById('bolt-game-count');
 
 let allGames = [];
 let activeTag = 'All';
-let queryKey = 'slug'; // will auto-detect
-
-async function detectQueryKey(){
-  try {
-    const res = await fetch('game.html?v=20250911175011', { cache:'no-cache' });
-    const html = await res.text();
-    const m = html.match(/URLSearchParams\([^)]*\)\.get\(["'](\w+)["']\)/);
-    if (m && m[1]) queryKey = m[1];
-  } catch(err) {}
-}
+const PRIMARY_QUERY_KEY = 'slug'; // shell reads slug; we also include id for legacy fallbacks
 
 const toSlug = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
 const prettyTag = t => t?.charAt(0).toUpperCase() + t?.slice(1);
@@ -61,7 +52,10 @@ function card(game){
   const short = game.description || '';
   const badge = Array.isArray(tags) && tags[0] ? prettyTag(tags[0]) : 'Game';
   const thumb = game.thumbnail || game.image || game.cover || null;
-  const href = `game.html?${encodeURIComponent(queryKey)}=${encodeURIComponent(slug)}`;
+  const params = new URLSearchParams();
+  if (slug) params.set(PRIMARY_QUERY_KEY, slug);
+  if (id) params.set('id', id);
+  const href = `game.html?${params.toString()}`;
 
   return `
   <article class="bolt-card" tabindex="0" role="article" aria-label="${title} card">
@@ -114,7 +108,6 @@ function buildFilterChips(tags){
 
 async function boot(){
   try {
-    await detectQueryKey();
     const res = await fetch('./games.json?v=20250911175011', { cache:'no-cache' });
     if (!res.ok) throw new Error('Failed to load games.json');
     const data = await res.json();
