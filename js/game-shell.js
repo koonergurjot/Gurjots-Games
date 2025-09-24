@@ -11,6 +11,54 @@ function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className 
 var state = { timer:null, muted:true, gameInfo:null, iframe:null };
 var diagState = { sink:null, listenerBound:false, errorListenerBound:false };
 
+function setLoaderVisibility(loader, isVisible) {
+  if (!loader) return;
+  try { loader.style.display = isVisible ? 'flex' : 'none'; } catch(_){}
+  try { loader.setAttribute('aria-hidden', isVisible ? 'false' : 'true'); } catch(_){}
+  try { loader.setAttribute('aria-busy', isVisible ? 'true' : 'false'); } catch(_){}
+}
+
+function setLoaderMessage(loader, text) {
+  if (!loader) return;
+  var node = loader.querySelector('.loader-text');
+  if (node) node.textContent = text;
+}
+
+function setErrorVisibility(err, isVisible) {
+  if (!err) return;
+  try {
+    if (isVisible) { err.classList.add('show'); }
+    else { err.classList.remove('show'); }
+  } catch(_){}
+  try { err.setAttribute('aria-hidden', isVisible ? 'false' : 'true'); } catch(_){}
+}
+
+function ensureCanvasLabels(root) {
+  var scope = root || document;
+  if (!scope || !scope.querySelectorAll) return;
+  try {
+    var canvases = scope.querySelectorAll('canvas');
+    var unlabeledCount = 0;
+    for (var i = 0; i < canvases.length; i++) {
+      var canvas = canvases[i];
+      if (!canvas) continue;
+      if (canvas.hasAttribute('aria-label') || canvas.hasAttribute('aria-labelledby')) continue;
+      canvas.setAttribute('role', 'img');
+      var label = 'Game canvas';
+      try {
+        if (state.gameInfo && state.gameInfo.title) {
+          label += ': ' + state.gameInfo.title;
+        }
+      } catch(_){}
+      unlabeledCount += 1;
+      if (unlabeledCount > 1) {
+        label += ' (' + unlabeledCount + ')';
+      }
+      canvas.setAttribute('aria-label', label);
+    }
+  } catch(_){ }
+}
+
 // NEW: inject high-contrast styles for shell overlays
 function injectShellStyles(){
   if (document.getElementById('gg-shell-contrast')) return;
@@ -18,6 +66,7 @@ function injectShellStyles(){
   style.id = 'gg-shell-contrast';
   style.textContent = `
   /* shell overlay readability */
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; white-space:nowrap; }
   #error { position:absolute; inset:0; display:none; align-items:center; justify-content:center; }
   #error.show { display:flex; }
   #error .panel{
@@ -32,7 +81,8 @@ function injectShellStyles(){
     font-size: 15px;
   }
   #error .message{ font-weight:700; margin-bottom:6px; }
-  #error .toggle{ margin-top:8px; cursor:pointer; opacity:.9; text-decoration:underline; }
+  #error .toggle{ margin-top:8px; cursor:pointer; opacity:.9; text-decoration:underline; background:none; border:0; color:inherit; font:inherit; }
+  #error .toggle:focus-visible{ outline:2px solid #89b4ff; outline-offset:2px; }
   #error .details{
     background: #0b133b;
     border: 1px solid #2a3a7a;
@@ -55,9 +105,12 @@ function injectShellStyles(){
     background:#2546a3;
   }
   /* loader dots more visible */
-  #loader.loader{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:10px; }
+  #loader.loader{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+  #loader .loader-inner{ display:flex; flex-direction:column; align-items:center; gap:12px; background:rgba(10,16,46,0.92); padding:16px 20px; border-radius:12px; border:1px solid #3a4a8a; box-shadow:0 12px 40px rgba(0,0,0,.5); text-align:center; }
+  #loader .loader-text{ font-size:16px; font-weight:600; color:#f5f7ff; }
+  #loader .loader-dots{ display:flex; gap:10px; }
   #loader .dot{ width:10px; height:10px; background:#aac6ff; border-radius:50%; animation: gg-bounce 1s infinite ease-in-out; }
-  #loader .dot:nth-child(2){ animation-delay:.15s } 
+  #loader .dot:nth-child(2){ animation-delay:.15s }
   #loader .dot:nth-child(3){ animation-delay:.3s }
   @keyframes gg-bounce { 0%,80%,100%{ transform:scale(0.6); opacity:.6 } 40%{ transform:scale(1); opacity:1 } }
   `;
@@ -141,10 +194,17 @@ function loadGame(info){
   var stage = $('#stage');
   var overlays = ensureOverlays();
   var loader = overlays.loader, err = overlays.err;
-  try { err.classList.remove('show'); } catch(_){}
-  try { loader.style.display = 'flex'; } catch(_){}
+  setErrorVisibility(err, false);
+  if (err) {
+    err.setAttribute('role', 'status');
+    err.setAttribute('aria-live', 'polite');
+  }
+  var gameName = info && (info.title || info.name || info.slug || slug) || 'game';
+  setLoaderMessage(loader, 'Loading ' + gameName + '…');
+  setLoaderVisibility(loader, true);
 
   ensureLegacyElements();
+  ensureCanvasLabels(stage || document);
 
   var entry = info.launch && info.launch.path || info.entry || info.url;
   var isModule = (info.launch && info.launch.module) || info.module || false;
@@ -169,7 +229,7 @@ function loadGame(info){
     state.iframe = iframe;
     createDiagUI(info, type, debugEntry);
   } else {
-    if (stage) stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas"></canvas>';
+    if (stage) stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas" role="img"></canvas>';
     ensureRuntimeDiagnostics(document);
     var s = document.createElement('script');
     var useModule = (FORCE_MODULE !== null) ? FORCE_MODULE : isModule;
@@ -178,12 +238,13 @@ function loadGame(info){
     s.onerror = function(e){ renderError('Failed to load game script', e); };
     document.body.appendChild(s);
     createDiagUI(info, type, entry);
+    ensureCanvasLabels(stage || document);
   }
 
   if(state.timer) clearTimeout(state.timer);
   state.timer = setTimeout(function(){
     var overlays2 = ensureOverlays();
-    try { overlays2.loader.style.display = 'none'; } catch(_){}
+    setLoaderVisibility(overlays2.loader, false);
     showSoftLoading();
   }, 6000);
 }
@@ -209,7 +270,8 @@ function toggleMute(){
 function ensureLegacyElements(){
   if(!document.getElementById('game')) { var d = document.createElement('div'); d.id = 'game'; d.style.position='relative'; document.body.appendChild(d); }
   if(!document.getElementById('game-root')){ var d2 = document.createElement('div'); d2.id = 'game-root'; document.body.appendChild(d2); }
-  if(!document.getElementById('gameCanvas')){ var c = document.createElement('canvas'); c.id='gameCanvas'; c.width=800; c.height=600; c.setAttribute('aria-label','Game canvas'); document.body.appendChild(c); }
+  if(!document.getElementById('gameCanvas')){ var c = document.createElement('canvas'); c.id='gameCanvas'; c.width=800; c.height=600; c.setAttribute('role','img'); c.setAttribute('aria-label','Game canvas'); document.body.appendChild(c); }
+  ensureCanvasLabels(document);
 }
 
 function ensureOverlays(){
@@ -220,7 +282,12 @@ function ensureOverlays(){
     loader = document.createElement('div');
     loader.id = 'loader';
     loader.className = 'loader';
-    loader.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+    loader.setAttribute('role', 'status');
+    loader.setAttribute('aria-live', 'polite');
+    loader.setAttribute('aria-atomic', 'true');
+    loader.setAttribute('aria-hidden', 'false');
+    loader.setAttribute('aria-busy', 'true');
+    loader.innerHTML = '<div class="loader-inner"><div class="loader-text">Loading game…</div><div class="loader-dots" aria-hidden="true"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>';
     stage.appendChild(loader);
   }
 
@@ -229,7 +296,22 @@ function ensureOverlays(){
     err = document.createElement('div');
     err.id = 'error';
     err.className = 'error';
-    err.innerHTML = '\n      <div class="panel">\n        <div class="message"></div>\n        <div class="toggle">Show details</div>\n        <pre class="details"></pre>\n        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">\n          <button class="btn" id="btn-restart">Retry</button>\n          <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>\n        </div>\n      </div>';
+    err.setAttribute('role', 'status');
+    err.setAttribute('aria-live', 'polite');
+    err.setAttribute('aria-atomic', 'true');
+    err.setAttribute('aria-hidden', 'true');
+    err.setAttribute('aria-labelledby', 'error-message');
+    err.setAttribute('aria-describedby', 'error-details');
+    err.innerHTML = '
+      <div class="panel">
+        <div class="message" id="error-message"></div>
+        <button type="button" class="toggle" aria-expanded="false">Show details</button>
+        <pre class="details" id="error-details" aria-hidden="true"></pre>
+        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
+         <button class="btn" id="btn-restart">Retry</button>
+          <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>
+        </div>
+      </div>';
     stage.appendChild(err);
   }
 
@@ -237,30 +319,85 @@ function ensureOverlays(){
   if (btn) btn.onclick = function(){ reloadGame(); };
   var openNew = err.querySelector('#open-new');
   if (openNew) openNew.href = location.href;
+  var details = err.querySelector('.details');
+  if (details) {
+    details.style.display = 'none';
+    details.setAttribute('aria-hidden', 'true');
+  }
+  var toggle = err.querySelector('.toggle');
+  if (toggle && details) {
+    toggle.style.display = '';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.onclick = function(){
+      var hidden = details.style.display === 'none';
+      details.style.display = hidden ? 'block' : 'none';
+      details.setAttribute('aria-hidden', hidden ? 'false' : 'true');
+      toggle.textContent = hidden ? 'Hide details' : 'Show details';
+      toggle.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+    };
+  }
 
   return { loader: loader, err: err };
 }
 
+
 function showSoftLoading(){
   var _ov = ensureOverlays();
   var loader = _ov.loader, err = _ov.err;
-  try { loader.style.display = 'none'; } catch(_) {}
-  try { err.classList.add('show'); } catch(_) {}
+  setLoaderVisibility(loader, false);
+  if (err) {
+    err.setAttribute('role', 'status');
+    err.setAttribute('aria-live', 'polite');
+  }
+  setErrorVisibility(err, true);
   var msg = err.querySelector('.message'); if (msg) msg.textContent = 'Still loading… This game may take longer on first load.';
-  var details = err.querySelector('.details'); if (details) details.style.display = 'none';
-  var toggle = err.querySelector('.toggle'); if (toggle) toggle.style.display = 'none';
+  var details = err.querySelector('.details'); if (details) { details.style.display = 'none'; details.setAttribute('aria-hidden', 'true'); }
+  var toggle = err.querySelector('.toggle');
+  if (toggle) {
+    toggle.style.display = 'none';
+    toggle.setAttribute('aria-hidden', 'true');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.textContent = 'Show details';
+    toggle.onclick = null;
+  }
 }
 
 function renderError(msg, e){
   var _ov = ensureOverlays();
   var loader = _ov.loader, err = _ov.err;
-  try { loader.style.display='none'; } catch(_) {}
-  try { err.classList.add('show'); } catch(_) {}
+  setLoaderVisibility(loader, false);
+  if (err) {
+    err.setAttribute('role', 'alert');
+    err.setAttribute('aria-live', 'assertive');
+  }
+  setErrorVisibility(err, true);
   var d = err.querySelector('.details');
-  if (d) { d.textContent = (e && (e.message || e.toString())) || ''; d.style.display = 'none'; }
+  if (d) {
+    d.textContent = (e && (e.message || e.toString())) || '';
+    d.style.display = 'none';
+    d.setAttribute('aria-hidden', 'true');
+  }
   var m = err.querySelector('.message'); if (m) m.textContent = msg;
   var tog = err.querySelector('.toggle');
-  if (tog && d) tog.onclick = function(){ d.style.display = (d.style.display==='none' ? 'block' : 'none'); };
+  if (tog) {
+    if (d && d.textContent) {
+      tog.style.display = '';
+      tog.textContent = 'Show details';
+      tog.setAttribute('aria-hidden', 'false');
+      tog.setAttribute('aria-expanded', 'false');
+      tog.onclick = function(){
+        var hidden = d.style.display === 'none';
+        d.style.display = hidden ? 'block' : 'none';
+        d.setAttribute('aria-hidden', hidden ? 'false' : 'true');
+        tog.textContent = hidden ? 'Hide details' : 'Show details';
+        tog.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+      };
+    } else {
+      tog.style.display = 'none';
+      tog.setAttribute('aria-hidden', 'true');
+      tog.onclick = null;
+    }
+  }
 }
 
 window.addEventListener('message', function(ev){
@@ -268,8 +405,13 @@ window.addEventListener('message', function(ev){
   if(data.type === 'GAME_READY'){
     if (state.timer) { try { clearTimeout(state.timer); } catch(_){} state.timer = null; }
     var _ov = ensureOverlays();
-    try { _ov.loader.style.display='none'; } catch(_) {}
-    try { _ov.err.classList.remove('show'); } catch(_) {}
+    setLoaderVisibility(_ov.loader, false);
+    setErrorVisibility(_ov.err, false);
+    if (_ov.err) {
+      _ov.err.setAttribute('role', 'status');
+      _ov.err.setAttribute('aria-live', 'polite');
+    }
+    ensureCanvasLabels(document);
   } else if(data.type === 'GAME_ERROR'){
     renderError('Game error', {message: data.message || 'Unknown error'});
   }
