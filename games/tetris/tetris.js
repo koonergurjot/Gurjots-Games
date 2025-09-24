@@ -2,6 +2,8 @@ import '../../shared/fx/canvasFx.js';
 import '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 
+window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
+
 installErrorReporter();
 
 const GAME_ID='tetris';GG.incPlays();
