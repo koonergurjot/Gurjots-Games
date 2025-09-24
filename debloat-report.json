@@ -237,11 +237,6 @@
         "extension": ".css"
       },
       {
-        "path": "data/games.json",
-        "sizeBytes": 2764,
-        "extension": ".json"
-      },
-      {
         "path": "debloat-report.json",
         "sizeBytes": 383076,
         "extension": ".json"

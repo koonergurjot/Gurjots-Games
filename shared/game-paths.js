@@ -1,17 +1,5 @@
 const GAME_SOURCES = [
   {
-    url: '/data/games.json',
-    extractSlug(entry) {
-      return (entry?.id || entry?.slug || '').trim();
-    },
-    extractPlay(entry) {
-      return entry?.playUrl || entry?.playURL || entry?.url || entry?.href || null;
-    },
-    extractEntry(entry) {
-      return entry?.entry || null;
-    }
-  },
-  {
     url: '/games.json',
     extractSlug(entry) {
       return (entry?.id || entry?.slug || '').trim();
