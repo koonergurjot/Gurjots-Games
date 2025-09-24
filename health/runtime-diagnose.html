@@ -50,7 +50,7 @@ const tbody = document.querySelector('#report tbody');
 const mk = (t, props={}) => Object.assign(document.createElement(t), props);
 
 async function loadCatalog() {
-  const res = await fetch('/games.json?cb=' + t);
+  const res = await fetch('/public/games.json?cb=' + t);
   if (!res.ok) throw new Error('Failed to fetch games.json');
   return res.json();
 }

@@ -14,16 +14,8 @@
   }
 
   async function getList(){
-    const bases = ['/games.json','/public/games.json', (location.pathname.replace(/[^\/]+$/, '') + 'games.json')];
-    const tried = [];
-    for (const b of bases){
-      const url = b + (b.includes('?')?'&':'?') + 't=' + now;
-      try {
-        const j = await fetchJSON(url);
-        return { j, src:b };
-      } catch(e){ tried.push(`${b} → ${e.message}`); }
-    }
-    throw new Error('Could not fetch games.json from any known location:\n' + tried.join('\n'));
+    const url = `/public/games.json?t=${now}`;
+    return { j: await fetchJSON(url), src: '/public/games.json' };
   }
 
   async function scan(){

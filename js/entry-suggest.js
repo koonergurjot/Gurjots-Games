@@ -31,7 +31,7 @@
   function esc(s){ return (s+'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
   async function run(){
-    const list = await fetchJSON('/games.json?t=' + now);
+    const list = await fetchJSON('/public/games.json?t=' + now);
     const games = Array.isArray(list) ? list : Object.keys(list).map(k => ({ slug:k, ...list[k] }));
     const missing = [];
     for (const g of games){
