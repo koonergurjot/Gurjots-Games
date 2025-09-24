@@ -1,4 +1,6 @@
 
+window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ };
+
 (function(){
   "use strict";
 
