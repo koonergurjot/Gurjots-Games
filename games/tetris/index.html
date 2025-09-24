@@ -1,31 +1,107 @@
-<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Tetris Lobby</title><style>body{margin:0;background:#0b0d12;color:#e6e7ea;font-family:Inter,system-ui,sans-serif;padding:20px}a{color:#38bdf8;text-decoration:none;margin-right:12px}.list{margin-top:10px}ul{list-style:none;padding:0}li{margin:4px 0}</style></head><body><h1>Tetris Tournament</h1><p><a href="play.html">Play</a><a href="play.html?spectate=1">Spectate</a></p><h2>Replays</h2><ul id="replayList" class="list"><li>Loading...</li></ul><script src="../../js/injectBackButton.js"></script><script>fetch('./replays/list.json').then(r=>r.json()).then(list=>{const ul=document.getElementById('replayList');ul.innerHTML='';if(!list.length){ul.innerHTML='<li>No replays</li>';return;}list.forEach(n=>{const li=document.createElement('li');const a=document.createElement('a');a.href='play.html?replay='+encodeURIComponent(n);a.textContent=n;li.appendChild(a);ul.appendChild(li);});}).catch(()=>{document.getElementById('replayList').innerHTML='<li>No replays</li>';});</script>  <script src="../common/diag-upgrades.js" defer data-slug="tetris"></script>  <script type="module" src="../../shared/juice/overlay.js" data-game="tetris"></script>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tetris Lobby</title>
+  <link rel="stylesheet" href="../common/game-shell.css" />
+  <style>
+    body {
+      font-size: 16px;
+      line-height: 1.6;
+    }
 
-<!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
-<script>
-(function(){
-  if (window.__gg_autoSignalInstalled) return; window.__gg_autoSignalInstalled = true;
-  function send(type, payload){
-    try {
-      if (window.parent) window.parent.postMessage(Object.assign({ type }, payload || {}), "*");
-    } catch(e){ /* noop */ }
-  }
-  // Bubble uncaught errors to shell
-  window.addEventListener("error", function(e){
-    send("GAME_ERROR", { error: (e.message || String(e.error || e)).slice(0, 500) });
-  });
-  window.addEventListener("unhandledrejection", function(e){
-    var reason = e && e.reason ? (e.reason.message || String(e.reason)) : "unhandled rejection";
-    send("GAME_ERROR", { error: String(reason).slice(0, 500) });
-  });
-  // If the game hasn't sent a signal by load, emit READY as a fallback
-  var signalled = false;
-  window.addEventListener("message", function(ev){
-    if (!ev || !ev.data) return;
-    if (ev.data.type === "GAME_READY" || ev.data.type === "GAME_ERROR") signalled = true;
-  });
-  function emitReadyOnce(){ if (!signalled) { send("GAME_READY"); signalled = true; } }
-  if (document.readyState === "complete") { setTimeout(emitReadyOnce, 0); }
-  else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
-})();
-</script>
-</body></html>
+    a {
+      color: #38bdf8;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    a:hover,
+    a:focus-visible {
+      text-decoration: underline;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    li + li {
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body class="game-shell">
+  <main class="game-shell__main">
+    <div class="game-shell__surface game-shell__surface--plain">
+      <section>
+        <h1>Tetris Tournament</h1>
+        <p>
+          <a href="play.html">Play</a>
+          <a href="play.html?spectate=1">Spectate</a>
+        </p>
+        <h2>Replays</h2>
+        <ul id="replayList">
+          <li>Loading...</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+
+  <script>
+  fetch('./replays/list.json')
+    .then(r => r.json())
+    .then(list => {
+      const ul = document.getElementById('replayList');
+      ul.innerHTML = '';
+      if (!list.length) {
+        ul.innerHTML = '<li>No replays</li>';
+        return;
+      }
+      list.forEach(n => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = 'play.html?replay=' + encodeURIComponent(n);
+        a.textContent = n;
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+    })
+    .catch(() => {
+      document.getElementById('replayList').innerHTML = '<li>No replays</li>';
+    });
+  </script>
+  <script type="module" src="../common/game-shell.js" data-game="tetris"></script>
+
+  <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
+  <script>
+  (function(){
+    if (window.__gg_autoSignalInstalled) return; window.__gg_autoSignalInstalled = true;
+    function send(type, payload){
+      try {
+        if (window.parent) window.parent.postMessage(Object.assign({ type }, payload || {}), "*");
+      } catch(e){ /* noop */ }
+    }
+    // Bubble uncaught errors to shell
+    window.addEventListener("error", function(e){
+      send("GAME_ERROR", { error: (e.message || String(e.error || e)).slice(0, 500) });
+    });
+    window.addEventListener("unhandledrejection", function(e){
+      var reason = e && e.reason ? (e.reason.message || String(e.reason)) : "unhandled rejection";
+      send("GAME_ERROR", { error: String(reason).slice(0, 500) });
+    });
+    // If the game hasn't sent a signal by load, emit READY as a fallback
+    var signalled = false;
+    window.addEventListener("message", function(ev){
+      if (!ev || !ev.data) return;
+      if (ev.data.type === "GAME_READY" || ev.data.type === "GAME_ERROR") signalled = true;
+    });
+    function emitReadyOnce(){ if (!signalled) { send("GAME_READY"); signalled = true; } }
+    if (document.readyState === "complete") { setTimeout(emitReadyOnce, 0); }
+    else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
+  })();
+  </script>
+</body>
+</html>

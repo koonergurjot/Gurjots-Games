@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Snake+</title>
+  <link rel="stylesheet" href="../common/game-shell.css" />
   <style>
     :root {
       --bg: #0b1020;
@@ -14,7 +15,7 @@
       --border: #25305a;
     }
     * { box-sizing: border-box; }
-    html, body {
+    body {
       height: 100%;
       margin: 0;
       background: var(--bg);
@@ -22,8 +23,6 @@
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
     .wrap {
-      position: fixed;
-      inset: 0;
       display: grid;
       place-items: center;
       padding: 10px;
@@ -78,22 +77,36 @@
       .hud {
         top: auto;
         bottom: 12px;
-        transform: translateX(-50%);
+        left: 12px;
+        transform: none;
+        right: 12px;
         justify-content: center;
       }
     }
   </style>
 </head>
-<body>
-  <div class="wrap">
-    <canvas id="c" width="640" height="640" aria-label="Snake game"></canvas>
+<body class="game-shell">
+  <main class="game-shell__main">
+    <div class="game-shell__surface">
+      <div class="wrap">
+        <canvas id="game" width="640" height="480"></canvas>
+      </div>
+    </div>
+  </main>
+  <div class="hud" role="group" aria-label="Snake controls">
+    <label><input type="checkbox" id="wrapToggle" /> Wrap walls</label>
+    <label><input type="checkbox" id="warpToggle" /> Warp speed</label>
+    <button id="restartBtn">Restart</button>
+    <button id="autoBtn" aria-pressed="false">Autoplay</button>
+    <label>Theme <select id="themeSelect"></select></label>
   </div>
-  <div class="hud" aria-live="polite"></div>
 
+  <script src="../../js/resizeCanvas.global.js"></script>
+  <script src="../../js/gameUtil.js"></script>
+  <script src="../../js/sfx.js"></script>
   <script type="module" src="./snake.js"></script>
-  <script src="../common/diag-upgrades.js" defer data-slug="snake"></script>
-  <script type="module" src="../../shared/game-boot.js" data-slug="snake"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="snake"></script>
+  <script type="module" src="../common/game-shell.js" data-game="snake"></script>
 
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
   <script>

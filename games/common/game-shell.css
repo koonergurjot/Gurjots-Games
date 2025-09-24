@@ -1,0 +1,112 @@
+:root {
+  color-scheme: dark;
+}
+
+body.game-shell {
+  margin: 0;
+  min-height: 100svh;
+  background: #0b0d12;
+  color: #e6e7ea;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+body.game-shell::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 55%),
+              radial-gradient(circle at bottom right, rgba(236, 72, 153, 0.12), transparent 55%);
+  opacity: 0.55;
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+
+.game-shell__main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 4vw, 64px);
+  position: relative;
+  z-index: 1;
+  min-height: 0;
+}
+
+.game-shell__surface {
+  display: grid;
+  place-items: center;
+  gap: 24px;
+  width: min(100%, 960px);
+}
+
+.game-shell__surface > canvas,
+.game-shell__surface > .game-shell__canvas,
+.game-shell__surface > .game-shell__frame {
+  display: block;
+  max-width: min(100%, 960px);
+  max-height: calc(100svh - 160px);
+  background: #0f1320;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+
+.game-shell__surface > canvas {
+  height: auto;
+}
+
+.game-shell__surface--plain {
+  place-items: stretch;
+  justify-items: stretch;
+  text-align: left;
+}
+
+.game-shell__surface--plain > * {
+  max-width: none;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.game-shell__back {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.4));
+}
+
+.game-shell__back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  background: linear-gradient(135deg, #22d3ee, #8b5cf6);
+  color: #020617;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.game-shell__back-link:focus-visible,
+.game-shell__back-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(34, 211, 238, 0.35);
+}
+
+.game-shell__diagnostics-anchor {
+  display: contents;
+}
+
+@media (max-width: 600px) {
+  .game-shell__surface > canvas,
+  .game-shell__surface > .game-shell__canvas,
+  .game-shell__surface > .game-shell__frame {
+    max-height: calc(100svh - 120px);
+  }
+}
