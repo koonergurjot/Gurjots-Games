@@ -395,7 +395,9 @@
     // balls
     for(const b of state.balls){ circle(b.x,b.y,b.r, getCSS("--pong-fg")); }
 
-    drawParticles();
+    if(typeof drawParticles === "function"){
+      drawParticles();
+    }
     endShake();
     ctx.restore();
 
