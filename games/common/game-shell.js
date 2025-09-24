@@ -23,7 +23,58 @@ if (!document.querySelector('.game-shell__back')) {
   anchor.setAttribute('aria-label', 'Back to games hub');
   anchor.innerHTML = '<span aria-hidden="true">⟵</span><span>Back</span>';
   backHost.append(anchor);
-  document.body.append(backHost);
+  document.body.prepend(backHost);
+
+  if (!document.getElementById('game-shell-announcer')) {
+    const announcer = document.createElement('div');
+    announcer.id = 'game-shell-announcer';
+    announcer.className = 'game-shell__sr-only';
+    announcer.setAttribute('aria-live', 'polite');
+    announcer.setAttribute('aria-atomic', 'true');
+    document.body.prepend(announcer);
+
+    let lastScoreAnnouncement = null;
+    const setAnnouncement = (message) => {
+      if (!message) return;
+      announcer.textContent = String(message);
+    };
+    const announceScore = (score) => {
+      const numericScore = Number(score);
+      if (Number.isNaN(numericScore)) return;
+      if (numericScore === lastScoreAnnouncement) return;
+      lastScoreAnnouncement = numericScore;
+      setAnnouncement(`Score ${numericScore}`);
+    };
+
+    window.addEventListener('message', (event) => {
+      const data = event && typeof event.data === 'object' ? event.data : null;
+      if (!data || !data.type) return;
+      if (data.type === 'GAME_PAUSE' || data.type === 'GG_PAUSE') {
+        setAnnouncement('Game paused');
+      }
+      if (data.type === 'GAME_RESUME' || data.type === 'GG_RESUME') {
+        setAnnouncement('Game resumed');
+      }
+      if (data.type === 'GAME_SCORE') {
+        announceScore(data.score);
+      }
+    }, { passive: true });
+
+    document.addEventListener('visibilitychange', () => {
+      setAnnouncement(document.hidden ? 'Game paused' : 'Game resumed');
+    });
+
+    window.addEventListener('ggshell:announce', (event) => {
+      setAnnouncement(event?.detail);
+    });
+
+    window.addEventListener('ggshell:score', (event) => {
+      announceScore(event?.detail);
+    });
+
+    window.GGShellAnnounce = setAnnouncement;
+    window.GGShellAnnounceScore = announceScore;
+  }
 }
 
 if (slug && !document.querySelector(`script[data-slug="${slug}"][data-shell-diag]`)) {

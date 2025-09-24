@@ -99,6 +99,18 @@ body.game-shell::after {
   box-shadow: 0 10px 24px rgba(34, 211, 238, 0.35);
 }
 
+.game-shell__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .game-shell__diagnostics-anchor {
   display: contents;
 }

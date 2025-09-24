@@ -108,12 +108,34 @@ import { resolveGamePaths } from './game-paths.js';
   root.querySelector('.gg-stage').appendChild(container);
   document.body.prepend(root);
 
+  const liveRegion = document.createElement('div');
+  liveRegion.id = 'gg-live-region';
+  liveRegion.className = 'gg-sr-only';
+  liveRegion.setAttribute('aria-live', 'polite');
+  liveRegion.setAttribute('aria-atomic', 'true');
+  root.prepend(liveRegion);
+
   const $pauseButton = root.querySelector('#gg-pause');
   const $loading = root.querySelector('#gg-loading');
   const $error = root.querySelector('#gg-error');
   const $paused = root.querySelector('#gg-paused');
   const $score = root.querySelector('#gg-score');
   const $hiscore = root.querySelector('#gg-hiscore');
+
+  const announce = (message) => {
+    if (!message) return;
+    liveRegion.textContent = String(message);
+    try { window.GGShellAnnounce?.(message); } catch (_err) {}
+  };
+  let lastAnnouncedScore = null;
+  const announceScore = (value) => {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) return;
+    if (numeric === lastAnnouncedScore) return;
+    lastAnnouncedScore = numeric;
+    announce(`Score ${numeric}`);
+    try { window.GGShellAnnounceScore?.(numeric); } catch (_err) {}
+  };
 
   function clearAnyPause(){
     try {
@@ -209,12 +231,14 @@ import { resolveGamePaths } from './game-paths.js';
       $paused.style.display = 'none';
       if ($pauseButton){ $pauseButton.setAttribute('aria-pressed','false'); }
       sendGameResume();
+      announce('Game resumed');
     } else {
       $paused.removeAttribute('hidden');
       $paused.removeAttribute('aria-hidden');
       $paused.style.display = '';
       if ($pauseButton){ $pauseButton.setAttribute('aria-pressed','true'); }
       sendGamePause();
+      announce('Game paused');
     }
   }
   function restart(){
@@ -236,7 +260,9 @@ import { resolveGamePaths } from './game-paths.js';
       sendGameResume();
     }
     if (d.type==='GAME_ERROR'){ setError(d.message||'Unknown error'); }
-    if (d.type==='GAME_SCORE'){ setScore(d.score); }
+    if (d.type==='GAME_SCORE'){ setScore(d.score); announceScore(d.score); }
+    if (d.type==='GAME_PAUSE' || d.type==='GG_PAUSE'){ announce('Game paused'); }
+    if (d.type==='GAME_RESUME' || d.type==='GG_RESUME'){ announce('Game resumed'); }
   });
 
   // Safety timeout: show error if no ready/error after 8s
