@@ -138,6 +138,16 @@ import { resolveGamePaths } from './game-paths.js';
   };
 
   function clearAnyPause(){
+    const gameUI = window.gameUI = window.gameUI || {};
+    if (typeof gameUI.forceClearPause === 'function') {
+      try {
+        gameUI.forceClearPause({ pausedEl: $paused, pauseButton: $pauseButton, document });
+        return;
+      } catch (err) {
+        // fall back to legacy logic below
+      }
+    }
+
     try {
       if (!document.getElementById('gg-pause-kill-style')){
         const style = document.createElement('style');
