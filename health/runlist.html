@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Runlist · Gurjot's Games</title>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap:12px; }
+  .card { border:1px solid #ddd; border-radius:12px; padding:12px; }
+  .title { font-weight:700; }
+  .muted { color:#777 }
+  .ok { color:#0a0; font-weight:600 }
+  .fail { color:#c00; font-weight:600 }
+  .warn { color:#b58900; font-weight:600 }
+</style>
+</head>
+<body>
+<h1>Runlist</h1>
+<p>One-click launch for every game in <code>/games.json</code>, with basic load status from a HEAD check.</p>
+<div id="grid" class="grid">Loading…</div>
+<script>
+(async function(){
+  const grid = document.getElementById('grid');
+  const res = await fetch('/games.json', {cache:'no-store'});
+  const catalog = await res.json();
+  const cards = await Promise.all(catalog.map(async (g)=>{
+    const play = g.playUrl || g.path || (g.slug?`/games/${g.slug}/`:'');
+    let ok=false;
+    try{ ok = (await fetch(play, {method:'HEAD'})).ok }catch(_){}
+    return `<div class="card">
+      <div class="title">${g.title||g.slug||'(untitled)'}</div>
+      <div class="${ok?'ok':'fail'}">${ok?'OK':'FAIL'}</div>
+      <div class="muted">${g.slug||''}</div>
+      <p><a href="${play}" target="_blank">Open</a></p>
+    </div>`;
+  }));
+  grid.innerHTML = cards.join('');
+})();
+</script>
+</body>
+</html>

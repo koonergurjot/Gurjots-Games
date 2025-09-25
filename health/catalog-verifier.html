@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Catalog Verifier · Gurjot's Games</title>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+  th { background: #f7f7f7; }
+  .ok { color: #0a0; font-weight: 600; }
+  .fail { color: #c00; font-weight: 600; }
+  .warn { color: #b58900; font-weight: 600; }
+  .muted { color: #777; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap }
+  .chip { border:1px solid #ddd; padding:2px 6px; border-radius:12px; font-size:12px; }
+</style>
+</head>
+<body>
+<h1>Catalog Verifier</h1>
+<p>Checks <code>/games.json</code> vs actual files and validates preload assets listed in <code>firstFrame</code>.</p>
+<div id="out">Loading…</div>
+<script>
+(async function(){
+  const out = document.getElementById('out');
+  function row(cells){ return '<tr>'+cells.map(c=>'<td>'+c+'</td>').join('')+'</tr>'; }
+  function esc(s){ return String(s).replace(/[&<>]/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;' }[m])); }
+  function chip(kind, text){ return '<span class="chip '+kind+'">'+esc(text)+'</span>'; }
+
+  const res = await fetch('/games.json', {cache:'no-store'});
+  const catalog = await res.json();
+  const rows = [];
+  for (const g of catalog){
+    const play = g.playUrl || g.path || (g.slug ? `/games/${g.slug}/` : '');
+    let pageOK = false, assetsOK = true;
+    try{
+      const head = await fetch(play, { method:'HEAD', cache:'no-store' });
+      pageOK = head.ok;
+    }catch(_){}
+
+    const chips = [];
+    if (!pageOK) chips.push(chip('fail', 'page 404'));
+    if (g.path && g.playUrl && g.path !== g.playUrl) chips.push(chip('warn','path!=playUrl'));
+    if (!g.slug) chips.push(chip('warn','missing slug'));
+    if (!g.title) chips.push(chip('warn','missing title'));
+    if (!g.difficulty) chips.push(chip('muted','no difficulty'));
+
+    const first = (g.firstFrame && (g.firstFrame.sprites||[]).concat(g.firstFrame.audio||[])) || [];
+    let checked = 0, missing = 0;
+    await Promise.all(first.map(async (url)=>{
+      try{
+        const R = await fetch(url, { method:'HEAD', cache:'no-store' });
+        checked++;
+        if (!R.ok) missing++;
+      }catch(_){ missing++; }
+    }));
+
+    if (missing>0) {
+      chips.push(chip('warn', `preload missing ${missing}/${first.length}`));
+      assetsOK = false;
+    }
+
+    rows.push(row([
+      esc(g.title||g.slug||'(untitled)'),
+      esc(g.slug||''),
+      pageOK ? '<span class="ok">OK</span>' : '<span class="fail">FAIL</span>',
+      assetsOK ? '<span class="ok">OK</span>' : '<span class="warn">WARN</span>',
+      `<div class="chips">${chips.join('')}</div>`,
+      play ? `<a href="${esc(play)}" target="_blank">Open</a>` : '<span class="muted">n/a</span>'
+    ]));
+  }
+  out.innerHTML = '<table><thead><tr><th>Title</th><th>Slug</th><th>Page</th><th>Preloads</th><th>Notes</th><th>Link</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>';
+})();
+</script>
+</body>
+</html>
