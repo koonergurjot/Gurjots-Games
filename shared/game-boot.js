@@ -3,6 +3,7 @@
 import { injectBackButton, injectHelpButton, recordLastPlayed } from './ui.js';
 import { recordPlay } from './quests.js';
 import { renderFallbackPanel } from './fallback.js';
+import { preloadFirstFrameAssets } from './game-asset-preloader.js';
 
 const currentScript = document.currentScript;
 const pathSegments = (new URL(location.href)).pathname.split('/').filter(Boolean);
@@ -13,6 +14,7 @@ const slug = currentScript?.dataset?.slug || urlSlug || 'unknown';
 injectBackButton('/');
 injectHelpButton({ gameId: slug, ...(window.helpData || { steps: window.helpSteps || [] }) });
 recordLastPlayed(slug);
+preloadFirstFrameAssets(slug);
 
 async function track(){
   let tags = [];
