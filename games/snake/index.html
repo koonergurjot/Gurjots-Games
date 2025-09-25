@@ -4,6 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Snake+</title>
+  <link rel="preload" href="../../assets/sprites/coin.png" as="image" />
+  <link rel="preload" href="../../assets/audio/hit.wav" as="audio" />
+  <link rel="preload" href="../../assets/audio/powerup.wav" as="audio" />
+  <link rel="preload" href="../../assets/audio/click.wav" as="audio" />
   <link rel="stylesheet" href="../common/game-shell.css" />
   <style>
     :root {
@@ -110,7 +114,7 @@
   <script src="../../js/sfx.js"></script>
   <script type="module" src="./snake.js"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="snake"></script>
-  <script type="module" src="../common/game-shell.js" data-back-href="/index.html" data-game="snake"></script>
+  <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="snake"></script>
 
   <script src="../common/diag-autowire.js" data-game="snake"></script>
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
