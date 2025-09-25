@@ -47,11 +47,47 @@ body.game-shell::after {
   justify-self: stretch;
 }
 
-.game-shell__surface {
+.game-shell__surface { 
   display: grid;
   place-items: center;
   gap: 24px;
   width: min(100%, 960px);
+}
+
+.game-shell__controls {
+  width: min(100%, 720px);
+  background: rgba(15, 19, 32, 0.9);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 12px 18px;
+  color: #e4e6ed;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.game-shell__controls-details {
+  font-size: 0.95rem;
+}
+
+.game-shell__controls-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.game-shell__controls-list {
+  margin: 12px 0 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.game-shell__controls-list kbd {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SFMono-Regular', Menlo, Monaco, Consolas, monospace;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.85em;
 }
 
 .game-shell__surface > canvas,

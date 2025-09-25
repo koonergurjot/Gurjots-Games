@@ -3,6 +3,28 @@ const dataset = current ? current.dataset : {};
 const applyTheme = dataset.applyTheme !== 'false';
 const slug = dataset.game || dataset.slug || '';
 const diagSrc = dataset.diagSrc || '../common/diag-upgrades.js';
+const backHref = dataset.backHref || '/index.html';
+const preloadTargets = (dataset.preloadFirst || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+const sendToParent = (type, detail) => {
+  try {
+    window.parent?.postMessage({ type, slug, ...(detail || {}) }, '*');
+  } catch (_) {
+    /* no-op */
+  }
+};
+
+const readyPromises = [];
+const whenDomReady = (fn) => {
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(fn, 0);
+  } else {
+    document.addEventListener('DOMContentLoaded', fn, { once: true });
+  }
+};
 
 if (applyTheme) {
   document.body.classList.add('game-shell');
@@ -17,7 +39,7 @@ if (!document.querySelector('.game-shell__back')) {
   anchor.className = 'game-shell__back-link';
   const baseParts = window.location.pathname.split('/games/');
   const base = (baseParts[0] || '/').replace(/\/+$/, '/');
-  const target = dataset.backHref || `${base}index.html`;
+  const target = backHref || `${base}index.html`;
   anchor.href = target;
   anchor.setAttribute('data-shell-back-link', '');
   anchor.setAttribute('aria-label', 'Back to games hub');
@@ -44,6 +66,7 @@ if (!document.querySelector('.game-shell__back')) {
       } catch (_) {
         // Swallow errors dispatching custom events to avoid breaking games.
       }
+      sendToParent(paused ? 'GAME_PAUSE' : 'GAME_RESUME', { reason: detail?.source || 'unknown' });
     };
     const setAnnouncement = (message) => {
       if (!message) return;
@@ -121,3 +144,216 @@ if (dataset.focusTarget) {
     window.addEventListener('load', tryFocus, { once: true });
   }
 }
+
+const SCORE_SELECTORS = {
+  pong: ['#score-p1'],
+  breakout: ['#score'],
+  snake: ['#score', '#scoreValue'],
+  shooter: ['#score'],
+  tetris: ['#score'],
+  runner: ['#score'],
+  g2048: ['#currentScore'],
+};
+
+const trackedScores = new WeakSet();
+let lastEmittedScore = null;
+
+const coerceScore = (value) => {
+  if (value == null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Number(String(value).replace(/[^0-9.-]+/g, ''));
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+};
+
+const emitScore = (score) => {
+  const numeric = coerceScore(score);
+  if (numeric == null) return;
+  if (numeric === lastEmittedScore) return;
+  lastEmittedScore = numeric;
+  sendToParent('GAME_SCORE', { score: numeric });
+  try {
+    window.dispatchEvent(new CustomEvent('ggshell:score', { detail: numeric }));
+  } catch (_) {
+    /* ignore */
+  }
+};
+
+window.GGShellEmitScore = emitScore;
+
+const observeScoreNode = (node) => {
+  if (!node || trackedScores.has(node)) return;
+  trackedScores.add(node);
+
+  const readScore = () => {
+    if (!document.contains(node)) return null;
+    if (node.dataset && node.dataset.gameScore != null) {
+      const direct = coerceScore(node.dataset.gameScore);
+      if (direct != null) return direct;
+    }
+    if (node.value != null) return coerceScore(node.value);
+    return coerceScore(node.textContent);
+  };
+
+  const notify = () => {
+    const currentScore = readScore();
+    if (currentScore != null) emitScore(currentScore);
+  };
+
+  notify();
+
+  const observer = new MutationObserver(() => notify());
+  observer.observe(node, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['data-game-score', 'aria-valuenow', 'value'],
+  });
+
+  const destroy = () => {
+    observer.disconnect();
+    node.removeEventListener('input', notify);
+    node.removeEventListener('change', notify);
+  };
+
+  node.addEventListener('input', notify, { passive: true });
+  node.addEventListener('change', notify, { passive: true });
+  window.addEventListener('beforeunload', destroy, { once: true });
+};
+
+const ensureScoreObservers = () => {
+  const selectorList = new Set([...(SCORE_SELECTORS[slug] || [])]);
+  document.querySelectorAll('[data-game-score]').forEach((node) => {
+    observeScoreNode(node);
+  });
+  selectorList.forEach((selector) => {
+    document.querySelectorAll(selector).forEach((node) => {
+      observeScoreNode(node);
+    });
+  });
+};
+
+const watchedCanvases = new WeakSet();
+
+const fitCanvas = (canvas) => {
+  if (!canvas || watchedCanvases.has(canvas)) return;
+  watchedCanvases.add(canvas);
+  const resize = () => {
+    if (typeof window.fitCanvasToParent === 'function') {
+      try {
+        window.fitCanvasToParent(canvas);
+      } catch (err) {
+        console.warn('[game-shell] fitCanvasToParent failed', err);
+      }
+    }
+  };
+  resize();
+  window.addEventListener('resize', resize);
+  canvas.addEventListener('ggshell:fit', resize);
+};
+
+const ensureCanvasFits = () => {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll('canvas').forEach((canvas) => fitCanvas(canvas));
+};
+
+const installCanvasObserver = () => {
+  if (typeof document === 'undefined' || !document.body) return;
+  ensureCanvasFits();
+  const observer = new MutationObserver(() => ensureCanvasFits());
+  observer.observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('beforeunload', () => observer.disconnect(), { once: true });
+};
+
+const installControlsOverlay = () => {
+  if (document.querySelector('[data-gg-controls-overlay]')) return;
+  const host = document.querySelector('.game-shell__surface') || document.body;
+  const overlay = document.createElement('aside');
+  overlay.setAttribute('data-gg-controls-overlay', '');
+  overlay.className = 'game-shell__controls';
+  overlay.innerHTML = `
+    <details class="game-shell__controls-details" open>
+      <summary>Controls</summary>
+      <ul class="game-shell__controls-list">
+        <li>⬆️/⬇️/⬅️/➡️ — Move / Navigate</li>
+        <li><kbd>Space</kbd> — Jump / Action</li>
+        <li><kbd>P</kbd> — Pause / Resume</li>
+        <li><kbd>R</kbd> — Restart</li>
+      </ul>
+    </details>
+  `;
+  host.appendChild(overlay);
+};
+
+const installVisibilityHelper = () => {
+  if (window.GGShellVisibility) return;
+  window.GGShellVisibility = {
+    bind({ onPause, onResume } = {}) {
+      const unbinders = [];
+      if (typeof onPause === 'function') {
+        const handler = (event) => onPause(event);
+        window.addEventListener('ggshell:pause', handler);
+        unbinders.push(['ggshell:pause', handler]);
+      }
+      if (typeof onResume === 'function') {
+        const handler = (event) => onResume(event);
+        window.addEventListener('ggshell:resume', handler);
+        unbinders.push(['ggshell:resume', handler]);
+      }
+      return () => {
+        unbinders.forEach(([type, handler]) => window.removeEventListener(type, handler));
+      };
+    },
+  };
+};
+
+const resolveAssetUrl = (value) => {
+  if (!value) return null;
+  try {
+    return new URL(value, current?.src || window.location.href).href;
+  } catch (_) {
+    return value;
+  }
+};
+
+const preloadFirstFrameAssets = () => {
+  const sources = new Set();
+  preloadTargets.forEach((value) => {
+    const url = resolveAssetUrl(value);
+    if (url) sources.add(url);
+  });
+  document.querySelectorAll('[data-preload-first]').forEach((el) => {
+    const attr = el.getAttribute('data-preload-first');
+    const url = resolveAssetUrl(attr);
+    if (url) sources.add(url);
+  });
+  if (!sources.size) return;
+  const tasks = Array.from(sources).map((src) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ src, status: 'loaded' });
+      img.onerror = () => {
+        sendToParent('GAME_ERROR', { error: `Failed to preload ${src}` });
+        resolve({ src, status: 'error' });
+      };
+      img.src = src;
+    });
+  });
+  const combined = Promise.allSettled(tasks);
+  readyPromises.push(combined);
+};
+
+if (typeof document !== 'undefined') {
+  installCanvasObserver();
+  whenDomReady(() => {
+    installControlsOverlay();
+    ensureScoreObservers();
+    installVisibilityHelper();
+    preloadFirstFrameAssets();
+  });
+}
+
+window.GGShellReady = {
+  wait: () => Promise.allSettled(readyPromises),
+};
