@@ -51,6 +51,7 @@ let onlineMode=false;
 let localColor='w';
 let lastSentMove=null;
 const netMoveQueue=[];
+let postedReady=false;
 
 // piece sprites encoded as base64 data URIs to avoid external binary assets
 const pieceSrcs={
@@ -377,6 +378,10 @@ function enqueueNetMove(moveStr){
 }
 function highlightSquare(x,y,color){ drawGlow(fxCtx, x*S+S/2, y*S+S/2, S*0.6, color); }
 function draw(){
+  if(!postedReady){
+    postedReady=true;
+    try { window.parent?.postMessage({ type:'GAME_READY', slug:'chess' }, '*'); } catch {}
+  }
   ctx.clearRect(0,0,c.width,c.height);
   fxCtx.clearRect(0,0,fx.width,fx.height);
   ctx.drawImage(boardTex,0,0);

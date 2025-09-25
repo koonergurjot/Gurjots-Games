@@ -44,6 +44,7 @@ c.height=BASE_H;
 fitCanvasToParent(c,BASE_W,BASE_H,24);addEventListener('resize',()=>fitCanvasToParent(c,BASE_W,BASE_H,24));
 const ctx=c.getContext('2d');
 installErrorReporter();
+let postedReady=false;
 
 const paddleBaseW=120;
 let paddle={w:paddleBaseW,h:14,x:c.width/2-paddleBaseW/2,y:c.height-40};
@@ -244,6 +245,10 @@ function step(dt){
 }
 
 function draw(){
+  if(!postedReady){
+    postedReady=true;
+    try { window.parent?.postMessage({ type:'GAME_READY', slug:'breakout' }, '*'); } catch {}
+  }
   ctx.shadowColor='rgba(0,200,255,0.6)';ctx.shadowBlur=12;
   bgT+=0.3;const bg=ctx.createLinearGradient(0,0,0,c.height);
   bg.addColorStop(0,`hsl(${bgT%360},40%,10%)`);

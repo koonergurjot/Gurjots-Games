@@ -6,6 +6,7 @@ export function boot() {
   canvas.width = canvas.width || 960;
   canvas.height = canvas.height || 540;
   const W = canvas.width, H = canvas.height;
+  let postedReady = false;
 
   const player = { x: W*0.2, y: H*0.5, r: 12, vx: 0, vy: 0, speed: 5, hp: 3, cd: 0 };
   const bullets = [];
@@ -68,6 +69,10 @@ export function boot() {
   }
 
   function draw(){
+    if(!postedReady){
+      postedReady = true;
+      try { window.parent?.postMessage({ type:'GAME_READY', slug:'shooter' }, '*'); } catch {}
+    }
     ctx.clearRect(0,0,W,H);
     // bg
     ctx.fillStyle = '#10151a';

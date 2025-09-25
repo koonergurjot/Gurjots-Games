@@ -43,6 +43,7 @@ if(c){
   throw error;
 }
 const ctx=c.getContext('2d');
+let postedReady=false;
 const COLS=10, ROWS=20;
 const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
 const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L:[[0,0,7],[7,7,7]]};
@@ -222,6 +223,10 @@ function drawGhost(cell){
       if(ghost.m[y][x]) drawPieceCell(ghost.x+x,ghost.y+y,ghost.m[y][x],cell,0.3);
 }
 function draw(){
+  if(!postedReady){
+    postedReady=true;
+    try { window.parent?.postMessage({ type:'GAME_READY', slug:'tetris' }, '*'); } catch {}
+  }
   const cell=getCellSize();
   bgShift=(bgShift+0.5)%c.height;
   const bg=ctx.createLinearGradient(0,bgShift,0,c.height+bgShift);

@@ -36,6 +36,7 @@ let searchToken = 0;
 let evalBar;
 let lastMoveHelper;
 let autoRotate = localStorage.getItem('chess3d.rotate') === '1';
+let postedReady=false;
 
 function handlePostMove(){
   try{ moveList?.refresh(); moveList?.setIndex(rules.historySAN().length); }catch(_){ }
@@ -325,6 +326,10 @@ async function boot(){
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    if(!postedReady){
+      postedReady=true;
+      try { window.parent?.postMessage({ type:'GAME_READY', slug:'chess3d' }, '*'); } catch {}
+    }
     renderer.render(scene, camera);
   }
   animate();

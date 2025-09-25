@@ -58,6 +58,7 @@ export function boot() {
   const W = canvas.width;
   const H = canvas.height;
   const groundY = H - 60;
+  let postedReady = false;
 
   const overlay = document.getElementById('overlay');
   const overlayTitle = document.getElementById('over-title');
@@ -438,6 +439,10 @@ export function boot() {
   }
 
   function drawScene() {
+    if(!postedReady){
+      postedReady = true;
+      try { window.parent?.postMessage({ type:'GAME_READY', slug:'platformer' }, '*'); } catch {}
+    }
     ctx.clearRect(0, 0, W, H);
     const gradient = ctx.createLinearGradient(0, 0, 0, H);
     gradient.addColorStop(0, '#0d1a2b');
