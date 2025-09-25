@@ -43,6 +43,7 @@ diffSel?.addEventListener('change',()=>{
   hintDepth=parseInt(diffSel.value)||1;
 });
 const hud=HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset()});
+let postedReady=false;
 
 // UI update functions
 function updateUI() {
@@ -474,6 +475,10 @@ c.addEventListener('touchend',e=>{
 });
 
 function draw(anim){
+  if(!postedReady){
+    postedReady=true;
+    try { window.parent?.postMessage({ type:'GAME_READY', slug:'g2048' }, '*'); } catch {}
+  }
   // Frame rate optimization - skip frames when performance is poor
   const now = performance.now();
   if (renderCache.skipFrames > 0) {

@@ -97,6 +97,7 @@ let opponent = { mesh:null };
 let opponentFinish = null;
 let myFinish = null;
 let lastPosSent = 0;
+let postedReady=false;
 if (roomInput) roomInput.value = Math.random().toString(36).slice(2,7);
 if (best) bestEl.textContent = best.toFixed(2);
 
@@ -847,6 +848,10 @@ function loop() {
   playerLight.position.copy(controls.getObject().position);
   playerLight.position.y += 1.5;
   renderer.render(scene, camera);
+  if(!postedReady){
+    postedReady=true;
+    try { window.parent?.postMessage({ type:'GAME_READY', slug:'maze3d' }, '*'); } catch {}
+  }
   if (mapVisible) {
     // render minimap (orthographic top-down)
     const miniCam = new THREE.OrthographicCamera(-cellSize*MAZE_CELLS*1.2, cellSize*MAZE_CELLS*1.2, cellSize*MAZE_CELLS*1.2, -cellSize*MAZE_CELLS*1.2, 0.1, 1000);

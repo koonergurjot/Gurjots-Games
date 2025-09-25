@@ -24,6 +24,7 @@ const DEFAULT_LEVEL = {
 };
 
 const SKY_GRADIENT = ['#1e293b', '#0f172a'];
+let postedReady = false;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -663,6 +664,10 @@ class RunnerGame {
   }
 
   draw() {
+    if(!postedReady){
+      postedReady = true;
+      try { window.parent?.postMessage({ type:'GAME_READY', slug:'runner' }, '*'); } catch {}
+    }
     const ctx = this.ctx;
     const canSave = typeof ctx.save === 'function';
     if (canSave) ctx.save();

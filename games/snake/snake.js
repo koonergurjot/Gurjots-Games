@@ -79,6 +79,7 @@ let deadHandled = false;
 const GAME_ID = 'snake';
 GG.incPlays();
 const tokens = getThemeTokens('snake');
+let postedReady=false;
 const SNAKE_SKINS = [
   { id: 'default', name: 'Purple', color: tokens['snake-purple'] || '#8b5cf6', unlock: p => true },
   { id: 'gold', name: 'Gold', color: tokens['snake-gold'] || '#fcd34d', unlock: p => p.best >= 10 },
@@ -284,6 +285,10 @@ function step() {
 }
 
 function render() {
+  if(!postedReady){
+    postedReady=true;
+    try { window.parent?.postMessage({ type:'GAME_READY', slug:'snake' }, '*'); } catch {}
+  }
   const time = performance.now();
   CELL = c.width / N;
 
