@@ -93,7 +93,59 @@ export function boot() {
     ctx.fillText('Move: WASD/Arrows • Shoot: Space/Enter', 16, 70);
   }
 
-  let raf; function loop(){ update(); draw(); if (player.hp>0) raf=requestAnimationFrame(loop); else gameOver(); } loop();
+  let raf = 0;
+  let shellPaused = false;
+  let pausedByShell = false;
+
+  function frame(){
+    if(shellPaused){ raf = 0; return; }
+    update();
+    draw();
+    if (player.hp>0) {
+      raf=requestAnimationFrame(frame);
+    } else {
+      gameOver();
+      shellPaused = false;
+      pausedByShell = false;
+      raf = 0;
+    }
+  }
+
+  function startLoop(){ if(!raf && player.hp>0){ raf=requestAnimationFrame(frame); } }
+
+  function stopLoop(){ if(raf){ cancelAnimationFrame(raf); raf=0; } }
+
+  function pauseForShell(){
+    if(shellPaused) return;
+    if(player.hp<=0){ shellPaused=false; pausedByShell=false; return; }
+    shellPaused=true;
+    pausedByShell=true;
+    stopLoop();
+  }
+
+  function resumeFromShell(){
+    if(!shellPaused || document.hidden) return;
+    shellPaused=false;
+    if(pausedByShell && player.hp>0){ pausedByShell=false; startLoop(); }
+  }
+
+  const onShellPause=()=>pauseForShell();
+  const onShellResume=()=>resumeFromShell();
+  const onVisibility=()=>{ if(document.hidden) pauseForShell(); else resumeFromShell(); };
+  const onShellMessage=(event)=>{
+    const data=event && typeof event.data==='object' ? event.data : null;
+    const type=data?.type;
+    if(type==='GAME_PAUSE' || type==='GG_PAUSE') pauseForShell();
+    if(type==='GAME_RESUME' || type==='GG_RESUME') resumeFromShell();
+  };
+
+  window.addEventListener('ggshell:pause', onShellPause);
+  window.addEventListener('ggshell:resume', onShellResume);
+  document.addEventListener('visibilitychange', onVisibility);
+  window.addEventListener('message', onShellMessage, { passive:true });
+
+  startLoop();
+
   function gameOver(){
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle = '#fff'; ctx.font='bold 48px system-ui'; ctx.textAlign='center';
@@ -101,5 +153,5 @@ export function boot() {
     ctx.font='24px system-ui';
     ctx.fillText(`Score: ${score}`, W/2, H/2 + 26);
   }
-  addEventListener('beforeunload', ()=>cancelAnimationFrame(raf));
+  addEventListener('beforeunload', ()=>stopLoop());
 }

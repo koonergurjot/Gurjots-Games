@@ -98,6 +98,9 @@ let ghost;
 let showGhost=localStorage.getItem('tetris:ghost')!=='0';
 let score=0, level=1, lines=0, over=false, dropMs=700, last=0, paused=false;
 let lockTimer=0; const LOCK_DELAY=0.5; let lastFrame=0;
+let shellPaused=false;
+let pausedByShell=false;
+let rafId=0;
 let clearAnim=0, clearRows=[];
 let bgShift=0;
 let combo=-1;
@@ -427,6 +430,7 @@ c.addEventListener('pointerup',e=>{
 
 
 function loop(ts){
+  if(shellPaused){ rafId=0; return; }
   if(!last) last=ts;
   if(!lastFrame) lastFrame=ts;
   const dt=Math.min((ts-lastFrame)/1000,0.05);
@@ -464,14 +468,51 @@ function loop(ts){
   ctx.clearRect(0,0,c.width,c.height);
   draw();
   if(bc && mode==='play') bc.postMessage({grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost});
-  requestAnimationFrame(loop);
+  rafId=requestAnimationFrame(loop);
 }
 
+function startLoop(){ if(!rafId) rafId=requestAnimationFrame(loop); }
+
+function pauseForShell(){
+  if(shellPaused) return;
+  if(!over && !paused){ paused=true; pausedByShell=true; }
+  shellPaused=true;
+  if(rafId){ cancelAnimationFrame(rafId); rafId=0; }
+}
+
+function resumeFromShell(){
+  if(!shellPaused || document.hidden) return;
+  shellPaused=false;
+  if(pausedByShell && !over){
+    paused=false;
+    pausedByShell=false;
+    last=performance.now();
+    lastFrame=0;
+  } else {
+    pausedByShell=false;
+  }
+  startLoop();
+}
+
+const onShellPause=()=>pauseForShell();
+const onShellResume=()=>resumeFromShell();
+const onVisibility=()=>{ if(document.hidden) pauseForShell(); else resumeFromShell(); };
+const onShellMessage=(event)=>{
+  const data=event && typeof event.data==='object' ? event.data : null;
+  const type=data?.type;
+  if(type==='GAME_PAUSE' || type==='GG_PAUSE') pauseForShell();
+  if(type==='GAME_RESUME' || type==='GG_RESUME') resumeFromShell();
+};
+window.addEventListener('ggshell:pause', onShellPause);
+window.addEventListener('ggshell:resume', onShellResume);
+document.addEventListener('visibilitychange', onVisibility);
+window.addEventListener('message', onShellMessage, {passive:true});
+
 if(mode==='replay'){
-  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;requestAnimationFrame(loop);if(typeof reportReady==='function') reportReady('tetris');});
+  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;startLoop();if(typeof reportReady==='function') reportReady('tetris');});
 }else{
   initGame();
   if(mode==='spectate') started=true;
-  requestAnimationFrame(loop);
+  startLoop();
   if(typeof reportReady==='function') reportReady('tetris');
 }

@@ -112,6 +112,7 @@ export function boot() {
   };
 
   let paused = false;
+  let pausedByShell = false;
   let gameOver = false;
   let finalTime = null;
   let rafId = 0;
@@ -542,6 +543,10 @@ export function boot() {
     window.removeEventListener('keyup', handleKeyUp);
     clearTimeout(shareResetTimer);
     clearTimeout(coopRetryTimer);
+    window.removeEventListener('ggshell:pause', onShellPause);
+    window.removeEventListener('ggshell:resume', onShellResume);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('message', onShellMessage);
   }
 
   window.addEventListener('keydown', handleKeyDown);
@@ -549,6 +554,34 @@ export function boot() {
   restartBtn?.addEventListener('click', restartGame);
   shareBtn?.addEventListener('click', shareRun);
   if (netHud) initNet();
+
+  function pauseForShell() {
+    if (gameOver) return;
+    if (paused) { pausedByShell = false; return; }
+    pausedByShell = true;
+    togglePause(true);
+  }
+
+  function resumeFromShell() {
+    if (!pausedByShell || document.hidden) return;
+    pausedByShell = false;
+    if (paused && !gameOver) togglePause(false);
+  }
+
+  const onShellPause = () => pauseForShell();
+  const onShellResume = () => resumeFromShell();
+  const onVisibilityChange = () => { if (document.hidden) pauseForShell(); else resumeFromShell(); };
+  const onShellMessage = (event) => {
+    const data = event && typeof event.data === 'object' ? event.data : null;
+    const type = data?.type;
+    if (type === 'GAME_PAUSE' || type === 'GG_PAUSE') pauseForShell();
+    if (type === 'GAME_RESUME' || type === 'GG_RESUME') resumeFromShell();
+  };
+
+  window.addEventListener('ggshell:pause', onShellPause);
+  window.addEventListener('ggshell:resume', onShellResume);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('message', onShellMessage, { passive: true });
 
   resetState();
   lastFrame = performance.now();

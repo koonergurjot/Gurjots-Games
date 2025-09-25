@@ -88,6 +88,9 @@ let rematchBtn = document.getElementById('rematchBtn');
 
 let running = false;
 let paused = true;
+let pausedByShell = false;
+let shellRenderPaused = false;
+let loopRaf = 0;
 let startTime = 0;
 let best = Number(localStorage.getItem('besttime:maze3d') || 0);
 let net = null;
@@ -832,7 +835,10 @@ function update(dt) {
 }
 
 function loop() {
-  requestAnimationFrame(loop);
+  if (shellRenderPaused) {
+    loopRaf = 0;
+    return;
+  }
   const dt = 0.016; // fixed timestep
   if (running && !paused) {
     const now = performance.now();
@@ -883,7 +889,57 @@ function loop() {
     ctx2.fillStyle = '#eab308';
     ctx2.fillRect(u-2, v-2, 4, 4);
   }
+  if (!shellRenderPaused) {
+    loopRaf = requestAnimationFrame(loop);
+  } else {
+    loopRaf = 0;
+  }
 }
+
+function startRenderLoop() {
+  if (!loopRaf) {
+    shellRenderPaused = false;
+    loopRaf = requestAnimationFrame(loop);
+  }
+}
+
+function stopRenderLoop() {
+  shellRenderPaused = true;
+  if (loopRaf) {
+    cancelAnimationFrame(loopRaf);
+    loopRaf = 0;
+  }
+}
+
+function pauseForShell() {
+  stopRenderLoop();
+  if (!running || paused) { pausedByShell = false; return; }
+  pausedByShell = true;
+  pause();
+}
+
+function resumeFromShell() {
+  if (document.hidden) return;
+  startRenderLoop();
+  if (!pausedByShell) return;
+  pausedByShell = false;
+  if (running && paused) start();
+}
+
+const onShellPause = () => pauseForShell();
+const onShellResume = () => resumeFromShell();
+const onVisibilityChange = () => { if (document.hidden) pauseForShell(); else resumeFromShell(); };
+const onShellMessage = (event) => {
+  const data = event && typeof event.data === 'object' ? event.data : null;
+  const type = data?.type;
+  if (type === 'GAME_PAUSE' || type === 'GG_PAUSE') pauseForShell();
+  if (type === 'GAME_RESUME' || type === 'GG_RESUME') resumeFromShell();
+};
+
+window.addEventListener('ggshell:pause', onShellPause);
+window.addEventListener('ggshell:resume', onShellResume);
+document.addEventListener('visibilitychange', onVisibilityChange);
+window.addEventListener('message', onShellMessage, { passive: true });
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -892,4 +948,4 @@ window.addEventListener('resize', () => {
 });
 
 restart(currentSeed);
-loop();
+startRenderLoop();

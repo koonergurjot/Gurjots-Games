@@ -34,6 +34,17 @@ if (!document.querySelector('.game-shell__back')) {
     document.body.prepend(announcer);
 
     let lastScoreAnnouncement = null;
+    let shellPaused = false;
+    const updateShellPauseState = (paused, detail) => {
+      if (shellPaused === paused) return;
+      shellPaused = paused;
+      const eventName = paused ? 'ggshell:pause' : 'ggshell:resume';
+      try {
+        window.dispatchEvent(new CustomEvent(eventName, { detail }));
+      } catch (_) {
+        // Swallow errors dispatching custom events to avoid breaking games.
+      }
+    };
     const setAnnouncement = (message) => {
       if (!message) return;
       announcer.textContent = String(message);
@@ -51,9 +62,11 @@ if (!document.querySelector('.game-shell__back')) {
       if (!data || !data.type) return;
       if (data.type === 'GAME_PAUSE' || data.type === 'GG_PAUSE') {
         setAnnouncement('Game paused');
+        updateShellPauseState(true, { source: 'message', payload: data });
       }
       if (data.type === 'GAME_RESUME' || data.type === 'GG_RESUME') {
         setAnnouncement('Game resumed');
+        updateShellPauseState(false, { source: 'message', payload: data });
       }
       if (data.type === 'GAME_SCORE') {
         announceScore(data.score);
@@ -62,6 +75,7 @@ if (!document.querySelector('.game-shell__back')) {
 
     document.addEventListener('visibilitychange', () => {
       setAnnouncement(document.hidden ? 'Game paused' : 'Game resumed');
+      updateShellPauseState(document.hidden, { source: 'visibilitychange' });
     });
 
     window.addEventListener('ggshell:announce', (event) => {

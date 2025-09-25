@@ -27,6 +27,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     score:{p1:0,p2:0}, ball:null, balls:[], p1:null, p2:null, hud:null, diag:null, loopId:0,
     particles:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
     trail:[], trailMax:20, touches:{}, replay:[], replayMax:5*60, recording:true,
+    shellPaused:false,
     gridPhase:0
   };
 
@@ -552,6 +553,18 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
   function number(value, on){ const i=h("input",{class:"pong-input", type:"number", value:String(value), min:"1", max:"99", style:"width:5rem"}); i.addEventListener("change", ()=>on(parseInt(i.value||"0")||11)); return i; }
 
   function togglePause(){ state.paused=!state.paused; if(!state.paused){ state.last=performance.now(); } }
+  function pauseForShell(){
+    if(state.over) return;
+    if(state.paused){ state.shellPaused=false; return; }
+    state.shellPaused=true;
+    state.paused=true;
+  }
+  function resumeFromShell(){
+    if(!state.shellPaused || state.over) return;
+    state.shellPaused=false;
+    state.paused=false;
+    state.last=performance.now();
+  }
   function toggleDiag(){ state.debug=!state.debug; state.diag.classList.toggle("show", state.debug); }
   function copyDiag(){ const pre=state.diag && state.diag.querySelector("pre"); if(pre) navigator.clipboard && navigator.clipboard.writeText(pre.textContent).catch(()=>{}); }
 
@@ -607,7 +620,19 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
   // ---------- Events ----------
   function addEvents(){
     window.addEventListener("resize", onResize);
-    document.addEventListener("visibilitychange", ()=> { state.paused = document.hidden || state.paused; });
+    const onShellPause=()=>pauseForShell();
+    const onShellResume=()=>{ if(!document.hidden) resumeFromShell(); };
+    const onVisibility=()=>{ if(document.hidden) pauseForShell(); else resumeFromShell(); };
+    const onMessage=(event)=>{
+      const data=event && typeof event.data==="object" ? event.data : null;
+      const type=data?.type;
+      if(type==="GAME_PAUSE" || type==="GG_PAUSE") pauseForShell();
+      if(type==="GAME_RESUME" || type==="GG_RESUME") resumeFromShell();
+    };
+    window.addEventListener("ggshell:pause", onShellPause);
+    window.addEventListener("ggshell:resume", onShellResume);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("message", onMessage, {passive:true});
     window.addEventListener("keydown", e=>{
       pressed.add(e.code);
       if(e.code===state.keys.pause){ togglePause(); e.preventDefault(); }

@@ -11,6 +11,30 @@ import { log, warn } from '../../tools/reporters/console-signature.js';
 import { injectHelpButton } from '../../shared/ui.js';
 const games = await fetch('/public/games.json').then(r => r.json());
 
+let renderLoopId = 0;
+let renderLoopPaused = false;
+let shellLoopAutoPaused = false;
+let shellClockAutoPaused = false;
+let handleShellPause = () => {};
+let handleShellResume = () => {};
+
+(function installShellAutoPause(){
+  const onPause = () => handleShellPause();
+  const onResume = () => handleShellResume();
+  window.addEventListener('ggshell:pause', onPause);
+  window.addEventListener('ggshell:resume', onResume);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) handleShellPause();
+    else handleShellResume();
+  });
+  window.addEventListener('message', (event) => {
+    const data = event && typeof event.data === 'object' ? event.data : null;
+    const type = data?.type;
+    if (type === 'GAME_PAUSE' || type === 'GG_PAUSE') handleShellPause();
+    if (type === 'GAME_RESUME' || type === 'GG_RESUME') handleShellResume();
+  }, { passive: true });
+})();
+
 log('chess3d', '[Chess3D] booting');
 
 const help = games.find(g => g.id === 'chess3d')?.help || {};
@@ -323,16 +347,62 @@ async function boot(){
   updateStatus();
   maybeAIMove();
 
-  function animate() {
-    requestAnimationFrame(animate);
+  const renderFrame = () => {
+    if (renderLoopPaused) {
+      renderLoopId = 0;
+      return;
+    }
     controls.update();
     if(!postedReady){
       postedReady=true;
       try { window.parent?.postMessage({ type:'GAME_READY', slug:'chess3d' }, '*'); } catch {}
     }
     renderer.render(scene, camera);
-  }
-  animate();
+    renderLoopId = requestAnimationFrame(renderFrame);
+  };
+  const startRenderLoop = () => {
+    if (renderLoopId) return;
+    renderLoopPaused = false;
+    renderLoopId = requestAnimationFrame(renderFrame);
+  };
+  const stopRenderLoop = () => {
+    renderLoopPaused = true;
+    if (renderLoopId) {
+      cancelAnimationFrame(renderLoopId);
+      renderLoopId = 0;
+    }
+  };
+  startRenderLoop();
+
+  handleShellPause = () => {
+    const wasRunning = !!renderLoopId && !renderLoopPaused;
+    stopRenderLoop();
+    shellLoopAutoPaused = wasRunning;
+    if (!gameOver && clocks && typeof clocks.pause === 'function') {
+      try {
+        clocks.pause();
+        shellClockAutoPaused = true;
+      } catch (_) {
+        shellClockAutoPaused = false;
+      }
+    } else {
+      shellClockAutoPaused = false;
+    }
+  };
+  handleShellResume = () => {
+    if (document.hidden) return;
+    if (shellClockAutoPaused && !gameOver && clocks && typeof clocks.resume === 'function') {
+      try { clocks.resume(); } catch (_) {}
+      shellClockAutoPaused = false;
+    }
+    if (shellLoopAutoPaused && !renderLoopId) {
+      shellLoopAutoPaused = false;
+      startRenderLoop();
+    } else if (!renderLoopId && !renderLoopPaused) {
+      startRenderLoop();
+    }
+  };
+
   try{ window.__Chess3DBooted = true; }catch(_){}
 }
 
