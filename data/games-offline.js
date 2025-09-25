@@ -10,7 +10,18 @@ export const games = [
     ],
     "difficulty": "easy",
     "released": "2025-08-20",
-    "playUrl": "/games/pong/"
+    "playUrl": "/games/pong/",
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/paddle.png",
+        "/assets/sprites/ball.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    }
   },
   {
     "id": "snake",
@@ -22,7 +33,17 @@ export const games = [
     ],
     "difficulty": "easy",
     "released": "2025-08-25",
-    "playUrl": "/games/snake/"
+    "playUrl": "/games/snake/",
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/coin.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    }
   },
   {
     "id": "tetris",
@@ -34,7 +55,14 @@ export const games = [
     ],
     "difficulty": "medium",
     "released": "2025-08-26",
-    "playUrl": "/games/tetris/"
+    "playUrl": "/games/tetris/",
+    "firstFrame": {
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    }
   },
   {
     "id": "breakout",
@@ -46,7 +74,19 @@ export const games = [
     ],
     "difficulty": "medium",
     "released": "2025-08-26",
-    "playUrl": "/games/breakout/"
+    "playUrl": "/games/breakout/",
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/paddle.png",
+        "/assets/sprites/brick.png",
+        "/assets/sprites/ball.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    }
   },
   {
     "id": "chess",
@@ -58,7 +98,12 @@ export const games = [
     ],
     "difficulty": "hard",
     "released": "2025-08-20",
-    "playUrl": "/games/chess/"
+    "playUrl": "/games/chess/",
+    "firstFrame": {
+      "audio": [
+        "/assets/audio/click.wav"
+      ]
+    }
   },
   {
     "id": "chess3d",
@@ -70,7 +115,12 @@ export const games = [
     ],
     "difficulty": "hard",
     "released": "2025-08-27",
-    "playUrl": "/games/chess3d/"
+    "playUrl": "/games/chess3d/",
+    "firstFrame": {
+      "audio": [
+        "/assets/audio/click.wav"
+      ]
+    }
   },
   {
     "id": "g2048",
@@ -82,7 +132,12 @@ export const games = [
     ],
     "difficulty": "medium",
     "released": "2025-08-20",
-    "playUrl": "/games/2048/"
+    "playUrl": "/games/2048/",
+    "firstFrame": {
+      "audio": [
+        "/assets/audio/click.wav"
+      ]
+    }
   },
   {
     "id": "asteroids",
@@ -94,7 +149,17 @@ export const games = [
     ],
     "difficulty": "hard",
     "released": "2025-08-27",
-    "playUrl": "/games/asteroids/"
+    "playUrl": "/games/asteroids/",
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/ship.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/explode.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    }
   },
   {
     "id": "maze3d",
@@ -105,7 +170,12 @@ export const games = [
     ],
     "difficulty": "medium",
     "released": "2025-08-27",
-    "playUrl": "/games/maze3d/"
+    "playUrl": "/games/maze3d/",
+    "firstFrame": {
+      "audio": [
+        "/assets/audio/powerup.wav"
+      ]
+    }
   },
   {
     "id": "platformer",
@@ -116,7 +186,16 @@ export const games = [
     ],
     "difficulty": "medium",
     "released": "2025-08-27",
-    "playUrl": "/games/platformer/"
+    "playUrl": "/games/platformer/",
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/coin.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    }
   },
   {
     "id": "runner",
@@ -127,7 +206,17 @@ export const games = [
     ],
     "difficulty": "medium",
     "released": "2025-08-27",
-    "playUrl": "/games/runner/"
+    "playUrl": "/games/runner/",
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/coin.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    }
   },
   {
     "id": "shooter",
@@ -138,7 +227,16 @@ export const games = [
     ],
     "difficulty": "hard",
     "released": "2025-08-27",
-    "playUrl": "/games/shooter/"
+    "playUrl": "/games/shooter/",
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/ship.png"
+      ],
+      "audio": [
+        "/assets/audio/explode.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    }
   }
 ];
 export default games;
