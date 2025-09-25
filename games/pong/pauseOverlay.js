@@ -1,6 +1,20 @@
 (function (global) {
   if (typeof document === 'undefined') return;
-  function createPauseOverlay(opts = {}) {
+
+  const gameUI = global.gameUI = global.gameUI || {};
+
+  function localCreatePauseOverlay(opts = {}) {
+    const overlay = (global.pauseOverlay && typeof global.pauseOverlay.createPauseOverlay === 'function')
+      ? global.pauseOverlay.createPauseOverlay({
+          ...opts,
+          gameId: 'pong',
+          hint: opts.hint || 'Press Esc or P to resume'
+        })
+      : createFallbackOverlay(opts);
+    return overlay;
+  }
+
+  function createFallbackOverlay(opts = {}) {
     const { onResume, onRestart } = opts;
     const existing = document.querySelector('.pause-overlay[data-game="pong"]');
     if (existing) existing.remove();
@@ -12,9 +26,7 @@
     overlay.innerHTML = `
       <div class="panel" role="document">
         <h3 style="margin:0 0 12px 0; font: 700 18px Inter,system-ui">Paused</h3>
-        <p class="hint" style="margin:0 0 16px 0; font:500 14px/1.4 Inter,system-ui; color:var(--muted,#9aa0a6);">
-          Press Esc or P to resume
-        </p>
+        <p class="hint" style="margin:0 0 16px 0; font:500 14px/1.4 Inter,system-ui; color:var(--muted,#9aa0a6);">Press Esc or P to resume</p>
         <div style="display:flex; gap:10px; justify-content:center">
           <button type="button" class="btn" data-action="resume">Resume</button>
           <button type="button" class="btn" data-action="restart">Restart</button>
@@ -50,5 +62,6 @@
       }
     };
   }
-  global.PongPauseOverlay = { create: createPauseOverlay };
+
+  global.PongPauseOverlay = { create: localCreatePauseOverlay };
 })(typeof window !== 'undefined' ? window : globalThis);
