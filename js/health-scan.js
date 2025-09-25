@@ -14,8 +14,18 @@
   }
 
   async function getList(){
-    const url = `/public/games.json?t=${now}`;
-    return { j: await fetchJSON(url), src: '/public/games.json' };
+    const urls = [`/games.json?t=${now}`, `/public/games.json?t=${now}`];
+    let lastError = null;
+    for (const url of urls) {
+      try {
+        const data = await fetchJSON(url);
+        const src = url.split('?')[0] || url;
+        return { j: data, src };
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError || new Error('failed to fetch games.json');
   }
 
   async function scan(){

@@ -11,6 +11,21 @@ function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className 
 var state = { timer:null, failTimer:null, muted:true, gameInfo:null, iframe:null };
 var diagState = { sink:null, listenerBound:false, errorListenerBound:false };
 
+async function fetchCatalogJSON(init){
+  var urls = ['/games.json', '/public/games.json'];
+  var lastError = null;
+  for (var i = 0; i < urls.length; i++) {
+    try {
+      var res = await fetch(urls[i], init);
+      if (!res || !res.ok) throw new Error('bad status ' + (res && res.status));
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('catalog unavailable');
+}
+
 function clearBootTimers(){
   try {
     if (state.timer) {
@@ -164,8 +179,7 @@ async function boot(){
   if(!slug){ return render404("Missing ?slug= parameter"); }
   var catalog;
   try{
-    var res = await fetch('/public/games.json', {cache:'no-cache'});
-    catalog = await res.json();
+    catalog = await fetchCatalogJSON({cache:'no-cache'});
   }catch(e){ return renderError("Could not load games.json", e); }
   var list = Array.isArray(catalog) ? catalog : (catalog.games || []);
   var info = list.find(function(g){ return (g.slug||g.id) === slug; });

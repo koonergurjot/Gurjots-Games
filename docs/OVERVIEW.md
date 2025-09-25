@@ -14,7 +14,7 @@ The client-side interface communicates with modular game logic. State is saved l
 ## Updating Game Data
 
 Game metadata displayed on the landing page lives in the repository root `games.json` file.
-At build time the sync script copies that source file to `/public/games.json`, which is what the deployed site loads. Treat `/public/games.json` as read-only—update the root catalog and re-run the sync script instead of editing the public copy by hand.
+The deployed site now consumes `/games.json` directly (with a compatibility fallback to `/public/games.json` for older builds). Treat `games.json` as the source of truth and re-run the sync script when entries change.
 
 To add a new entry:
 
@@ -28,6 +28,6 @@ To add a new entry:
    - `released` – release date in `YYYY-MM-DD`
    - `playUrl` – path to the game's root
 3. Ensure the JSON remains valid and each object is comma-separated.
-4. Run `npm run sync:games` to refresh `/public/games.json`.
+4. Run `npm run sync:games` to refresh auxiliary artifacts (offline cache, etc.).
 5. Run `npm run health` to verify the metadata.
 

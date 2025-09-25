@@ -50,9 +50,18 @@ const tbody = document.querySelector('#report tbody');
 const mk = (t, props={}) => Object.assign(document.createElement(t), props);
 
 async function loadCatalog() {
-  const res = await fetch('/public/games.json?cb=' + t);
-  if (!res.ok) throw new Error('Failed to fetch games.json');
-  return res.json();
+  const urls = [`/games.json?cb=${t}`, `/public/games.json?cb=${t}`];
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res?.ok) throw new Error('Failed to fetch games.json');
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('Failed to fetch games.json');
 }
 
 function buildRows(list) {

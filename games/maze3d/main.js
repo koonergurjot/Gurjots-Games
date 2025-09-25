@@ -4,7 +4,23 @@ import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.
 import { emitEvent } from '../../shared/achievements.js';
 import { connect } from './net.js';
 import { generateMaze, seedRandom } from './generator.js';
-const games = await fetch('/public/games.json').then(r => r.json());
+
+async function loadCatalog() {
+  const urls = ['/games.json', '/public/games.json'];
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res?.ok) throw new Error(`bad status ${res?.status}`);
+      return await res.json();
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('catalog unavailable');
+}
+
+const games = await loadCatalog();
 
 const help = games.find(g => g.id === 'maze3d')?.help || {};
 injectHelpButton({ gameId: 'maze3d', ...help });

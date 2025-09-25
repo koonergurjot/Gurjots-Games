@@ -1,21 +1,30 @@
 import { normalizeCatalogEntries, toNormalizedList } from './game-catalog-core.js';
 
-const CATALOG_URL = '/public/games.json';
+const PRIMARY_CATALOG_URL = '/games.json';
+const LEGACY_CATALOG_URLS = ['/public/games.json'];
 let catalogPromise = null;
 
 async function fetchCatalogSource() {
-  try {
-    const response = await fetch(CATALOG_URL, { cache: 'no-store', credentials: 'omit' });
-    if (!response?.ok) throw new Error(`bad status: ${response?.status}`);
-    const data = await response.json();
-    if (!Array.isArray(data)) throw new Error('games.json did not contain an array');
-    return data;
-  } catch (err) {
-    console.warn('[GG] falling back to offline game catalog', err);
-    const offline = await import('../data/games-offline.js');
-    const fallback = offline?.games || offline?.default || [];
-    return Array.isArray(fallback) ? fallback : [];
+  const urls = [PRIMARY_CATALOG_URL, ...LEGACY_CATALOG_URLS];
+  let lastError = null;
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, { cache: 'no-store', credentials: 'omit' });
+      if (!response?.ok) throw new Error(`bad status: ${response?.status}`);
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error('games.json did not contain an array');
+      return data;
+    } catch (err) {
+      lastError = err;
+    }
   }
+
+  const err = lastError || new Error('failed to fetch catalog');
+  console.warn('[GG] falling back to offline game catalog', err);
+  const offline = await import('../data/games-offline.js');
+  const fallback = offline?.games || offline?.default || [];
+  return Array.isArray(fallback) ? fallback : [];
 }
 
 async function buildCatalog() {

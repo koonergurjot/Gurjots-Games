@@ -43,8 +43,19 @@
 
     async function loadGames(){
       try {
-        const res = await fetch('./public/games.json', { cache: 'no-store' });
-        const data = await res.json();
+        const urls = ['./games.json', './public/games.json'];
+        let data = null;
+        for (const url of urls) {
+          try {
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res?.ok) throw new Error('bad status ' + (res && res.status));
+            data = await res.json();
+            break;
+          } catch (_) {
+            data = null;
+          }
+        }
+        if (!data) throw new Error('catalog unavailable');
         games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
       } catch { games = []; }
     }

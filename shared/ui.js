@@ -267,8 +267,19 @@ export async function shareScore(slug, score) {
   let text = `I scored ${score} in ${slug}!`;
   try {
     // Attempt to grab a nicer title from games.json
-    const res = await fetch(new URL('../public/games.json', import.meta.url));
-    const data = await res.json();
+    const catalogPaths = ['../games.json', '../public/games.json'];
+    let data = null;
+    for (const rel of catalogPaths) {
+      try {
+        const res = await fetch(new URL(rel, import.meta.url), { cache: 'no-store' });
+        if (!res?.ok) throw new Error(`bad status ${res?.status}`);
+        data = await res.json();
+        break;
+      } catch (_) {
+        data = null;
+      }
+    }
+    if (!data) throw new Error('catalog unavailable');
     const game = (data.games || data).find?.(g => g.slug === slug);
     if (game?.title) text = `I scored ${score} in ${game.title}!`;
   } catch {}

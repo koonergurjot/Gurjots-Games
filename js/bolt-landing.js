@@ -108,9 +108,19 @@ function buildFilterChips(tags){
 
 async function boot(){
   try {
-    const res = await fetch('./public/games.json?v=20250911175011', { cache:'no-cache' });
-    if (!res.ok) throw new Error('Failed to load games.json');
-    const data = await res.json();
+    const urls = ['./games.json?v=20250911175011', './public/games.json?v=20250911175011'];
+    let data = null;
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { cache:'no-cache' });
+        if (!res?.ok) throw new Error('Failed to load games.json');
+        data = await res.json();
+        break;
+      } catch (_) {
+        data = null;
+      }
+    }
+    if (!data) throw new Error('Failed to load games.json');
     const list = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
     allGames = list.map(g => ({
       id: g.id || g.slug || toSlug(g.name),
