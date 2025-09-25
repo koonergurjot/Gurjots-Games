@@ -108,6 +108,9 @@ class RunnerGame {
     this.onPointerDown = this.handlePointerDown.bind(this);
     this.onPointerUp = this.handlePointerUp.bind(this);
     this.onVisibilityChange = this.handleVisibilityChange.bind(this);
+    this.onShellPause = this.handleShellPause.bind(this);
+    this.onShellResume = this.handleShellResume.bind(this);
+    this.onShellMessage = this.handleShellMessage.bind(this);
 
     this.attachEvents();
     this.readPreferences(context);
@@ -127,6 +130,9 @@ class RunnerGame {
     this.canvas.addEventListener('pointerup', this.onPointerUp, { passive: false });
     this.canvas.addEventListener('pointercancel', this.onPointerUp, { passive: false });
     document.addEventListener('visibilitychange', this.onVisibilityChange);
+    window.addEventListener('ggshell:pause', this.onShellPause);
+    window.addEventListener('ggshell:resume', this.onShellResume);
+    window.addEventListener('message', this.onShellMessage, { passive: true });
 
     this.hud.pauseBtn?.addEventListener('click', () => this.togglePause());
     this.hud.restartBtn?.addEventListener('click', () => this.restart());
@@ -145,6 +151,9 @@ class RunnerGame {
     this.canvas.removeEventListener('pointerup', this.onPointerUp);
     this.canvas.removeEventListener('pointercancel', this.onPointerUp);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    window.removeEventListener('ggshell:pause', this.onShellPause);
+    window.removeEventListener('ggshell:resume', this.onShellResume);
+    window.removeEventListener('message', this.onShellMessage);
   }
 
   readPreferences(context) {
@@ -652,14 +661,30 @@ class RunnerGame {
 
   handleVisibilityChange() {
     if (document.hidden) {
-      if (!this.gameOver && !this.paused) {
-        this.wasPausedByVisibility = true;
-        this.pause();
-      }
-    } else if (this.wasPausedByVisibility) {
-      this.wasPausedByVisibility = false;
-      this.resume();
+      this.handleShellPause();
+    } else {
+      this.handleShellResume();
     }
+  }
+
+  handleShellPause() {
+    if (this.gameOver || this.paused) return;
+    this.wasPausedByVisibility = true;
+    this.pause();
+  }
+
+  handleShellResume() {
+    if (document.hidden) return;
+    if (!this.wasPausedByVisibility) return;
+    this.wasPausedByVisibility = false;
+    if (!this.gameOver) this.resume();
+  }
+
+  handleShellMessage(event) {
+    const data = event && typeof event.data === 'object' ? event.data : null;
+    const type = data?.type;
+    if (type === 'GAME_PAUSE' || type === 'GG_PAUSE') this.handleShellPause();
+    if (type === 'GAME_RESUME' || type === 'GG_RESUME') this.handleShellResume();
   }
 
   draw() {
