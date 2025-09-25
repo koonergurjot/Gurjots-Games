@@ -1,13 +1,11 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { normalizeCatalogEntries, toNormalizedList } from '../shared/game-catalog-core.js';
+import { normalizeCatalogEntries } from '../shared/game-catalog-core.js';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const gamesPath = path.join(rootDir, 'games.json');
 const offlinePath = path.join(rootDir, 'data', 'games-offline.js');
-const normalizedPath = path.join(rootDir, 'data', 'games-normalized.json');
-const publicGamesPath = path.join(rootDir, 'public', 'games.json');
 
 async function readGames() {
   const source = await readFile(gamesPath, 'utf8');
@@ -26,14 +24,10 @@ function buildOfflineModule(games) {
 
 async function main() {
   const games = await readGames();
-  const normalized = normalizeCatalogEntries(games);
-  const normalizedList = toNormalizedList(normalized);
-
   await writeFile(offlinePath, buildOfflineModule(games));
-  await writeFile(normalizedPath, JSON.stringify({ games: normalizedList }, null, 2) + '\n');
-  await writeFile(publicGamesPath, JSON.stringify(games, null, 2) + '\n');
+  const normalized = normalizeCatalogEntries(games);
 
-  console.log('Game catalog artifacts updated.');
+  console.log(`Game catalog artifacts updated (offline catalog refreshed, ${normalized.length} entries validated).`);
 }
 
 main().catch(err => {

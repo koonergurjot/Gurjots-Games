@@ -19,8 +19,19 @@ preloadFirstFrameAssets(slug);
 async function track(){
   let tags = [];
   try {
-    const res = await fetch('/public/games.json');
-    const data = await res.json();
+    const urls = ['/games.json', '/public/games.json'];
+    let data = null;
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res?.ok) throw new Error(`bad status ${res?.status}`);
+        data = await res.json();
+        break;
+      } catch (_) {
+        data = null;
+      }
+    }
+    if (!data) throw new Error('catalog unavailable');
     const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
     const g = games.find(g => g.slug === slug);
     if (g) tags = g.tags || [];

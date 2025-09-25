@@ -51,8 +51,18 @@
 
   async function scan(){
     const { list, src } = await (async ()=>{
-      const url = `/public/games.json?t=${now}`;
-      return { list: await fetchJSON(url), src: '/public/games.json' };
+      const candidates = [`/games.json?t=${now}`, `/public/games.json?t=${now}`];
+      let lastError = null;
+      for (const url of candidates) {
+        try {
+          const data = await fetchJSON(url);
+          const srcPath = url.split('?')[0] || url;
+          return { list: data, src: srcPath };
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      throw lastError || new Error('failed to load games catalog');
     })();
 
     const arr = Array.isArray(list) ? list : Object.keys(list).map(k => ({ slug:k, ...list[k] }));

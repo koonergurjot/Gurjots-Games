@@ -31,7 +31,17 @@
   function esc(s){ return (s+'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
   async function run(){
-    const list = await fetchJSON('/public/games.json?t=' + now);
+    let list = null;
+    const urls = [`/games.json?t=${now}`, `/public/games.json?t=${now}`];
+    for (const url of urls) {
+      try {
+        list = await fetchJSON(url);
+        break;
+      } catch (_) {
+        list = null;
+      }
+    }
+    if (!list) throw new Error('failed to load games.json');
     const games = Array.isArray(list) ? list : Object.keys(list).map(k => ({ slug:k, ...list[k] }));
     const missing = [];
     for (const g of games){
