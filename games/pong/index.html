@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Pong • Gurjot’s Games</title>
     <link rel="preload" href="./pong.css" as="style" />
+    <link rel="preload" href="../../assets/sprites/paddle.png" as="image" />
+    <link rel="preload" href="../../assets/sprites/ball.png" as="image" />
+    <link rel="preload" href="../../assets/audio/hit.wav" as="audio" />
+    <link rel="preload" href="../../assets/audio/powerup.wav" as="audio" />
+    <link rel="preload" href="../../assets/audio/click.wav" as="audio" />
     <link rel="stylesheet" href="../common/game-shell.css" />
     <link rel="stylesheet" href="./pong.css" />
   </head>
@@ -14,7 +19,7 @@
       try { window.parent && window.parent.postMessage({type:'IFRAME_LOADED', slug:'pong'}, '*'); } catch(e){}
     </script>
     <script src="./pong.js" defer></script>
-    <script type="module" src="../common/game-shell.js" data-back-href="/index.html" data-game="pong" data-apply-theme="false" data-focus-target="#app"></script>
+    <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="pong" data-apply-theme="false" data-focus-target="#app"></script>
 
   <script src="../common/diag-autowire.js" data-game="pong"></script>
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->

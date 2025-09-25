@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Runner Pro</title>
+  <link rel="preload" href="../../assets/sprites/coin.png" as="image" />
+  <link rel="preload" href="../../assets/audio/hit.wav" as="audio" />
+  <link rel="preload" href="../../assets/audio/powerup.wav" as="audio" />
+  <link rel="preload" href="../../assets/audio/click.wav" as="audio" />
   <link rel="stylesheet" href="../common/game-shell.css" />
   <style>
     :root { --fg:#eaeaf2; --bg:#0b0b0f; --accent:#6ee7b7; }
@@ -136,7 +140,7 @@
   <script type="module" src="./editor.js"></script>
   <script type="module" src="../../shared/game-boot.js" data-slug="runner"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="runner"></script>
-  <script type="module" src="../common/game-shell.js" data-back-href="/index.html" data-game="runner" data-apply-theme="false"></script>
+  <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="runner" data-apply-theme="false"></script>
 
   <script src="../common/diag-autowire.js" data-game="runner"></script>
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->

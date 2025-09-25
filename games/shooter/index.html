@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Space Shooter</title>
+  <link rel="preload" href="../../assets/sprites/ship.png" as="image" />
+  <link rel="preload" href="../../assets/audio/explode.wav" as="audio" />
+  <link rel="preload" href="../../assets/audio/powerup.wav" as="audio" />
   <link rel="stylesheet" href="../common/game-shell.css" />
   <style>
     body {
@@ -165,7 +168,7 @@
 
   <script type="module" src="./main.js"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="shooter"></script>
-  <script type="module" src="../common/game-shell.js" data-back-href="/index.html" data-game="shooter"></script>
+  <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="shooter"></script>
 
   <script src="../common/diag-autowire.js" data-game="shooter"></script>
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
