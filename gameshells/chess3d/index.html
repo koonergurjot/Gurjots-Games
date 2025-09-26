@@ -12,26 +12,73 @@
       }
     }
     </script>
-    <style>html,body{height:100%;margin:0;background:#000;overflow:hidden}</style>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: #060b16;
+        color: #e6e7ea;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        overflow: hidden;
+      }
+      .chess3d-panel {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+        box-sizing: border-box;
+        height: 100%;
+      }
+      #stage {
+        position: relative;
+        width: 100%;
+        min-height: 70vh;
+      }
+      #stage canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #hud {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+    </style>
   </head>
   <body>
-    <canvas id="game-canvas" width="800" height="600" aria-label="Chess 3D (Local) canvas"></canvas>
-    <div id="hud">
-      <div id="score" aria-live="polite">0</div>
-      <button id="pause-btn" aria-pressed="false">Pause</button>
-    </div>
+    <main class="chess3d-panel">
+      <div id="stage" aria-label="3D chess board"></div>
+      <div id="coords" hidden></div>
+      <div id="thinking" hidden>Engine thinking…</div>
+      <div>
+        <label for="difficulty">Difficulty:</label>
+        <select id="difficulty">
+          <option value="1">Easy</option>
+          <option value="2" selected>Medium</option>
+          <option value="3">Hard</option>
+        </select>
+      </div>
+      <div id="status"></div>
+      <div id="hud"></div>
+    </main>
     <script src="../../js/bootstrap/gg.js"></script>
     <script src="../../js/preflight.js"></script>
     <script type="module" src="../../js/three-global-shim.js"></script>
     <script type="module">
-      import { ensureCanvas, ensureElement } from "../../js/bootstrap/dom.js";
+      import { ensureElement } from "../../js/bootstrap/dom.js";
       window.addEventListener("DOMContentLoaded", () => {
-        ensureCanvas("game-canvas");
-        ensureElement("#score");
+        ensureElement("#stage");
+        ensureElement("#coords");
+        ensureElement("#thinking");
+        ensureElement("#difficulty");
+        ensureElement("#status");
+        ensureElement("#hud");
       });
     </script>
     <script type="module" src="../../games/chess3d/main.js"></script>
-  
+
 <!-- Auto-signal bootstrap: emits READY/ERROR to parent -->
 <script>
 (function(){
