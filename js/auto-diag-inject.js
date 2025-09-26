@@ -7,6 +7,8 @@
       const doc = frame.contentDocument || frame.contentWindow?.document;
       if(!doc) return;
       if(doc.getElementById('gg-diag-autowire')) return; // already injected
+      // Legacy shells already handle diagnostics when data-shell-diag markers exist.
+      if(doc.querySelector('script[data-shell-diag], [data-shell-diag]')) return;
       const s = doc.createElement('script');
       s.id = 'gg-diag-autowire';
       // Use absolute path from loader to avoid relative path issues
