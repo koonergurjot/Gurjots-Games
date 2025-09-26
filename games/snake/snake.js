@@ -5,7 +5,23 @@ import '../../shared/ui/hud.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
-const hud = document.querySelector('.hud');
+function resolveHudContainer() {
+  let el = document.querySelector('.hud, #hud');
+  if (el && el.id === 'hud' && !el.classList.contains('hud')) {
+    el.classList.add('hud');
+  }
+  if (!el) {
+    el = document.querySelector('.hud');
+  }
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'hud';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+const hud = resolveHudContainer();
 hud.innerHTML = `Arrows/WASD or swipe • R restart • P pause
   <label><input type="checkbox" id="dailyToggle"/> Daily</label>
   <ol id="dailyScores" style="margin:4px 0 0 0;padding-left:20px;font-size:14px"></ol>
