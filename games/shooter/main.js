@@ -155,3 +155,11 @@ export function boot() {
   }
   addEventListener('beforeunload', ()=>stopLoop());
 }
+
+if (typeof window !== 'undefined') {
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', boot, { once: true });
+  } else {
+    boot();
+  }
+}
