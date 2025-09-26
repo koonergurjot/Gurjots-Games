@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * tools/wire-diag.mjs
- * Bulk insert <script src="../common/diag-upgrades.js" defer></script>
+ * Bulk insert <script src="../common/diag-autowire.js" defer></script>
  * into every /games/<slug>/index.html just before </body>.
  */
 import { promises as fs } from 'node:fs';
@@ -11,10 +11,10 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
 const gamesDir = path.join(repoRoot, 'games');
-const targetSnippet = `<script src="../common/diag-upgrades.js" defer></script>`;
+const targetSnippet = `<script src="../common/diag-autowire.js" defer></script>`;
 
 function looksWired(html) {
-  return html.includes('common/diag-upgrades.js');
+  return html.includes('common/diag-autowire.js');
 }
 function insertBeforeBody(html, snippet) {
   const i = html.lastIndexOf('</body>');

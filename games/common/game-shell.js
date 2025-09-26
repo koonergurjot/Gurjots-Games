@@ -2,7 +2,7 @@ const current = document.currentScript;
 const dataset = current ? current.dataset : {};
 const applyTheme = dataset.applyTheme !== 'false';
 const slug = dataset.game || dataset.slug || '';
-const diagSrc = dataset.diagSrc || '../common/diag-upgrades.js';
+const diagSrc = dataset.diagSrc || '../common/diag-autowire.js';
 const backHref = dataset.backHref || '/index.html';
 const preloadTargets = (dataset.preloadFirst || '')
   .split(',')
