@@ -682,6 +682,13 @@ function roundRect(ctx,x,y,w,h,r,fill,stroke,scale=1){
 
 function getHint(){
   hintDir=engineHint(grid,hintDepth);
+  draw();
+}
+
+function hideHint(){
+  if(hintDir===null) return;
+  hintDir=null;
+  draw();
 }
 
 const gameLoop=new GameEngine();
