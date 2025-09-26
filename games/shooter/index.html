@@ -177,7 +177,6 @@
   <script type="module" src="../../shared/juice/overlay.js" data-game="shooter"></script>
   <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="shooter"></script>
 
-  <script src="../common/diag-autowire.js" data-game="shooter"></script>
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
   <script>
   (function(){
@@ -206,13 +205,8 @@
     else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
   })();
   </script>
-<style>
-  #gg-diag-btn{position:fixed;right:12px;bottom:12px;padding:10px 12px;border-radius:10px;border:1px solid #444;background:#111;color:#fff;font:600 14px system-ui;z-index:9999;opacity:0.88}
-  #gg-diag-btn:focus{outline:2px solid #6cf;outline-offset:2px}
-</style>
-<button id="gg-diag-btn" aria-label="Open diagnostics">Diagnostics</button>
-<script>
-  (function(){var b=document.getElementById('gg-diag-btn'); if(b){ b.addEventListener('click', function(){ try{ window.__GG_DIAG && window.__GG_DIAG.open && window.__GG_DIAG.open(); }catch(e){ alert('Diagnostics not available'); } }); }})(); 
-</script>
+  <link rel="stylesheet" href="../common/diag-modal.css">
+  <script src="../common/diag-core.js" defer></script>
+  <script src="../common/diag-capture.js" defer></script>
 </body>
 </html>
