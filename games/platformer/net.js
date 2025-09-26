@@ -10,6 +10,8 @@ export function connect(){
 
 channel.onmessage = e => {
   const msg = e.data;
+  if (msg?.id === myId) return;
+
   if (msg.type === 'hello') {
     if (!connected) {
       peerId = msg.id;
