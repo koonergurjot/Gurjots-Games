@@ -29,7 +29,7 @@ body.bolt-body{
 .bolt-container{max-width:1200px;margin:0 auto;padding:0 22px}
 
 /* NAV */
-.bolt-nav{position:sticky;top:0;z-index:30;background:transparent}
+.bolt-nav{background:transparent}
 .bolt-nav-inner{display:flex;align-items:center;justify-content:space-between;height:74px}
 .bolt-brand{text-decoration:none;color:var(--bolt-text);display:flex;align-items:center;gap:10px}
 .bolt-logo{font-size:26px;filter:drop-shadow(0 8px 20px rgba(0,0,0,.2))}
