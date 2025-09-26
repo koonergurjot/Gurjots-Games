@@ -13,6 +13,10 @@
       color: #e5f0ff; font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       display: grid; grid-template-rows: auto 1fr auto; gap: 8px;
     }
+    body.legacy-shell {
+      display: block;
+      background: #000;
+    }
     header, footer {
       backdrop-filter: blur(6px); background: rgba(17,24,39,0.6); border-bottom: 1px solid #243042;
     }
@@ -30,9 +34,27 @@
       width: 100%; height: 100%; aspect-ratio: auto; background: #0b0f14; border: 1px solid #1e2a3b;
       border-radius: 14px; overflow: clip; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.45);
     }
+    body.legacy-shell .game-card {
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
     iframe#game-frame { width: 100%; height: 100%; border: 0; background: #000; display:block; }
     .overlay {
       position:absolute; inset:0; display:grid; place-items:center; pointer-events:none;
+    }
+    body.legacy-shell header,
+    body.legacy-shell footer,
+    body.legacy-shell .overlay {
+      display: none !important;
+    }
+    body.legacy-shell main {
+      padding: 0;
+      height: 100vh;
+      display: block;
+    }
+    body.legacy-shell iframe#game-frame {
+      height: 100vh;
     }
     .status {
       pointer-events:auto; background: rgba(12,18,28,0.92); border:1px solid #223049; border-radius:12px;
@@ -119,6 +141,43 @@
       const btnReload = document.getElementById("btnReload");
       const btnDiag = document.getElementById("btnDiag");
 
+      let isLegacyShell = false;
+
+      const diagHandler = () => {
+        const payload = [
+          `slug=${slug}`, `title=${gameTitleEl.textContent}`, `signal=${pillSignal.textContent.replace("signal: ","")}`,
+          `time=${secs()}`, `userAgent=${navigator.userAgent}`, `href=${location.href}`,
+          `logs:`, ...Array.from(logbox.querySelectorAll("div")).map(d => "- " + d.textContent)
+        ].join("\n");
+        navigator.clipboard.writeText(payload).catch(()=>{});
+        btnDiag.textContent = "Copied!";
+        setTimeout(()=>btnDiag.textContent="Diagnostics", 1200);
+      };
+
+      let diagWired = false;
+      function wireDiagButton() {
+        if (!btnDiag) return;
+        if (!diagWired) {
+          btnDiag.addEventListener("click", diagHandler);
+          diagWired = true;
+        }
+        btnDiag.classList.remove("hidden");
+        btnDiag.removeAttribute("aria-hidden");
+        btnDiag.removeAttribute("tabindex");
+      }
+
+      function unwireDiagButton() {
+        if (!btnDiag) return;
+        if (diagWired) {
+          btnDiag.removeEventListener("click", diagHandler);
+          diagWired = false;
+        }
+        btnDiag.classList.add("hidden");
+        btnDiag.setAttribute("aria-hidden", "true");
+        btnDiag.setAttribute("tabindex", "-1");
+        btnDiag.textContent = "Diagnostics";
+      }
+
       // Normalize 2048 → g2048 (keeps existing links working)
       if (slug === "2048") slug = "g2048";
 
@@ -145,22 +204,17 @@
         write("manual: reload requested");
         frame.contentWindow?.location.reload();
       });
-      btnDiag.addEventListener("click", () => {
-        const payload = [
-          `slug=${slug}`, `title=${gameTitleEl.textContent}`, `signal=${pillSignal.textContent.replace("signal: ","")}`,
-          `time=${secs()}`, `userAgent=${navigator.userAgent}`, `href=${location.href}`,
-          `logs:`, ...Array.from(logbox.querySelectorAll("div")).map(d => "- " + d.textContent)
-        ].join("\n");
-        navigator.clipboard.writeText(payload).catch(()=>{});
-        btnDiag.textContent = "Copied!";
-        setTimeout(()=>btnDiag.textContent="Diagnostics", 1200);
-      });
-
       // Load the game iframe
       pillSlug.textContent = "slug: " + (slug || "—");
 
-      function setFrameSrc(src, note) {
+      function setFrameSrc(src, note, legacy = false) {
         frame.src = src;
+        isLegacyShell = legacy;
+        if (legacy) {
+          unwireDiagButton();
+        } else {
+          wireDiagButton();
+        }
         write(`iframe src set → ${src}${note ? ` (${note})` : ""}`);
       }
 
@@ -175,20 +229,20 @@
         const forceLegacy = qs.has('legacy') || qs.get('shell') === 'legacy';
         const forceModern = qs.has('modern') || qs.get('shell') === 'modern';
         if (forceLegacy) {
-          setFrameSrc(legacySrc, "forced legacy");
+          setFrameSrc(legacySrc, "forced legacy", true);
         } else if (forceModern) {
-          setFrameSrc(modernSrc, "forced modern");
+          setFrameSrc(modernSrc, "forced modern", false);
         } else {
         fetch(modernSrc, { method: "HEAD" })
           .then((resp) => {
             if (resp.ok) {
-              setFrameSrc(modernSrc, "modern wrapper");
+              setFrameSrc(modernSrc, "modern wrapper", false);
             } else {
-              setFrameSrc(legacySrc, `legacy fallback (status ${resp.status})`);
+              setFrameSrc(legacySrc, `legacy fallback (status ${resp.status})`, true);
             }
           })
           .catch((err) => {
-            setFrameSrc(legacySrc, `legacy fallback (${err && err.message ? err.message : err})`);
+            setFrameSrc(legacySrc, `legacy fallback (${err && err.message ? err.message : err})`, true);
           });
         }
       }
@@ -196,6 +250,13 @@
 
       frame.addEventListener("load", () => {
         write("iframe loaded");
+        if (isLegacyShell) {
+          document.body.classList.add("legacy-shell");
+          unwireDiagButton();
+        } else {
+          document.body.classList.remove("legacy-shell");
+          wireDiagButton();
+        }
         try {
           const mark = frame.contentWindow && frame.contentWindow.__gg_autoSignalInstalled;
           write("child autosignal: " + (mark ? "present" : "absent/x-origin"));
