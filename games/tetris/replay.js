@@ -54,7 +54,7 @@
       return this.pieces[this.pi++];
     }
     tick(dt){
-      this.t+=dt;
+      if(Number.isFinite(dt)) this.t+=dt*1000;
       const ev=[];
       while(this.ai<this.actions.length && this.actions[this.ai].t<=this.t){
         ev.push(this.actions[this.ai++].a);
