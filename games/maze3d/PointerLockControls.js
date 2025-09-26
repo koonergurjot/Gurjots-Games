@@ -163,9 +163,15 @@ function onPointerlockError() {
 export { PointerLockControls };
 
 if (typeof window !== 'undefined' && window.THREE && !window.THREE.PointerLockControls) {
-        Object.defineProperty(window.THREE, 'PointerLockControls', {
-                value: PointerLockControls,
-                configurable: true,
-                writable: true
-        });
+        try {
+                if (Object.isExtensible(window.THREE)) {
+                        Object.defineProperty(window.THREE, 'PointerLockControls', {
+                                value: PointerLockControls,
+                                configurable: true,
+                                writable: true
+                        });
+                }
+        } catch (error) {
+                // Silently skip if the property cannot be defined.
+        }
 }
