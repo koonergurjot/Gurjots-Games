@@ -168,14 +168,18 @@
         setFrameSrc("./404.html");
       } else {
         const modernSrc = `./gameshells/${slug}/index.html`;
-        const legacySrc = `./games/${slug}/index.html`;
+        const legacySlug = slug === 'g2048' ? '2048' : slug;
+        const legacySrc = `./games/${legacySlug}/index.html`;
 
         write(`checking modern wrapper → ${modernSrc}`);
 
         const forceLegacy = qs.has('legacy') || qs.get('shell') === 'legacy';
         const forceModern = qs.has('modern') || qs.get('shell') === 'modern';
-        if (forceLegacy) {
-          setFrameSrc(legacySrc, "forced legacy");
+        const slugNeedsLegacy = slug === 'g2048';
+
+        if (forceLegacy || slugNeedsLegacy) {
+          const reason = forceLegacy ? "forced legacy" : "legacy (auto for g2048)";
+          setFrameSrc(legacySrc, reason);
         } else if (forceModern) {
           setFrameSrc(modernSrc, "forced modern");
         } else {
