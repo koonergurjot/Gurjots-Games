@@ -1,0 +1,272 @@
+:root {
+  color-scheme: dark;
+}
+
+body.gg-diag-scroll-locked {
+  overflow: hidden;
+}
+
+.gg-diag-hidden {
+  display: none !important;
+}
+
+.gg-diag-fab {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(138, 180, 255, 0.35);
+  background: radial-gradient(circle at 30% 30%, #3b82f6, #1d4ed8 65%, #0f172a);
+  color: #f8fbff;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.6), 0 2px 12px rgba(30, 64, 175, 0.6);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Inter", "Segoe UI", sans-serif;
+  font-size: 1.125rem;
+  line-height: 1;
+  z-index: 2147483600;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 200ms ease;
+}
+
+.gg-diag-fab:hover,
+.gg-diag-fab:focus-visible {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 24px 40px rgba(15, 23, 42, 0.72);
+  background: radial-gradient(circle at 35% 25%, #60a5fa, #2563eb 60%, #111b2f);
+}
+
+.gg-diag-fab:focus-visible {
+  outline: 3px solid rgba(96, 165, 250, 0.6);
+  outline-offset: 2px;
+}
+
+.gg-diag-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(0.75rem, 3vw, 2rem);
+  background: rgba(4, 11, 22, 0.82);
+  backdrop-filter: blur(6px) saturate(120%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  z-index: 2147483599;
+}
+
+.gg-diag-backdrop[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.gg-diag-modal {
+  width: min(720px, 100%);
+  max-height: min(90vh, 680px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  background: linear-gradient(165deg, rgba(12, 20, 31, 0.98), rgba(8, 13, 23, 0.98));
+  box-shadow: 0 28px 76px rgba(2, 6, 14, 0.82), 0 4px 24px rgba(30, 64, 175, 0.45);
+  color: #e6efff;
+  overflow: hidden;
+}
+
+.gg-diag-modal-header {
+  padding: 1.25rem clamp(1rem, 4vw, 1.75rem);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.18);
+  background: linear-gradient(180deg, rgba(17, 27, 42, 0.95), rgba(11, 19, 32, 0.95));
+}
+
+.gg-diag-modal-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.gg-diag-modal-meta {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  color: rgba(191, 219, 254, 0.72);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.gg-diag-close {
+  background: none;
+  border: 1px solid transparent;
+  color: inherit;
+  border-radius: 10px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.gg-diag-close:hover,
+.gg-diag-close:focus-visible {
+  background: rgba(96, 165, 250, 0.16);
+  border-color: rgba(96, 165, 250, 0.45);
+}
+
+.gg-diag-close:focus-visible {
+  outline: 3px solid rgba(96, 165, 250, 0.45);
+  outline-offset: 2px;
+}
+
+.gg-diag-modal-body {
+  padding: clamp(0.75rem, 3vw, 1.5rem);
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: rgba(9, 15, 24, 0.96);
+}
+
+.gg-diag-loglist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.8125rem;
+}
+
+.gg-diag-logitem {
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem;
+  background: rgba(17, 27, 42, 0.74);
+  border: 1px solid rgba(96, 165, 250, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45rem;
+  word-break: break-word;
+}
+
+.gg-diag-logitem[data-level="error"] {
+  border-color: rgba(248, 113, 113, 0.38);
+  background: rgba(45, 17, 26, 0.84);
+}
+
+.gg-diag-logitem[data-level="warn"] {
+  border-color: rgba(251, 191, 36, 0.38);
+  background: rgba(40, 28, 6, 0.84);
+}
+
+.gg-diag-logitem-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  color: rgba(226, 232, 240, 0.86);
+  font-weight: 500;
+}
+
+.gg-diag-logitem-time {
+  font-size: 0.75rem;
+  color: rgba(148, 163, 184, 0.8);
+  margin-left: auto;
+}
+
+.gg-diag-logitem-body {
+  color: rgba(226, 232, 240, 0.84);
+  white-space: pre-wrap;
+}
+
+.gg-diag-logitem-meta {
+  color: rgba(148, 163, 184, 0.8);
+  font-size: 0.75rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.gg-diag-modal-actions {
+  padding: 0.9rem clamp(1rem, 4vw, 1.75rem);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  background: rgba(10, 17, 28, 0.92);
+  border-top: 1px solid rgba(96, 165, 250, 0.14);
+}
+
+.gg-diag-action {
+  border-radius: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  background: rgba(37, 99, 235, 0.3);
+  color: #e0f2ff;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.gg-diag-action:hover,
+.gg-diag-action:focus-visible {
+  background: rgba(59, 130, 246, 0.45);
+  border-color: rgba(147, 197, 253, 0.7);
+  transform: translateY(-1px);
+}
+
+.gg-diag-action:focus-visible {
+  outline: 3px solid rgba(96, 165, 250, 0.45);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .gg-diag-fab {
+    bottom: 1.1rem;
+    right: 1.1rem;
+    width: 3.15rem;
+    height: 3.15rem;
+    font-size: 1rem;
+  }
+
+  .gg-diag-modal {
+    border-radius: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .gg-diag-modal {
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .gg-diag-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .gg-diag-modal-header,
+  .gg-diag-modal-actions {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gg-diag-fab,
+  .gg-diag-backdrop,
+  .gg-diag-action {
+    transition: none;
+  }
+}
