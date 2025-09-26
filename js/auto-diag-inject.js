@@ -1,17 +1,17 @@
 // js/auto-diag-inject.js
-// Auto-injects /games/common/diag-upgrades.js into the game iframe on game.html
+// Auto-injects /games/common/diag-autowire.js into the game iframe on game.html
 // so you can just upload files (no per-game edits). Requires same-origin.
 (function(){
   function injectIntoFrame(frame){
     try{
       const doc = frame.contentDocument || frame.contentWindow?.document;
       if(!doc) return;
-      if(doc.getElementById('gg-diag-upgrades')) return; // already injected
+      if(doc.getElementById('gg-diag-autowire')) return; // already injected
       const s = doc.createElement('script');
-      s.id = 'gg-diag-upgrades';
+      s.id = 'gg-diag-autowire';
       // Use absolute path from loader to avoid relative path issues
       const base = location.pathname.replace(/\/[^/]*$/, '');
-      s.src = base + '/games/common/diag-upgrades.js';
+      s.src = base + '/games/common/diag-autowire.js';
       s.defer = true;
       (doc.body || doc.documentElement).appendChild(s);
     }catch(_){}

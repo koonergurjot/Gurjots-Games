@@ -8,6 +8,6 @@
      ```html
      <script src="../common/diag-autowire.js" data-game="{{slug}}"></script>
      ```
-   - This will inject `../common/diag-upgrades.js` automatically if missing.
+   - This will bootstrap the new diagnostics loader (`diag-autowire.js`), which pulls in the full diagnostics stack automatically.
 
 **Rollback:** Delete the added files if you don’t need them.

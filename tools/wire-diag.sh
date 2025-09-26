@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # tools/wire-diag.sh
-# Bulk insert <script src="../common/diag-upgrades.js" defer></script>
+# Bulk insert <script src="../common/diag-autowire.js" defer></script>
 # into every /games/<slug>/index.html just before </body>.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SNIP='<script src="../common/diag-upgrades.js" defer></script>'
+SNIP='<script src="../common/diag-autowire.js" defer></script>'
 
 updated=0; skipped=0; missing=0
 while IFS= read -r -d '' f; do
-  if grep -q 'common/diag-upgrades.js' "$f"; then
+  if grep -q 'common/diag-autowire.js' "$f"; then
     ((skipped++)); continue
   fi
   if grep -q '</body>' "$f"; then
