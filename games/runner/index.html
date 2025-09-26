@@ -105,6 +105,13 @@
       padding: 4px 8px;
     }
   </style>
+
+            <style id="gg-viewport-shim">
+              html,body{height:100%}
+              body{margin:0}
+              canvas,#app,.game-root{max-width:100vw;max-height:100vh}
+            </style>
+            
 </head>
 <body class="game-shell">
   <canvas id="game" role="img" aria-label="City Runner gameplay area"></canvas>
@@ -171,24 +178,13 @@
     else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
   })();
   </script>
-
-  <style>
-  #gg-diag-btn{position:fixed;right:12px;bottom:12px;padding:10px 12px;border-radius:10px;border:1px solid #444;background:#111;color:#fff;font:600 14px system-ui;z-index:9999;opacity:0.85}
+<style>
+  #gg-diag-btn{position:fixed;right:12px;bottom:12px;padding:10px 12px;border-radius:10px;border:1px solid #444;background:#111;color:#fff;font:600 14px system-ui;z-index:9999;opacity:0.88}
   #gg-diag-btn:focus{outline:2px solid #6cf;outline-offset:2px}
-  html,body{height:100%}
-  body{margin:0}
-  canvas, #app, .game-root{max-width:100vw;max-height:100vh}
 </style>
 <button id="gg-diag-btn" aria-label="Open diagnostics">Diagnostics</button>
 <script>
-  (function(){
-    var btn=document.getElementById('gg-diag-btn');
-    if(btn && !window.__GG_DIAG_BTN_WIRED){
-      window.__GG_DIAG_BTN_WIRED=true;
-      btn.addEventListener('click',function(){ try{ window.__GG_DIAG && window.__GG_DIAG.open && window.__GG_DIAG.open(); }catch(e){ alert('Diagnostics not available'); }});
-    }
-  })();
+  (function(){var b=document.getElementById('gg-diag-btn'); if(b){ b.addEventListener('click', function(){ try{ window.__GG_DIAG && window.__GG_DIAG.open && window.__GG_DIAG.open(); }catch(e){ alert('Diagnostics not available'); } }); }})(); 
 </script>
-
 </body>
 </html>
