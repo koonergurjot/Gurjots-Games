@@ -35,8 +35,29 @@ if(c){
   c.dataset.baseh=String(BASE_H);
   c.width=BASE_W;
   c.height=BASE_H;
-  fitCanvasToParent(c,420,840,24);
-  addEventListener('resize',()=>fitCanvasToParent(c,420,840,24));
+  const CANVAS_PADDING=24;
+  const MAX_CANVAS_WIDTH=720;
+  const MAX_CANVAS_HEIGHT=1440;
+
+  function syncHudLayout(){
+    const root=document.documentElement?.style;
+    if(!root) return;
+    const rect=c.getBoundingClientRect();
+    root.setProperty('--tetris-hud-max-width',`${Math.round(rect.width)}px`);
+    root.setProperty('--tetris-hud-center',`${Math.round(rect.left+rect.width/2)}px`);
+    const top=Math.max(rect.top+16,CANVAS_PADDING);
+    root.setProperty('--tetris-hud-top',`${Math.round(top)}px`);
+  }
+
+  function applyResponsiveCanvas(){
+    const availableW=Math.max(BASE_W,Math.min(window.innerWidth-CANVAS_PADDING*2,MAX_CANVAS_WIDTH));
+    const availableH=Math.max(BASE_H,Math.min(window.innerHeight-CANVAS_PADDING*2,MAX_CANVAS_HEIGHT));
+    fitCanvasToParent(c,availableW,availableH,CANVAS_PADDING);
+    syncHudLayout();
+  }
+
+  applyResponsiveCanvas();
+  addEventListener('resize',applyResponsiveCanvas);
 }else{
   const error=new Error('Tetris: unable to locate a canvas element (#t or #gameCanvas).');
   console.error(error);
