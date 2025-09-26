@@ -5,6 +5,116 @@ import '../../shared/ui/hud.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
+const bootStatus = (() => {
+  const status = window.__bootStatus = window.__bootStatus || {};
+  status.game = status.game || 'snake';
+  status.started = typeof status.started === 'number' ? status.started : performance.now();
+  status.logs = Array.isArray(status.logs) ? status.logs : [];
+  status.watchdogs = status.watchdogs || {};
+
+  function log(event, detail) {
+    const entry = {
+      at: performance.now(),
+      event,
+      detail: detail || null
+    };
+    status.last = entry;
+    status.logs.push(entry);
+    if (status.logs.length > 200) status.logs.splice(0, status.logs.length - 200);
+    try {
+      if (!status.silent) console.debug('[boot]', event, detail || '');
+    } catch (_) {}
+    return entry;
+  }
+
+  status.log = status.log || log;
+
+  if (!status.watchdogs.raf) {
+    const nativeRAF = window.requestAnimationFrame;
+    if (typeof nativeRAF !== 'function') {
+      log('raf:missing');
+    } else {
+      let firstTick = 0;
+      let lastTick = 0;
+      let idleLogged = false;
+      let stallLogged = false;
+      status.watchdogs.raf = { firstTick: 0, lastTick: 0 };
+      window.requestAnimationFrame = function wrapped(cb) {
+        return nativeRAF.call(this, function(ts) {
+          if (!firstTick) {
+            firstTick = performance.now();
+            status.watchdogs.raf.firstTick = firstTick;
+            log('raf:first-tick', { elapsed: Math.round(firstTick - status.started) });
+          }
+          lastTick = performance.now();
+          status.watchdogs.raf.lastTick = lastTick;
+          return cb(ts);
+        });
+      };
+      status.watchdogs.raf.interval = window.setInterval(() => {
+        const now = performance.now();
+        if (!firstTick) {
+          if (!idleLogged && now - status.started > 2000) {
+            idleLogged = true;
+            log('watchdog:raf-not-started', { waited: Math.round(now - status.started) });
+          }
+          return;
+        }
+        const gap = now - lastTick;
+        if (!stallLogged && gap > 2000) {
+          stallLogged = true;
+          log('watchdog:raf-stall', { gap: Math.round(gap) });
+        }
+      }, 1200);
+    }
+  }
+
+  return status;
+})();
+
+const bootLog = bootStatus.log || function(){};
+bootLog('init:start', { readyState: document.readyState });
+
+function ensureGameCanvas(){
+  let canvas = document.getElementById('game');
+  if (!canvas) {
+    bootLog('canvas:missing', { attempt: 'create' });
+    canvas = document.createElement('canvas');
+    canvas.id = 'game';
+    canvas.width = 640;
+    canvas.height = 480;
+    const mount = document.querySelector('.wrap') || document.body || document.documentElement;
+    mount.appendChild(canvas);
+    bootLog('canvas:created', { mount: mount?.className || mount?.nodeName || 'unknown' });
+  } else {
+    bootLog('canvas:found', { width: canvas.width, height: canvas.height });
+  }
+  if (!bootStatus.watchdogs.canvas) {
+    const start = performance.now();
+    let missingLogged = false;
+    bootStatus.watchdogs.canvas = {
+      interval: window.setInterval(() => {
+        const now = performance.now();
+        const w = canvas?.width || 0;
+        const h = canvas?.height || 0;
+        if (w && h) {
+          bootLog('watchdog:canvas-ok', {
+            width: w,
+            height: h,
+            elapsed: Math.round(now - start)
+          });
+          window.clearInterval(bootStatus.watchdogs.canvas.interval);
+          bootStatus.watchdogs.canvas.interval = null;
+        } else if (!missingLogged && now - start > 800) {
+          missingLogged = true;
+          bootLog('watchdog:canvas-pending', { width: w, height: h });
+        }
+      }, 500)
+    };
+  }
+  return canvas;
+}
+
 function resolveHudContainer() {
   let el = document.querySelector('.hud, #hud');
   if (el && el.id === 'hud' && !el.classList.contains('hud')) {
@@ -74,9 +184,18 @@ wrapSel.value = WRAP ? '1' : '0';
 sizeSel.onchange = ()=>{ params.set('size', sizeSel.value); location.search = params.toString(); };
 wrapSel.onchange = ()=>{ params.set('wrap', wrapSel.value); location.search = params.toString(); };
 
-const c = document.getElementById('c');
-fitCanvasToParent(c, 900, 900, 24);
-addEventListener('resize', () => fitCanvasToParent(c, 900, 900, 24));
+const c = ensureGameCanvas();
+bootLog('canvas:resolved', { width: c.width, height: c.height });
+if (typeof fitCanvasToParent === 'function') {
+  fitCanvasToParent(c, 900, 900, 24);
+  bootLog('canvas:fitted', { width: c.width, height: c.height });
+  addEventListener('resize', () => {
+    fitCanvasToParent(c, 900, 900, 24);
+    bootLog('canvas:resized', { width: c.width, height: c.height });
+  });
+} else {
+  bootLog('canvas:fit-helper-missing');
+}
 const ctx = c.getContext('2d');
 let CELL = c.width / N;
 let dir = { x: 1, y: 0 };
