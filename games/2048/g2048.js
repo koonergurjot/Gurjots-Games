@@ -878,15 +878,15 @@ function removeModalFocusTrap() {
 // Theme toggle accessibility
 const themeToggle = document.getElementById('themeToggle');
 if (themeToggle) {
-  const originalClickHandler = themeToggle.onclick;
   themeToggle.addEventListener('click', () => {
-    // Allow original handler to run first
+    // Allow the existing toggle handler to update the theme first
     setTimeout(() => {
-      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-      // Update both text and ARIA label
-      themeToggle.textContent = newTheme === 'dark' ? 'Light' : 'Dark';
-      themeToggle.setAttribute('aria-label', `Switch to ${newTheme === 'dark' ? 'light' : 'dark'} theme`);
-      announceToScreenReader(`Switched to ${newTheme} theme.`);
+      const activatedTheme = currentTheme;
+      const nextTheme = activatedTheme === 'dark' ? 'light' : 'dark';
+      // Update both text and ARIA label to reflect the current and next themes
+      themeToggle.textContent = nextTheme === 'dark' ? 'Light' : 'Dark';
+      themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
+      announceToScreenReader(`Switched to ${activatedTheme} theme.`);
     }, 100);
   });
 }
