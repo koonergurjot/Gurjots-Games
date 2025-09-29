@@ -197,11 +197,6 @@
         "extension": ".md"
       },
       {
-        "path": "achievements.html",
-        "sizeBytes": 1561,
-        "extension": ".html"
-      },
-      {
         "path": "admin/diagnostics.html",
         "sizeBytes": 2658,
         "extension": ".html"
