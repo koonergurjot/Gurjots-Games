@@ -14027,11 +14027,6 @@
         "extension": ".js"
       },
       {
-        "path": "templates/game.html",
-        "sizeBytes": 870,
-        "extension": ".html"
-      },
-      {
         "path": "tests/README.md",
         "sizeBytes": 577,
         "extension": ".md"
