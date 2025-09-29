@@ -31,6 +31,279 @@ const STORAGE_KEYS = {
   best: `${SLUG}:best`,
 };
 
+const globalScope = typeof window !== 'undefined' ? window : undefined;
+const diagnosticsQueue = globalScope
+  ? (globalScope.__diagnosticsQueue = globalScope.__diagnosticsQueue || [])
+  : null;
+
+function publishDiagnostics(entry) {
+  if (!globalScope || !entry) return;
+  const normalized = {
+    category: entry.category || 'general',
+    level: entry.level || 'info',
+    message: entry.message || '',
+    details: entry.details ?? null,
+    timestamp: Date.now(),
+  };
+  try {
+    const diagnostics = globalScope.__diagnostics;
+    if (diagnostics && typeof diagnostics.log === 'function') {
+      diagnostics.log(normalized);
+      return;
+    }
+  } catch (err) {
+    // fall through to queue push when logging fails
+    diagnosticsQueue?.push({
+      category: 'diagnostics',
+      level: 'error',
+      message: '[asteroids] diagnostics interface log failed',
+      details: { error: err?.message || String(err) },
+      timestamp: Date.now(),
+    });
+  }
+  if (diagnosticsQueue) {
+    diagnosticsQueue.push(normalized);
+    if (diagnosticsQueue.length > 1000) {
+      diagnosticsQueue.splice(0, diagnosticsQueue.length - 1000);
+    }
+  }
+}
+
+function sanitizeForLog(value, depth = 0, seen = new WeakSet()) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'function') {
+    return `[Function${value.name ? ` ${value.name}` : ''}]`;
+  }
+  if (typeof value === 'bigint') {
+    return `${value.toString()}n`;
+  }
+  if (typeof value === 'symbol') {
+    return value.toString();
+  }
+  if (value instanceof Error) {
+    return { name: value.name, message: value.message, stack: value.stack };
+  }
+  if (typeof DOMRect !== 'undefined' && value instanceof DOMRect) {
+    return { x: value.x, y: value.y, width: value.width, height: value.height };
+  }
+  if (typeof HTMLElement !== 'undefined' && value instanceof HTMLElement) {
+    const tag = value.tagName?.toLowerCase() || 'element';
+    const id = value.id ? `#${value.id}` : '';
+    const cls = value.className ? `.${String(value.className).replace(/\s+/g, '.')}` : '';
+    return `<${tag}${id}${cls}>`;
+  }
+  if (depth >= 3) {
+    return '[Truncated]';
+  }
+  if (typeof value === 'object') {
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+    if (Array.isArray(value)) {
+      return value.slice(0, 10).map((item) => sanitizeForLog(item, depth + 1, seen));
+    }
+    const output = {};
+    const entries = Object.entries(value).slice(0, 20);
+    for (const [key, val] of entries) {
+      output[key] = sanitizeForLog(val, depth + 1, seen);
+    }
+    return output;
+  }
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (_) {
+    return String(value);
+  }
+}
+
+function createBootTracker(slug) {
+  if (!globalScope) {
+    return {
+      entry: { slug, milestones: [], raf: { frames: 0, samples: [] }, canvasWarnings: [], canvasSamples: [] },
+      milestone() {},
+      rafTick() {},
+      rafActive() {},
+      warnCanvas() {},
+      recordCanvasSample() {},
+      updateReadyState() {},
+    };
+  }
+
+  const store = (globalScope.__bootStatus = globalScope.__bootStatus || {});
+  const entry = (store[slug] = store[slug] || {
+    slug,
+    version: 1,
+    milestones: [],
+    raf: { frames: 0, samples: [], active: false },
+    canvasWarnings: [],
+    canvasSamples: [],
+    bootAttempts: 0,
+    bootSuccesses: 0,
+  });
+  if (typeof entry.bootAttempts !== 'number') entry.bootAttempts = 0;
+  if (typeof entry.bootSuccesses !== 'number') entry.bootSuccesses = 0;
+
+  const now = () => {
+    try {
+      if (globalScope.performance?.now) return Math.round(globalScope.performance.now());
+    } catch (_) {
+      /* ignore */
+    }
+    return Date.now();
+  };
+
+  const clamp = (list, max) => {
+    if (list.length > max) list.splice(0, list.length - max);
+  };
+
+  const milestone = (name, details) => {
+    const record = { name, at: now() };
+    if (details) record.details = details;
+    entry.milestones.push(record);
+    clamp(entry.milestones, 120);
+    publishDiagnostics({
+      category: 'boot',
+      level: 'info',
+      message: `[${slug}] ${name}`,
+      details: sanitizeForLog(record),
+    });
+    entry.lastUpdated = record.at;
+  };
+
+  const rafTick = (timestamp) => {
+    const prev = typeof entry.raf.lastTimestamp === 'number' ? entry.raf.lastTimestamp : null;
+    entry.raf.lastTimestamp = timestamp;
+    entry.raf.lastDelta = prev === null ? null : timestamp - prev;
+    entry.raf.frames = (entry.raf.frames || 0) + 1;
+    const sample = { at: now(), timestamp, delta: entry.raf.lastDelta };
+    entry.raf.samples.push(sample);
+    clamp(entry.raf.samples, 60);
+    if (entry.raf.frames <= 5) {
+      publishDiagnostics({
+        category: 'raf',
+        level: 'debug',
+        message: `[${slug}] frame ${entry.raf.frames}`,
+        details: sanitizeForLog(sample),
+      });
+    }
+    entry.lastUpdated = sample.at;
+  };
+
+  const rafActive = (active, reason) => {
+    if (entry.raf.active === active) return;
+    entry.raf.active = active;
+    entry.raf.lastStateChange = now();
+    entry.raf.lastStateReason = reason || null;
+    publishDiagnostics({
+      category: 'raf',
+      level: active ? 'info' : 'warn',
+      message: `[${slug}] raf ${active ? 'started' : 'stopped'}`,
+      details: sanitizeForLog({ reason, at: entry.raf.lastStateChange }),
+    });
+    entry.lastUpdated = entry.raf.lastStateChange;
+  };
+
+  const warnCanvas = (reason, metrics) => {
+    const record = { reason, at: now(), metrics };
+    entry.canvasWarnings.push(record);
+    clamp(entry.canvasWarnings, 30);
+    publishDiagnostics({
+      category: 'boot',
+      level: 'warn',
+      message: `[${slug}] canvas warning: ${reason}`,
+      details: sanitizeForLog(record),
+    });
+    entry.lastUpdated = record.at;
+  };
+
+  const recordCanvasSample = (stage, metrics) => {
+    const sample = { stage, at: now(), metrics };
+    entry.canvasSamples.push(sample);
+    clamp(entry.canvasSamples, 50);
+    entry.lastCanvas = sample;
+    entry.lastUpdated = sample.at;
+    return sample;
+  };
+
+  const updateReadyState = (state) => {
+    entry.readyState = state;
+    entry.lastReadyStateAt = now();
+  };
+
+  return { entry, milestone, rafTick, rafActive, warnCanvas, recordCanvasSample, updateReadyState };
+}
+
+const bootTracker = createBootTracker(SLUG);
+const {
+  milestone: recordMilestone,
+  rafTick: recordRafTick,
+  rafActive: setRafActive,
+  warnCanvas: recordCanvasWarning,
+  recordCanvasSample,
+  updateReadyState,
+} = bootTracker;
+
+function captureCanvasSnapshot(stage, canvas, extras = {}) {
+  const readyState = typeof document !== 'undefined' ? document.readyState : undefined;
+  if (!canvas || typeof canvas.getBoundingClientRect !== 'function') {
+    recordCanvasWarning('missing-canvas', { stage, readyState, ...extras });
+    return null;
+  }
+  const rect = canvas.getBoundingClientRect();
+  const snapshot = {
+    stage,
+    width: rect.width,
+    height: rect.height,
+    devicePixelRatio: globalScope?.devicePixelRatio || 1,
+    ...extras,
+  };
+  recordCanvasSample(stage, snapshot);
+  if (!rect.width || !rect.height) {
+    recordCanvasWarning('zero-area', { ...snapshot, readyState });
+  }
+  return snapshot;
+}
+
+if (typeof document !== 'undefined') {
+  updateReadyState(document.readyState);
+  recordMilestone('module:evaluated', { readyState: document.readyState });
+  document.addEventListener(
+    'DOMContentLoaded',
+    () => {
+      updateReadyState(document.readyState);
+      recordMilestone('document:domcontentloaded', { readyState: document.readyState });
+      captureCanvasSnapshot('domcontentloaded', document.getElementById('game'));
+    },
+    { once: true }
+  );
+  document.addEventListener(
+    'readystatechange',
+    () => {
+      updateReadyState(document.readyState);
+      if (document.readyState === 'complete') {
+        recordMilestone('document:complete', { readyState: document.readyState });
+      }
+    },
+    { passive: true }
+  );
+  if (typeof window !== 'undefined') {
+    window.addEventListener(
+      'load',
+      () => {
+        updateReadyState(document.readyState);
+        recordMilestone('window:load', { readyState: document.readyState });
+        captureCanvasSnapshot('load', document.getElementById('game'));
+      },
+      { once: true }
+    );
+  }
+}
+
+let activeGame = null;
+let bootInProgress = false;
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -68,6 +341,8 @@ function createAudio(src, volume = 0.6) {
 
 class AsteroidsGame {
   constructor(canvas, context = {}) {
+    recordMilestone('game:constructor:start');
+    captureCanvasSnapshot('constructor:before-init', canvas);
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     if (!this.ctx) throw new Error('[asteroids] Canvas 2D context unavailable');
@@ -162,6 +437,11 @@ class AsteroidsGame {
     emitEvent({ type: 'play', slug: SLUG });
     this.paused = true;
     this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Press start to begin!', false);
+    recordMilestone('game:constructor:ready');
+    captureCanvasSnapshot('constructor:after-init', canvas, {
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
+    });
     this.start();
   }
 
@@ -363,17 +643,28 @@ class AsteroidsGame {
     this.canvas.height = Math.round(this.height * this.dpr);
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.imageSmoothingEnabled = false;
+    captureCanvasSnapshot('resize', this.canvas, {
+      rectWidth: rect.width,
+      rectHeight: rect.height,
+      computedWidth: this.width,
+      computedHeight: this.height,
+      canvasWidth: this.canvas.width,
+      canvasHeight: this.canvas.height,
+    });
   }
 
   start() {
     this.started = true;
     this.lastTime = performance.now();
     if (!this.rafId) {
+      recordMilestone('game:start');
+      setRafActive(true, 'start');
       this.rafId = requestAnimationFrame(this.loop);
     }
   }
 
   loop(now) {
+    recordRafTick(now);
     const dt = clamp((now - this.lastTime) / 1000, 0, 0.12);
     this.lastTime = now;
 
@@ -1003,6 +1294,11 @@ class AsteroidsGame {
   destroy() {
     cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    setRafActive(false, 'destroy');
+    recordMilestone('game:destroyed');
+    if (activeGame === this) {
+      activeGame = null;
+    }
     this.controls?.dispose?.();
     window.removeEventListener('resize', this.resize);
     document.removeEventListener('visibilitychange', this.events.onVisibility);
@@ -1018,15 +1314,127 @@ class AsteroidsGame {
 }
 
 export function boot(context = {}) {
-  const canvas = document.getElementById('game');
-  if (!(canvas instanceof HTMLCanvasElement)) {
-    console.error('[asteroids] missing #game canvas');
-    return;
+  const readyState = typeof document !== 'undefined' ? document.readyState : 'unknown';
+  recordMilestone('boot:requested', { readyState });
+  bootTracker.entry.bootAttempts = (bootTracker.entry.bootAttempts || 0) + 1;
+  bootTracker.entry.lastBootRequestedAt = Date.now();
+  bootTracker.entry.lastBootContext = sanitizeForLog(context);
+
+  if (activeGame) {
+    recordMilestone('boot:skipped', { reason: 'existing-instance' });
+    return activeGame;
+  }
+  if (bootInProgress) {
+    recordMilestone('boot:skipped', { reason: 'boot-in-progress' });
+    return activeGame;
   }
 
-  const game = new AsteroidsGame(canvas, context);
-  game.updateLivesDisplay();
-  window.addEventListener('beforeunload', () => game.destroy(), { once: true });
+  bootInProgress = true;
+  let canvas = null;
+  if (typeof document !== 'undefined') {
+    canvas = document.getElementById('game');
+  }
+  if (!(canvas instanceof HTMLCanvasElement)) {
+    recordMilestone('boot:error', { reason: 'missing-canvas', readyState });
+    recordCanvasWarning('missing-canvas', { stage: 'boot', selector: '#game', readyState });
+    publishDiagnostics({
+      category: 'boot',
+      level: 'error',
+      message: '[asteroids] missing #game canvas',
+      details: { readyState },
+    });
+    bootInProgress = false;
+    console.error('[asteroids] missing #game canvas');
+    return undefined;
+  }
 
+  captureCanvasSnapshot('boot:before-instance', canvas, { readyState });
+
+  let game;
+  try {
+    game = new AsteroidsGame(canvas, context);
+  } catch (error) {
+    const details = sanitizeForLog(error);
+    recordMilestone('boot:exception', { error: details });
+    publishDiagnostics({
+      category: 'boot',
+      level: 'error',
+      message: '[asteroids] boot threw',
+      details,
+    });
+    bootInProgress = false;
+    throw error;
+  }
+
+  activeGame = game;
+  bootTracker.entry.bootSuccesses = (bootTracker.entry.bootSuccesses || 0) + 1;
+  bootTracker.entry.lastBootSuccessAt = Date.now();
+  recordMilestone('boot:game-created');
+  captureCanvasSnapshot('boot:after-instance', canvas, {
+    readyState: typeof document !== 'undefined' ? document.readyState : readyState,
+    canvasWidth: canvas.width,
+    canvasHeight: canvas.height,
+  });
+
+  try {
+    game.updateLivesDisplay();
+  } catch (error) {
+    publishDiagnostics({
+      category: 'boot',
+      level: 'warn',
+      message: '[asteroids] updateLivesDisplay failed during boot',
+      details: sanitizeForLog(error),
+    });
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => game.destroy(), { once: true });
+  }
+
+  recordMilestone('boot:completed');
+  bootInProgress = false;
   return game;
+}
+
+function invokeBootSafely(context) {
+  try {
+    boot(context);
+  } catch (error) {
+    publishDiagnostics({
+      category: 'boot',
+      level: 'error',
+      message: '[asteroids] auto boot failed',
+      details: sanitizeForLog(error),
+    });
+  }
+}
+
+function scheduleAutoBoot() {
+  if (!globalScope || typeof document === 'undefined') {
+    return;
+  }
+  const readyState = document.readyState;
+  recordMilestone('autoboot:setup', { readyState });
+  if (readyState === 'interactive' || readyState === 'complete') {
+    recordMilestone('autoboot:invoke:queue', { readyState });
+    Promise.resolve().then(() => {
+      recordMilestone('autoboot:invoke', { readyState: document.readyState });
+      invokeBootSafely();
+    });
+    return;
+  }
+  recordMilestone('autoboot:waiting', { readyState });
+  document.addEventListener(
+    'DOMContentLoaded',
+    () => {
+      recordMilestone('autoboot:domcontentloaded', { readyState: document.readyState });
+      invokeBootSafely();
+    },
+    { once: true }
+  );
+}
+
+if (globalScope && !globalScope.__asteroidsAutoBootScheduled) {
+  globalScope.__asteroidsAutoBootScheduled = true;
+  scheduleAutoBoot();
 }
