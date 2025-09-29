@@ -13687,11 +13687,6 @@
         "extension": ".svg"
       },
       {
-        "path": "quests.html",
-        "sizeBytes": 2147,
-        "extension": ".html"
-      },
-      {
         "path": "robots.txt",
         "sizeBytes": 45,
         "extension": ".txt"
