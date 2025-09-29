@@ -1,5 +1,189 @@
 import * as net from './net.js';
 
+const globalScope = typeof window !== 'undefined' ? window : undefined;
+const GAME_ID = 'platformer';
+
+function ensureBootRecord() {
+  if (!globalScope) {
+    return {
+      game: GAME_ID,
+      createdAt: Date.now(),
+      phases: {},
+      phaseOrder: [],
+      raf: { lastTick: 0, tickCount: 0 },
+      canvas: { width: null, height: null, lastChange: 0, attached: null },
+      logs: [],
+      watchdogs: {},
+    };
+  }
+  const root = globalScope.__bootStatus || (globalScope.__bootStatus = {});
+  if (!root[GAME_ID]) {
+    root[GAME_ID] = {
+      game: GAME_ID,
+      createdAt: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+      phases: {},
+      phaseOrder: [],
+      raf: { lastTick: 0, tickCount: 0, firstTickAt: 0, stalled: false, noTickLogged: false },
+      canvas: { width: null, height: null, lastChange: 0, attached: null, notifiedDetached: false },
+      logs: [],
+      watchdogs: {},
+    };
+  }
+  return root[GAME_ID];
+}
+
+function markPhase(name, details) {
+  const record = ensureBootRecord();
+  const at = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const entry = Object.assign({ at }, details || {});
+  record.phases[name] = entry;
+  if (Array.isArray(record.phaseOrder) && !record.phaseOrder.includes(name)) {
+    record.phaseOrder.push(name);
+  }
+  return entry;
+}
+
+function logBoot(level, message, details = {}) {
+  const record = ensureBootRecord();
+  const timestamp = Date.now();
+  const entry = { timestamp, level, message, details };
+  if (Array.isArray(record.logs)) {
+    record.logs.push(entry);
+    if (record.logs.length > 200) {
+      record.logs.splice(0, record.logs.length - 200);
+    }
+  }
+  if (globalScope) {
+    const queue = globalScope.__GG_DIAG_QUEUE || (globalScope.__GG_DIAG_QUEUE = []);
+    queue.push({ game: GAME_ID, category: 'game', level, message, details, timestamp });
+    if (queue.length > 500) {
+      queue.splice(0, queue.length - 500);
+    }
+    const console = globalScope.console;
+    if (console) {
+      if (level === 'error' && typeof console.error === 'function') {
+        console.error('[platformer]', message, details);
+      } else if (level === 'warn' && typeof console.warn === 'function') {
+        console.warn('[platformer]', message, details);
+      }
+    }
+  }
+  return entry;
+}
+
+function snapshotCanvas(canvas) {
+  const record = ensureBootRecord();
+  if (!record.canvas) record.canvas = {};
+  record.canvas.width = canvas?.width ?? null;
+  record.canvas.height = canvas?.height ?? null;
+  record.canvas.lastChange = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  record.canvas.attached = isCanvasAttached(canvas);
+  if (record.canvas.attached) {
+    record.canvas.notifiedDetached = false;
+  }
+  return record.canvas;
+}
+
+function isCanvasAttached(canvas) {
+  if (!canvas || !globalScope?.document) return false;
+  if ('isConnected' in canvas) return !!canvas.isConnected;
+  return globalScope.document.contains(canvas);
+}
+
+let bootStarted = false;
+let diagRafWatchTimer = 0;
+let diagCanvasWatchTimer = 0;
+let diagWatchCleanup = null;
+
+function stopWatchdogs() {
+  if (!globalScope) return;
+  if (diagWatchCleanup) {
+    try { diagWatchCleanup(); } catch (_) {}
+    diagWatchCleanup = null;
+  }
+  const record = ensureBootRecord();
+  if (record.watchdogs) {
+    record.watchdogs.active = false;
+  }
+}
+
+function startWatchdogs(canvas) {
+  if (!globalScope) return;
+  stopWatchdogs();
+  const record = ensureBootRecord();
+  record.watchdogs = record.watchdogs || {};
+  record.watchdogs.armedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const canvasSnapshot = snapshotCanvas(canvas);
+  if (typeof globalScope.setInterval !== 'function') {
+    record.watchdogs.active = false;
+    logBoot('warn', 'Watchdog timers unavailable in this environment', {
+      canvasWidth: canvasSnapshot.width,
+      canvasHeight: canvasSnapshot.height,
+    });
+    return;
+  }
+  record.watchdogs.active = true;
+  logBoot('info', 'Watchdogs armed', {
+    canvasWidth: canvasSnapshot.width,
+    canvasHeight: canvasSnapshot.height,
+    attached: canvasSnapshot.attached,
+  });
+
+  let rafStalled = false;
+  diagRafWatchTimer = globalScope.setInterval(() => {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const raf = record.raf || (record.raf = {});
+    const sinceStart = now - (record.phases['boot:start']?.at ?? record.createdAt ?? now);
+    if (!raf.tickCount) {
+      if (sinceStart > 2000 && !raf.noTickLogged) {
+        raf.noTickLogged = true;
+        logBoot('error', 'No animation frames after boot', { sinceStart: Math.round(sinceStart) });
+      }
+      return;
+    }
+    const lastTick = raf.lastTick || 0;
+    if (!lastTick) return;
+    const gap = now - lastTick;
+    raf.sinceLastTick = gap;
+    if (gap > 2000 && !rafStalled) {
+      rafStalled = true;
+      raf.stalled = true;
+      logBoot('warn', 'rAF watchdog detected stall', { gap: Math.round(gap) });
+    } else if (rafStalled && gap <= 1200) {
+      rafStalled = false;
+      raf.stalled = false;
+      logBoot('info', 'rAF watchdog recovered', { gap: Math.round(gap) });
+    }
+  }, 1000);
+
+  let lastSizeKey = `${canvas?.width ?? 0}x${canvas?.height ?? 0}`;
+  diagCanvasWatchTimer = globalScope.setInterval(() => {
+    const attached = isCanvasAttached(canvas);
+    const sizeKey = `${canvas?.width ?? 0}x${canvas?.height ?? 0}`;
+    if (sizeKey !== lastSizeKey) {
+      lastSizeKey = sizeKey;
+      const snap = snapshotCanvas(canvas);
+      logBoot('info', 'Canvas size changed', {
+        canvasWidth: snap.width,
+        canvasHeight: snap.height,
+        attached: snap.attached,
+      });
+    } else if (!attached && !record.canvas?.notifiedDetached) {
+      if (record.canvas) record.canvas.notifiedDetached = true;
+      logBoot('error', 'Canvas detached from document', { size: sizeKey });
+    }
+  }, 1500);
+
+  diagWatchCleanup = () => {
+    if (typeof globalScope.clearInterval === 'function') {
+      globalScope.clearInterval(diagRafWatchTimer);
+      globalScope.clearInterval(diagCanvasWatchTimer);
+    }
+    diagRafWatchTimer = 0;
+    diagCanvasWatchTimer = 0;
+  };
+}
+
 const GRAVITY = 0.7;
 const MOVE_SPEED = 4;
 const JUMP_FORCE = 13;
@@ -47,14 +231,44 @@ function clamp(v, min, max) {
 }
 
 export function boot() {
-  const canvas = document.getElementById('game');
-  if (!canvas) {
-    console.error('[platformer] missing #game canvas');
+  const record = ensureBootRecord();
+  record.bootInvokedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  if (bootStarted) {
+    logBoot('warn', 'boot() called after initialization', { ignored: true });
     return;
   }
+  bootStarted = true;
+  markPhase('boot:start');
+
+  if (!globalScope?.document) {
+    logBoot('error', 'boot() called without document context');
+    markPhase('boot:error', { reason: 'no-document' });
+    return;
+  }
+
+  const canvas = globalScope.document.getElementById('game');
+  if (!canvas) {
+    logBoot('error', 'Missing #game canvas', { selector: '#game' });
+    markPhase('boot:error', { reason: 'missing-canvas' });
+    return;
+  }
+
   const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    logBoot('error', 'Failed to acquire 2d context on #game canvas');
+    markPhase('boot:error', { reason: 'no-2d-context' });
+    return;
+  }
   canvas.width = canvas.width || 960;
   canvas.height = canvas.height || 540;
+  snapshotCanvas(canvas);
+  markPhase('boot:canvas-ready', {
+    width: canvas.width,
+    height: canvas.height,
+    attached: isCanvasAttached(canvas),
+  });
+  startWatchdogs(canvas);
+
   const W = canvas.width;
   const H = canvas.height;
   const groundY = H - 60;
@@ -442,6 +656,8 @@ export function boot() {
   function drawScene() {
     if(!postedReady){
       postedReady = true;
+      markPhase('boot:ready-signal');
+      logBoot('info', 'Posted GAME_READY to shell');
       try { window.parent?.postMessage({ type:'GAME_READY', slug:'platformer' }, '*'); } catch {}
     }
     ctx.clearRect(0, 0, W, H);
@@ -523,6 +739,16 @@ export function boot() {
     lastFrame = now;
     const dt = dtMs / (1000 / 60); // scale to 60fps units
 
+    const record = ensureBootRecord();
+    const rafInfo = record.raf || (record.raf = {});
+    rafInfo.lastTick = now;
+    rafInfo.tickCount = (rafInfo.tickCount || 0) + 1;
+    rafInfo.lastDelta = dtMs;
+    if (!rafInfo.firstTickAt) {
+      rafInfo.firstTickAt = now;
+      markPhase('raf:first-tick', { at: now });
+    }
+
     updatePhysics(dt);
 
     if (!paused && !gameOver) {
@@ -539,6 +765,7 @@ export function boot() {
 
   function cleanup() {
     cancelAnimationFrame(rafId);
+    stopWatchdogs();
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
     clearTimeout(shareResetTimer);
@@ -585,6 +812,29 @@ export function boot() {
 
   resetState();
   lastFrame = performance.now();
+  markPhase('boot:ready', { lastFrameAt: lastFrame });
+  logBoot('info', 'Boot complete', { lastFrameAt: lastFrame });
   rafId = requestAnimationFrame(frame);
   window.addEventListener('beforeunload', cleanup, { once: true });
+}
+
+if (globalScope) {
+  markPhase('module:evaluated');
+  if (globalScope.document) {
+    const runOnReady = () => {
+      markPhase('dom:ready');
+      if (!bootStarted) {
+        boot();
+      }
+    };
+    if (globalScope.document.readyState === 'loading') {
+      globalScope.document.addEventListener('DOMContentLoaded', runOnReady, { once: true });
+    } else if (typeof queueMicrotask === 'function') {
+      queueMicrotask(runOnReady);
+    } else if (typeof Promise !== 'undefined') {
+      Promise.resolve().then(runOnReady);
+    } else {
+      setTimeout(runOnReady, 0);
+    }
+  }
 }
