@@ -2,6 +2,7 @@
 // Usage in a game page: <script type="module" src="../../shared/game-boot.js" data-slug="runner"></script>
 import { injectBackButton, injectHelpButton, recordLastPlayed } from './ui.js';
 import { recordPlay } from './quests.js';
+import { normalizeCatalogEntries } from './game-catalog-core.js';
 import { renderFallbackPanel } from './fallback.js';
 import { preloadFirstFrameAssets } from './game-asset-preloader.js';
 
@@ -33,8 +34,14 @@ async function track(){
     }
     if (!data) throw new Error('catalog unavailable');
     const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
-    const g = games.find(g => g.slug === slug);
-    if (g) tags = g.tags || [];
+    const normalized = normalizeCatalogEntries(games);
+    const normalizedMatch = normalized.find(g => g.slug === slug || g.id === slug);
+    const rawMatch = normalizedMatch ? null : games.find(g => g?.slug === slug || g?.id === slug);
+    const match = normalizedMatch || rawMatch;
+    if (match) {
+      const sourceTags = normalizedMatch ? normalizedMatch.tags : match.tags;
+      tags = Array.isArray(sourceTags) ? sourceTags : [];
+    }
   } catch {}
   recordPlay(slug, tags);
 }

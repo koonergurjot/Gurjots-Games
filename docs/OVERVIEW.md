@@ -14,7 +14,8 @@ The client-side interface communicates with modular game logic. State is saved l
 ## Updating Game Data
 
 Game metadata displayed on the landing page lives in the repository root `games.json` file.
-The deployed site now consumes `/games.json` directly (with a compatibility fallback to `/public/games.json` for older builds). Treat `games.json` as the source of truth and re-run the sync script when entries change.
+The deployed site now consumes `/games.json` directly (with a compatibility fallback to `/public/games.json` for older builds). Pages can boot straight from that raw catalog data — the runtime normalizes entries so games with only an `id` still expose their tags for quests.
+Treat `games.json` as the source of truth and re-run the sync script when entries change.
 
 To add a new entry:
 
