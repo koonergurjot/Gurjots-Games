@@ -1,4 +1,6 @@
 // bolt-landing v2 — 1:1 hero + games grid, auto-adapts to game.html
+import { getLastPlayed } from '../shared/ui.js';
+
 const GRID = document.getElementById('bolt-grid');
 const STATUS = document.getElementById('bolt-status');
 const SEARCH = document.getElementById('bolt-search');
@@ -13,6 +15,20 @@ const PRIMARY_QUERY_KEY = 'slug'; // shell reads slug; we also include id for le
 const toSlug = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
 const prettyTag = t => t?.charAt(0).toUpperCase() + t?.slice(1);
 const toQuery = s => (s||'').trim().toLowerCase();
+
+const HISTORY_SECTION = document.createElement('section');
+HISTORY_SECTION.className = 'bolt-history';
+HISTORY_SECTION.setAttribute('hidden', '');
+HISTORY_SECTION.setAttribute('aria-labelledby', 'bolt-history-heading');
+HISTORY_SECTION.innerHTML = `
+  <h2 id="bolt-history-heading" class="bolt-section-title bolt-history-title">Recently Played</h2>
+  <div class="bolt-grid bolt-history-grid"></div>
+`;
+
+const HISTORY_GRID = HISTORY_SECTION.querySelector('.bolt-history-grid');
+GRID?.parentElement?.insertBefore(HISTORY_SECTION, GRID);
+
+const lastPlayedSlugs = getLastPlayed();
 
 function placeholderSVG(label='GG'){
   return `
@@ -83,6 +99,24 @@ function render(list){
   if (GAME_COUNT) GAME_COUNT.textContent = list.length + '+';
 }
 
+function renderHistory(slugs = []){
+  if (!HISTORY_SECTION) return;
+  if (!Array.isArray(slugs) || !slugs.length) {
+    HISTORY_SECTION.setAttribute('hidden', '');
+    HISTORY_GRID.innerHTML = '';
+    return;
+  }
+  const lookup = new Map(allGames.map(g => [g.slug, g]));
+  const items = slugs.map(slug => lookup.get(slug)).filter(Boolean);
+  if (!items.length) {
+    HISTORY_SECTION.setAttribute('hidden', '');
+    HISTORY_GRID.innerHTML = '';
+    return;
+  }
+  HISTORY_GRID.innerHTML = items.map(card).join('');
+  HISTORY_SECTION.removeAttribute('hidden');
+}
+
 function filterAndSearch(){
   const q = toQuery(SEARCH?.value || '');
   const filtered = allGames.filter(g => {
@@ -135,6 +169,7 @@ async function boot(){
     buildFilterChips(tags);
 
     render(allGames);
+    renderHistory(lastPlayedSlugs);
     STATUS.focus?.();
   } catch(err) {
     console.error(err);

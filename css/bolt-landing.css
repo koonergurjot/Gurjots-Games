@@ -102,6 +102,11 @@ body.bolt-body{
 @media (max-width: 760px){ .bolt-grid{grid-template-columns:repeat(2,1fr)}}
 @media (max-width: 420px){ .bolt-grid{grid-template-columns:1fr}}
 
+.bolt-history{margin:30px 0 34px;padding:22px 22px 26px;border:1px solid var(--bolt-border);border-radius:22px;background:rgba(0,0,0,.22);backdrop-filter:blur(6px)}
+.bolt-history[hidden]{display:none}
+.bolt-history-title{margin:0 0 18px;font-size:24px}
+.bolt-history-grid{margin:0}
+
 .bolt-card{background:linear-gradient(180deg, var(--bolt-card) 0%, var(--bolt-card-2) 100%);border:1px solid var(--bolt-border);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;transition:transform .2s ease, background .2s ease, border-color .2s ease}
 .bolt-card:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.25)}
 .bolt-shot{aspect-ratio: 16/9; display:grid; place-items:center; position:relative; background:#0f1020}
