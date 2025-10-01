@@ -1,0 +1,11 @@
+{
+  "leaderboard": {
+    "enableSharing": true,
+    "collectUserHandle": true,
+    "maxEntries": 10,
+    "rateLimit": {
+      "windowSeconds": 60,
+      "maxRequests": 30
+    }
+  }
+}
