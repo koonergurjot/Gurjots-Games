@@ -22,6 +22,7 @@ Our mission is to build a friendly, open playground for accessible HTML5 games. 
 ## ✨ Features
 
 - **Curated game library** – browse and launch games from a unified interface that works on desktop and mobile.
+- **Recently played shortcuts** – the landing page highlights your stored history for quick access to favorite titles.
 - **Game loader with diagnostics** – `js/game-loader.js` boots each game and surfaces clear error messages when something goes wrong.
 - **Service Worker caching** – a network‑first strategy keeps JavaScript fresh while enabling offline support for assets.
 - **Accessible design** – semantic HTML, ARIA labels and responsive layouts provide an inclusive experience.
