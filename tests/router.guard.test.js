@@ -37,4 +37,28 @@ describe('Router guard navigation', () => {
     replaceSpy.mockRestore();
     history.replaceState({}, '', originalPathname);
   });
+
+  test('static routes with dots only match exact paths', async () => {
+    const outlet = document.createElement('div');
+    const router = new Router(outlet);
+
+    const statsHandler = vi.fn();
+    const statsLoader = vi.fn(async () => ({ default: statsHandler }));
+    const statsXHandler = vi.fn();
+    const statsXLoader = vi.fn(async () => ({ default: statsXHandler }));
+
+    router.register('/stats.html', statsLoader);
+    router.register('/statsXhtml', statsXLoader);
+
+    await router.resolve('/stats.html');
+    expect(statsLoader).toHaveBeenCalledTimes(1);
+    expect(statsHandler).toHaveBeenCalledTimes(1);
+    expect(statsXLoader).not.toHaveBeenCalled();
+
+    await router.resolve('/statsXhtml');
+    expect(statsLoader).toHaveBeenCalledTimes(1);
+    expect(statsHandler).toHaveBeenCalledTimes(1);
+    expect(statsXLoader).toHaveBeenCalledTimes(1);
+    expect(statsXHandler).toHaveBeenCalledTimes(1);
+  });
 });

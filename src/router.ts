@@ -30,10 +30,18 @@ export class Router {
 
   register(path: string, loader: Loader, guard?: Guard) {
     const keys: string[] = [];
-    const pattern = new RegExp('^' + path.replace(/:([^/]+)/g, (_, k) => {
-      keys.push(k);
-      return '([^/]+)';
-    }) + '$');
+    const escapeRegExp = (segment: string) => segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const patternSource = path
+      .split(/(:[^/]+)/g)
+      .map(part => {
+        if (part.startsWith(':')) {
+          keys.push(part.slice(1));
+          return '([^/]+)';
+        }
+        return escapeRegExp(part);
+      })
+      .join('');
+    const pattern = new RegExp('^' + patternSource + '$');
     this.routes.push({ pattern, keys, loader, guard });
   }
 
