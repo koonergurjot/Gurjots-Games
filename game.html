@@ -11,7 +11,12 @@
     body {
       margin: 0; background: linear-gradient(180deg, #0b0f14, #111827 35%, #0b0f14);
       color: #e5f0ff; font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      display: grid; grid-template-rows: auto auto 1fr auto; gap: 8px;
+      display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr auto; gap: 8px;
+      grid-template-areas:
+        "header"
+        "quest"
+        "main"
+        "footer";
     }
     body.legacy-shell {
       display: block;
@@ -20,7 +25,7 @@
     header, footer {
       backdrop-filter: blur(6px); background: rgba(17,24,39,0.6); border-bottom: 1px solid #243042;
     }
-    header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; grid-area: header; }
     header .title { display:flex; align-items:center; gap:10px; }
     header .title h1 { font-size: 16px; margin: 0; font-weight: 600; }
     header nav { display:flex; gap:8px; }
@@ -29,7 +34,7 @@
       padding: 8px 10px; border-radius: 10px; cursor: pointer; text-decoration: none;
     }
     a.btn:hover, button.btn:hover { border-color: #3b5172; }
-    main { display:grid; place-items:stretch; padding: 0; }
+    main { display:grid; place-items:stretch; padding: 0; grid-area: main; }
     .game-card {
       width: 100%; height: 100%; aspect-ratio: auto; background: #0b0f14; border: 1px solid #1e2a3b;
       border-radius: 14px; overflow: clip; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.45);
@@ -70,7 +75,10 @@
       margin-top:10px; max-height:160px; overflow:auto; background:#0b1018; border:1px solid #203049; border-radius:8px; padding:8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px;
     }
     .hidden { display:none; }
-    footer { padding: 10px 14px; border-top: 1px solid #243042; color: #a8c3df; }
+    footer { padding: 10px 14px; border-top: 1px solid #243042; color: #a8c3df; grid-area: footer; }
+    #questWidgetRoot {
+      grid-area: quest;
+    }
     .quest-widget {
       padding: 0 14px;
     }
@@ -187,6 +195,21 @@
     }
     @media (max-width: 768px) {
       header .title h1 { font-size: 14px; }
+    }
+    @media (min-width: 1024px) {
+      body {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+        grid-template-areas:
+          "header header"
+          "main quest"
+          "footer footer";
+      }
+      .quest-widget {
+        align-self: start;
+        justify-self: start;
+        width: 100%;
+        max-width: 320px;
+      }
     }
   </style>
 </head>
