@@ -1,8 +1,19 @@
 /* @vitest-environment jsdom */
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+
+const notFoundHandler = vi.fn();
+
+vi.mock('../scripts/pages/not-found.js', () => ({
+  default: notFoundHandler,
+}));
+
 import { Router } from '../scripts/router.js';
 
 describe('Router guard navigation', () => {
+  beforeEach(() => {
+    notFoundHandler.mockClear();
+  });
+
   test('guard failure replaces current history entry', async () => {
     const originalPathname = location.pathname;
     history.replaceState({}, '', originalPathname);
@@ -26,12 +37,13 @@ describe('Router guard navigation', () => {
 
     expect(guard).toHaveBeenCalledTimes(1);
     expect(guardedLoader).not.toHaveBeenCalled();
-    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(pushSpy).not.toHaveBeenCalled();
     expect(replaceSpy).toHaveBeenCalledTimes(1);
-    expect(history.length).toBe(initialLength + 1);
+    expect(history.length).toBe(initialLength);
     expect(location.pathname).toBe('/');
     expect(fallbackLoader).toHaveBeenCalledTimes(1);
     expect(fallbackHandler).toHaveBeenCalledTimes(1);
+    expect(notFoundHandler).not.toHaveBeenCalled();
 
     pushSpy.mockRestore();
     replaceSpy.mockRestore();
@@ -60,5 +72,44 @@ describe('Router guard navigation', () => {
     expect(statsHandler).toHaveBeenCalledTimes(1);
     expect(statsXLoader).toHaveBeenCalledTimes(1);
     expect(statsXHandler).toHaveBeenCalledTimes(1);
+  });
+
+  test('guarded home route falls back to not-found', async () => {
+    const outlet = document.createElement('div');
+    const router = new Router(outlet);
+
+    const guard = vi.fn().mockResolvedValue(false);
+    const guardedLoader = vi.fn(async () => ({ default: vi.fn() }));
+    router.register('/', guardedLoader, guard);
+
+    await router.resolve('/');
+
+    expect(guard).toHaveBeenCalledTimes(1);
+    expect(guardedLoader).not.toHaveBeenCalled();
+    expect(notFoundHandler).toHaveBeenCalledTimes(1);
+  });
+
+  test('missing home route shows not-found after guard fallback', async () => {
+    const originalPathname = location.pathname;
+    history.replaceState({}, '', originalPathname);
+
+    const replaceSpy = vi.spyOn(history, 'replaceState');
+
+    const outlet = document.createElement('div');
+    const router = new Router(outlet);
+
+    const guard = vi.fn().mockResolvedValue(false);
+    const protectedLoader = vi.fn(async () => ({ default: vi.fn() }));
+    router.register('/protected', protectedLoader, guard);
+
+    await router.navigate('/protected');
+
+    expect(guard).toHaveBeenCalledTimes(1);
+    expect(protectedLoader).not.toHaveBeenCalled();
+    expect(notFoundHandler).toHaveBeenCalledTimes(1);
+    expect(replaceSpy).toHaveBeenCalledTimes(1);
+
+    replaceSpy.mockRestore();
+    history.replaceState({}, '', originalPathname);
   });
 });
