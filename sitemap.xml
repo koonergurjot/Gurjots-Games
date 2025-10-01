@@ -4,9 +4,15 @@
   <url><loc>/stats.html</loc></url>
   <url><loc>/cabinet.html</loc></url>
   <url><loc>/games/pong/</loc></url>
-  <url><loc>/games/runner/</loc></url>
+  <url><loc>/games/snake/</loc></url>
+  <url><loc>/games/tetris/</loc></url>
+  <url><loc>/games/breakout/</loc></url>
+  <url><loc>/games/chess/</loc></url>
+  <url><loc>/games/chess3d/</loc></url>
+  <url><loc>/games/2048/</loc></url>
   <url><loc>/games/asteroids/</loc></url>
-  <url><loc>/games/shooter/</loc></url>
-  <url><loc>/games/platformer/</loc></url>
   <url><loc>/games/maze3d/</loc></url>
+  <url><loc>/games/platformer/</loc></url>
+  <url><loc>/games/runner/</loc></url>
+  <url><loc>/games/shooter/</loc></url>
 </urlset>
