@@ -1,6 +1,13 @@
 export type Params = Record<string, string>;
 export type Loader = (params: Params) => Promise<{ default: (el: HTMLElement, params: Params) => void }>;
-export type Guard = (params: Params) => Promise<boolean> | boolean;
+type ResolveMode = 'push' | 'replace' | 'pop';
+
+export interface ResolveContext {
+  mode: ResolveMode;
+  visited: Set<string>;
+}
+
+export type Guard = (params: Params, context: ResolveContext) => Promise<boolean | string> | boolean | string;
 
 interface Route {
   pattern: RegExp;
@@ -15,7 +22,7 @@ export class Router {
 
   constructor(outlet: HTMLElement) {
     this.outlet = outlet;
-    window.addEventListener('popstate', () => this.resolve(location.pathname));
+    window.addEventListener('popstate', () => this.resolve(location.pathname, { mode: 'pop', visited: new Set() }));
     document.addEventListener('click', e => {
       const a = (e.target as HTMLElement).closest('a');
       if (a && a instanceof HTMLAnchorElement && a.origin === location.origin) {
@@ -46,31 +53,89 @@ export class Router {
   }
 
   async navigate(path: string) {
-    history.pushState({}, '', path);
-    await this.resolve(path);
+    await this.resolve(path, { mode: 'push', visited: new Set() });
   }
 
-  async resolve(path: string) {
-    for (const r of this.routes) {
-      const match = r.pattern.exec(path);
-      if (match) {
-        const params: Params = {};
-        r.keys.forEach((k, i) => params[k] = decodeURIComponent(match[i + 1]));
-        if (r.guard && !(await r.guard(params))) {
-          history.replaceState({}, '', '/');
-          return this.resolve('/');
-        }
-        const mod = await r.loader(params);
-        this.outlet.innerHTML = '';
-        if (typeof mod.default === 'function') {
-          mod.default(this.outlet, params);
-        }
-        return;
-      }
+  async resolve(path: string, context?: Partial<ResolveContext>) {
+    const resolveContext: ResolveContext = {
+      mode: context?.mode ?? 'pop',
+      visited: context?.visited ?? new Set<string>(),
+    };
+
+    if (resolveContext.visited.has(path)) {
+      await this.renderNotFound(resolveContext.mode, path);
+      return;
     }
+
+    resolveContext.visited.add(path);
+
+    const match = this.match(path);
+    if (!match) {
+      await this.renderNotFound(resolveContext.mode, path);
+      return;
+    }
+
+    const { route, params } = match;
+    let guardResult: boolean | string = true;
+    if (route.guard) {
+      guardResult = await route.guard(params, resolveContext);
+    }
+
+    if (guardResult === true) {
+      await this.renderRoute(route, params);
+      this.commitHistory(path, resolveContext.mode);
+      return;
+    }
+
+    if (guardResult === false) {
+      await this.resolve('/', { mode: 'replace', visited: resolveContext.visited });
+      return;
+    }
+
+    if (typeof guardResult === 'string') {
+      await this.resolve(guardResult, { mode: 'replace', visited: resolveContext.visited });
+      return;
+    }
+
+    await this.renderNotFound(resolveContext.mode, path);
+  }
+
+  private match(path: string) {
+    for (const route of this.routes) {
+      const match = route.pattern.exec(path);
+      if (!match) {
+        continue;
+      }
+      const params: Params = {};
+      route.keys.forEach((key, index) => {
+        params[key] = decodeURIComponent(match[index + 1]);
+      });
+      return { route, params };
+    }
+    return undefined;
+  }
+
+  private async renderRoute(route: Route, params: Params) {
+    const mod = await route.loader(params);
+    this.outlet.innerHTML = '';
+    if (typeof mod.default === 'function') {
+      mod.default(this.outlet, params);
+    }
+  }
+
+  private async renderNotFound(mode: ResolveMode, path: string) {
     const mod = await import('./pages/not-found.js');
     this.outlet.innerHTML = '';
     mod.default(this.outlet);
+    this.commitHistory(path, mode);
+  }
+
+  private commitHistory(path: string, mode: ResolveMode) {
+    if (mode === 'push') {
+      history.pushState({}, '', path);
+    } else if (mode === 'replace') {
+      history.replaceState({}, '', path);
+    }
   }
 }
 
