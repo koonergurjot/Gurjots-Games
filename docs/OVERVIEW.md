@@ -32,3 +32,20 @@ To add a new entry:
 4. Run `npm run sync:games` to refresh auxiliary artifacts (offline cache, etc.).
 5. Run `npm run health` to verify the metadata.
 
+## Quests and XP
+
+The quest system lives in [`shared/quests.js`](../shared/quests.js) and exposes three key helpers:
+
+- `getActiveQuests(date?)` returns the currently active daily and weekly quests along with the player's saved progress.
+- `recordPlay(slug, tags, date?)` advances quest counters and adds XP when a quest goal is achieved. It is invoked automatically by [`shared/game-boot.js`](../shared/game-boot.js) whenever a game session starts.
+- `getXP()` reads the accumulated XP total from local storage.
+
+Quests are deterministic rotations seeded by UTC timestamps:
+
+- Two daily quests are selected every calendar day (00:00 UTC) from the daily pool.
+- One weekly quest is selected for each ISO week, refreshing every Monday (00:00 UTC).
+
+Progress is tracked per profile in `localStorage` under `questProgress:<profile>:<type>:<seed>` keys. Completing a quest grants the XP defined in the quest descriptor. After each update, the module emits a `quests:updated` `CustomEvent` on `window`, allowing widgets (such as the shell quest tracker) to refresh without polling. Listeners receive `{ xp, daily, weekly, timestamp }` data in the event detail, but can also call `getActiveQuests()` and `getXP()` for the latest state.
+
+The quest widget added to the shell (`shared/quest-widget.js`) listens for this event, renders current progress on page load, and updates automatically after each `recordPlay` call.
+

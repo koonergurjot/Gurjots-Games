@@ -45,6 +45,8 @@ const WEEKLY_POOL = [
 const DAILY_COUNT = 2;
 const WEEKLY_COUNT = 1;
 
+export const QUESTS_UPDATED_EVENT = 'quests:updated';
+
 // deterministic PRNG
 function xmur3(str){
   let h = 1779033703 ^ str.length;
@@ -131,6 +133,26 @@ function select(pool, count, seedStr){
   return seededShuffle(pool, seedStr).slice(0, count);
 }
 
+function withProgress(selection, progress){
+  return selection.map(q => ({
+    ...q,
+    progress: progress[q.id]?.count || 0,
+    completed: !!progress[q.id]?.done
+  }));
+}
+
+function emitQuestUpdate(detail){
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+  let event = null;
+  if (typeof window.CustomEvent === 'function'){
+    event = new window.CustomEvent(QUESTS_UPDATED_EVENT, { detail });
+  } else if (typeof document !== 'undefined' && typeof document.createEvent === 'function'){
+    event = document.createEvent('CustomEvent');
+    event.initCustomEvent(QUESTS_UPDATED_EVENT, false, false, detail);
+  }
+  if (event) window.dispatchEvent(event);
+}
+
 export function getActiveQuests(date = new Date()){
   const daySeed = date.toISOString().slice(0,10);
   const weekSeed = weekKey(date);
@@ -140,16 +162,8 @@ export function getActiveQuests(date = new Date()){
   const dailyProg = loadProgress('daily', daySeed);
   const weeklyProg = loadProgress('weekly', weekSeed);
 
-  const daily = dailySel.map(q => ({
-    ...q,
-    progress: dailyProg[q.id]?.count || 0,
-    completed: !!dailyProg[q.id]?.done
-  }));
-  const weekly = weeklySel.map(q => ({
-    ...q,
-    progress: weeklyProg[q.id]?.count || 0,
-    completed: !!weeklyProg[q.id]?.done
-  }));
+  const daily = withProgress(dailySel, dailyProg);
+  const weekly = withProgress(weeklySel, weeklyProg);
 
   return { daily, weekly };
 }
@@ -190,6 +204,13 @@ export function recordPlay(slug, tags = [], date = new Date()){
 
   apply(dailySel, dailyProg, 'daily', daySeed);
   apply(weeklySel, weeklyProg, 'weekly', weekSeed);
+
+  emitQuestUpdate({
+    xp: getXP(),
+    daily: withProgress(dailySel, dailyProg),
+    weekly: withProgress(weeklySel, weeklyProg),
+    timestamp: date.toISOString()
+  });
 }
 
 export default { getActiveQuests, recordPlay, getXP };
