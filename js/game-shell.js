@@ -219,6 +219,60 @@ function renderShell(info){
   });
 }
 
+function resolveLaunchEntry(info) {
+  var fallback = (info && info.launch && info.launch.path) || (info && info.entry) || (info && info.url) || '';
+  var base = (info && (info.playUrl || info.path)) || fallback;
+  if (!base) return '';
+  try {
+    var parsed = new URL(base, location.origin);
+    var path = parsed.pathname || '';
+    var lastSegment = path.substring(path.lastIndexOf('/') + 1);
+    if (!lastSegment || lastSegment.indexOf('.') === -1) {
+      if (!path.endsWith('/')) path += '/';
+      path += 'index.html';
+    }
+    parsed.pathname = path;
+    return parsed.pathname + (parsed.search || '') + (parsed.hash || '');
+  } catch (_err) {
+    try {
+      var withoutHash = base;
+      var hashIndex = withoutHash.indexOf('#');
+      var hash = '';
+      if (hashIndex >= 0) {
+        hash = withoutHash.substring(hashIndex);
+        withoutHash = withoutHash.substring(0, hashIndex);
+      }
+      var queryIndex = withoutHash.indexOf('?');
+      var query = '';
+      if (queryIndex >= 0) {
+        query = withoutHash.substring(queryIndex);
+        withoutHash = withoutHash.substring(0, queryIndex);
+      }
+      var pathOnly = withoutHash;
+      var seg = pathOnly.substring(pathOnly.lastIndexOf('/') + 1);
+      if (!seg || seg.indexOf('.') === -1) {
+        if (pathOnly && !pathOnly.endsWith('/')) pathOnly += '/';
+        pathOnly += 'index.html';
+      }
+      return pathOnly + query + hash;
+    } catch(__err) {
+      return base;
+    }
+  }
+}
+
+function appendQueryParam(url, key, value) {
+  if (!url) return url;
+  try {
+    var parsed = new URL(url, location.origin);
+    parsed.searchParams.set(key, value);
+    return parsed.pathname + (parsed.search || '') + (parsed.hash || '');
+  } catch(_) {
+    var hasQuery = url.indexOf('?') >= 0;
+    return url + (hasQuery ? '&' : '?') + encodeURIComponent(key) + '=' + encodeURIComponent(value);
+  }
+}
+
 function loadGame(info){
   var stage = $('#stage');
   var overlays = ensureOverlays();
@@ -235,17 +289,46 @@ function loadGame(info){
   ensureLegacyElements();
   ensureCanvasLabels(stage || document);
 
-  var entry = info.launch && info.launch.path || info.entry || info.url;
+  var fallbackEntry = (info && info.launch && info.launch.path) || (info && info.entry) || (info && info.url) || '';
+  var resolvedEntry = resolveLaunchEntry(info);
+  var candidate = resolvedEntry || fallbackEntry;
   var isModule = (info.launch && info.launch.module) || info.module || false;
-  var type = (info.launch && info.launch.type) || (entry && entry.endsWith('.html') ? 'iframe' : 'script');
+
+  var type;
+  if (candidate) {
+    var entryPath = candidate.split('#')[0];
+    entryPath = entryPath.split('?')[0];
+    var lower = entryPath.toLowerCase();
+    if (lower.endsWith('.html') || lower.endsWith('.htm')) {
+      type = 'iframe';
+    } else {
+      type = 'script';
+    }
+  } else {
+    type = 'script';
+  }
+
+  var loadTarget = candidate;
+
+  if (!loadTarget) {
+    setLoaderVisibility(loader, false);
+    renderError('Game missing launch entry', {message: 'No playable URL defined for this game.'});
+    return;
+  }
+
   if (FORCE === 'iframe') type = 'iframe'; else if (FORCE === 'script') type = 'script';
 
+  if (type === 'iframe' && DEBUG && loadTarget) {
+    loadTarget = appendQueryParam(loadTarget, 'debug', '1');
+  }
+
+  var cachedTarget = loadTarget ? cacheBust(loadTarget) : '';
+
   if(type === 'iframe'){
-    var debugEntry = DEBUG ? (entry + (entry.indexOf('?')>=0?'&':'?') + 'debug=1') : entry;
     var iframe = document.createElement('iframe');
     iframe.id = 'frame';
     iframe.allow = 'autoplay; fullscreen';
-    iframe.src = cacheBust(debugEntry);
+    iframe.src = cachedTarget;
     iframe.onload = function(){ /* wait for GAME_READY */ };
     iframe.addEventListener('load', function(){
       try {
@@ -256,17 +339,17 @@ function loadGame(info){
     if (stage) stage.innerHTML = '';
     (stage || document.body).appendChild(iframe);
     state.iframe = iframe;
-    createDiagUI(info, type, debugEntry);
+    createDiagUI(info, type, resolvedEntry, loadTarget);
   } else {
     if (stage) stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas" role="img"></canvas>';
     ensureRuntimeDiagnostics(document);
     var s = document.createElement('script');
     var useModule = (FORCE_MODULE !== null) ? FORCE_MODULE : isModule;
     if(useModule){ s.type='module'; }
-    s.src = cacheBust(entry);
+    s.src = cachedTarget;
     s.onerror = function(e){ renderError('Failed to load game script', e); };
     document.body.appendChild(s);
-    createDiagUI(info, type, entry);
+    createDiagUI(info, type, resolvedEntry, loadTarget);
     ensureCanvasLabels(stage || document);
   }
 
@@ -486,7 +569,7 @@ function ensureDiagListeners() {
   }
 }
 
-function createDiagUI(info, type, entry) {
+function createDiagUI(info, type, resolvedEntry, loadedEntry) {
   var btn = document.getElementById('diag-btn');
   var panel = document.getElementById('diag-panel');
   if (!btn || !panel) {
@@ -618,11 +701,14 @@ function createDiagUI(info, type, entry) {
   }
 
   var forced = FORCE ? ' (forced)' : '';
+  var resolved = resolvedEntry || 'n/a';
+  var loaded = loadedEntry || resolvedEntry || 'n/a';
   meta.innerHTML = ''+
     '<div style="font-weight:700;margin-bottom:6px">Game Diagnostics</div>'+
     '<div><b>Slug</b>: ' + (info.slug || 'n/a') + '</div>'+
     '<div><b>Title</b>: ' + (info.title || 'n/a') + '</div>'+
-    '<div><b>Entry</b>: ' + entry + '</div>'+
+    '<div><b>Resolved Entry</b>: ' + resolved + '</div>'+
+    '<div><b>Loaded URL</b>: ' + loaded + '</div>'+
     '<div><b>Type</b>: ' + type + forced + '</div>'+
     '<div><b>Module</b>: ' + String((info.launch && info.launch.module) || info.module || false) + '</div>';
 
@@ -630,6 +716,7 @@ function createDiagUI(info, type, entry) {
   diagState.sink = sinkEl;
 
   ensureDiagListeners();
+  appendDiag('[shell] resolved entry: ' + resolved + '\n');
   appendDiag('[shell] diagnostics ready\n');
 }
 
