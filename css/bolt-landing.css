@@ -87,7 +87,10 @@ body.bolt-body{
 .bolt-section-title{margin:0 0 10px;font-size:28px}
 .bolt-search{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.25);padding:8px 10px;border-radius:14px;border:1px solid var(--bolt-border);max-width:560px}
 .bolt-search input{flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:16px;padding:8px}
+.bolt-search input::placeholder{color:rgba(234,240,255,.65)}
 .bolt-search input:focus{box-shadow:var(--bolt-focus)}
+.bolt-search:focus-within{background:rgba(0,0,0,.18);border-color:rgba(255,255,255,.35);box-shadow:var(--bolt-focus)}
+.bolt-search:focus-within #bolt-clear{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.35)}
 .bolt-search button{appearance:none;background:rgba(255,255,255,.12);border:1px solid var(--bolt-border);color:#fff;border-radius:10px;padding:8px 10px;cursor:pointer}
 .bolt-search button:hover{background:rgba(255,255,255,.18)}
 
