@@ -1,0 +1,98 @@
+{
+  "id": "combat_basics",
+  "title": "Combat Basics",
+  "description": "Practice equipping gear, firing, and dodging attacks.",
+  "steps": [
+    {
+      "id": "equip",
+      "text": "Gear up before engaging hostiles.",
+      "objectives": [
+        "Open the inventory.",
+        "Equip the training blaster."
+      ],
+      "completeEvents": ["inventory:weapon_equipped"],
+      "next": "target",
+      "hints": {
+        "default": [
+          "Press I to open your inventory, then select the blaster to equip it."
+        ],
+        "branches": [
+          {
+            "when": ["inventory_closed"],
+            "hints": [
+              "Tap I to reopen the inventory panel."
+            ]
+          },
+          {
+            "when": ["weapon_already_equipped"],
+            "hints": [
+              "You're ready to fight—close the inventory to continue."
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "target",
+      "text": "Hit the stationary target.",
+      "objectives": [
+        "Aim at the target dummy.",
+        "Fire three shots."
+      ],
+      "completeEvents": ["combat:target_destroyed"],
+      "next": "dodge",
+      "hints": {
+        "default": [
+          "Hold right mouse to aim, then left mouse to fire."
+        ],
+        "branches": [
+          {
+            "when": ["shots_missed"],
+            "hints": [
+              "Pause your aim for a moment before shooting to tighten the spread."
+            ]
+          },
+          {
+            "when": ["ammo_empty"],
+            "hints": [
+              "Reload with R to replenish your magazine."
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "dodge",
+      "text": "Evade the incoming attack to survive.",
+      "objectives": [
+        "Watch for the telegraphed strike.",
+        "Dash out of the danger zone."
+      ],
+      "completeEvents": ["combat:dodge_success"],
+      "next": null,
+      "hints": {
+        "default": [
+          "Double-tap a movement key to perform a quick dodge."
+        ],
+        "branches": [
+          {
+            "when": ["player_hit"],
+            "hints": [
+              "Move as soon as you see the red warning circle appear."
+            ]
+          },
+          {
+            "when": ["player_idle"],
+            "hints": [
+              "Keep moving—dodges travel farther when you have momentum."
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "completion": {
+    "reward": "combat_bundle",
+    "summary": "You can now take on the first mission."
+  }
+}

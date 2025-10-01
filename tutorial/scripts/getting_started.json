@@ -1,0 +1,103 @@
+{
+  "id": "getting_started",
+  "title": "Getting Started",
+  "description": "Master core movement so you can explore the arena.",
+  "steps": [
+    {
+      "id": "welcome",
+      "text": "Welcome to the arena! Let's get you moving.",
+      "objectives": [
+        "Press the Start button to continue."
+      ],
+      "completeEvents": ["ui:start_pressed"],
+      "next": "movement",
+      "hints": {
+        "default": [
+          "Tap Start when you're ready to begin."
+        ],
+        "branches": [
+          {
+            "when": ["menu_open"],
+            "hints": [
+              "Close the settings panel to reveal the Start button."
+            ]
+          },
+          {
+            "when": ["player_idle"],
+            "hints": [
+              "The Start button is glowing in the lower-right corner—select it to proceed."
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "movement",
+      "text": "Move toward the checkpoint to learn the controls.",
+      "objectives": [
+        "Use WASD or the arrow keys to walk.",
+        "Reach the glowing checkpoint."
+      ],
+      "completeEvents": ["movement:checkpoint_reached"],
+      "next": "jump",
+      "hints": {
+        "default": [
+          "Hold W or the up arrow to advance toward the checkpoint beacon."
+        ],
+        "branches": [
+          {
+            "when": ["player_idle"],
+            "hints": [
+              "Try tapping any movement key to leave the spawn pad."
+            ]
+          },
+          {
+            "when": ["player_off_course"],
+            "hints": [
+              "Steer toward the blue light—the checkpoint marks your destination."
+            ]
+          },
+          {
+            "when": ["player_stuck_wall"],
+            "hints": [
+              "Strafe with A or D to slide along the wall and clear the corner."
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "jump",
+      "text": "Jump the barrier to finish the warm-up.",
+      "objectives": [
+        "Press Space to jump over the barrier.",
+        "Enter the exit portal."
+      ],
+      "completeEvents": ["movement:jump_success"],
+      "next": null,
+      "hints": {
+        "default": [
+          "Tap Space while moving forward to clear the barrier."
+        ],
+        "branches": [
+          {
+            "when": ["player_idle"],
+            "hints": [
+              "Begin walking toward the barrier before you attempt the jump."
+            ]
+          },
+          {
+            "when": ["player_hit_barrier"],
+            "hints": [
+              "Jump a split-second earlier so you take off before colliding with the barrier."
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "completion": {
+    "reward": "movement_bundle",
+    "summary": "You can now roam the arena freely."
+  }
+}
