@@ -118,7 +118,14 @@ body.bolt-body{
 .bolt-badge{position:absolute;top:10px;left:10px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:800;background:rgba(0,0,0,.55);border:1px solid var(--bolt-border)}
 .bolt-card-body{padding:14px 14px 16px;display:flex;flex-direction:column;gap:6px}
 .bolt-card-title{font-weight:800;font-size:16px}
-.bolt-card-meta{display:flex;gap:10px;color:#b8c2e6;font-size:12px}
+.bolt-card-meta{
+  display:flex;
+  flex-wrap:wrap;
+  column-gap:10px;
+  row-gap:4px;
+  color:rgba(184,194,230,.88);
+  font-size:12px;
+}
 .bolt-card-actions{margin-top:10px;display:flex;gap:10px}
 .bolt-btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 14px;border-radius:12px;border:1px solid var(--bolt-border);background:rgba(255,255,255,.08);color:#eef2ff;text-decoration:none;font-weight:800}
 .bolt-btn:hover{background:rgba(255,255,255,.12)}
