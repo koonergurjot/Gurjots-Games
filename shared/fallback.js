@@ -1,3 +1,6 @@
+const REPO_SLUG = 'USER/Game';
+const ISSUE_BASE_URL = `https://github.com/${REPO_SLUG}/issues/new`;
+
 export function renderFallbackPanel(error, gameName) {
   if (typeof document === 'undefined') return;
   const existing = document.getElementById('fallback-panel');
@@ -29,7 +32,14 @@ export function renderFallbackPanel(error, gameName) {
 
   const issue = document.createElement('a');
   issue.textContent = 'Open issue';
-  issue.href = `https://github.com/<org>/<repo>/issues/new?title=${encodeURIComponent(gameName+' crash')}`;
+  const normalizedSlug = typeof gameName === 'string' && gameName.trim() ? gameName.trim() : 'unknown';
+  const errorMessage = error && error.stack ? error.stack : String(error);
+  const issueUrl = new URL(ISSUE_BASE_URL);
+  issueUrl.searchParams.set('title', `${normalizedSlug} crash`);
+  issueUrl.searchParams.set('body', [`### Game`, normalizedSlug || 'unknown', '', `### Message`, '```', errorMessage, '```', ''].join('\n'));
+  issueUrl.searchParams.set('slug', normalizedSlug);
+  issueUrl.searchParams.set('message', errorMessage);
+  issue.href = issueUrl.toString();
   issue.target = '_blank';
   issue.rel = 'noopener noreferrer';
 
