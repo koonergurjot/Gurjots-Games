@@ -111,6 +111,7 @@
 
     win.__GG_DIAG_OPTS = { suppressButton: true };
 
+    ensureScript('../common/diagnostics/report-store.js', 'data-gg-diag-report');
     ensureScript('../common/diag-core.js', 'data-gg-diag-core');
     ensureScript('../common/diag-capture.js', 'data-gg-diag-capture');
   });
