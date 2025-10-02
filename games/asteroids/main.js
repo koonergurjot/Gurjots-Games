@@ -23,6 +23,7 @@ const BASE_HEIGHT = 720;
 const MAX_SPEED = 320;
 const SHIP_RADIUS = 18;
 const ASTEROID_SIZES = [0, 14, 26, 40]; // index by size tier (1-3)
+const ASTEROID_SEGMENTS = 8;
 const ASTEROID_SPEED = [0, 120, 90, 70];
 const ASTEROID_SCORE = [0, 100, 50, 20];
 const WAVE_ASTEROID_COUNT = [0, 4, 6, 8];
@@ -322,6 +323,20 @@ function angleTo(x1, y1, x2, y2) {
 
 function randomRange(min, max) {
   return min + Math.random() * (max - min);
+}
+
+// Asteroid shapes are cached to keep silhouettes stable during rendering.
+function makeAsteroidShape(radius) {
+  const vertices = [];
+  for (let i = 0; i < ASTEROID_SEGMENTS; i++) {
+    const angle = (i / ASTEROID_SEGMENTS) * TWO_PI;
+    const distance = radius * (0.75 + Math.random() * 0.25);
+    vertices.push({
+      x: Math.cos(angle) * distance,
+      y: Math.sin(angle) * distance,
+    });
+  }
+  return vertices;
 }
 
 function createAudio(src, volume = 0.6) {
@@ -904,13 +919,15 @@ class AsteroidsGame {
       for (let n = 0; n < 2; n++) {
         const angle = randomRange(0, TWO_PI);
         const speed = ASTEROID_SPEED[nextSize] * randomRange(0.7, 1.2);
+        const radius = ASTEROID_SIZES[nextSize];
         this.asteroids.push({
           x: asteroid.x,
           y: asteroid.y,
           vx: Math.cos(angle) * speed,
           vy: Math.sin(angle) * speed,
           size: nextSize,
-          radius: ASTEROID_SIZES[nextSize],
+          radius,
+          shape: makeAsteroidShape(radius),
           rotation: randomRange(0, TWO_PI),
           spin: randomRange(-1, 1),
         });
@@ -996,13 +1013,15 @@ class AsteroidsGame {
       if (edge === 3) { x = -60; y = Math.random() * this.height; }
       const angle = angleTo(x, y, this.width / 2, this.height / 2) + randomRange(-0.5, 0.5);
       const speed = ASTEROID_SPEED[size] * randomRange(0.6, 1.1);
+      const radius = ASTEROID_SIZES[size];
       rocks.push({
         x,
         y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         size,
-        radius: ASTEROID_SIZES[size],
+        radius,
+        shape: makeAsteroidShape(radius),
         rotation: randomRange(0, TWO_PI),
         spin: randomRange(-0.5, 0.5),
       });
@@ -1120,21 +1139,19 @@ class AsteroidsGame {
 
   drawAsteroid(asteroid) {
     const ctx = this.ctx;
-    const segments = 8;
-    const r = asteroid.radius;
+    const shape = asteroid.shape || (asteroid.shape = makeAsteroidShape(asteroid.radius));
     ctx.save();
     ctx.translate(asteroid.x, asteroid.y);
     ctx.rotate(asteroid.rotation);
     ctx.beginPath();
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * TWO_PI;
-      const radius = r * (0.75 + Math.random() * 0.25);
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+    if (shape.length) {
+      ctx.moveTo(shape[0].x, shape[0].y);
+      for (let i = 1; i < shape.length; i++) {
+        const point = shape[i];
+        ctx.lineTo(point.x, point.y);
+      }
+      ctx.closePath();
     }
-    ctx.closePath();
     ctx.stroke();
     ctx.restore();
   }
