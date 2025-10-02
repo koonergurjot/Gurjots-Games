@@ -1,19 +1,32 @@
 // Shared achievement system
 // Schema: { id, title, desc, icon, condition: (event, stats) => boolean }
 
-// load profile
-let profile = 'default';
-try {
-  profile = localStorage.getItem('profile') || 'default';
-} catch {}
+import { PROFILE_EVENT } from './profile.js';
 
-const ACH_KEY = `achievements:${profile}`;
-const STAT_KEY = `achstats:${profile}`;
+function normalizeProfileName(name) {
+  if (typeof name !== 'string') return 'default';
+  const trimmed = name.trim();
+  return trimmed || 'default';
+}
+
+function getAchievementStorageKey(name) {
+  return `achievements:${normalizeProfileName(name)}`;
+}
+
+function getStatStorageKey(name) {
+  return `achstats:${normalizeProfileName(name)}`;
+}
+
+let profile = 'default';
+let ACH_KEY = getAchievementStorageKey(profile);
+let STAT_KEY = getStatStorageKey(profile);
 
 let unlocks = {};
 let stats = { plays: {}, totalPlays: 0 };
 
 function load() {
+  unlocks = {};
+  stats = { plays: {}, totalPlays: 0 };
   try {
     const raw = localStorage.getItem(ACH_KEY);
     unlocks = raw ? JSON.parse(raw) : {};
@@ -25,7 +38,28 @@ function load() {
     stats.totalPlays = parsed.totalPlays || 0;
   } catch { /* ignore */ }
 }
-load();
+
+export function setActiveProfile(name) {
+  const nextProfile = normalizeProfileName(name);
+  if (nextProfile === profile) {
+    load();
+    return;
+  }
+  profile = nextProfile;
+  ACH_KEY = getAchievementStorageKey(profile);
+  STAT_KEY = getStatStorageKey(profile);
+  load();
+}
+
+function initProfile() {
+  let stored = 'default';
+  try {
+    stored = localStorage.getItem('profile') || 'default';
+  } catch {}
+  setActiveProfile(stored);
+}
+
+initProfile();
 
 function saveUnlocks(){
   try { localStorage.setItem(ACH_KEY, JSON.stringify(unlocks)); } catch {}
@@ -114,4 +148,11 @@ export function getAchievements(){
 
 export function getUnlocks(){
   return { ...unlocks };
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(PROFILE_EVENT, (event) => {
+    const name = event && event.detail && event.detail.profile ? event.detail.profile.name : undefined;
+    setActiveProfile(name);
+  });
 }
