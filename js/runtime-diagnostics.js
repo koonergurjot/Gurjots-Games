@@ -38,7 +38,8 @@
 
   window.addEventListener('error', (e)=>{
     push('error', 'window.error', { message: e.message, source: e.filename, line: e.lineno, col: e.colno });
-    try { parent && parent.postMessage({ type: 'GAME_ERROR', message: e.message }, '*'); } catch(_) {}
+    const detail = String(e?.message ?? e);
+    try { parent && parent.postMessage({ type: 'GAME_ERROR', error: detail, message: detail }, '*'); } catch(_) {}
   });
   window.addEventListener('unhandledrejection', (e)=>{
     push('error', 'unhandledrejection', { reason: (e.reason && (e.reason.message || e.reason.toString())) || 'unknown' });
@@ -57,7 +58,8 @@
     },
     error(message){
       stopHB();
-      try { parent && parent.postMessage({ type:'GAME_ERROR', message }, '*'); push('error','sent GAME_ERROR: '+message); } catch(_){ }
+      const detail = String(message ?? 'Unknown error');
+      try { parent && parent.postMessage({ type:'GAME_ERROR', error: detail, message: detail }, '*'); push('error','sent GAME_ERROR: '+detail); } catch(_){ }
     },
     dump(){ return logs.slice(); }
   };

@@ -17,7 +17,7 @@
     const force = opts && opts.force;
     if (!postedError || force) {
       postedError = true;
-      post("GAME_ERROR", { error: message });
+      post("GAME_ERROR", { error: message, message });
     }
     return message;
   };
