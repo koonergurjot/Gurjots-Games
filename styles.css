@@ -187,3 +187,15 @@ main { max-width:1100px; margin:0 auto; padding:16px; }
 /* Utility badges/tags */
 .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid var(--border); border-radius:999px; background:rgba(255,255,255,0.04) }
 .chip .dot { width:8px; height:8px; border-radius:50%; background: var(--accent); }
+.chip.favorites { position:relative; padding-left:12px; }
+.chip.favorites::before { content:'★'; font-size:12px; margin-right:4px; opacity:.8; }
+.chip.favorites[aria-disabled="true"] { opacity:.45; cursor:not-allowed; }
+.chip.favorites.active::before { opacity:1; }
+
+.card[data-favorite="true"] { box-shadow: 0 10px 30px rgba(255, 214, 10, 0.22); border-color: color-mix(in srgb, var(--border) 60%, #facc15 40%); }
+.card[data-favorite="true"] .badge { background: linear-gradient(120deg, #facc15, #f97316); color:#1a1a1a; border-color: transparent; }
+
+.actions .favorite-toggle { display:inline-flex; align-items:center; gap:4px; font-weight:600; }
+.actions .favorite-toggle.is-active { background: var(--accent); color: var(--bg); border-color: transparent; }
+.actions .favorite-toggle.is-active::before { content:'★'; }
+.actions .favorite-toggle::before { content:'☆'; font-size:12px; }

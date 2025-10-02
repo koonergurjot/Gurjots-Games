@@ -1,8 +1,10 @@
 /* @vitest-environment jsdom */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { injectBackButton, recordLastPlayed } from '../shared/ui.js';
 
 const mockCatalogGames = [];
+const nativeGetContext = HTMLCanvasElement.prototype.getContext;
+const nativeMatchMedia = global.matchMedia;
 
 vi.mock('../shared/game-catalog.js', () => ({
   loadGameCatalog: async () => ({ games: mockCatalogGames })
@@ -106,15 +108,17 @@ describe('landing newest sort', () => {
     `;
     global.innerWidth = 1280;
     global.innerHeight = 720;
+    localStorage.clear();
     Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true });
+    window.matchMedia = () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} });
     window.requestAnimationFrame = vi.fn();
-    HTMLCanvasElement.prototype.getContext = () => ({
-      clearRect: vi.fn(),
-      fillStyle: '',
-      beginPath: vi.fn(),
-      arc: vi.fn(),
-      fill: vi.fn()
-    });
+    HTMLCanvasElement.prototype.getContext = () => null;
+  });
+
+  afterEach(() => {
+    HTMLCanvasElement.prototype.getContext = nativeGetContext;
+    window.matchMedia = nativeMatchMedia;
+    vi.resetAllMocks();
   });
 
   it('reorders games by the newest derived timestamp', async () => {
@@ -136,5 +140,28 @@ describe('landing newest sort', () => {
 
     const titles = Array.from(document.querySelectorAll('#gamesGrid article h3')).map(el => el.textContent);
     expect(titles[0]).toBe('Fresh Game');
+  });
+
+  it('lets users favorite a game and filter by favorites', async () => {
+    mockCatalogGames.push(
+      { id: 'fav', title: 'Fav Game', description: 'Fav', tags: [] },
+      { id: 'other', title: 'Other Game', description: 'Other', tags: [] }
+    );
+
+    await import('../js/app.js');
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const favBtn = document.querySelector('.favorite-toggle');
+    expect(favBtn).toBeTruthy();
+    favBtn.click();
+
+    const favoritesChip = Array.from(document.querySelectorAll('#tagChips button')).find(btn => btn.textContent.startsWith('Favorites'));
+    expect(favoritesChip).toBeTruthy();
+    favoritesChip.click();
+
+    const titles = Array.from(document.querySelectorAll('#gamesGrid article h3')).map(el => el.textContent);
+    expect(titles).toEqual(['Fav Game']);
   });
 });
