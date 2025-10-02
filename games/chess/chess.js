@@ -29,14 +29,25 @@ function require2dContext(canvas){
 (function(){
 const c=requireCanvas('board'), ctx=require2dContext(c);
 const fx=requireCanvas('fx'), fxCtx=require2dContext(fx);
-const S=60;
+const COLS=8, ROWS=8;
+const DEFAULT_BOARD_CSS_SIZE=480;
+const rect=c.getBoundingClientRect();
+const cssSize=Math.max(1, Math.min(DEFAULT_BOARD_CSS_SIZE, rect.width||DEFAULT_BOARD_CSS_SIZE));
+const dpr=window.devicePixelRatio||1;
+c.style.width=`${cssSize}px`; c.style.height=`${cssSize}px`;
+fx.style.width=`${cssSize}px`; fx.style.height=`${cssSize}px`;
+const pixelSize=Math.round(cssSize*dpr);
+c.width=pixelSize; c.height=pixelSize;
+fx.width=pixelSize; fx.height=pixelSize;
+ctx.setTransform(dpr,0,0,dpr,0,0);
+fxCtx.setTransform(dpr,0,0,dpr,0,0);
+const S=cssSize/COLS;
 const statusEl=requireElementById('status');
 const depthEl=/** @type {HTMLSelectElement} */ (requireElementById('difficulty'));
 const puzzleSelect=/** @type {HTMLSelectElement} */ (requireElementById('puzzle-select'));
 const lobbyStatusEl=requireElementById('lobby-status');
 const rankingsList=/** @type {HTMLOListElement} */ (requireElementById('rankings'));
 const findMatchBtn=/** @type {HTMLButtonElement} */ (requireElementById('find-match'));
-const COLS=8, ROWS=8;
 const EMPTY = '.';
 // Simple FEN start
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
@@ -255,8 +266,9 @@ Object.keys(pieceSrcs).forEach(k=>{ const img=new Image(); img.src=pieceSrcs[k];
 
 // pre-render board texture
 const boardTex=document.createElement('canvas');
-boardTex.width=COLS*S; boardTex.height=ROWS*S;
-const bctx=boardTex.getContext('2d');
+boardTex.width=pixelSize; boardTex.height=pixelSize;
+const bctx=require2dContext(boardTex);
+bctx.setTransform(dpr,0,0,dpr,0,0);
 for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
   const light=((x+y)%2)===0;
   const grad=bctx.createLinearGradient(x*S,y*S,x*S+S,y*S+S);
@@ -597,9 +609,9 @@ function draw(){
     postedReady=true;
     try { window.parent?.postMessage({ type:'GAME_READY', slug:'chess' }, '*'); } catch {}
   }
-  ctx.clearRect(0,0,c.width,c.height);
-  fxCtx.clearRect(0,0,fx.width,fx.height);
-  ctx.drawImage(boardTex,0,0);
+  ctx.clearRect(0,0,cssSize,cssSize);
+  fxCtx.clearRect(0,0,cssSize,cssSize);
+  ctx.drawImage(boardTex,0,0,cssSize,cssSize);
   if(sel){
     highlightSquare(sel.x, sel.y, 'rgba(80,200,255,0.25)');
     moves.forEach(m=> highlightSquare(m.x, m.y, 'rgba(80,200,255,0.15)'));
@@ -629,11 +641,11 @@ function draw(){
 
 function overlay(msg){
   ctx.fillStyle='rgba(0,0,0,0.6)';
-  ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillRect(0,0,cssSize,cssSize);
   ctx.fillStyle='#fff';
   ctx.font='24px Inter';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(msg,c.width/2,c.height/2);
+  ctx.fillText(msg,cssSize/2,cssSize/2);
 }
 
 registerGameDiagnostics('chess', {
