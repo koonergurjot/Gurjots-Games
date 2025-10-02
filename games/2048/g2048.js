@@ -14,6 +14,7 @@ const oppC=document.getElementById('oppBoard'), oppCtx=oppC?.getContext('2d');
 const net=window.Net;
 let oppGrid=null, oppScore=0;
 let PAD=12, S=80, GAP=10;
+let canvasCssWidth=0, canvasCssHeight=0;
 const LS_SIZE='g2048.size';
 const sizeSel=document.getElementById('sizeSel');
 const diffSel=document.getElementById('diffSel');
@@ -251,11 +252,17 @@ function updateCanvas(){
   const container = document.querySelector('.game-main');
   const maxWidth = Math.min(480, container ? container.clientWidth - 32 : 360);
   const baseSize = Math.min(80, Math.floor((maxWidth - 20) / (N + (N-1)*0.125 + 0.25)));
-  S = Math.max(50, baseSize); 
-  PAD = Math.max(10, S/8); 
+  S = Math.max(50, baseSize);
+  PAD = Math.max(10, S/8);
   GAP = Math.max(5, S/16);
-  c.width = 2*PAD + N*S + (N-1)*GAP;
-  c.height = 40 + N*S + (N-1)*GAP + 30;
+  canvasCssWidth = 2*PAD + N*S + (N-1)*GAP;
+  canvasCssHeight = 40 + N*S + (N-1)*GAP + 30;
+  c.style.width = `${canvasCssWidth}px`;
+  c.style.height = `${canvasCssHeight}px`;
+  const dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(canvasCssWidth * dpr);
+  c.height = Math.round(canvasCssHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Scale drawing to match CSS pixels after DPR adjustments
 }
 
 function applyTheme(){
@@ -555,7 +562,7 @@ function draw(anim){
   
   // Clear canvas efficiently
   ctx.fillStyle = theme.boardBg;
-  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillRect(0, 0, canvasCssWidth, canvasCssHeight);
   
   // Cache formatted strings for UI text
   const streakText = FEATURES.mergeStreaks && mergeStreak > 1 ? ` Streak:x${mergeStreak}` : '';
@@ -652,7 +659,7 @@ function draw(anim){
     }
   }
   
-  if(hintDir!=null){ ctx.fillText('Hint: '+['Left','Up','Right','Down'][hintDir],12,c.height-12); }
+  if(hintDir!=null){ ctx.fillText('Hint: '+['Left','Up','Right','Down'][hintDir],12,canvasCssHeight-12); }
   updateStatus();
   drawOpponent();
 }
