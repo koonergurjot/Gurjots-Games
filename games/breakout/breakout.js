@@ -5,6 +5,18 @@ import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { showToast, showModal, clearHud } from '../../shared/ui/hud.js';
 import { createParticleSystem } from '../../shared/fx/canvasFx.js';
 
+const globalScope = typeof window !== 'undefined'
+  ? window
+  : (typeof globalThis !== 'undefined' ? globalThis : undefined);
+
+const breakoutReadyQueue = (() => {
+  if (!globalScope) return [];
+  if (Array.isArray(globalScope.__BREAKOUT_READY__)) return globalScope.__BREAKOUT_READY__;
+  const queue = [];
+  globalScope.__BREAKOUT_READY__ = queue;
+  return queue;
+})();
+
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
 const GAME_ID='breakout';GG.incPlays();
@@ -112,16 +124,20 @@ c.addEventListener('pointermove',e=>{
   if(ball.stuck){ball.x=paddle.x+paddle.w/2;}
 });
 c.addEventListener('pointerdown',()=>{if(ball.stuck)ball.stuck=false});
+function resetMatch(){
+  powerEngine.reset();
+  score=0;lives=3;level=1;
+  syncScore();
+  loadLevel();resetBall();
+  runStart=performance.now();endTime=null;submitted=false;
+  clearHud();gameOverShown=false;
+}
+
 addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft')paddle.x=Math.max(0,paddle.x-24);
   if(e.key==='ArrowRight')paddle.x=Math.min(c.width-paddle.w,paddle.x+24);
   if(e.key.toLowerCase()==='r'&&lives<=0){
-    powerEngine.reset();
-    score=0;lives=3;level=1;
-    syncScore();
-    loadLevel();resetBall();
-    runStart=performance.now();endTime=null;submitted=false;
-    clearHud();gameOverShown=false;
+    resetMatch();
   }
 });
 
@@ -299,4 +315,40 @@ engine.update=step;
 engine.render=draw;
 engine.start();
 if(window.reportReady) window.reportReady('breakout');
+
+if(globalScope){
+  const breakoutGlobal = (typeof globalScope.Breakout === 'object' && globalScope.Breakout)
+    ? globalScope.Breakout
+    : {};
+
+  Object.defineProperties(breakoutGlobal,{
+    engine:{value:engine,enumerable:true,configurable:true},
+    score:{get:()=>score,enumerable:true,configurable:true},
+    ball:{get:()=>ball,enumerable:true,configurable:true},
+    paddle:{get:()=>paddle,enumerable:true,configurable:true},
+    bricks:{get:()=>bricks,enumerable:true,configurable:true},
+    resetMatch:{value:resetMatch,enumerable:true,configurable:true,writable:true}
+  });
+
+  globalScope.Breakout=breakoutGlobal;
+
+  const invokeReady=(callback)=>{
+    if(typeof callback!=='function')return;
+    try{callback(breakoutGlobal);}catch(err){console.error('Breakout ready callback failed',err);}
+  };
+
+  const queueTarget = Array.isArray(breakoutReadyQueue) ? breakoutReadyQueue : [];
+  breakoutGlobal.__readyCallbacks=queueTarget;
+
+  if(queueTarget.length){
+    const pending=queueTarget.splice(0,queueTarget.length);
+    pending.forEach(invokeReady);
+  }
+
+  breakoutGlobal.ready=(callback)=>{
+    invokeReady(callback);
+  };
+}
+
+import('./adapter.js');
 
