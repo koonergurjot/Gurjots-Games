@@ -2,7 +2,6 @@ import { PointerLockControls } from "./PointerLockControls.js";
 import '/js/three-global-shim.js';
 import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
-import { pushEvent } from '../common/diag-adapter.js';
 import { connect } from './net.js';
 import { generateMaze, seedRandom } from './generator.js';
 
@@ -69,6 +68,175 @@ scene.add(playerLight);
 const controls = new PointerLockControls(camera, renderer.domElement);
 const player = controls.getObject();
 let opponent = { mesh: null };
+let timeEl;
+let oppTimeEl;
+let bestEl;
+
+const diagStateListeners = new Set();
+const pointerLockListeners = new Set();
+const networkLatencyListeners = new Set();
+
+let diagState = 'init';
+let lastStateMeta = { state: diagState, timestamp: Date.now(), reason: 'bootstrap' };
+let lastPointerLock = controls.isLocked;
+let lastPointerLockMeta = { locked: lastPointerLock, timestamp: Date.now(), source: 'bootstrap' };
+let lastNetworkLatency = null;
+let lastNetworkMeta = { latency: null, timestamp: Date.now(), source: 'bootstrap' };
+
+function notifyDiagnosticsState(state, meta = {}) {
+  const normalized = typeof state === 'string' && state.trim() ? state.trim() : 'unknown';
+  const detail = { ...meta, state: normalized, timestamp: Date.now() };
+  diagState = normalized;
+  lastStateMeta = detail;
+  diagStateListeners.forEach((listener) => {
+    try {
+      listener(normalized, detail);
+    } catch (err) {
+      console.error('maze3d: diagnostics state listener failed', err);
+    }
+  });
+}
+
+function notifyPointerLockChange(locked, meta = {}) {
+  const isLocked = !!locked;
+  const detail = { ...meta, locked: isLocked, timestamp: Date.now() };
+  lastPointerLock = isLocked;
+  lastPointerLockMeta = detail;
+  pointerLockListeners.forEach((listener) => {
+    try {
+      listener(isLocked, detail);
+    } catch (err) {
+      console.error('maze3d: diagnostics pointer-lock listener failed', err);
+    }
+  });
+}
+
+function notifyNetworkLatency(latency, meta = {}) {
+  const numeric = typeof latency === 'number' && Number.isFinite(latency) ? latency : null;
+  const detail = { ...meta, latency: numeric, timestamp: Date.now() };
+  lastNetworkLatency = numeric;
+  lastNetworkMeta = detail;
+  networkLatencyListeners.forEach((listener) => {
+    try {
+      listener(numeric, detail);
+    } catch (err) {
+      console.error('maze3d: diagnostics network listener failed', err);
+    }
+  });
+}
+
+function createDiagnosticsSubscription(set, currentValue, currentMeta, listener) {
+  if (typeof listener !== 'function') return () => {};
+  try {
+    listener(currentValue, { ...currentMeta, replay: true });
+  } catch (err) {
+    console.error('maze3d: diagnostics subscription replay failed', err);
+  }
+  set.add(listener);
+  return () => set.delete(listener);
+}
+
+function onDiagnosticsStateChange(listener) {
+  return createDiagnosticsSubscription(diagStateListeners, diagState, lastStateMeta, listener);
+}
+
+function onDiagnosticsPointerLockChange(listener) {
+  return createDiagnosticsSubscription(pointerLockListeners, lastPointerLock, lastPointerLockMeta, listener);
+}
+
+function onDiagnosticsNetworkLatency(listener) {
+  return createDiagnosticsSubscription(networkLatencyListeners, lastNetworkLatency, lastNetworkMeta, listener);
+}
+
+function vectorToSnapshot(vec) {
+  if (!vec) return null;
+  const { x, y, z } = vec;
+  return {
+    x: Number.isFinite(x) ? Number(x.toFixed(3)) : null,
+    y: Number.isFinite(y) ? Number(y.toFixed(3)) : null,
+    z: Number.isFinite(z) ? Number(z.toFixed(3)) : null,
+  };
+}
+
+function parseHudTime(text) {
+  if (typeof text !== 'string') return null;
+  const value = parseFloat(text);
+  return Number.isFinite(value) ? value : null;
+}
+
+function getDiagnosticsSnapshot() {
+  const hudTime = parseHudTime(timeEl?.textContent ?? '');
+  const hudOpponentTime = parseHudTime(oppTimeEl?.textContent ?? '');
+  const perf = typeof performance !== 'undefined' ? performance : null;
+  let elapsedSeconds = null;
+  if (running && !paused && perf && typeof startTime === 'number' && startTime > 0) {
+    elapsedSeconds = (perf.now() - startTime) / 1000;
+  } else if (typeof myFinish === 'number') {
+    elapsedSeconds = myFinish;
+  } else if (hudTime != null) {
+    elapsedSeconds = hudTime;
+  }
+  if (elapsedSeconds != null && Number.isFinite(elapsedSeconds)) {
+    elapsedSeconds = Number(elapsedSeconds.toFixed(3));
+  } else {
+    elapsedSeconds = null;
+  }
+  let opponentSeconds = null;
+  if (typeof opponentFinish === 'number') {
+    opponentSeconds = opponentFinish;
+  } else if (hudOpponentTime != null) {
+    opponentSeconds = hudOpponentTime;
+  }
+  if (opponentSeconds != null && Number.isFinite(opponentSeconds)) {
+    opponentSeconds = Number(opponentSeconds.toFixed(3));
+  } else {
+    opponentSeconds = null;
+  }
+  const bestSeconds = Number.isFinite(best) && best > 0 ? Number(best) : null;
+  const finishSeconds = typeof myFinish === 'number' ? Number(myFinish.toFixed(3)) : null;
+  return {
+    timestamp: Date.now(),
+    state: {
+      label: diagState,
+      running,
+      paused,
+      finished: !!myFinish,
+      meta: { ...lastStateMeta },
+    },
+    pointerLock: {
+      locked: controls.isLocked,
+      meta: { ...lastPointerLockMeta },
+    },
+    network: {
+      latencyMs: lastNetworkLatency,
+      meta: { ...lastNetworkMeta },
+    },
+    timers: {
+      elapsedSeconds,
+      finishSeconds,
+      opponentFinishSeconds: opponentSeconds,
+      bestSeconds,
+      hudTimeSeconds: hudTime,
+      hudOpponentSeconds: hudOpponentTime,
+      startTimestamp: typeof startTime === 'number' ? startTime : null,
+    },
+    player: vectorToSnapshot(player?.position ?? null),
+    opponent: vectorToSnapshot(opponent.mesh?.position ?? null),
+    mapVisible,
+  };
+}
+
+notifyDiagnosticsState('init', { reason: 'bootstrap', initial: true });
+notifyPointerLockChange(controls.isLocked, { source: 'bootstrap', initial: true });
+notifyNetworkLatency(null, { source: 'bootstrap', initial: true });
+
+controls.addEventListener('lock', () => {
+  notifyPointerLockChange(true, { source: 'controls', type: 'lock' });
+});
+
+controls.addEventListener('unlock', () => {
+  notifyPointerLockChange(false, { source: 'controls', type: 'unlock' });
+});
 
 const readyListeners = new Set();
 let readyNotified = false;
@@ -110,8 +278,17 @@ if (typeof window !== 'undefined') {
     restart,
     player,
     opponent,
-    onReady: registerReadyListener
+    controls,
+    onReady: registerReadyListener,
+    onDiagnosticsStateChange,
+    onDiagnosticsPointerLockChange,
+    onDiagnosticsNetworkLatency,
+    getDiagnosticsSnapshot,
   };
+
+  import('./adapter.js').catch((err) => {
+    console.warn('maze3d: diagnostics adapter failed to load', err);
+  });
 }
 
 let overlay = document.getElementById('overlay');
@@ -119,9 +296,9 @@ let message = document.getElementById('message');
 let startBtn = document.getElementById('startBtn');
 let restartBtn = document.getElementById('restartBtn');
 let shareBtn = document.getElementById('shareBtn');
-let timeEl = document.getElementById('time');
-let oppTimeEl = document.getElementById('oppTime');
-let bestEl = document.getElementById('best');
+timeEl = document.getElementById('time');
+oppTimeEl = document.getElementById('oppTime');
+bestEl = document.getElementById('best');
 let sizeSelect = document.getElementById('mazeSize');
 let enemySelect = document.getElementById('enemyCount');
 let roomInput = document.getElementById('roomInput');
@@ -764,6 +941,10 @@ function start(syncTime) {
   paused = false;
   hideOverlay();
   controls.lock();
+  notifyDiagnosticsState('running', {
+    reason: syncTime !== undefined ? 'sync-start' : 'local-start',
+    sync: syncTime !== undefined,
+  });
 }
 
 function resume(syncTime) {
@@ -788,6 +969,8 @@ function restart(seed = Math.floor(Math.random()*1e9)) {
   if (restartBtn) restartBtn.style.display = 'none';
   if (shareBtn) shareBtn.style.display = 'none';
   rematchBtn && (rematchBtn.style.display = 'none');
+  notifyNetworkLatency(null, { source: 'restart' });
+  notifyDiagnosticsState('ready', { reason: 'restart', seed });
   showOverlay();
 }
 
@@ -837,6 +1020,7 @@ function pause() {
   startBtn.textContent = 'Resume';
   if (restartBtn) restartBtn.style.display = 'inline-block';
   showOverlay();
+  notifyDiagnosticsState('paused', { reason: 'pause' });
 }
 
 function togglePause() {
@@ -870,6 +1054,7 @@ function finish(time) {
   showOverlay();
   startTime = 0;
   emitEvent({ type: 'game_over', slug: 'maze3d', value: time });
+  notifyDiagnosticsState('finished', { reason: 'finish', time });
   if (opponentFinish != null) {
     message.textContent += myFinish < opponentFinish ? ' You win!' : ' Opponent wins!';
     rematchBtn && (rematchBtn.style.display = 'inline-block');
@@ -922,7 +1107,11 @@ function loop() {
       const p = controls.getObject().position;
       const latency = lastPosSent ? now - lastPosSent : 0;
       net.send('pos', { id: myId, x: p.x, z: p.z, time: t });
-      pushEvent('network', { type: 'posSync', latency });
+      notifyNetworkLatency(latency, {
+        event: 'posSync',
+        intervalMs: latency,
+        position: vectorToSnapshot(p),
+      });
       lastPosSent = now;
     }
   }
