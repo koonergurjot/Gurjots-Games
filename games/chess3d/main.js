@@ -25,7 +25,12 @@ async function loadCatalog() {
   throw lastError || new Error('catalog unavailable');
 }
 
-const games = await loadCatalog();
+let games = [];
+try {
+  games = await loadCatalog();
+} catch (error) {
+  warn('chess3d', '[Chess3D] failed to load catalog', error);
+}
 
 let renderLoopId = 0;
 let renderLoopPaused = false;
@@ -53,7 +58,8 @@ let handleShellResume = () => {};
 
 log('chess3d', '[Chess3D] booting');
 
-const help = games.find(g => g.id === 'chess3d')?.help || {};
+const helpEntry = games?.find?.((g) => g.id === 'chess3d');
+const help = helpEntry?.help || {};
 injectHelpButton({ gameId: 'chess3d', ...help });
 
 const stage = document.getElementById('stage');
