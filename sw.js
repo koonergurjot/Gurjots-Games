@@ -130,12 +130,13 @@ self.addEventListener('fetch', (event) => {
       }
       return networkResponse;
     } catch (error) {
-      const cached = await cache.match(req);
+      const cached = await cache.match(req) || await cache.match(url.pathname);
       if (cached) {
         return cached;
       }
       if (req.mode === 'navigate' || req.destination === 'document') {
-        const fallback = await cache.match('/index.html');
+        const fallbackPath = url.pathname.startsWith('/game') ? '/game.html' : '/index.html';
+        const fallback = await cache.match(fallbackPath);
         if (fallback) {
           return fallback;
         }
