@@ -259,15 +259,30 @@ export function boot() {
     markPhase('boot:error', { reason: 'no-2d-context' });
     return;
   }
-  canvas.width = canvas.width || 960;
-  canvas.height = canvas.height || 540;
-  snapshotCanvas(canvas);
+  function resizeCanvas() {
+    const rect = typeof canvas.getBoundingClientRect === 'function'
+      ? canvas.getBoundingClientRect()
+      : null;
+    const width = rect && rect.width > 0 ? Math.round(rect.width) : 960;
+    const height = rect && rect.height > 0 ? Math.round(rect.height) : 540;
+    canvas.width = width;
+    canvas.height = height;
+    snapshotCanvas(canvas);
+  }
+
+  resizeCanvas();
   markPhase('boot:canvas-ready', {
     width: canvas.width,
     height: canvas.height,
     attached: isCanvasAttached(canvas),
   });
   startWatchdogs(canvas);
+
+  const handleResize = () => {
+    resizeCanvas();
+  };
+  // Keep the shell layout responsive by resizing with the window.
+  window.addEventListener('resize', handleResize);
 
   const W = canvas.width;
   const H = canvas.height;
@@ -766,6 +781,7 @@ export function boot() {
   function cleanup() {
     cancelAnimationFrame(rafId);
     stopWatchdogs();
+    window.removeEventListener('resize', handleResize);
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
     clearTimeout(shareResetTimer);
