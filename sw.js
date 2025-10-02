@@ -1,5 +1,5 @@
 // sw.js — safe service worker with pass-through for games and scripts
-const CACHE_VERSION = 'v3_2';
+const CACHE_VERSION = 'v3_3';
 
 const CORE_SHELL_ASSETS = [
   '/',
@@ -7,7 +7,9 @@ const CORE_SHELL_ASSETS = [
   '/game.html',
   '/play.html',
   '/css/bolt-landing.css?v=20250911175011',
+  '/styles/profile-overlay.css',
   '/js/bolt-landing.js?v=20250911175011',
+  '/js/profile-overlay.js',
   '/js/auto-diag-inject.js',
   '/js/game-loader.js',
   '/js/preflight.js',

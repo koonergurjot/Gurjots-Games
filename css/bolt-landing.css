@@ -31,6 +31,7 @@ body.bolt-body{
 /* NAV */
 .bolt-nav{background:transparent}
 .bolt-nav-inner{display:flex;align-items:center;justify-content:space-between;height:74px}
+.bolt-nav-actions{display:flex;align-items:center;gap:18px}
 .bolt-brand{text-decoration:none;color:var(--bolt-text);display:flex;align-items:center;gap:10px}
 .bolt-logo{display:block;width:32px;height:auto;filter:drop-shadow(0 8px 20px rgba(0,0,0,.2))}
 .bolt-brand-text{font-weight:800;letter-spacing:.3px;text-shadow:0 2px 18px rgba(0,0,0,.28)}

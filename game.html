@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Play — Gurjot’s Games</title>
   <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="stylesheet" href="styles/profile-overlay.css">
   <style>
     :root {
       color-scheme: dark;
@@ -293,10 +294,17 @@
         <a id="backLink" class="btn btn-primary" href="./index.html" aria-label="Back to home">← Back</a>
         <h1 id="gameTitle">Loading…</h1>
       </div>
-      <nav>
-        <button id="btnReload" class="btn" aria-label="Reload game">Reload</button>
-        <button id="btnDiag" class="btn btn-ghost" aria-label="Show diagnostics">Diagnostics</button>
-      </nav>
+      <div class="bolt-nav-actions">
+        <nav>
+          <button id="btnReload" class="btn" aria-label="Reload game">Reload</button>
+          <button id="btnDiag" class="btn btn-ghost" aria-label="Show diagnostics">Diagnostics</button>
+        </nav>
+        <button type="button" class="bolt-profile-trigger" data-profile-trigger aria-haspopup="dialog" aria-expanded="false">
+          <span class="sr-only">Open profile overlay</span>
+          <span data-profile-avatar aria-hidden="true"></span>
+          <span data-profile-name></span>
+        </button>
+      </div>
     </header>
 
     <section id="questWidgetRoot" class="quest-widget" aria-live="polite"></section>
@@ -326,6 +334,7 @@
   </div>
 
   <script src="./js/auto-diag-inject.js"></script>
+  <script type="module" src="./js/profile-overlay.js"></script>
 
   <script type="module">
     import { mountQuestWidget } from './shared/quest-widget.js';
