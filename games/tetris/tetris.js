@@ -4,6 +4,76 @@ import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
+const globalScope = typeof window !== 'undefined' ? window : globalThis;
+const diagPending = [];
+let diagPushEvent = null;
+
+function dispatchDiagnostics(payload){
+  if(!payload) return;
+  if(diagPushEvent){
+    try{
+      diagPushEvent('network', payload);
+      return;
+    }catch(err){
+      console.warn('Tetris diagnostics dispatch failed', err);
+    }
+  }
+  diagPending.push(payload);
+}
+
+setTimeout(()=>{
+  import('../common/diag-adapter.js')
+    .then(mod=>{
+      if(typeof mod?.pushEvent === 'function'){
+        diagPushEvent=mod.pushEvent;
+        if(diagPending.length){
+          const queued=diagPending.splice(0,diagPending.length);
+          for(const entry of queued){
+            try{
+              diagPushEvent('network', entry);
+            }catch(err){
+              console.warn('Tetris diagnostics flush failed', err);
+            }
+          }
+        }
+      }
+    })
+    .catch(error=>{
+      console.warn('Tetris diagnostics adapter unavailable', error);
+      diagPending.length=0;
+    });
+},0);
+
+const readyCallbacks=new Set();
+let tetrisReady=false;
+
+function notifyReadyListeners(){
+  if(!tetrisReady) return;
+  const callbacks=Array.from(readyCallbacks);
+  readyCallbacks.clear();
+  for(const cb of callbacks){
+    try{ cb(globalScope.Tetris); }
+    catch(err){ console.error('Tetris onReady callback failed', err); }
+  }
+}
+
+function markReady(){
+  if(tetrisReady) return;
+  tetrisReady=true;
+  notifyReadyListeners();
+}
+
+function registerReadyCallback(callback){
+  if(typeof callback!=='function') return ()=>{};
+  if(tetrisReady){
+    try{ callback(globalScope.Tetris); }
+    catch(err){ console.error('Tetris onReady callback failed', err); }
+    return ()=>{};
+  }
+  readyCallbacks.add(callback);
+  return ()=>readyCallbacks.delete(callback);
+}
+
 installErrorReporter();
 
 const GAME_ID='tetris';GG.incPlays();
@@ -77,20 +147,191 @@ function getCellSize(){
 const params=new URLSearchParams(location.search);
 const mode=params.has('spectate')?'spectate':(params.get('replay')?'replay':'play');
 const replayFile=params.get('replay');
-let bc=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('tetris'):null;
-if(bc && mode==='spectate'){
-  bc.onmessage=e=>{
-    ({grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost}=e.data);
-    syncScoreDisplay();
-    updateGhost();
-  };
-}
 
 let bestScore=+(localStorage.getItem('tetris:bestScore')||0);
 let bestLines=+(localStorage.getItem('tetris:bestLines')||0);
 let started=false;
 let grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
 let bag=[];
+let nextM;
+let holdM=null;
+let canHold=true;
+
+let cur;
+let ghost;
+let showGhost=localStorage.getItem('tetris:ghost')!=='0';
+let score=0, level=1, lines=0, over=false, dropMs=700, last=0, paused=false;
+let combo=-1;
+const scoreDisplay=document.getElementById('score');
+
+function summarizeBroadcastPayload(data){
+  if(!data || typeof data!=='object') return null;
+  const summary={
+    started: !!data.started,
+    paused: !!data.paused,
+    over: !!data.over,
+  };
+  if(typeof data.score==='number') summary.score=data.score;
+  if(typeof data.level==='number') summary.level=data.level;
+  if(typeof data.lines==='number') summary.lines=data.lines;
+  if(typeof data.combo==='number') summary.combo=data.combo;
+  const currentPiece=data.cur?.t ?? data.current?.t ?? null;
+  const nextPiece=data.nextM?.t ?? data.next?.t ?? null;
+  const holdPiece=data.holdM?.t ?? data.hold?.t ?? null;
+  if(currentPiece) summary.current=currentPiece;
+  if(nextPiece) summary.next=nextPiece;
+  if(holdPiece) summary.hold=holdPiece;
+  if(Array.isArray(data.grid)){
+    summary.hasGrid=true;
+    const filled=data.grid.reduce((acc,row)=>acc+(Array.isArray(row)?row.reduce((sum,cell)=>sum+(cell?1:0),0):0),0);
+    summary.filledCells=filled;
+  }
+  return summary;
+}
+
+function logBroadcastEvent(direction,payload,details){
+  const entry={
+    channel:'tetris',
+    type:'broadcast',
+    direction,
+    mode,
+    started,
+    paused,
+    over,
+    score,
+    level,
+    lines,
+    combo,
+    ready:tetrisReady,
+  };
+  if(details && typeof details==='object') Object.assign(entry,details);
+  const summary=summarizeBroadcastPayload(payload);
+  if(summary) entry.payload=summary;
+  dispatchDiagnostics(entry);
+}
+
+function cloneMatrix(matrix){
+  if(!Array.isArray(matrix)) return [];
+  return matrix.map(row=>Array.isArray(row)?row.slice():[]);
+}
+
+function clonePiece(piece){
+  if(!piece) return null;
+  const snapshot={t:piece.t ?? null};
+  if(piece.m) snapshot.m=cloneMatrix(piece.m);
+  if(typeof piece.x==='number') snapshot.x=piece.x;
+  if(typeof piece.y==='number') snapshot.y=piece.y;
+  if(typeof piece.o==='number') snapshot.o=piece.o;
+  return snapshot;
+}
+
+function getPublicState(){
+  return {
+    mode,
+    started,
+    paused,
+    over,
+    score,
+    level,
+    lines,
+    combo,
+    canHold,
+    showGhost,
+    grid: cloneMatrix(grid),
+    current: clonePiece(cur),
+    next: clonePiece(nextM),
+    hold: clonePiece(holdM),
+  };
+}
+
+const TetrisAPI={
+  get mode(){ return mode; },
+  get started(){ return started; },
+  get paused(){ return paused; },
+  get over(){ return over; },
+  get score(){ return score; },
+  get level(){ return level; },
+  get lines(){ return lines; },
+  get combo(){ return combo; },
+  get canHold(){ return canHold; },
+  get showGhost(){ return showGhost; },
+  get ready(){ return tetrisReady; },
+  get broadcastChannel(){ return bc; },
+  get grid(){ return cloneMatrix(grid); },
+  get currentPiece(){ return clonePiece(cur); },
+  get nextPiece(){ return clonePiece(nextM); },
+  get holdPiece(){ return clonePiece(holdM); },
+  get state(){ return getPublicState(); },
+  start(){
+    if(over) return false;
+    if(!started){
+      started=true;
+      const replayApi=globalScope?.Replay;
+      if(mode==='play' && replayApi && typeof replayApi.start==='function') replayApi.start();
+      last=typeof performance!=='undefined'?performance.now():Date.now();
+      lastFrame=0;
+    }
+    startGameLoop();
+    return true;
+  },
+  pause(){
+    if(over) return false;
+    if(!paused) paused=true;
+    return true;
+  },
+  resume(){
+    if(over) return false;
+    if(paused){
+      paused=false;
+      startGameLoop();
+    }
+    return true;
+  },
+  togglePause(){
+    if(over) return false;
+    paused=!paused;
+    if(!paused) startGameLoop();
+    return paused;
+  },
+  startLoop(){
+    startGameLoop();
+    return rafId;
+  },
+  stopLoop(){
+    stopGameLoop();
+    return rafId;
+  },
+  reset(){
+    stopGameLoop();
+    grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+    bag=[];
+    initGame();
+    score=0;
+    level=1;
+    lines=0;
+    combo=-1;
+    holdM=null;
+    canHold=true;
+    over=false;
+    started=false;
+    paused=false;
+    shellPaused=false;
+    pausedByShell=false;
+    lockTimer=0;
+    clearRows.length=0;
+    clearAnim=0;
+    last=0;
+    lastFrame=0;
+    dropMs=700;
+    syncScoreDisplay();
+    updateGhost();
+    return true;
+  },
+  onReady: registerReadyCallback,
+  offReady(callback){ readyCallbacks.delete(callback); },
+};
+
+globalScope.Tetris=TetrisAPI;
 
 function shuffle(a){
   for(let i=a.length-1;i>0;i--){
@@ -111,15 +352,6 @@ function nextFromBag(){
   const t=bag.pop();
   return {m:SHAPES[t].map(r=>r.slice()),t};
 }
-let nextM;
-let holdM=null;
-let canHold=true;
-
-let cur;
-let ghost;
-let showGhost=localStorage.getItem('tetris:ghost')!=='0';
-let score=0, level=1, lines=0, over=false, dropMs=700, last=0, paused=false;
-const scoreDisplay=document.getElementById('score');
 
 function syncScoreDisplay(){
   if(!scoreDisplay) return;
@@ -128,13 +360,30 @@ function syncScoreDisplay(){
 }
 
 syncScoreDisplay();
+let bc=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('tetris'):null;
+if(bc){
+  logBroadcastEvent('init',null,{event:'open'});
+}else{
+  logBroadcastEvent('init',null,{event:'unavailable'});
+}
+if(bc && mode==='spectate'){
+  bc.onmessage=e=>{
+    const data=e?.data;
+    logBroadcastEvent('inbound',data,{event:'message'});
+    if(data && typeof data==='object'){
+      ({grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost}=data);
+      if(typeof data.combo==='number') combo=data.combo;
+      syncScoreDisplay();
+      updateGhost();
+    }
+  };
+}
 let lockTimer=0; const LOCK_DELAY=0.5; let lastFrame=0;
 let shellPaused=false;
 let pausedByShell=false;
 let rafId=0;
 let clearAnim=0, clearRows=[];
 let bgShift=0;
-let combo=-1;
 let rotated=false;
 
 function initGame(){
@@ -261,6 +510,7 @@ function draw(){
   if(!postedReady){
     postedReady=true;
     try { window.parent?.postMessage({ type:'GAME_READY', slug:'tetris' }, '*'); } catch {}
+    markReady();
   }
   const cell=getCellSize();
   bgShift=(bgShift+0.5)%c.height;
@@ -500,17 +750,27 @@ function loop(ts){
   }
   ctx.clearRect(0,0,c.width,c.height);
   draw();
-  if(bc && mode==='play') bc.postMessage({grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost});
+  if(bc && mode==='play'){
+    const payload={grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost,combo};
+    bc.postMessage(payload);
+    logBroadcastEvent('outbound',payload,{event:'message'});
+  }
   rafId=requestAnimationFrame(loop);
 }
 
-function startLoop(){ if(!rafId) rafId=requestAnimationFrame(loop); }
+function startGameLoop(){ if(!rafId) rafId=requestAnimationFrame(loop); }
+
+function stopGameLoop(){
+  if(!rafId) return;
+  cancelAnimationFrame(rafId);
+  rafId=0;
+}
 
 function pauseForShell(){
   if(shellPaused) return;
   if(!over && !paused){ paused=true; pausedByShell=true; }
   shellPaused=true;
-  if(rafId){ cancelAnimationFrame(rafId); rafId=0; }
+  stopGameLoop();
 }
 
 function resumeFromShell(){
@@ -524,7 +784,7 @@ function resumeFromShell(){
   } else {
     pausedByShell=false;
   }
-  startLoop();
+  startGameLoop();
 }
 
 const onShellPause=()=>pauseForShell();
@@ -542,10 +802,11 @@ document.addEventListener('visibilitychange', onVisibility);
 window.addEventListener('message', onShellMessage, {passive:true});
 
 if(mode==='replay'){
-  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;startLoop();if(typeof reportReady==='function') reportReady('tetris');});
+  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;startGameLoop();if(typeof reportReady==='function') reportReady('tetris'); markReady();});
 }else{
   initGame();
   if(mode==='spectate') started=true;
-  startLoop();
+  startGameLoop();
   if(typeof reportReady==='function') reportReady('tetris');
+  markReady();
 }
