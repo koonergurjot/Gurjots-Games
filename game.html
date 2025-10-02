@@ -28,7 +28,17 @@
     body {
       margin: 0; background: var(--bg);
       color: var(--fg, #e5f0ff); font-size: 14px; line-height: 1.5; font-family: var(--font-brand);
-      display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr auto; gap: 8px;
+    }
+    .shell-frame {
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 0 20px;
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto auto 1fr auto;
+      gap: 8px;
       grid-template-areas:
         "header"
         "quest"
@@ -38,6 +48,12 @@
     body.legacy-shell {
       display: block;
       background: #000;
+    }
+    body.legacy-shell .shell-frame {
+      max-width: none;
+      padding: 0;
+      min-height: auto;
+      display: block;
     }
     header, footer {
       backdrop-filter: blur(6px); background: var(--header-bg, rgba(17,24,39,0.6)); border-bottom: 1px solid var(--border-strong);
@@ -222,7 +238,7 @@
       header .title h1 { font-size: 14px; }
     }
     @media (min-width: 1024px) {
-      body {
+      .shell-frame {
         grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
         grid-template-areas:
           "header header"
@@ -239,41 +255,43 @@
   </style>
 </head>
 <body>
-  <header aria-label="Game Shell Header">
-    <div class="title">
-      <a id="backLink" class="btn" href="./index.html" aria-label="Back to home">← Back</a>
-      <h1 id="gameTitle">Loading…</h1>
-    </div>
-    <nav>
-      <button id="btnReload" class="btn" aria-label="Reload game">Reload</button>
-      <button id="btnDiag" class="btn" aria-label="Show diagnostics">Diagnostics</button>
-    </nav>
-  </header>
-
-  <section id="questWidgetRoot" class="quest-widget" aria-live="polite"></section>
-
-  <main>
-    <section class="game-card" aria-live="polite">
-      <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
-      <div class="overlay" id="overlay" aria-hidden="false">
-        <div class="status" id="statusPanel" role="status" aria-live="polite" aria-atomic="true">
-          <span class="sr-only" id="statusContext">Game status message</span>
-          <h2 id="statusTitle" aria-describedby="statusContext">Starting…</h2>
-          <p id="statusText">We’re booting the game. First load may take a bit longer.</p>
-          <div class="row">
-            <span class="pill" id="pillSlug">slug: —</span>
-            <span class="pill" id="pillTimer">t+0.0s</span>
-            <span class="pill" id="pillSignal">signal: —</span>
-          </div>
-          <div class="logbox" id="logbox" role="log" aria-live="polite"></div>
-        </div>
+  <div class="shell-frame">
+    <header aria-label="Game Shell Header">
+      <div class="title">
+        <a id="backLink" class="btn" href="./index.html" aria-label="Back to home">← Back</a>
+        <h1 id="gameTitle">Loading…</h1>
       </div>
-    </section>
-  </main>
+      <nav>
+        <button id="btnReload" class="btn" aria-label="Reload game">Reload</button>
+        <button id="btnDiag" class="btn" aria-label="Show diagnostics">Diagnostics</button>
+      </nav>
+    </header>
 
-  <footer>
-    Standard shell + diagnostics active. Press <strong>Diagnostics</strong> to copy details.
-  </footer>
+    <section id="questWidgetRoot" class="quest-widget" aria-live="polite"></section>
+
+    <main>
+      <section class="game-card" aria-live="polite">
+        <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
+        <div class="overlay" id="overlay" aria-hidden="false">
+          <div class="status" id="statusPanel" role="status" aria-live="polite" aria-atomic="true">
+            <span class="sr-only" id="statusContext">Game status message</span>
+            <h2 id="statusTitle" aria-describedby="statusContext">Starting…</h2>
+            <p id="statusText">We’re booting the game. First load may take a bit longer.</p>
+            <div class="row">
+              <span class="pill" id="pillSlug">slug: —</span>
+              <span class="pill" id="pillTimer">t+0.0s</span>
+              <span class="pill" id="pillSignal">signal: —</span>
+            </div>
+            <div class="logbox" id="logbox" role="log" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Standard shell + diagnostics active. Press <strong>Diagnostics</strong> to copy details.
+    </footer>
+  </div>
 
   <script src="./js/auto-diag-inject.js"></script>
 
