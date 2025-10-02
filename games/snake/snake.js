@@ -2,6 +2,8 @@ import { GameEngine } from '../../shared/gameEngine.js';
 import { createParticleSystem } from '../../shared/fx/canvasFx.js';
 import getThemeTokens from '../../shared/skins/index.js';
 import '../../shared/ui/hud.js';
+import { pushEvent } from '../common/diag-adapter.js';
+import '../common/diagnostics/adapter.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
@@ -12,11 +14,22 @@ const bootStatus = (() => {
   status.logs = Array.isArray(status.logs) ? status.logs : [];
   status.watchdogs = status.watchdogs || {};
 
+  function resolveLevel(event) {
+    const name = String(event || '').toLowerCase();
+    if (/error|fail|crash/.test(name)) return 'error';
+    if (/stall|missing|pending|timeout|watchdog/.test(name)) return 'warn';
+    return 'info';
+  }
+
   function log(event, detail) {
+    const level = resolveLevel(event);
+    const message = `[snake] ${event}`;
     const entry = {
       at: performance.now(),
       event,
-      detail: detail || null
+      detail: detail || null,
+      level,
+      message
     };
     status.last = entry;
     status.logs.push(entry);
@@ -24,6 +37,11 @@ const bootStatus = (() => {
     try {
       if (!status.silent) console.debug('[boot]', event, detail || '');
     } catch (_) {}
+    pushEvent('boot', {
+      level,
+      message,
+      details: detail || undefined
+    });
     return entry;
   }
 
@@ -320,8 +338,46 @@ let fruitSpawnTime = performance.now();
 let turnBuffer = [];
 const MAX_TURN_BUFFER = 2;
 
-function togglePause() { paused = !paused; }
-document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') togglePause(); });
+function pauseGame(reason = 'manual') {
+  if (paused) return;
+  paused = true;
+  bootLog('game:paused', { reason });
+}
+
+function resumeGame(reason = 'manual') {
+  if (!paused) return;
+  paused = false;
+  bootLog('game:resumed', { reason });
+}
+
+function togglePause(reason = 'toggle') {
+  if (paused) resumeGame(reason);
+  else pauseGame(reason);
+}
+
+function resetGame(reason = 'manual') {
+  dir = { x: 1, y: 0 };
+  lastDir = { x: 1, y: 0 };
+  turnBuffer = [];
+  snake = [{ x: 5, y: 16 }, { x: 4, y: 16 }, { x: 3, y: 16 }];
+  lastSnake = snake.map(s => ({ ...s }));
+  food = spawnFood();
+  fruitSpawnTime = performance.now();
+  speedMs = 120;
+  score = 0;
+  dead = false;
+  deadHandled = false;
+  level = 1;
+  moveAcc = 0;
+  paused = false;
+  lastTickTime = performance.now();
+  progress.plays++;
+  saveProgress();
+  populateSkinSelects();
+  bootLog('game:reset', { reason });
+}
+
+document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') togglePause('keyboard'); });
 
 (function () {
   let start = null;
@@ -534,23 +590,7 @@ function saveScore(s) {
 document.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === 'r' && dead) {
-    dir = { x: 1, y: 0 };
-    lastDir = { x: 1, y: 0 };
-    turnBuffer = [];
-    snake = [{ x: 5, y: 16 }, { x: 4, y: 16 }, { x: 3, y: 16 }];
-    lastSnake = snake.map(s => ({ ...s }));
-    food = spawnFood();
-    fruitSpawnTime = performance.now();
-    speedMs = 120;
-    score = 0;
-    dead = false;
-    deadHandled = false;
-    level = 1;
-    lastTickTime = performance.now();
-    progress.plays++;
-    saveProgress();
-    populateSkinSelects();
-    moveAcc = 0;
+    resetGame('keyboard');
     return;
   }
   const map = {
@@ -579,3 +619,83 @@ engine.update = dt => {
 engine.render = draw;
 engine.start();
 if (typeof reportReady === 'function') reportReady('snake');
+
+const snakeApi = {
+  engine,
+  get snake() { return snake; },
+  get food() { return food; },
+  get score() { return score; },
+  get turnBuffer() { return turnBuffer; },
+  pause: (reason = 'external') => pauseGame(reason),
+  resume: (reason = 'external') => resumeGame(reason),
+  reset: (reason = 'external') => resetGame(reason),
+  onReady: []
+};
+
+window.Snake = snakeApi;
+
+function flushSnakeReadyHandlers(context) {
+  const api = window.Snake;
+  if (!api) return;
+  const queue = Array.isArray(api.onReady) ? api.onReady.splice(0) : [];
+  if (!queue.length) return;
+  for (const handler of queue) {
+    if (typeof handler !== 'function') continue;
+    try {
+      handler(api, context);
+    } catch (err) {
+      pushEvent('boot', {
+        level: 'warn',
+        message: '[snake] onReady handler failed',
+        details: { error: err?.message || String(err), stack: err?.stack || null }
+      });
+    }
+  }
+}
+
+if (typeof queueMicrotask === 'function') {
+  queueMicrotask(() => flushSnakeReadyHandlers());
+} else {
+  setTimeout(() => flushSnakeReadyHandlers(), 0);
+}
+
+const registerGameDiagnostics = window.GGDiagAdapters?.registerGameDiagnostics;
+if (typeof registerGameDiagnostics === 'function') {
+  try {
+    registerGameDiagnostics('snake', {
+      hooks: {
+        onReady(context) {
+          flushSnakeReadyHandlers(context);
+        }
+      },
+      api: {
+        pause: () => pauseGame('diagnostics'),
+        resume: () => resumeGame('diagnostics'),
+        reset: () => resetGame('diagnostics'),
+        getScore: () => score,
+        getEntities: () => ({
+          snake: snake.map(segment => ({ ...segment })),
+          food: { ...food },
+          obstacles: obstacles.map(obstacle => ({ ...obstacle })),
+          level,
+          speedMs,
+          dead,
+          paused,
+          score
+        })
+      }
+    });
+    pushEvent('boot', { level: 'info', message: '[snake] diagnostics adapter registered' });
+  } catch (err) {
+    pushEvent('boot', {
+      level: 'error',
+      message: '[snake] diagnostics adapter registration failed',
+      details: { error: err?.message || String(err), stack: err?.stack || null }
+    });
+  }
+} else {
+  pushEvent('boot', {
+    level: 'warn',
+    message: '[snake] diagnostics registry unavailable'
+  });
+}

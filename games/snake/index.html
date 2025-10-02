@@ -123,8 +123,10 @@
   <script src="../../js/sfx.js"></script>
   <script type="module" src="./snake.js"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="snake"></script>
-  <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="snake"></script>
-  <script src="../common/diag-autowire.js" defer></script>
+  <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="snake" data-diag-src="../common/diag-capture.js"></script>
+  <link rel="stylesheet" href="../common/diag-modal.css">
+  <script src="../common/diagnostics/report-store.js" defer></script>
+  <script src="../common/diag-core.js" defer></script>
 
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
   <script>
