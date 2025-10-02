@@ -881,12 +881,12 @@ if (themeToggle) {
   themeToggle.addEventListener('click', () => {
     // Allow the existing toggle handler to update the theme first
     setTimeout(() => {
-      const activatedTheme = currentTheme;
-      const nextTheme = activatedTheme === 'dark' ? 'light' : 'dark';
+      // currentTheme has already been updated by the primary click handler
+      const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
       // Update both text and ARIA label to reflect the current and next themes
-      themeToggle.textContent = nextTheme === 'dark' ? 'Light' : 'Dark';
+      themeToggle.textContent = currentTheme === 'dark' ? 'Light' : 'Dark';
       themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
-      announceToScreenReader(`Switched to ${activatedTheme} theme.`);
+      announceToScreenReader(`Switched to ${currentTheme} theme.`);
     }, 100);
   });
 }
