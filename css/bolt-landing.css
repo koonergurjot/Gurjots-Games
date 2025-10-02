@@ -26,6 +26,35 @@ body.bolt-body{
   overflow-x:hidden;
 }
 
+.bolt-skip-link{
+  position:absolute;
+  top:16px;
+  left:50%;
+  transform:translate(-50%,-150%);
+  padding:12px 24px;
+  background:var(--bolt-btn);
+  color:var(--bolt-btn-text);
+  font-weight:700;
+  text-decoration:none;
+  border-radius:999px;
+  box-shadow:0 12px 30px rgba(3,11,30,.35);
+  opacity:0;
+  pointer-events:none;
+  transition:transform .2s ease,opacity .2s ease;
+  z-index:1000;
+}
+
+.bolt-skip-link:focus,
+.bolt-skip-link:focus-visible{
+  outline:none;
+  opacity:1;
+  transform:translate(-50%,0);
+  pointer-events:auto;
+  box-shadow:var(--bolt-focus),0 12px 30px rgba(3,11,30,.35);
+}
+
+.bolt-main{display:block}
+
 .bolt-container{max-width:1200px;margin:0 auto;padding:0 22px}
 
 /* NAV */

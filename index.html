@@ -33,6 +33,7 @@
   </style>
 </head>
 <body class="bolt-body">
+  <a class="bolt-skip-link" href="#games">Skip to games</a>
   <header class="bolt-nav">
     <div class="bolt-container bolt-nav-inner">
       <a class="bolt-brand" href="./" aria-label="Gurjot's Games home">
@@ -54,120 +55,122 @@
     </div>
   </header>
 
-  <!-- HERO -->
-  <section class="bolt-hero">
-    <div class="bolt-hero-bg" aria-hidden="true">
-      <div class="bolt-gradient"></div>
-      <div class="bolt-bubble bolt-b1"></div>
-      <div class="bolt-bubble bolt-b2"></div>
-      <div class="bolt-bubble bolt-b3"></div>
-      <div class="bolt-stars"></div>
-    </div>
-    <div class="bolt-container bolt-hero-content">
-      <h1 class="bolt-hero-title">Gurjot's Games</h1>
-      <p class="bolt-hero-sub">Welcome to the ultimate gaming destination! Discover amazing games, challenge your skills, and have endless fun.</p>
-      <p class="bolt-cta-line"><span>Ready Player One?</span> 🎮</p>
-      <div class="bolt-metrics">
-        <div class="bolt-metric">
-          <img class="bolt-ic" src="assets/icons/players.svg" alt="" role="presentation">
-          <div>
-            <div class="bolt-met-n">10K+</div>
-            <div class="bolt-met-l">Players</div>
-          </div>
-        </div>
-        <div class="bolt-metric">
-          <img class="bolt-ic" src="assets/icons/joystick.svg" alt="" role="presentation">
-          <div>
-            <div class="bolt-met-n" id="bolt-game-count">50+</div>
-            <div class="bolt-met-l">Games</div>
-          </div>
-        </div>
-        <div class="bolt-metric">
-          <img class="bolt-ic" src="assets/icons/star.svg" alt="" role="presentation">
-          <div>
-            <div class="bolt-met-n">4.8</div>
-            <div class="bolt-met-l">Rating</div>
-          </div>
-        </div>
-        <div class="bolt-metric">
-          <img class="bolt-ic" src="assets/icons/uptime.svg" alt="" role="presentation">
-          <div>
-            <div class="bolt-met-n">99%</div>
-            <div class="bolt-met-l">Uptime</div>
-          </div>
-        </div>
+  <main id="main-content" class="bolt-main">
+    <!-- HERO -->
+    <section class="bolt-hero">
+      <div class="bolt-hero-bg" aria-hidden="true">
+        <div class="bolt-gradient"></div>
+        <div class="bolt-bubble bolt-b1"></div>
+        <div class="bolt-bubble bolt-b2"></div>
+        <div class="bolt-bubble bolt-b3"></div>
+        <div class="bolt-stars"></div>
       </div>
-      <a href="#games" class="bolt-cta">Start Playing ↗</a>
-    </div>
-  </section>
+      <div class="bolt-container bolt-hero-content">
+        <h1 class="bolt-hero-title">Gurjot's Games</h1>
+        <p class="bolt-hero-sub">Welcome to the ultimate gaming destination! Discover amazing games, challenge your skills, and have endless fun.</p>
+        <p class="bolt-cta-line"><span>Ready Player One?</span> 🎮</p>
+        <div class="bolt-metrics">
+          <div class="bolt-metric">
+            <img class="bolt-ic" src="assets/icons/players.svg" alt="" role="presentation">
+            <div>
+              <div class="bolt-met-n">10K+</div>
+              <div class="bolt-met-l">Players</div>
+            </div>
+          </div>
+          <div class="bolt-metric">
+            <img class="bolt-ic" src="assets/icons/joystick.svg" alt="" role="presentation">
+            <div>
+              <div class="bolt-met-n" id="bolt-game-count">50+</div>
+              <div class="bolt-met-l">Games</div>
+            </div>
+          </div>
+          <div class="bolt-metric">
+            <img class="bolt-ic" src="assets/icons/star.svg" alt="" role="presentation">
+            <div>
+              <div class="bolt-met-n">4.8</div>
+              <div class="bolt-met-l">Rating</div>
+            </div>
+          </div>
+          <div class="bolt-metric">
+            <img class="bolt-ic" src="assets/icons/uptime.svg" alt="" role="presentation">
+            <div>
+              <div class="bolt-met-n">99%</div>
+              <div class="bolt-met-l">Uptime</div>
+            </div>
+          </div>
+        </div>
+        <a href="#games" class="bolt-cta">Start Playing ↗</a>
+      </div>
+    </section>
 
-  <!-- GAMES SECTION -->
-  <section id="games" class="bolt-games" aria-labelledby="games-title">
-    <div class="bolt-container">
-      <div class="bolt-section-head">
-        <div class="bolt-section-title-group">
-          <h2 class="bolt-section-title" id="games-title">Browse Games</h2>
-          <p class="bolt-section-sub">Explore our curated mix of retro favorites, new releases, and indie gems to find your next go-to adventure.</p>
+    <!-- GAMES SECTION -->
+    <section id="games" class="bolt-games" aria-labelledby="games-title">
+      <div class="bolt-container">
+        <div class="bolt-section-head">
+          <div class="bolt-section-title-group">
+            <h2 class="bolt-section-title" id="games-title">Browse Games</h2>
+            <p class="bolt-section-sub">Explore our curated mix of retro favorites, new releases, and indie gems to find your next go-to adventure.</p>
+          </div>
+          <div class="bolt-filter-bar">
+            <form class="bolt-search" role="search" aria-label="Search games" onsubmit="return false;">
+              <label class="sr-only" for="bolt-search">Search games</label>
+              <input id="bolt-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
+              <button id="bolt-clear" type="button" title="Clear search">✕</button>
+            </form>
+            <div class="bolt-filter-group">
+              <span class="bolt-filter-label" id="bolt-filter-label">Browse by genre</span>
+              <div id="bolt-filters" class="bolt-filters" aria-labelledby="bolt-filter-label" role="tablist"></div>
+            </div>
+          </div>
         </div>
-        <div class="bolt-filter-bar">
-          <form class="bolt-search" role="search" aria-label="Search games" onsubmit="return false;">
-            <label class="sr-only" for="bolt-search">Search games</label>
-            <input id="bolt-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
-            <button id="bolt-clear" type="button" title="Clear search">✕</button>
-          </form>
-          <div class="bolt-filter-group">
-            <span class="bolt-filter-label" id="bolt-filter-label">Browse by genre</span>
-            <div id="bolt-filters" class="bolt-filters" aria-labelledby="bolt-filter-label" role="tablist"></div>
+        <div id="bolt-status" class="bolt-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">
+          <span class="sr-only">Game loading status:</span>
+          Loading games…
+        </div>
+        <div id="bolt-grid" class="bolt-grid" aria-label="Game list"></div>
+      </div>
+    </section>
+
+    <!-- ABOUT SECTION -->
+    <section id="about" class="bolt-about">
+      <div class="bolt-container">
+        <h2 class="bolt-section-title">About Gurjot's Games</h2>
+        <p class="bolt-section-lead">We curate a hand-picked library of classics, indie hits, and modern experiences so every gamer can find their next adventure.</p>
+        <div class="bolt-about-grid">
+          <div>
+            <h3>Built for discovery</h3>
+            <p>Our catalog highlights trending titles, spotlighted creators, and community favorites to make it easy to jump into something new.</p>
+          </div>
+          <div>
+            <h3>Always evolving</h3>
+            <p>Fresh games, seasonal events, and exclusive challenges are added regularly so there is always a new quest waiting for you.</p>
           </div>
         </div>
       </div>
-      <div id="bolt-status" class="bolt-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">
-        <span class="sr-only">Game loading status:</span>
-        Loading games…
-      </div>
-      <div id="bolt-grid" class="bolt-grid" aria-label="Game list"></div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ABOUT SECTION -->
-  <section id="about" class="bolt-about">
-    <div class="bolt-container">
-      <h2 class="bolt-section-title">About Gurjot's Games</h2>
-      <p class="bolt-section-lead">We curate a hand-picked library of classics, indie hits, and modern experiences so every gamer can find their next adventure.</p>
-      <div class="bolt-about-grid">
-        <div>
-          <h3>Built for discovery</h3>
-          <p>Our catalog highlights trending titles, spotlighted creators, and community favorites to make it easy to jump into something new.</p>
-        </div>
-        <div>
-          <h3>Always evolving</h3>
-          <p>Fresh games, seasonal events, and exclusive challenges are added regularly so there is always a new quest waiting for you.</p>
+    <!-- CONTACT SECTION -->
+    <section id="contact" class="bolt-contact">
+      <div class="bolt-container">
+        <h2 class="bolt-section-title">Get in Touch</h2>
+        <p class="bolt-section-lead">Have a game suggestion, found a bug, or just want to say hi? We would love to hear from you.</p>
+        <div class="bolt-contact-cards">
+          <a class="bolt-contact-card" href="mailto:hello@gurjotsgames.com">
+            <span class="bolt-contact-label">Email</span>
+            <span class="bolt-contact-value">hello@gurjotsgames.com</span>
+          </a>
+          <a class="bolt-contact-card" href="https://twitter.com" target="_blank" rel="noopener">
+            <span class="bolt-contact-label">Twitter</span>
+            <span class="bolt-contact-value">@GurjotsGames</span>
+          </a>
+          <a class="bolt-contact-card" href="https://discord.com" target="_blank" rel="noopener">
+            <span class="bolt-contact-label">Discord</span>
+            <span class="bolt-contact-value">Join our community ↗</span>
+          </a>
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- CONTACT SECTION -->
-  <section id="contact" class="bolt-contact">
-    <div class="bolt-container">
-      <h2 class="bolt-section-title">Get in Touch</h2>
-      <p class="bolt-section-lead">Have a game suggestion, found a bug, or just want to say hi? We would love to hear from you.</p>
-      <div class="bolt-contact-cards">
-        <a class="bolt-contact-card" href="mailto:hello@gurjotsgames.com">
-          <span class="bolt-contact-label">Email</span>
-          <span class="bolt-contact-value">hello@gurjotsgames.com</span>
-        </a>
-        <a class="bolt-contact-card" href="https://twitter.com" target="_blank" rel="noopener">
-          <span class="bolt-contact-label">Twitter</span>
-          <span class="bolt-contact-value">@GurjotsGames</span>
-        </a>
-        <a class="bolt-contact-card" href="https://discord.com" target="_blank" rel="noopener">
-          <span class="bolt-contact-label">Discord</span>
-          <span class="bolt-contact-value">Join our community ↗</span>
-        </a>
-      </div>
-    </div>
-  </section>
+    </section>
+  </main>
 
   <footer class="bolt-footer">
     <div class="bolt-container bolt-footer-inner">
