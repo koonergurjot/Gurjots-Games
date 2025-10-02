@@ -92,7 +92,11 @@ function weekKey(date){
 }
 
 function profileId(){
-  return localStorage.getItem('profile') || 'default';
+  try {
+    return localStorage.getItem('profile') || 'default';
+  } catch {
+    return 'default';
+  }
 }
 
 function progressKey(type, seed){
@@ -108,7 +112,11 @@ function loadProgress(type, seed){
 }
 
 function saveProgress(type, seed, obj){
-  localStorage.setItem(progressKey(type, seed), JSON.stringify(obj));
+  try {
+    localStorage.setItem(progressKey(type, seed), JSON.stringify(obj));
+  } catch {
+    // ignore write failures so quest progression degrades gracefully
+  }
 }
 
 function xpKey(){
@@ -116,16 +124,24 @@ function xpKey(){
 }
 
 export function getXP(){
-  const parsed = Number(localStorage.getItem(xpKey()));
-  return Number.isFinite(parsed) ? parsed : 0;
+  try {
+    const parsed = Number(localStorage.getItem(xpKey()));
+    return Number.isFinite(parsed) ? parsed : 0;
+  } catch {
+    return 0;
+  }
 }
 
 function addXP(n){
-  const k = xpKey();
-  const prev = getXP();
-  const next = prev + n;
-  if (Number.isFinite(next)){
-    localStorage.setItem(k, String(next));
+  try {
+    const k = xpKey();
+    const prev = getXP();
+    const next = prev + n;
+    if (Number.isFinite(next)){
+      localStorage.setItem(k, String(next));
+    }
+  } catch {
+    // ignore write failures so XP tracking degrades gracefully
   }
 }
 
