@@ -9,6 +9,7 @@ import {
 import { getAchievements } from '../shared/achievements.js';
 import { getActiveQuests, getXP, QUESTS_UPDATED_EVENT } from '../shared/quests.js';
 import { getLastPlayed } from '../shared/ui.js';
+import { loadGameCatalog } from '../shared/game-catalog.js';
 
 const trigger = document.querySelector('[data-profile-trigger]');
 if (trigger) {
@@ -304,25 +305,39 @@ if (trigger) {
   }
 
   async function loadCatalogTitles() {
-    const urls = ['./games.json', './public/games.json'];
-    for (const url of urls) {
-      try {
-        const res = await fetch(url, { cache: 'no-cache' });
-        if (!res?.ok) continue;
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : Array.isArray(data?.games) ? data.games : [];
-        const map = new Map();
-        list.forEach(entry => {
-          const slug = entry?.slug || entry?.id;
-          if (!slug) return;
-          const title = entry?.title || entry?.name || slug;
-          map.set(slug, title);
-        });
-        if (map.size) return map;
-      } catch (error) {
-        console.warn('[profile-overlay] Failed to load catalog titles from', url, error);
-      }
+    try {
+      const { games } = await loadGameCatalog();
+      const map = new Map();
+      games.forEach(entry => {
+        const slug = entry?.slug || entry?.id;
+        if (!slug) return;
+        const title = entry?.title || entry?.name || slug;
+        map.set(slug, title);
+      });
+      if (map.size) return map;
+    } catch (error) {
+      console.warn('[profile-overlay] Failed to load shared catalog titles', error);
     }
+
+    try {
+      const offline = await import('../data/games-offline.js');
+      const list = Array.isArray(offline?.games)
+        ? offline.games
+        : Array.isArray(offline?.default)
+        ? offline.default
+        : [];
+      const map = new Map();
+      list.forEach(entry => {
+        const slug = entry?.slug || entry?.id;
+        if (!slug) return;
+        const title = entry?.title || entry?.name || slug;
+        map.set(slug, title);
+      });
+      if (map.size) return map;
+    } catch (error) {
+      console.warn('[profile-overlay] Failed to load offline catalog titles', error);
+    }
+
     return new Map();
   }
 
