@@ -439,14 +439,43 @@ export function boot() {
     markPhase('boot:error', { reason: 'no-2d-context' });
     return;
   }
+  const VIRTUAL_WIDTH = 960;
+  const VIRTUAL_HEIGHT = 540;
+  let cssWidth = VIRTUAL_WIDTH;
+  let cssHeight = VIRTUAL_HEIGHT;
+  let renderScale = 1;
+  let renderOffsetX = 0;
+  let renderOffsetY = 0;
+  let dpr = globalScope?.devicePixelRatio && Number.isFinite(globalScope.devicePixelRatio)
+    ? globalScope.devicePixelRatio
+    : 1;
   function resizeCanvas() {
     const rect = typeof canvas.getBoundingClientRect === 'function'
       ? canvas.getBoundingClientRect()
       : null;
-    const width = rect && rect.width > 0 ? Math.round(rect.width) : 960;
-    const height = rect && rect.height > 0 ? Math.round(rect.height) : 540;
-    canvas.width = width;
-    canvas.height = height;
+    cssWidth = rect && rect.width > 0 ? rect.width : VIRTUAL_WIDTH;
+    cssHeight = rect && rect.height > 0 ? rect.height : VIRTUAL_HEIGHT;
+    dpr = globalScope?.devicePixelRatio && Number.isFinite(globalScope.devicePixelRatio)
+      ? globalScope.devicePixelRatio
+      : 1;
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+    canvas.width = Math.round(cssWidth * dpr);
+    canvas.height = Math.round(cssHeight * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const scaleX = cssWidth / VIRTUAL_WIDTH;
+    const scaleY = cssHeight / VIRTUAL_HEIGHT;
+    // Uniformly scale the virtual playfield dimensions, leaving centered letterbox offsets.
+    renderScale = Math.min(scaleX, scaleY);
+    const scaledWidth = VIRTUAL_WIDTH * renderScale;
+    const scaledHeight = VIRTUAL_HEIGHT * renderScale;
+    renderOffsetX = (cssWidth - scaledWidth) / 2;
+    renderOffsetY = (cssHeight - scaledHeight) / 2;
+    if (!Number.isFinite(renderScale) || renderScale <= 0) {
+      renderScale = 1;
+      renderOffsetX = 0;
+      renderOffsetY = 0;
+    }
     snapshotCanvas(canvas);
   }
 
@@ -464,8 +493,8 @@ export function boot() {
   // Keep the shell layout responsive by resizing with the window.
   window.addEventListener('resize', handleResize);
 
-  const W = canvas.width;
-  const H = canvas.height;
+  const W = VIRTUAL_WIDTH;
+  const H = VIRTUAL_HEIGHT;
   const groundY = H - 60;
   let postedReady = false;
 
@@ -932,7 +961,11 @@ export function boot() {
       logBoot('info', 'Posted GAME_READY to shell');
       try { window.parent?.postMessage({ type:'GAME_READY', slug:'platformer' }, '*'); } catch {}
     }
-    ctx.clearRect(0, 0, W, H);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    ctx.save();
+    ctx.translate(renderOffsetX, renderOffsetY);
+    ctx.scale(renderScale, renderScale);
+    // Letterbox using the precomputed offsets so both axes keep the same scale while centering the playfield.
     const gradient = ctx.createLinearGradient(0, 0, 0, H);
     gradient.addColorStop(0, '#0d1a2b');
     gradient.addColorStop(1, '#0b1020');
@@ -1004,6 +1037,7 @@ export function boot() {
       ctx.font = '14px system-ui';
       ctx.fillText('Collect the remaining coins!', goal.x - 60, goal.y - 12);
     }
+    ctx.restore();
   }
 
   function frame(now) {
