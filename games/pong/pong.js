@@ -1,4 +1,6 @@
 
+import { pushEvent } from "../common/diag-adapter.js";
+
 window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ };
 
 (function(){
@@ -22,9 +24,9 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
   const state = {
     ...DFLT, ...loadLS(),
-    running:false, debug:hasDebug(), t0:0, last:0, dt:0,
+    running:false, t0:0, last:0, dt:0,
     canvas:null, ctx:null, ratio:1, paused:false, over:false,
-    score:{p1:0,p2:0}, ball:null, balls:[], p1:null, p2:null, hud:null, diag:null, loopId:0,
+    score:{p1:0,p2:0}, ball:null, balls:[], p1:null, p2:null, hud:null, loopId:0,
     particles:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
     trail:[], trailMax:20, touches:{}, replay:[], replayMax:5*60, recording:true,
     shellPaused:false,
@@ -33,26 +35,17 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
   const globalScope = typeof window !== "undefined" ? window : undefined;
 
-  function pushDiagnostics(level, message, details){
-    if (!globalScope) return;
-    const payload = {
-      level: typeof level === "string" ? level : "info",
-      message: message || "",
-    };
-    if (details !== undefined) payload.details = details;
-    if (typeof globalScope.__GG_DIAG_PUSH_EVENT__ === "function") {
-      globalScope.__GG_DIAG_PUSH_EVENT__("game", payload);
-      return;
-    }
-    const queue = globalScope.__GG_DIAG_QUEUE || (globalScope.__GG_DIAG_QUEUE = []);
-    queue.push(Object.assign({ category: "game", timestamp: Date.now() }, payload));
-    if (queue.length > 1200) {
-      queue.splice(0, queue.length - 1200);
-    }
+  function emitStateChange(field, value){
+    pushEvent("state", {
+      slug: SLUG,
+      field,
+      value,
+      mode: state.mode,
+      difficulty: state.ai,
+    });
   }
 
   // ---------- Utilities ----------
-  function hasDebug(){ return location.search.includes("debug"); }
   function post(type, detail){ try{ window.parent && window.parent.postMessage({type, slug:SLUG, detail}, "*"); }catch{} }
   function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
   function rand(a,b){ return Math.random()*(b-a)+a; }
@@ -184,8 +177,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
   function endMatch(){ state.over=true; state.paused=true; toast("Match over"); beep(220,0.25,"triangle",0.12); }
 
   function toast(msg){
-    if(state.diag){ const pre=state.diag.querySelector("pre"); pre.textContent = `[note] ${msg}\n` + pre.textContent; }
-    pushDiagnostics("info", `[${SLUG}] ${msg}`);
+    pushEvent("game", { level:"info", message:`[${SLUG}] ${msg}` });
   }
 
   function updateHUD(){
@@ -425,14 +417,6 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     endShake();
     ctx.restore();
 
-    // Diag text
-    if(state.debug && state.diag){ const pre=state.diag.querySelector("pre"); if(pre){
-      pre.textContent = `mode=${state.mode} ai=${state.ai} powerups=${state.powerups}
-score=${state.score.p1}-${state.score.p2} paused=${state.paused} over=${state.over}
-dt=${(state.dt*1000).toFixed(2)}ms DPR=${state.ratio}
-balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
-` + pre.textContent.slice(0,400);
-    }}
   }
 
   // ---------- UI ----------
@@ -458,8 +442,7 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
       h("span",{class:"pong-spacer"}),
       h("span",{class:"pong-kbd"},"Pause: Space"),
       h("button",{class:"pong-btn",onclick:togglePause},"Pause"),
-      h("button",{class:"pong-btn",onclick:openKeybinds},"Keys"),
-      h("button",{class:"pong-btn",onclick:toggleDiag},"Diagnostics")
+      h("button",{class:"pong-btn",onclick:openKeybinds},"Keys")
     );
 
     const wrap = h("div",{class:"pong-canvas-wrap"},
@@ -477,12 +460,12 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
       // Mode
       h("div",{class:"pong-row"},
         h("label",{},"Mode:"),
-        select(["1P","2P","Endless","Mayhem"], state.mode, v=>{state.mode=v; saveLS(); reset();})
+        select(["1P","2P","Endless","Mayhem"], state.mode, v=>{state.mode=v; saveLS(); reset(); emitStateChange("mode", v);})
       ),
       // AI
       h("div",{class:"pong-row"},
         h("label",{},"AI:"),
-        select(["Easy","Normal","Hard","Insane"], state.ai, v=>{state.ai=v; saveLS();})
+        select(["Easy","Normal","Hard","Insane"], state.ai, v=>{state.ai=v; saveLS(); emitStateChange("difficulty", v);})
       ),
       // Score to
       h("div",{class:"pong-row"},
@@ -518,17 +501,6 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
       h("button",{class:"pong-btn",onclick:()=>{reset();}},"Reset Match")
     );
 
-    const diag = state.diag = h("div",{class:"pong-diag", role:"region", "aria-label":"Diagnostics"},
-      h("div",{class:"pong-row"},
-        h("strong",{},"Diagnostics"),
-        h("span",{class:"pong-spacer"}),
-        h("button",{class:"pong-btn",onclick:copyDiag},"Copy"),
-        h("button",{class:"pong-btn",onclick:()=>{state.debug=false; state.diag.classList.remove('show');}},"Close")
-      ),
-      h("pre",{},"Diagnostics ready.")
-    );
-    pushDiagnostics("info", `[${SLUG}] diagnostics ready`);
-
     const keyModal = state.keyModal = h("div",{class:"pong-modal", id:"key-modal"},
       h("div",{class:"pong-card"},
         h("h3",{},"Rebind Keys"),
@@ -544,7 +516,7 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
       )
     );
 
-    root.append(bar, wrap, hud, menu, diag, keyModal);
+    root.append(bar, wrap, hud, menu, keyModal);
     state.hud = {p1: hud.querySelector("#score-p1"), p2: hud.querySelector("#score-p2")};
     installCanvas();
     ensureContext();
@@ -591,9 +563,6 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
     state.paused=false;
     state.last=performance.now();
   }
-  function toggleDiag(){ state.debug=!state.debug; state.diag.classList.toggle("show", state.debug); }
-  function copyDiag(){ const pre=state.diag && state.diag.querySelector("pre"); if(pre) navigator.clipboard && navigator.clipboard.writeText(pre.textContent).catch(()=>{}); }
-
   // Replay
   function playReplay(){
     if(state.replay.length<10) return toast("Not enough replay data yet");
@@ -613,6 +582,19 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
+  }
+
+  if(globalScope){
+    const api = globalScope.Pong || {};
+    api.state = state;
+    api.reset = reset;
+    api.togglePause = togglePause;
+    api.pauseForShell = pauseForShell;
+    api.resumeFromShell = resumeFromShell;
+    api.emitStateChange = emitStateChange;
+    api.playReplay = playReplay;
+    api.pushEvent = pushEvent;
+    globalScope.Pong = api;
   }
 
   // ---------- Canvas ----------
@@ -686,8 +668,7 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
     }catch(err){
       console.error("[pong] boot error", err);
       post("GAME_ERROR", String(err&&err.message||err));
-      if(state.diag){ const pre=state.diag.querySelector("pre"); pre.textContent = String(err && (err.stack||err.message)||err) + "\n" + pre.textContent; state.diag.classList.add("show"); }
-      pushDiagnostics("error", `[${SLUG}] boot error`, { error: err && (err.stack || err.message) || err });
+      pushEvent("game", { level:"error", message:`[${SLUG}] boot error`, details:{ error: err && (err.stack || err.message) || err } });
     }
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
