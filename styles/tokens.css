@@ -1,18 +1,31 @@
 :root {
+  /* Gradient helpers */
+  --brand-gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+  --shell-gradient: linear-gradient(180deg, #050b1f 0%, #111827 35%, #050b1f 100%);
+  --card-gradient: linear-gradient(180deg, #141824 0%, #101420 100%);
+
+  /* Shared palette */
+  --brand-accent: #4cc9f0;
+  --accent-strong: #4895ef;
+  --text-muted: #9db0c5;
+  --surface-border-soft: rgba(255, 255, 255, 0.18);
+  --surface-border-strong: rgba(34, 48, 73, 0.88);
+  --card-solid: #121821;
+
   /* Color tokens */
-  --bg: #e0f2fe;
-  --fg: #0b0b0f;
-  --header-bg: #bae6fd;
-  --border: #dddddd;
-  --button-bg: #7dd3fc;
-  --button-border: #cccccc;
-  --button-hover: #d5d5d5;
-  --card-bg: #ffffff;
-  --tag-border: #cccccc;
-  --panel-bg: #ffffff;
-  --panel-fg: #000000;
-  --accent: #f43f5e;
-  --focus: #93c5fd;
+  --bg: var(--brand-gradient);
+  --fg: #eaf0ff;
+  --header-bg: rgba(16, 24, 39, 0.72);
+  --border: var(--surface-border-soft);
+  --button-bg: rgba(255, 255, 255, 0.14);
+  --button-border: rgba(255, 255, 255, 0.28);
+  --button-hover: rgba(255, 255, 255, 0.22);
+  --card-bg: var(--card-gradient);
+  --tag-border: rgba(255, 255, 255, 0.22);
+  --panel-bg: rgba(12, 18, 28, 0.92);
+  --panel-fg: #f3f7ff;
+  --accent: var(--brand-accent);
+  --focus: #8ec8ff;
 
   /* Spacing scale */
   --space-0: 0;
@@ -49,20 +62,20 @@
 }
 
 [data-theme="dark"] {
-  --bg: #082f49;
-  --fg: #eaeaf2;
-  --header-bg: #0c4a6e;
-  --border: #1f1f2a;
-  --button-bg: #075985;
-  --button-border: #2a2a36;
-  --button-hover: #2a2a36;
-  --card-bg: #14141d;
-  --tag-border: #2a2a36;
-  --panel-bg: #111111;
-  --panel-fg: #ffffff;
-  --accent: #fb7185;
-  --focus: #93c5fd;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.6);
+  --bg: var(--shell-gradient);
+  --fg: #f3f7ff;
+  --header-bg: rgba(12, 18, 28, 0.88);
+  --border: var(--surface-border-strong);
+  --button-bg: rgba(15, 22, 34, 0.9);
+  --button-border: rgba(76, 201, 240, 0.4);
+  --button-hover: rgba(76, 201, 240, 0.24);
+  --card-bg: var(--card-gradient);
+  --tag-border: rgba(76, 201, 240, 0.25);
+  --panel-bg: rgba(12, 18, 28, 0.92);
+  --panel-fg: #f3f7ff;
+  --accent: var(--brand-accent);
+  --focus: #8ec8ff;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.55);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 18px 40px rgba(0, 0, 0, 0.6);
 }

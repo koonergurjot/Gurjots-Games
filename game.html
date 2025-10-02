@@ -6,12 +6,28 @@
   <title>Play — Gurjot’s Games</title>
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <style>
-    :root { --bg:#0b0f14; --card:#121821; --muted:#9db0c5; --accent:#4cc9f0; --error:#ff6b6b; --font-brand:"Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    :root {
+      color-scheme: dark;
+      --shell-bg: var(--shell-gradient, linear-gradient(180deg, #050b1f 0%, #111827 35%, #050b1f 100%));
+      --shell-card: var(--card-gradient, linear-gradient(180deg, #141824 0%, #101420 100%));
+      --shell-card-solid: var(--card-solid, #121821);
+      --shell-border: var(--surface-border-strong, #223049);
+      --shell-muted: var(--text-muted, #9db0c5);
+      --shell-accent: var(--brand-accent, #4cc9f0);
+      --bg: var(--shell-bg);
+      --card: var(--shell-card);
+      --card-solid: var(--shell-card-solid);
+      --muted: var(--shell-muted);
+      --accent: var(--shell-accent);
+      --error: #ff6b6b;
+      --border-strong: var(--shell-border);
+      --font-brand:"Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
     body {
-      margin: 0; background: linear-gradient(180deg, #0b0f14, #111827 35%, #0b0f14);
-      color: #e5f0ff; font-size: 14px; line-height: 1.5; font-family: var(--font-brand);
+      margin: 0; background: var(--bg);
+      color: var(--fg, #e5f0ff); font-size: 14px; line-height: 1.5; font-family: var(--font-brand);
       display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr auto; gap: 8px;
       grid-template-areas:
         "header"
@@ -24,20 +40,23 @@
       background: #000;
     }
     header, footer {
-      backdrop-filter: blur(6px); background: rgba(17,24,39,0.6); border-bottom: 1px solid #243042;
+      backdrop-filter: blur(6px); background: var(--header-bg, rgba(17,24,39,0.6)); border-bottom: 1px solid var(--border-strong);
     }
     header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; grid-area: header; }
     header .title { display:flex; align-items:center; gap:10px; }
     header .title h1 { font-size: 16px; margin: 0; font-weight: 600; }
     header nav { display:flex; gap:8px; }
     a.btn, button.btn {
-      appearance: none; border: 1px solid #2a3b54; background: #0f1622; color: #e5f0ff;
+      appearance: none; border: 1px solid var(--button-border, #2a3b54); background: var(--button-bg, #0f1622); color: var(--fg, #e5f0ff);
       padding: 8px 10px; border-radius: 10px; cursor: pointer; text-decoration: none;
     }
-    a.btn:hover, button.btn:hover { border-color: #3b5172; }
+    a.btn:hover, button.btn:hover {
+      border-color: #3b5172;
+      border-color: color-mix(in srgb, var(--button-border, #2a3b54) 60%, var(--accent) 40%);
+    }
     main { display:grid; place-items:stretch; padding: 0; grid-area: main; }
     .game-card {
-      width: 100%; height: 100%; aspect-ratio: auto; background: #0b0f14; border: 1px solid #1e2a3b;
+      width: 100%; height: 100%; aspect-ratio: auto; background: var(--card); border: 1px solid var(--border-strong);
       border-radius: 14px; overflow: clip; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.45);
     }
     body.legacy-shell .game-card {
@@ -63,20 +82,22 @@
       height: 100vh;
     }
     .status {
-      pointer-events:none; background: rgba(12,18,28,0.92); border:1px solid #223049; border-radius:12px;
+      pointer-events:none; background: var(--panel-bg, rgba(12,18,28,0.92)); border:1px solid var(--border-strong); border-radius:12px;
       padding:16px; width:min(560px, 90%);
-      color:#f3f7ff;
+      color:var(--panel-fg, #f3f7ff);
     }
     .status .logbox { pointer-events:auto; }
     .status h2 { margin:0 0 6px; font-size:16px; }
     .status p { margin:6px 0 0; color: var(--muted); }
     .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
-    .pill { border:1px solid #2a3b54; padding:6px 8px; border-radius:999px; font-size:12px; color:#cfe2ff; }
+    .pill { border:1px solid var(--border-strong); padding:6px 8px; border-radius:999px; font-size:12px; color:#cfe2ff; color:color-mix(in srgb, var(--fg, #e5f0ff) 70%, var(--muted) 30%); }
     .logbox {
-      margin-top:10px; max-height:160px; overflow:auto; background:#0b1018; border:1px solid #203049; border-radius:8px; padding:8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px;
+      margin-top:10px; max-height:160px; overflow:auto; background: #0b1018;
+      background: color-mix(in srgb, rgba(5,11,31,0.92) 40%, var(--card-solid) 60%);
+      border:1px solid var(--border-strong); border-radius:8px; padding:8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px;
     }
     .hidden { display:none; }
-    footer { padding: 10px 14px; border-top: 1px solid #243042; color: #a8c3df; grid-area: footer; }
+    footer { padding: 10px 14px; border-top: 1px solid var(--border-strong); color: var(--muted); grid-area: footer; }
     #questWidgetRoot {
       grid-area: quest;
     }
@@ -84,8 +105,8 @@
       padding: 0 14px;
     }
     .quest-widget-panel {
-      background: rgba(12,18,28,0.92);
-      border: 1px solid #223049;
+      background: var(--panel-bg, rgba(12,18,28,0.92));
+      border: 1px solid var(--border-strong);
       border-radius: 12px;
       padding: 16px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.35);
@@ -120,9 +141,11 @@
     }
     .quest-widget-item {
       border: 1px solid rgba(76,201,240,0.25);
+      border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent 60%);
       border-radius: 10px;
       padding: 10px 12px;
       background: rgba(15,22,34,0.8);
+      background: color-mix(in srgb, var(--card-solid) 75%, rgba(12,18,28,0.92) 25%);
       outline: none;
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
@@ -163,8 +186,9 @@
       color: var(--muted);
     }
     .quest-widget-item.is-complete {
-      border-color: #4cc9f0;
+      border-color: var(--accent);
       background: rgba(76,201,240,0.12);
+      background: color-mix(in srgb, var(--accent) 20%, transparent 80%);
     }
     .quest-widget-item.is-complete .quest-widget-status {
       color: #7ae0ff;
