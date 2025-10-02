@@ -1,4 +1,7 @@
 // Minimal top-down shooter (canvas id='game')
+import { pushEvent } from '../common/diag-adapter.js';
+import './diagnostics-adapter.js';
+
 export function boot() {
   const canvas = document.getElementById('game');
   if (!canvas) return console.error('[shooter] missing #game canvas');
@@ -12,6 +15,11 @@ export function boot() {
   const bullets = [];
   const enemies = [];
   let t = 0, score = 0;
+  let shooterAPI = null;
+  let currentState = 'ready';
+  let lastPostedScore = null;
+  let lastPostedHp = null;
+  let lastPostedState = null;
   const scoreElement = document.getElementById('score');
   const scoreDisplay = document.getElementById('scoreDisplay');
 
@@ -68,6 +76,8 @@ export function boot() {
     }
 
     t++;
+
+    publishDiagnostics('running');
   }
 
   function draw(){
@@ -131,12 +141,34 @@ export function boot() {
     shellPaused=true;
     pausedByShell=true;
     stopLoop();
+    publishDiagnostics('paused', { forceState: true });
   }
 
   function resumeFromShell(){
     if(!shellPaused || document.hidden) return;
     shellPaused=false;
     if(pausedByShell && player.hp>0){ pausedByShell=false; startLoop(); }
+    publishDiagnostics('running', { forceState: true });
+  }
+
+  function restart(){
+    stopLoop();
+    player.x = W*0.2;
+    player.y = H*0.5;
+    player.vx = 0;
+    player.vy = 0;
+    player.hp = 3;
+    player.cd = 0;
+    bullets.length = 0;
+    enemies.length = 0;
+    t = 0;
+    score = 0;
+    shellPaused = false;
+    pausedByShell = false;
+    currentState = 'ready';
+    publishDiagnostics('running', { forceScore: true, forceState: true });
+    draw();
+    startLoop();
   }
 
   const onShellPause=()=>pauseForShell();
@@ -154,15 +186,77 @@ export function boot() {
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('message', onShellMessage, { passive:true });
 
-  startLoop();
-
   function gameOver(){
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle = '#fff'; ctx.font='bold 48px system-ui'; ctx.textAlign='center';
     ctx.fillText('Game Over', W/2, H/2 - 10);
     ctx.font='24px system-ui';
     ctx.fillText(`Score: ${score}`, W/2, H/2 + 26);
+    publishDiagnostics('gameover', { forceScore: true, forceState: true });
   }
+  function syncShooterState(){
+    if(!shooterAPI) return;
+    shooterAPI.player = player;
+    shooterAPI.enemies = enemies;
+    shooterAPI.bullets = bullets;
+    shooterAPI.score = score;
+    shooterAPI.hp = player.hp;
+    shooterAPI.state = currentState;
+  }
+
+  function publishDiagnostics(stateLabel, { forceScore = false, forceState = false } = {}){
+    if(stateLabel) currentState = stateLabel;
+    syncShooterState();
+    const shouldPushScore = forceScore || score !== lastPostedScore || player.hp !== lastPostedHp;
+    if(shouldPushScore){
+      pushEvent('score', { score, hp: player.hp, state: currentState });
+      lastPostedScore = score;
+      lastPostedHp = player.hp;
+    }
+    const shouldPushState = forceState || currentState !== lastPostedState;
+    if(shouldPushState){
+      pushEvent('state', { status: currentState, score, hp: player.hp });
+      lastPostedState = currentState;
+    }
+  }
+
+  const existing = typeof window !== 'undefined' && window.Shooter && typeof window.Shooter === 'object'
+    ? window.Shooter
+    : null;
+  const base = existing && typeof existing === 'object' ? existing : {};
+  const readyQueue = Array.isArray(base.onReady) ? base.onReady : [];
+  shooterAPI = Object.assign(base, {
+    startLoop,
+    pauseForShell,
+    resumeFromShell,
+    restart,
+    player,
+    enemies,
+    bullets,
+    onReady: readyQueue,
+    score,
+    hp: player.hp,
+    state: currentState,
+  });
+  if (!Array.isArray(base.onReady)) {
+    base.onReady = readyQueue;
+  }
+  if (typeof window !== 'undefined') {
+    window.Shooter = shooterAPI;
+  }
+  syncShooterState();
+  if (readyQueue.length) {
+    const callbacks = readyQueue.slice();
+    readyQueue.length = 0;
+    for (const callback of callbacks) {
+      if (typeof callback === 'function') {
+        try { callback(shooterAPI); }
+        catch (error) { console.error('[shooter] onReady callback failed', error); }
+      }
+    }
+  }
+
+  startLoop();
   addEventListener('beforeunload', ()=>stopLoop());
 }
 
