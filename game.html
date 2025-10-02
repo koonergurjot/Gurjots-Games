@@ -63,12 +63,44 @@
     header .title h1 { font-size: 16px; margin: 0; font-weight: 600; }
     header nav { display:flex; gap:8px; }
     a.btn, button.btn {
-      appearance: none; border: 1px solid var(--button-border, #2a3b54); background: var(--button-bg, #0f1622); color: var(--fg, #e5f0ff);
-      padding: 8px 10px; border-radius: 10px; cursor: pointer; text-decoration: none;
+      appearance: none; border: 1px solid var(--button-border, #2a3b54); background: var(--button-bg, #0f1622); color: var(--button-fg, var(--fg, #e5f0ff));
+      padding: 8px 10px; border-radius: 10px; cursor: pointer; text-decoration: none; font-weight: var(--button-weight, 500);
+      transition: transform 0.15s ease, filter 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
     }
     a.btn:hover, button.btn:hover {
-      border-color: #3b5172;
       border-color: color-mix(in srgb, var(--button-border, #2a3b54) 60%, var(--accent) 40%);
+      filter: brightness(1.05);
+    }
+    a.btn:active, button.btn:active {
+      transform: translateY(1px);
+      filter: brightness(0.95);
+    }
+    .btn-primary {
+      --button-bg: linear-gradient(140deg, #4cc9f0 0%, #4361ee 45%, #3a0ca3 100%);
+      --button-border: rgba(67, 97, 238, 0.65);
+      --button-fg: #f8fbff;
+      --button-weight: 600;
+      box-shadow: 0 6px 18px rgba(58, 12, 163, 0.35);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 8px 22px rgba(58, 12, 163, 0.45);
+    }
+    .btn-primary:active {
+      box-shadow: 0 3px 10px rgba(58, 12, 163, 0.35);
+    }
+    .btn-ghost {
+      --button-bg: transparent;
+      --button-border: rgba(157, 176, 197, 0.35);
+      --button-fg: color-mix(in srgb, #e5f0ff 85%, var(--muted) 15%);
+      --button-weight: 500;
+      background-color: rgba(15, 22, 34, 0.35);
+      box-shadow: inset 0 0 0 1px rgba(12, 18, 28, 0.6);
+    }
+    .btn-ghost:hover {
+      background-color: rgba(67, 97, 238, 0.08);
+    }
+    .btn-ghost:active {
+      background-color: rgba(67, 97, 238, 0.12);
     }
     main { display:grid; place-items:stretch; padding: 0; grid-area: main; }
     .game-card {
@@ -258,12 +290,12 @@
   <div class="shell-frame">
     <header aria-label="Game Shell Header">
       <div class="title">
-        <a id="backLink" class="btn" href="./index.html" aria-label="Back to home">← Back</a>
+        <a id="backLink" class="btn btn-primary" href="./index.html" aria-label="Back to home">← Back</a>
         <h1 id="gameTitle">Loading…</h1>
       </div>
       <nav>
         <button id="btnReload" class="btn" aria-label="Reload game">Reload</button>
-        <button id="btnDiag" class="btn" aria-label="Show diagnostics">Diagnostics</button>
+        <button id="btnDiag" class="btn btn-ghost" aria-label="Show diagnostics">Diagnostics</button>
       </nav>
     </header>
 
