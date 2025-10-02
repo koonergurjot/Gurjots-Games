@@ -1,6 +1,7 @@
 import { Controls } from '../../src/runtime/controls.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
+import { pushEvent } from '../common/diag-adapter.js';
 import {
   connect as netConnect,
   disconnect as netDisconnect,
@@ -33,42 +34,6 @@ const STORAGE_KEYS = {
 };
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
-const diagnosticsQueue = globalScope
-  ? (globalScope.__diagnosticsQueue = globalScope.__diagnosticsQueue || [])
-  : null;
-
-function publishDiagnostics(entry) {
-  if (!globalScope || !entry) return;
-  const normalized = {
-    category: entry.category || 'general',
-    level: entry.level || 'info',
-    message: entry.message || '',
-    details: entry.details ?? null,
-    timestamp: Date.now(),
-  };
-  try {
-    const diagnostics = globalScope.__diagnostics;
-    if (diagnostics && typeof diagnostics.log === 'function') {
-      diagnostics.log(normalized);
-      return;
-    }
-  } catch (err) {
-    // fall through to queue push when logging fails
-    diagnosticsQueue?.push({
-      category: 'diagnostics',
-      level: 'error',
-      message: '[asteroids] diagnostics interface log failed',
-      details: { error: err?.message || String(err) },
-      timestamp: Date.now(),
-    });
-  }
-  if (diagnosticsQueue) {
-    diagnosticsQueue.push(normalized);
-    if (diagnosticsQueue.length > 1000) {
-      diagnosticsQueue.splice(0, diagnosticsQueue.length - 1000);
-    }
-  }
-}
 
 function sanitizeForLog(value, depth = 0, seen = new WeakSet()) {
   if (value === null || value === undefined) return value;
@@ -164,8 +129,7 @@ function createBootTracker(slug) {
     if (details) record.details = details;
     entry.milestones.push(record);
     clamp(entry.milestones, 120);
-    publishDiagnostics({
-      category: 'boot',
+    pushEvent('boot', {
       level: 'info',
       message: `[${slug}] ${name}`,
       details: sanitizeForLog(record),
@@ -182,8 +146,7 @@ function createBootTracker(slug) {
     entry.raf.samples.push(sample);
     clamp(entry.raf.samples, 60);
     if (entry.raf.frames <= 5) {
-      publishDiagnostics({
-        category: 'raf',
+      pushEvent('raf', {
         level: 'debug',
         message: `[${slug}] frame ${entry.raf.frames}`,
         details: sanitizeForLog(sample),
@@ -197,8 +160,7 @@ function createBootTracker(slug) {
     entry.raf.active = active;
     entry.raf.lastStateChange = now();
     entry.raf.lastStateReason = reason || null;
-    publishDiagnostics({
-      category: 'raf',
+    pushEvent('raf', {
       level: active ? 'info' : 'warn',
       message: `[${slug}] raf ${active ? 'started' : 'stopped'}`,
       details: sanitizeForLog({ reason, at: entry.raf.lastStateChange }),
@@ -210,8 +172,7 @@ function createBootTracker(slug) {
     const record = { reason, at: now(), metrics };
     entry.canvasWarnings.push(record);
     clamp(entry.canvasWarnings, 30);
-    publishDiagnostics({
-      category: 'boot',
+    pushEvent('boot', {
       level: 'warn',
       message: `[${slug}] canvas warning: ${reason}`,
       details: sanitizeForLog(record),
@@ -452,6 +413,23 @@ class AsteroidsGame {
     emitEvent({ type: 'play', slug: SLUG });
     this.paused = true;
     this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Press start to begin!', false);
+    if (globalScope) {
+      const api = {
+        start: this.start.bind(this),
+        pause: this.pause.bind(this),
+        resume: this.resume.bind(this),
+        restart: this.restart.bind(this),
+        getScore: this.getScore.bind(this),
+        getBestScore: this.getBestScore.bind(this),
+        getShipState: () => this.getShipState(),
+        getRockState: () => this.getRockState(),
+        isPaused: () => this.isPaused(),
+        isGameOver: () => this.isGameOver(),
+        getWave: () => this.getWave(),
+      };
+      Object.defineProperty(api, '__instance', { value: this, enumerable: false });
+      globalScope.Asteroids = api;
+    }
     recordMilestone('game:constructor:ready');
     captureCanvasSnapshot('constructor:after-init', canvas, {
       canvasWidth: canvas.width,
@@ -676,6 +654,54 @@ class AsteroidsGame {
       setRafActive(true, 'start');
       this.rafId = requestAnimationFrame(this.loop);
     }
+  }
+
+  getScore() {
+    return this.score;
+  }
+
+  getBestScore() {
+    return this.bestScore;
+  }
+
+  getWave() {
+    return this.wave;
+  }
+
+  isPaused() {
+    return this.paused;
+  }
+
+  isGameOver() {
+    return this.gameOver;
+  }
+
+  getShipState() {
+    const ship = this.ship || {};
+    return {
+      alive: !!ship.alive,
+      x: typeof ship.x === 'number' ? ship.x : null,
+      y: typeof ship.y === 'number' ? ship.y : null,
+      vx: typeof ship.vx === 'number' ? ship.vx : null,
+      vy: typeof ship.vy === 'number' ? ship.vy : null,
+      angle: typeof ship.angle === 'number' ? ship.angle : null,
+      invulnerable: typeof ship.invulnerable === 'number' ? ship.invulnerable : 0,
+      radius: typeof ship.radius === 'number' ? ship.radius : SHIP_RADIUS,
+      lives: this.lives,
+    };
+  }
+
+  getRockState() {
+    if (!Array.isArray(this.asteroids)) return [];
+    return this.asteroids.map((asteroid) => ({
+      x: typeof asteroid.x === 'number' ? asteroid.x : null,
+      y: typeof asteroid.y === 'number' ? asteroid.y : null,
+      vx: typeof asteroid.vx === 'number' ? asteroid.vx : null,
+      vy: typeof asteroid.vy === 'number' ? asteroid.vy : null,
+      radius: typeof asteroid.radius === 'number' ? asteroid.radius : null,
+      size: typeof asteroid.size === 'number' ? asteroid.size : null,
+      spin: typeof asteroid.spin === 'number' ? asteroid.spin : null,
+    }));
   }
 
   loop(now) {
@@ -1316,6 +1342,9 @@ class AsteroidsGame {
     if (activeGame === this) {
       activeGame = null;
     }
+    if (globalScope?.Asteroids?.__instance === this) {
+      globalScope.Asteroids = null;
+    }
     this.controls?.dispose?.();
     window.removeEventListener('resize', this.resize);
     document.removeEventListener('visibilitychange', this.events.onVisibility);
@@ -1354,8 +1383,7 @@ export function boot(context = {}) {
   if (!(canvas instanceof HTMLCanvasElement)) {
     recordMilestone('boot:error', { reason: 'missing-canvas', readyState });
     recordCanvasWarning('missing-canvas', { stage: 'boot', selector: '#game', readyState });
-    publishDiagnostics({
-      category: 'boot',
+    pushEvent('boot', {
       level: 'error',
       message: '[asteroids] missing #game canvas',
       details: { readyState },
@@ -1373,8 +1401,7 @@ export function boot(context = {}) {
   } catch (error) {
     const details = sanitizeForLog(error);
     recordMilestone('boot:exception', { error: details });
-    publishDiagnostics({
-      category: 'boot',
+    pushEvent('boot', {
       level: 'error',
       message: '[asteroids] boot threw',
       details,
@@ -1396,8 +1423,7 @@ export function boot(context = {}) {
   try {
     game.updateLivesDisplay();
   } catch (error) {
-    publishDiagnostics({
-      category: 'boot',
+    pushEvent('boot', {
       level: 'warn',
       message: '[asteroids] updateLivesDisplay failed during boot',
       details: sanitizeForLog(error),
@@ -1417,8 +1443,7 @@ function invokeBootSafely(context) {
   try {
     boot(context);
   } catch (error) {
-    publishDiagnostics({
-      category: 'boot',
+    pushEvent('boot', {
       level: 'error',
       message: '[asteroids] auto boot failed',
       details: sanitizeForLog(error),
