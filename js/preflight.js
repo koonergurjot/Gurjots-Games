@@ -42,7 +42,8 @@
       var slug = (window.GG && window.GG.slug) ||
                  (document.body && document.body.dataset && document.body.dataset.slug) ||
                  (new URLSearchParams(location.search).get('slug')) || 'game';
-      try { window.parent && window.parent.postMessage({type:'GAME_ERROR', slug: slug, message: (kind?('['+kind+'] '):'') + String(msg||'error')}, '*'); } catch(e){}
+      var detail = (kind?('['+kind+'] '):'') + String(msg||'error');
+      try { window.parent && window.parent.postMessage({type:'GAME_ERROR', slug: slug, error: detail, message: detail}, '*'); } catch(e){}
     }
     window.addEventListener('error', function(e){
       var m = (e && (e.message || (e.error && e.error.message))) || 'Script error';

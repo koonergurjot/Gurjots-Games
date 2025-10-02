@@ -66,6 +66,7 @@
     if (readyToSignal) window.parent?.postMessage?.({type:'GAME_READY', slug}, '*');
   }catch(e){
     console.error('[loader] error', e);
-    window.parent?.postMessage?.({type:'GAME_ERROR', slug, message:String(e?.message||e)}, '*');
+    const detail = String(e?.message ?? e);
+    window.parent?.postMessage?.({type:'GAME_ERROR', slug, error:detail, message:detail}, '*');
   }
 })();

@@ -1,7 +1,10 @@
 // Utility helpers to use inside games (optional)
 export function postScore(score){ try{ parent.postMessage({type:'GAME_SCORE', score}, '*'); }catch{} }
 export function ready(){ try{ parent.postMessage({type:'GAME_READY'}, '*'); }catch{} }
-export function error(message){ try{ parent.postMessage({type:'GAME_ERROR', message}, '*'); }catch{} }
+export function error(message){
+  const detail = String(message ?? 'Unknown error');
+  try{ parent.postMessage({type:'GAME_ERROR', error: detail, message: detail}, '*'); }catch{}
+}
 
 // Optional listeners for pause/mute/restart sent from shell
 export function attachShellControls({ onPause, onResume, onRestart, onMute } = {}){

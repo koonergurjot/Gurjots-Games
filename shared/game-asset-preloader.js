@@ -33,13 +33,14 @@ function reportAssetError(slug, url, err) {
   const key = `${slug}|${url}`;
   if (reportedFailures.has(key)) return;
   reportedFailures.add(key);
-  const message = `[assets] failed to load ${url}: ${err?.message || err || 'unknown error'}`;
-  console.error(message);
+  const detail = `[assets] failed to load ${url}: ${err?.message || err || 'unknown error'}`;
+  console.error(detail);
   try {
     window.parent?.postMessage?.({
       type: 'GAME_ERROR',
       slug,
-      message: `First-frame asset failed to load: ${url}`
+      error: detail,
+      message: detail
     }, '*');
   } catch (_) {}
 }
