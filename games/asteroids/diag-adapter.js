@@ -1,12 +1,12 @@
+import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 import { pushEvent } from '../common/diag-adapter.js';
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 const SLUG = 'asteroids';
-const SNAPSHOT_INTERVAL = 5000;
 const POLL_INTERVAL = 1000;
 const attachedApis = new WeakSet();
-let snapshotTimer = 0;
 let lastAttachedApi = null;
+const adapterContexts = new WeakMap();
 
 function toNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -82,19 +82,39 @@ function buildSnapshot(api) {
   };
 }
 
+function setContext(api, context) {
+  if (!api || !context || typeof context !== 'object') return;
+  adapterContexts.set(api, context);
+}
+
+function triggerProbe(api, label, reason = 'state-change') {
+  const context = adapterContexts.get(api);
+  if (!context || typeof context.requestProbeRun !== 'function') return;
+  const trimmedLabel = typeof label === 'string' && label.trim() ? label.trim() : 'State snapshot';
+  const normalizedLabel = trimmedLabel.toLowerCase().startsWith('asteroids')
+    ? trimmedLabel
+    : `Asteroids: ${trimmedLabel}`;
+  try {
+    context.requestProbeRun(normalizedLabel, { reason });
+  } catch (error) {
+    pushEvent('diagnostics', {
+      level: 'warn',
+      message: `[${SLUG}] probe request failed`,
+      details: {
+        error: error?.message || String(error),
+        label: normalizedLabel,
+        reason,
+      },
+    });
+  }
+}
+
 function logEvent(api, message, level = 'info') {
   pushEvent('diagnostics', {
     level,
     message: `[${SLUG}] ${message}`,
     details: { state: buildSnapshot(api) },
   });
-}
-
-function clearSnapshotTimer() {
-  if (snapshotTimer && globalScope && typeof globalScope.clearInterval === 'function') {
-    globalScope.clearInterval(snapshotTimer);
-  }
-  snapshotTimer = 0;
 }
 
 function wrapAction(api, method, description) {
@@ -104,6 +124,7 @@ function wrapAction(api, method, description) {
     try {
       const result = original(...args);
       logEvent(api, description);
+      triggerProbe(api, description, `action:${method}`);
       return result;
     } catch (error) {
       pushEvent('diagnostics', {
@@ -114,6 +135,7 @@ function wrapAction(api, method, description) {
           state: buildSnapshot(api),
         },
       });
+      triggerProbe(api, `${description} failed`, `action-error:${method}`);
       throw error;
     }
   };
@@ -122,9 +144,6 @@ function wrapAction(api, method, description) {
 function attach(api) {
   if (!api || typeof api !== 'object' || attachedApis.has(api)) return;
   attachedApis.add(api);
-  if (lastAttachedApi && lastAttachedApi !== api) {
-    clearSnapshotTimer();
-  }
   lastAttachedApi = api;
   wrapAction(api, 'start', 'start invoked');
   wrapAction(api, 'pause', 'pause invoked');
@@ -132,21 +151,65 @@ function attach(api) {
   wrapAction(api, 'restart', 'restart invoked');
   logEvent(api, 'diagnostics adapter attached');
 
-  if (globalScope && typeof globalScope.setInterval === 'function') {
-    clearSnapshotTimer();
-    snapshotTimer = globalScope.setInterval(
-      () => logEvent(api, 'state snapshot', 'debug'),
-      SNAPSHOT_INTERVAL
-    );
-    if (typeof globalScope.addEventListener === 'function') {
-      globalScope.addEventListener(
-        'beforeunload',
-        () => {
-          clearSnapshotTimer();
+  try {
+    registerGameDiagnostics(SLUG, {
+      hooks: {
+        onReady(context) {
+          setContext(api, context);
+          logEvent(api, 'diagnostics adapter ready');
+          triggerProbe(api, 'Initial snapshot', 'initial');
         },
-        { once: true }
-      );
-    }
+        onStateChange(context) {
+          setContext(api, context);
+          triggerProbe(api, 'State change detected', 'summary-change');
+        },
+        onScoreChange(context) {
+          setContext(api, context);
+          triggerProbe(api, 'Score updated', 'score-change');
+        },
+        onError(context) {
+          setContext(api, context);
+          const error = context?.error;
+          pushEvent('diagnostics', {
+            level: 'error',
+            message: `[${SLUG}] diagnostics summary error`,
+            details: {
+              error: error?.message || String(error),
+              state: buildSnapshot(api),
+            },
+          });
+          triggerProbe(api, 'Summary error detected', 'summary-error');
+        },
+      },
+      api: {
+        start() {
+          return invoke(api, 'start');
+        },
+        pause() {
+          return invoke(api, 'pause');
+        },
+        resume() {
+          return invoke(api, 'resume');
+        },
+        reset() {
+          return invoke(api, 'restart');
+        },
+        getScore() {
+          return toNumber(invoke(api, 'getScore'));
+        },
+        async getEntities() {
+          return buildSnapshot(api);
+        },
+      },
+    });
+  } catch (error) {
+    pushEvent('diagnostics', {
+      level: 'error',
+      message: `[${SLUG}] failed to register diagnostics adapter`,
+      details: {
+        error: error?.message || String(error),
+      },
+    });
   }
 }
 
@@ -154,10 +217,13 @@ function pollForApi() {
   if (!globalScope) return;
   const api = globalScope.Asteroids;
   if (api && typeof api === 'object' && typeof api.getShipState === 'function') {
+    if (lastAttachedApi && lastAttachedApi !== api) {
+      adapterContexts.delete(lastAttachedApi);
+    }
     attach(api);
   } else if (!api && lastAttachedApi) {
+    adapterContexts.delete(lastAttachedApi);
     lastAttachedApi = null;
-    clearSnapshotTimer();
   }
   if (typeof globalScope.setTimeout === 'function') {
     globalScope.setTimeout(pollForApi, POLL_INTERVAL);
