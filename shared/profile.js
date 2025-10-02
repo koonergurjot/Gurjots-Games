@@ -1,4 +1,7 @@
 import { getAchievements } from './achievements.js';
+import { PROFILE_EVENT } from './profile-events.js';
+
+export { PROFILE_EVENT } from './profile-events.js';
 
 const PROFILE_KEY = 'gg:profile';
 const PROFILE_LIST_KEY = 'gg:profiles';
@@ -57,8 +60,6 @@ export function readProfileStats(profileInput = getProfile()) {
     return { xp: 0, plays: 0 };
   }
 }
-
-export const PROFILE_EVENT = 'profile:changed';
 
 function sanitizeProfile(input = {}) {
   const name = typeof input.name === 'string' ? input.name.trim() : '';

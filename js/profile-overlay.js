@@ -3,10 +3,10 @@ import {
   getAggregatedStats,
   login,
   listProfiles,
-  removeProfile,
-  PROFILE_EVENT
+  removeProfile
 } from '../shared/profile.js';
 import { getAchievements } from '../shared/achievements.js';
+import { PROFILE_EVENT } from '../shared/profile-events.js';
 import { getActiveQuests, getXP, QUESTS_UPDATED_EVENT } from '../shared/quests.js';
 import { getLastPlayed } from '../shared/ui.js';
 import { loadGameCatalog } from '../shared/game-catalog.js';

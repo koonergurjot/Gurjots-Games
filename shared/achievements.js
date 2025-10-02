@@ -1,7 +1,7 @@
 // Shared achievement system
 // Schema: { id, title, desc, icon, condition: (event, stats) => boolean }
 
-import { PROFILE_EVENT } from './profile.js';
+import { PROFILE_EVENT } from './profile-events.js';
 
 function normalizeProfileName(name) {
   if (typeof name !== 'string') return 'default';
