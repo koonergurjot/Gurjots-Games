@@ -1,4 +1,6 @@
 // bolt-landing v2 — 1:1 hero + games grid, auto-adapts to game.html
+import { loadGameCatalog } from '../shared/game-catalog.js';
+import { registerSW, cacheGameAssets, precacheAssets } from '../shared/sw.js';
 import { getLastPlayed } from '../shared/ui.js';
 
 const GRID = document.getElementById('bolt-grid');
@@ -11,6 +13,9 @@ const GAME_COUNT = document.getElementById('bolt-game-count');
 let allGames = [];
 let activeTag = 'All';
 const PRIMARY_QUERY_KEY = 'slug'; // shell reads slug; we also include id for legacy fallbacks
+const GAME_LOOKUP = new Map();
+const PREFETCHED = new Set();
+let CARD_OBSERVER = undefined;
 
 const toSlug = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
 const prettyTag = t => t?.charAt(0).toUpperCase() + t?.slice(1);
@@ -29,6 +34,8 @@ const HISTORY_GRID = HISTORY_SECTION.querySelector('.bolt-history-grid');
 GRID?.parentElement?.insertBefore(HISTORY_SECTION, GRID);
 
 const lastPlayedSlugs = getLastPlayed();
+
+registerSW();
 
 function placeholderSVG(label='GG'){
   return `
@@ -74,7 +81,7 @@ function card(game){
   const href = `game.html?${params.toString()}`;
 
   return `
-  <article class="bolt-card" tabindex="0" role="article" aria-label="${title} card">
+  <article class="bolt-card" tabindex="0" role="article" aria-label="${title} card" data-slug="${slug}">
     <div class="bolt-shot">
       <div class="bolt-badge">${badge}</div>
       ${thumb ? `<img loading="lazy" decoding="async" alt="${title} thumbnail" src="${thumb}">` : placeholderSVG(title.slice(0, 14))}
@@ -97,6 +104,7 @@ function render(list){
   GRID.innerHTML = list.map(card).join('');
   STATUS.textContent = `${list.length} game${list.length===1?'':'s'} available`;
   if (GAME_COUNT) GAME_COUNT.textContent = list.length + '+';
+  wirePrefetch(GRID);
 }
 
 function renderHistory(slugs = []){
@@ -115,6 +123,7 @@ function renderHistory(slugs = []){
   }
   HISTORY_GRID.innerHTML = items.map(card).join('');
   HISTORY_SECTION.removeAttribute('hidden');
+  wirePrefetch(HISTORY_GRID);
 }
 
 function filterAndSearch(){
@@ -140,30 +149,99 @@ function buildFilterChips(tags){
   }, {passive:true});
 }
 
+function ensureObserver(){
+  if (CARD_OBSERVER !== undefined) return CARD_OBSERVER;
+  if (!('IntersectionObserver' in window)) {
+    CARD_OBSERVER = null;
+    return CARD_OBSERVER;
+  }
+  CARD_OBSERVER = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      if (!entry.isIntersecting) return;
+      CARD_OBSERVER?.unobserve(entry.target);
+      const slug = entry.target?.dataset?.slug;
+      if (slug) schedulePrefetch(slug);
+    });
+  }, { rootMargin: '200px 0px' });
+  return CARD_OBSERVER;
+}
+
+function collectManifest(slug){
+  const record = GAME_LOOKUP.get(slug);
+  if (!record) return [];
+  const assets = new Set();
+  const playPath = record.playPath || record.path;
+  if (playPath) assets.add(playPath);
+  const thumb = record.thumbnail || record.image || record.cover;
+  if (thumb) assets.add(thumb);
+  const firstFrame = record.firstFrame;
+  if (firstFrame && typeof firstFrame === 'object') {
+    Object.values(firstFrame).forEach(value => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        value.forEach(item => {
+          if (typeof item === 'string') assets.add(item);
+          else if (item && typeof item === 'object' && typeof item.url === 'string') assets.add(item.url);
+        });
+      } else if (typeof value === 'string') {
+        assets.add(value);
+      } else if (typeof value === 'object' && typeof value.url === 'string') {
+        assets.add(value.url);
+      }
+    });
+  }
+  return Array.from(assets).filter(Boolean);
+}
+
+function schedulePrefetch(slug){
+  if (!slug || PREFETCHED.has(slug)) return;
+  PREFETCHED.add(slug);
+  cacheGameAssets(slug);
+  const manifest = collectManifest(slug);
+  if (manifest.length) {
+    precacheAssets(manifest);
+  }
+}
+
+function wirePrefetch(root){
+  if (!root || typeof root.querySelectorAll !== 'function') return;
+  const observer = ensureObserver();
+  root.querySelectorAll('.bolt-card').forEach(card => {
+    const slug = card?.dataset?.slug;
+    if (!slug || card.dataset.prefetchWired === 'true') return;
+    card.dataset.prefetchWired = 'true';
+
+    const hover = () => schedulePrefetch(slug);
+    card.addEventListener('mouseenter', hover, { once: true, passive: true });
+    card.addEventListener('focus', hover, { once: true });
+    card.addEventListener('touchstart', hover, { once: true, passive: true });
+
+    if (observer) observer.observe(card);
+  });
+}
+
 async function boot(){
   try {
-    const urls = ['./games.json?v=20250911175011', './public/games.json?v=20250911175011'];
-    let data = null;
-    for (const url of urls) {
-      try {
-        const res = await fetch(url, { cache:'no-cache' });
-        if (!res?.ok) throw new Error('Failed to load games.json');
-        data = await res.json();
-        break;
-      } catch (_) {
-        data = null;
+    const { games } = await loadGameCatalog();
+    const list = Array.isArray(games) ? games : [];
+    GAME_LOOKUP.clear();
+    allGames = list.map(g => {
+      const slug = g.slug || g.id || toSlug(g.name);
+      const record = {
+        id: g.id || g.slug || toSlug(g.name),
+        slug,
+        title: g.title || g.name || (g.id || g.slug || 'Game'),
+        description: g.description || g.short || '',
+        tags: g.tags || g.genres || [],
+        thumbnail: g.thumbnail || g.image || g.cover || null,
+        playPath: g.playPath || g.playUrl || g.path || null,
+        firstFrame: g.firstFrame || g.initialAssets || null
+      };
+      if (slug) {
+        GAME_LOOKUP.set(slug, record);
       }
-    }
-    if (!data) throw new Error('Failed to load games.json');
-    const list = Array.isArray(data) ? data : (Array.isArray(data.games) ? data.games : []);
-    allGames = list.map(g => ({
-      id: g.id || g.slug || toSlug(g.name),
-      slug: g.slug || g.id || toSlug(g.name),
-      title: g.title || g.name || (g.id || g.slug || 'Game'),
-      description: g.description || '',
-      tags: g.tags || g.genres || [],
-      thumbnail: g.thumbnail || g.image || g.cover || null
-    })).filter(g => g.id && g.title);
+      return record;
+    }).filter(g => g.id && g.title);
 
     const tags = allGames.flatMap(g => g.tags).map(t => t && (t[0].toUpperCase()+t.slice(1)));
     buildFilterChips(tags);

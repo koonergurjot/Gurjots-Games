@@ -37,6 +37,11 @@ deduplicates requests, and stores successful responses for future sessions. Netw
 cached response (including the main shell), so both navigating the catalog and launching previously saved games work even while
 offline.
 
+The landing page now performs predictive warmup as you explore the grid. Hovering, focusing, touching, or even scrolling a game
+card into view schedules a precache request for that game's entry point and its "first frame" assets (sprites, audio, fonts,
+etc.). These hints flow through `precacheAssets()` so the queue waits for an active service worker before downloading anything,
+reducing unnecessary traffic for cold starts while keeping likely-next games snappy when you click Play.
+
 ## 🚀 Getting Started
 
 ### Prerequisites
