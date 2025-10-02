@@ -2,6 +2,7 @@ import { PointerLockControls } from "./PointerLockControls.js";
 import '/js/three-global-shim.js';
 import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
 import { emitEvent } from '../../shared/achievements.js';
+import { pushEvent } from '../common/diag-adapter.js';
 import { connect } from './net.js';
 import { generateMaze, seedRandom } from './generator.js';
 
@@ -66,6 +67,52 @@ playerLight.castShadow = true;
 scene.add(playerLight);
 
 const controls = new PointerLockControls(camera, renderer.domElement);
+const player = controls.getObject();
+let opponent = { mesh: null };
+
+const readyListeners = new Set();
+let readyNotified = false;
+
+function notifyReadyListeners() {
+  if (readyNotified) return;
+  readyNotified = true;
+  readyListeners.forEach((listener) => {
+    try {
+      listener({ player, opponent });
+    } catch (err) {
+      console.error('maze3d: onReady listener failed', err);
+    }
+  });
+  readyListeners.clear();
+}
+
+function registerReadyListener(listener) {
+  if (typeof listener !== 'function') return () => {};
+  if (readyNotified) {
+    try {
+      listener({ player, opponent });
+    } catch (err) {
+      console.error('maze3d: onReady listener failed', err);
+    }
+    return () => {};
+  }
+  readyListeners.add(listener);
+  return () => {
+    readyListeners.delete(listener);
+  };
+}
+
+if (typeof window !== 'undefined') {
+  window.Maze3D = {
+    start,
+    pause,
+    resume,
+    restart,
+    player,
+    opponent,
+    onReady: registerReadyListener
+  };
+}
 
 let overlay = document.getElementById('overlay');
 let message = document.getElementById('message');
@@ -117,7 +164,6 @@ let best = Number(localStorage.getItem('besttime:maze3d') || 0);
 let net = null;
 let currentSeed = Math.floor(Math.random()*1e9);
 const myId = Math.random().toString(36).slice(2,8);
-let opponent = { mesh:null };
 let opponentFinish = null;
 let myFinish = null;
 let lastPosSent = 0;
@@ -720,6 +766,12 @@ function start(syncTime) {
   controls.lock();
 }
 
+function resume(syncTime) {
+  if (!running || paused) {
+    start(syncTime);
+  }
+}
+
 function restart(seed = Math.floor(Math.random()*1e9)) {
   running = false;
   paused = true;
@@ -789,7 +841,7 @@ function pause() {
 
 function togglePause() {
   if (!running) return;
-  if (paused) start(); else pause();
+  if (paused) resume(); else pause();
 }
 
 function toggleMap() {
@@ -868,7 +920,9 @@ function loop() {
     update(dt);
     if (net && now - lastPosSent > 100) {
       const p = controls.getObject().position;
+      const latency = lastPosSent ? now - lastPosSent : 0;
       net.send('pos', { id: myId, x: p.x, z: p.z, time: t });
+      pushEvent('network', { type: 'posSync', latency });
       lastPosSent = now;
     }
   }
@@ -876,6 +930,7 @@ function loop() {
   playerLight.position.y += 1.5;
   renderer.render(scene, camera);
   if(!postedReady){
+    notifyReadyListeners();
     postedReady=true;
     try { window.parent?.postMessage({ type:'GAME_READY', slug:'maze3d' }, '*'); } catch {}
   }
@@ -944,7 +999,7 @@ function resumeFromShell() {
   startRenderLoop();
   if (!pausedByShell) return;
   pausedByShell = false;
-  if (running && paused) start();
+  if (running && paused) resume();
 }
 
 const onShellPause = () => pauseForShell();
