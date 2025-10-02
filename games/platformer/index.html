@@ -128,10 +128,12 @@
     <div class="btn" id="shareBtn" style="margin-top:8px">Share</div>
   </div></div>
 
+  <button type="button" id="diag-open" class="btn" style="position:fixed;bottom:16px;right:16px;z-index:32">Diagnostics</button>
+
   <script type="module" src="./main.js"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="platformer"></script>
   <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="platformer"></script>
-  <script type="module" src="./diagnostics.js"></script>
+  <script type="module" src="./adapter.js"></script>
 
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
   <script>
