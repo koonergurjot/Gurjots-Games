@@ -1,7 +1,25 @@
 import * as net from './net.js';
+import { pushEvent } from '../common/diag-adapter.js';
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 const GAME_ID = 'platformer';
+const BOOT_SNAPSHOT_INTERVAL = 5000;
+
+const platformerApi = (() => {
+  if (!globalScope) return null;
+  const existing = globalScope.Platformer;
+  if (existing && typeof existing === 'object') {
+    return existing;
+  }
+  const api = {};
+  globalScope.Platformer = api;
+  return api;
+})();
+
+if (platformerApi) {
+  if (platformerApi.onState == null) platformerApi.onState = [];
+  if (platformerApi.onScore == null) platformerApi.onScore = [];
+}
 
 function ensureBootRecord() {
   if (!globalScope) {
@@ -32,6 +50,154 @@ function ensureBootRecord() {
   return root[GAME_ID];
 }
 
+function toCallbackList(value) {
+  if (!value) return [];
+  if (typeof value === 'function') return [value];
+  if (Array.isArray(value)) return value.filter((fn) => typeof fn === 'function');
+  if (typeof Set !== 'undefined' && value instanceof Set) {
+    return Array.from(value).filter((fn) => typeof fn === 'function');
+  }
+  if (typeof value.handleEvent === 'function') {
+    return [value.handleEvent.bind(value)];
+  }
+  return [];
+}
+
+function notifyPlatformerCallbacks(property, payload) {
+  if (!platformerApi) return;
+  const handlers = toCallbackList(platformerApi[property]);
+  for (const handler of handlers) {
+    try {
+      handler(payload);
+    } catch (err) {
+      if (globalScope?.console?.warn) {
+        globalScope.console.warn(`[${GAME_ID}] ${property} callback failed`, err);
+      }
+    }
+  }
+}
+
+function buildPhaseSnapshot(record) {
+  const phases = [];
+  const source = Array.isArray(record.phaseOrder) && record.phaseOrder.length
+    ? record.phaseOrder.slice()
+    : Object.keys(record.phases || {});
+  source.sort((a, b) => {
+    const aAt = record.phases?.[a]?.at ?? 0;
+    const bAt = record.phases?.[b]?.at ?? 0;
+    return aAt - bAt;
+  });
+  for (const name of source.slice(-12)) {
+    const entry = record.phases?.[name];
+    if (!entry) continue;
+    phases.push({
+      name,
+      at: entry.at ?? null,
+      details: Object.keys(entry)
+        .filter((key) => key !== 'at')
+        .reduce((acc, key) => {
+          acc[key] = entry[key];
+          return acc;
+        }, {}),
+    });
+  }
+  return phases;
+}
+
+function buildLogSnapshot(record) {
+  if (!Array.isArray(record.logs) || !record.logs.length) return [];
+  return record.logs.slice(-10).map((entry) => ({
+    level: entry.level || 'info',
+    message: entry.message || '',
+    timestamp: entry.timestamp || Date.now(),
+  }));
+}
+
+function buildBootSnapshot(record) {
+  return {
+    createdAt: record.createdAt ?? null,
+    phases: buildPhaseSnapshot(record),
+    raf: record.raf
+      ? {
+          tickCount: record.raf.tickCount ?? 0,
+          sinceLastTick: record.raf.sinceLastTick ?? null,
+          stalled: !!record.raf.stalled,
+          noTickLogged: !!record.raf.noTickLogged,
+        }
+      : null,
+    canvas: record.canvas
+      ? {
+          width: record.canvas.width ?? null,
+          height: record.canvas.height ?? null,
+          attached: record.canvas.attached ?? null,
+          lastChange: record.canvas.lastChange ?? null,
+        }
+      : null,
+    watchdogs: record.watchdogs
+      ? {
+          active: !!record.watchdogs.active,
+          armedAt: record.watchdogs.armedAt ?? null,
+        }
+      : null,
+    logs: buildLogSnapshot(record),
+  };
+}
+
+function determineBootLevel(record) {
+  const latestLog = Array.isArray(record.logs) && record.logs.length
+    ? record.logs[record.logs.length - 1]
+    : null;
+  if (latestLog?.level === 'error') return 'error';
+  if (record.raf?.stalled) return 'warn';
+  return 'info';
+}
+
+function emitBootSnapshot(message, { level, details, context } = {}) {
+  if (!globalScope) return;
+  const record = ensureBootRecord();
+  const payload = {
+    level: level ?? determineBootLevel(record),
+    message: `[${GAME_ID}] ${message}`,
+    details: {
+      context: context || 'snapshot',
+      snapshot: buildBootSnapshot(record),
+    },
+  };
+  if (details && Object.keys(details).length) {
+    payload.details.details = details;
+  }
+  try {
+    pushEvent('boot', payload);
+  } catch (err) {
+    if (globalScope?.console?.warn) {
+      globalScope.console.warn(`[${GAME_ID}] failed to push boot snapshot`, err);
+    }
+  }
+  return payload;
+}
+
+let bootSnapshotTimer = 0;
+
+function stopBootSnapshots() {
+  if (!globalScope) return;
+  if (bootSnapshotTimer && typeof globalScope.clearInterval === 'function') {
+    globalScope.clearInterval(bootSnapshotTimer);
+  }
+  bootSnapshotTimer = 0;
+}
+
+function startBootSnapshots() {
+  if (!globalScope) return;
+  stopBootSnapshots();
+  emitBootSnapshot('snapshot ready', { context: 'boot' });
+  if (typeof globalScope.setInterval === 'function') {
+    bootSnapshotTimer = globalScope.setInterval(() => {
+      emitBootSnapshot('watchdog update', { context: 'watchdog' });
+    }, BOOT_SNAPSHOT_INTERVAL);
+    globalScope.addEventListener?.('beforeunload', stopBootSnapshots, { once: true });
+  }
+}
+
 function markPhase(name, details) {
   const record = ensureBootRecord();
   const at = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -54,11 +220,6 @@ function logBoot(level, message, details = {}) {
     }
   }
   if (globalScope) {
-    const queue = globalScope.__GG_DIAG_QUEUE || (globalScope.__GG_DIAG_QUEUE = []);
-    queue.push({ game: GAME_ID, category: 'game', level, message, details, timestamp });
-    if (queue.length > 500) {
-      queue.splice(0, queue.length - 500);
-    }
     const console = globalScope.console;
     if (console) {
       if (level === 'error' && typeof console.error === 'function') {
@@ -68,6 +229,7 @@ function logBoot(level, message, details = {}) {
       }
     }
   }
+  emitBootSnapshot(message, { level, details, context: 'log' });
   return entry;
 }
 
@@ -95,6 +257,21 @@ let diagRafWatchTimer = 0;
 let diagCanvasWatchTimer = 0;
 let diagWatchCleanup = null;
 
+if (platformerApi) {
+  if (typeof platformerApi.start !== 'function') {
+    platformerApi.start = () => { if (!bootStarted) boot(); };
+  }
+  if (typeof platformerApi.pause !== 'function') {
+    platformerApi.pause = () => {};
+  }
+  if (typeof platformerApi.resume !== 'function') {
+    platformerApi.resume = () => {};
+  }
+  if (typeof platformerApi.restartGame !== 'function') {
+    platformerApi.restartGame = () => {};
+  }
+}
+
 function stopWatchdogs() {
   if (!globalScope) return;
   if (diagWatchCleanup) {
@@ -105,6 +282,7 @@ function stopWatchdogs() {
   if (record.watchdogs) {
     record.watchdogs.active = false;
   }
+  stopBootSnapshots();
 }
 
 function startWatchdogs(canvas) {
@@ -182,6 +360,8 @@ function startWatchdogs(canvas) {
     diagRafWatchTimer = 0;
     diagCanvasWatchTimer = 0;
   };
+
+  startBootSnapshots();
 }
 
 const GRAVITY = 0.7;
@@ -340,6 +520,12 @@ export function boot() {
     gameOver: false,
   };
 
+  if (platformerApi) {
+    platformerApi.localPlayer = localPlayer;
+    platformerApi.coins = coins;
+    platformerApi.goal = goal;
+  }
+
   let paused = false;
   let pausedByShell = false;
   let gameOver = false;
@@ -362,6 +548,9 @@ export function boot() {
     localPlayer.facing = 1;
     localPlayer.collected = 0;
     coins = createCoins(groundY);
+    if (platformerApi) {
+      platformerApi.coins = coins;
+    }
     gameOver = false;
     paused = false;
     finalTime = null;
@@ -388,6 +577,38 @@ export function boot() {
     return Math.max(0, (end - runStart) / 1000);
   }
 
+  function stateSnapshot(type, extra = {}) {
+    return {
+      type,
+      timestamp: Date.now(),
+      paused,
+      gameOver,
+      collected: localPlayer.collected,
+      totalCoins: coins.length,
+      time: secondsElapsed(),
+      ...extra,
+    };
+  }
+
+  function scoreSnapshot(type, extra = {}) {
+    return {
+      type,
+      timestamp: Date.now(),
+      collected: localPlayer.collected,
+      totalCoins: coins.length,
+      time: secondsElapsed(),
+      ...extra,
+    };
+  }
+
+  function emitState(type, extra = {}) {
+    notifyPlatformerCallbacks('onState', stateSnapshot(type, extra));
+  }
+
+  function emitScore(type, extra = {}) {
+    notifyPlatformerCallbacks('onScore', scoreSnapshot(type, extra));
+  }
+
   function triggerGameOver(title, info) {
     if (gameOver) return;
     gameOver = true;
@@ -395,6 +616,8 @@ export function boot() {
     finalTime = performance.now();
     showOverlay(title, info, { showShare: true });
     if (net.isConnected()) sendState();
+    emitState('gameover', { title, info });
+    emitScore('final', { title, info });
   }
 
   function togglePause(forceState) {
@@ -416,6 +639,34 @@ export function boot() {
       net.sendAssist();
       sendState();
     }
+    emitState('restart', { reason: 'restart' });
+    emitScore('reset', { reason: 'restart' });
+  }
+
+  if (platformerApi) {
+    platformerApi.start = () => {
+      if (!bootStarted) {
+        boot();
+        return;
+      }
+      if (gameOver) {
+        restartGame();
+      } else if (paused) {
+        togglePause(false);
+      }
+    };
+    platformerApi.pause = () => {
+      if (!gameOver) togglePause(true);
+    };
+    platformerApi.resume = () => {
+      if (!gameOver) togglePause(false);
+    };
+    platformerApi.restartGame = () => {
+      restartGame();
+    };
+    platformerApi.localPlayer = localPlayer;
+    platformerApi.coins = coins;
+    platformerApi.goal = goal;
   }
 
   function shareRun() {
@@ -474,6 +725,8 @@ export function boot() {
     if (coin && !coin.collected) {
       coin.collected = true;
       localPlayer.collected = coins.filter(c => c.collected).length;
+      emitScore('collect', { coinId: coin.id, source: 'remote' });
+      emitState('collect', { coinId: coin.id, source: 'remote' });
     }
   }
 
@@ -488,6 +741,8 @@ export function boot() {
     }
     if (changed) {
       localPlayer.collected = coins.filter(c => c.collected).length;
+      emitScore('collect', { source: 'remote-sync', coinIds: ids.slice() });
+      emitState('collect', { source: 'remote-sync', coinIds: ids.slice() });
     }
   }
 
@@ -657,6 +912,8 @@ export function boot() {
       if (!coin.collected && aabb(localPlayer, coin)) {
         coin.collected = true;
         localPlayer.collected += 1;
+        emitScore('collect', { coinId: coin.id });
+        emitState('collect', { coinId: coin.id });
         if (net.isConnected()) {
           net.sendCollect({ id: coin.id });
         }
