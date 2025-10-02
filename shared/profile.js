@@ -2,6 +2,61 @@ import { getAchievements } from './achievements.js';
 
 const PROFILE_KEY = 'gg:profile';
 const PROFILE_LIST_KEY = 'gg:profiles';
+const LEGACY_XP_KEY = 'gg:xp';
+const PROFILE_XP_PREFIX = 'gg:xp';
+
+function normalizeProfileKeyName(name) {
+  if (typeof name !== 'string') return 'guest';
+  const normalized = name.trim().toLowerCase();
+  if (!normalized || normalized === 'default') return 'guest';
+  return normalized;
+}
+
+function resolveProfileName(profileInput) {
+  if (typeof profileInput === 'string') return profileInput;
+  if (profileInput && typeof profileInput === 'object') return profileInput.name;
+  return '';
+}
+
+function getProfileStatsContext(profileInput = getProfile()) {
+  const source = resolveProfileName(profileInput);
+  const normalized = normalizeProfileKeyName(source);
+  const key = `${PROFILE_XP_PREFIX}:${encodeURIComponent(normalized)}`;
+  return { key, normalized };
+}
+
+export function getProfileStatsKey(profileInput = getProfile()) {
+  return getProfileStatsContext(profileInput).key;
+}
+
+export function migrateLegacyStats(profileInput = getProfile()) {
+  const { key, normalized } = getProfileStatsContext(profileInput);
+  if (normalized !== 'guest') return key;
+  try {
+    const legacy = localStorage.getItem(LEGACY_XP_KEY);
+    const current = localStorage.getItem(key);
+    if (legacy && !current) {
+      localStorage.setItem(key, legacy);
+    }
+  } catch {}
+  return key;
+}
+
+export function readProfileStats(profileInput = getProfile()) {
+  const key = migrateLegacyStats(profileInput);
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return { xp: 0, plays: 0 };
+    const parsed = JSON.parse(raw);
+    const xpValue = Number(parsed?.xp);
+    const playsValue = Number(parsed?.plays);
+    const xp = Number.isFinite(xpValue) ? xpValue : 0;
+    const plays = Number.isFinite(playsValue) ? playsValue : 0;
+    return { xp, plays };
+  } catch {
+    return { xp: 0, plays: 0 };
+  }
+}
 
 export const PROFILE_EVENT = 'profile:changed';
 
@@ -119,12 +174,8 @@ export function removeProfile(name) {
 }
 
 export function getAggregatedStats() {
-  let xp = 0, plays = 0;
-  try {
-    const s = JSON.parse(localStorage.getItem('gg:xp') || '{"xp":0,"plays":0}');
-    xp = s.xp || 0;
-    plays = s.plays || 0;
-  } catch {}
+  const profile = getProfile();
+  const { xp, plays } = readProfileStats(profile);
   const achievements = getAchievements().filter(a => a.unlocked);
   return { xp, plays, achievements };
 }
