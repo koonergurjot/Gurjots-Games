@@ -64,7 +64,12 @@ body.bolt-body{
 .bolt-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:840px;margin:14px auto 22px}
 @media (max-width: 860px){.bolt-metrics{grid-template-columns:repeat(2,1fr)}}
 .bolt-metric{display:flex;gap:12px;align-items:center;justify-content:center;background:rgba(0,0,0,.18);border:1px solid var(--bolt-border);border-radius:16px;padding:14px 16px;backdrop-filter:blur(4px)}
-.bolt-ic{font-size:20px}
+.bolt-ic{
+  width:32px;
+  height:32px;
+  display:block;
+  flex-shrink:0;
+}
 .bolt-met-n{font-weight:800;font-size:20px}
 .bolt-met-l{font-size:12px;opacity:.9}
 .bolt-cta{

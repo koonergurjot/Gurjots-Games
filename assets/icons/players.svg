@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="grad-players" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#c084fc"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#grad-players)" d="M9.5 6.5a2.75 2.75 0 1 1-5.5 0 2.75 2.75 0 0 1 5.5 0Zm10 0a2.75 2.75 0 1 1-5.5 0 2.75 2.75 0 0 1 5.5 0ZM2.5 17.5c0-2.761 2.239-5 5-5h1c2.761 0 5 2.239 5 5v1a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-1Zm11 0c0-2.761 2.239-5 5-5h1c2.761 0 5 2.239 5 5v1a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-1Z" opacity="0.55"/>
+  <path fill="url(#grad-players)" d="M12 10.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Zm0 9.75c3.175 0 5.75 2.046 5.75 4.75a.5.5 0 0 1-.5.5h-10.5a.5.5 0 0 1-.5-.5c0-2.704 2.575-4.75 5.75-4.75Z"/>
+</svg>
