@@ -1,4 +1,6 @@
 import { Controls } from '../../src/runtime/controls.js';
+import { pushEvent } from '../common/diag-adapter.js';
+import { registerRunnerAdapter } from './adapter.js';
 
 const VIRTUAL_WIDTH = 960;
 const VIRTUAL_HEIGHT = 320;
@@ -25,6 +27,79 @@ const DEFAULT_LEVEL = {
 
 const SKY_GRADIENT = ['#1e293b', '#0f172a'];
 let postedReady = false;
+
+const globalScope = typeof window !== 'undefined' ? window : null;
+
+const runnerBridge = (() => {
+  if (!globalScope) return null;
+  const existing = globalScope.Runner && typeof globalScope.Runner === 'object'
+    ? globalScope.Runner
+    : {};
+  const onReady = Array.isArray(existing.onReady) ? existing.onReady : [];
+  const onScore = Array.isArray(existing.onScore) ? existing.onScore : [];
+  const bridge = { ...existing, game: existing.game || null, onReady, onScore };
+  globalScope.Runner = bridge;
+  return bridge;
+})();
+
+function notifyRunnerReady(game) {
+  if (!runnerBridge) return;
+  runnerBridge.game = game;
+  if (!Array.isArray(runnerBridge.onReady) || !runnerBridge.onReady.length) return;
+  const callbacks = runnerBridge.onReady.splice(0, runnerBridge.onReady.length);
+  for (const callback of callbacks) {
+    if (typeof callback !== 'function') continue;
+    try {
+      callback(game);
+    } catch (err) {
+      console.warn('[runner] Runner.onReady callback failed', err);
+    }
+  }
+}
+
+function emitRunnerScore(game, score, details = {}) {
+  if (!runnerBridge) return;
+  const payload = {
+    score,
+    bestScore: details.bestScore ?? game?.bestScore ?? 0,
+    distance: details.distance ?? Math.floor(game?.distance ?? 0),
+    difficulty: details.difficulty ?? game?.difficulty ?? 'med',
+    status: details.status
+      || (game?.gameOver ? 'game-over' : game?.paused ? 'paused' : 'running'),
+    timestamp: Date.now(),
+    levelName: details.levelName ?? (game?.levelName || ''),
+  };
+  runnerBridge.lastScoreEvent = payload;
+  if (!Array.isArray(runnerBridge.onScore) || !runnerBridge.onScore.length) return;
+  const listeners = runnerBridge.onScore.slice();
+  for (const listener of listeners) {
+    if (typeof listener !== 'function') continue;
+    try {
+      listener(payload);
+    } catch (err) {
+      console.warn('[runner] Runner.onScore callback failed', err);
+    }
+  }
+}
+
+function emitStateEvent(game, status, extra = {}) {
+  const base = {
+    status,
+    paused: !!game?.paused,
+    gameOver: !!game?.gameOver,
+    score: game?.score ?? 0,
+    bestScore: game?.bestScore ?? 0,
+    distance: Math.floor(game?.distance ?? 0),
+    difficulty: game?.difficulty ?? 'med',
+    levelName: game?.levelName || '',
+  };
+  const level = status === 'paused' ? 'warn' : 'info';
+  pushEvent('state', {
+    level,
+    message: `[runner] ${status}`,
+    details: { ...base, ...extra },
+  });
+}
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -370,6 +445,7 @@ class RunnerGame {
     this.paused = true;
     if (this.hud.pauseBtn) this.hud.pauseBtn.textContent = '▶️';
     this.updateMission();
+    emitStateEvent(this, 'paused');
   }
 
   resume() {
@@ -377,6 +453,7 @@ class RunnerGame {
     this.lastTime = performance.now();
     if (this.hud.pauseBtn) this.hud.pauseBtn.textContent = '⏸️';
     this.updateMission();
+    emitStateEvent(this, 'running');
   }
 
   share() {
@@ -587,6 +664,7 @@ class RunnerGame {
         // Shell observer expects the score attribute to stay in sync.
         this.hud.score.dataset.gameScore = String(newScore);
       }
+      emitRunnerScore(this, newScore);
     }
   }
 
@@ -610,6 +688,11 @@ class RunnerGame {
       this.persistBestScore();
     }
     this.updateMission();
+    emitStateEvent(this, 'game-over');
+    emitRunnerScore(this, this.score, {
+      bestScore: this.bestScore,
+      status: 'game-over',
+    });
   }
 
   handleKeyDown(e) {
@@ -837,10 +920,14 @@ export function boot(context = {}) {
     const diff = context?.meta?.difficulty;
     if (diff && DIFFICULTY_SETTINGS[diff]) instance.setDifficulty(diff);
     instance.start();
+    notifyRunnerReady(instance);
+    registerRunnerAdapter(instance);
     return instance;
   }
   Controls?.init?.();
   instance = new RunnerGame(canvas, context);
+  registerRunnerAdapter(instance);
+  notifyRunnerReady(instance);
   maybeLoadExternalLevel(instance);
   return instance;
 }
