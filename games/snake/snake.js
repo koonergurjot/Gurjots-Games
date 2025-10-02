@@ -216,7 +216,11 @@ if (typeof fitCanvasToParent === 'function') {
   bootLog('canvas:fit-helper-missing');
 }
 const ctx = c.getContext('2d');
-let CELL = c.width / N;
+// The playfield is always rendered as a square grid inside the canvas.
+let CELL = Math.min(c.width, c.height) / N;
+// Track the rendered square's offset for pointer-to-grid conversions.
+let boardOffsetX = 0;
+let boardOffsetY = 0;
 let dir = { x: 1, y: 0 };
 let lastDir = { x: 1, y: 0 };
 let snake = [
@@ -482,14 +486,26 @@ function draw() {
     try { window.parent?.postMessage({ type:'GAME_READY', slug:'snake' }, '*'); } catch {}
   }
   const time = performance.now();
-  CELL = c.width / N;
+  const side = Math.min(c.width, c.height);
+  const offsetX = (c.width - side) / 2;
+  const offsetY = (c.height - side) / 2;
+  // CELL is derived from the square side length so that N cells always fit exactly.
+  CELL = side / N;
+  // Store offsets so any canvas-space interaction can subtract them before using CELL.
+  boardOffsetX = offsetX;
+  boardOffsetY = offsetY;
+
+  ctx.clearRect(0, 0, c.width, c.height);
 
   if (scoreNode) {
     scoreNode.textContent = String(score);
     scoreNode.dataset.gameScore = String(score);
   }
 
-  // background with alternating tints
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+
+  // background with alternating tints inside the square grid
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
       ctx.fillStyle = (x + y) % 2 ? boardColors[0] : boardColors[1];
@@ -530,12 +546,14 @@ function draw() {
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   obstacles.forEach(o => ctx.fillRect(o.x * CELL, o.y * CELL, CELL, CELL));
 
+  ctx.restore();
+
   // HUD
   ctx.fillStyle = '#e6e7ea';
   ctx.font = 'bold 20px Inter, system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText(`Score: ${score} (Best: ${bestScore}) • Lv ${level}`, 16, 28);
+  ctx.fillText(`Score: ${score} (Best: ${bestScore}) • Lv ${level}`, offsetX + 16, offsetY + 28);
 
   if (score > 0 && score % 10 === 0 && obstacles.length < Math.floor(score / 10) * (N / 2)) addObstacleRow();
 
@@ -626,6 +644,8 @@ const snakeApi = {
   get food() { return food; },
   get score() { return score; },
   get turnBuffer() { return turnBuffer; },
+  get cellSize() { return CELL; },
+  get boardOffset() { return { x: boardOffsetX, y: boardOffsetY }; },
   pause: (reason = 'external') => pauseGame(reason),
   resume: (reason = 'external') => resumeGame(reason),
   reset: (reason = 'external') => resetGame(reason),
