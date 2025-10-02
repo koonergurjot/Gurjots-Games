@@ -481,7 +481,11 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
       // Theme
       h("div",{class:"pong-row"},
         h("label",{},"Theme:"),
-        select(["neon","vapor","crt","minimal"], state.theme, v=>{state.theme=v; saveLS(); document.body.className='pong-root '+themeToClass(v);})
+        select(["neon","vapor","crt","minimal"], state.theme, v=>{state.theme=v; saveLS();
+          // Preserve shell/host classes on <body>; only swap the theme-specific class.
+          document.body.classList.remove("theme-neon","theme-vapor","theme-crt","theme-minimal");
+          document.body.classList.add(themeToClass(v));
+        })
       ),
       // Reduce motion
       h("div",{class:"pong-row"},
