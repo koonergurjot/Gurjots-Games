@@ -9,6 +9,7 @@ import { mountCameraPresets } from "./ui/cameraPresets.js";
 import { envDataUrl } from "./textures/env.js";
 import { log, warn } from '../../tools/reporters/console-signature.js';
 import { injectHelpButton } from '../../shared/ui.js';
+import { pushEvent } from "../common/diag-adapter.js";
 
 async function loadCatalog() {
   const urls = ['/games.json', '/public/games.json'];
@@ -83,14 +84,95 @@ let evalBar;
 let lastMoveHelper;
 let autoRotate = localStorage.getItem('chess3d.rotate') === '1';
 let postedReady=false;
+let lastEvaluation = null;
+let evaluationToken = 0;
+let startRenderLoopImpl = () => {};
+let stopRenderLoopImpl = () => {};
+let currentState = 'menu';
+const stateListeners = new Set();
+const globalScope = typeof window !== 'undefined' ? window : undefined;
+
+const now = () => (typeof performance !== 'undefined' && typeof performance.now === 'function'
+  ? performance.now()
+  : Date.now());
+
+function notifyStateChange(nextState, details = {}) {
+  const normalized = typeof nextState === 'string' ? nextState.trim() : '';
+  if (!normalized) return;
+  const previous = currentState;
+  if (normalized === previous && !details?.force) return;
+  currentState = normalized;
+  const payload = Object.assign({ previous, state: normalized }, details || {});
+  if (!stateListeners.size) return;
+  stateListeners.forEach((listener) => {
+    try {
+      listener(normalized, payload);
+    } catch (err) {
+      warn('chess3d', '[Chess3D] state listener failed', err);
+    }
+  });
+}
+
+const chess3dController = {
+  startRenderLoop: () => startRenderLoopImpl(),
+  stopRenderLoop: () => stopRenderLoopImpl(),
+  getAIDepth: () => getDepth(),
+  setAIDepth(value) {
+    return setAIDepth(value);
+  },
+  get camera() {
+    return currentCamera || null;
+  },
+  get lastEvaluation() {
+    return lastEvaluation;
+  },
+  get state() {
+    return currentState;
+  },
+  onStateChange(listener) {
+    if (typeof listener !== 'function') return () => {};
+    stateListeners.add(listener);
+    try {
+      listener(currentState, { previous: null, state: currentState, initial: true });
+    } catch (err) {
+      warn('chess3d', '[Chess3D] state listener failed', err);
+    }
+    return () => stateListeners.delete(listener);
+  },
+  transitionTo(state, details) {
+    notifyStateChange(state, details);
+  },
+};
+
+if (globalScope) {
+  globalScope.Chess3D = chess3dController;
+}
+
+notifyStateChange('menu', { reason: 'boot:init', initial: true, force: true });
 
 function handlePostMove(){
   try{ moveList?.refresh(); moveList?.setIndex(rules.historySAN().length); }catch(_){ }
   try{ if (clockPaused){ clocks?.resume(); clockPaused = false; } clocks?.startTurn(rules.turn()); }catch(_){ }
   try{
-    evaluate(rules.fen(), { depth: getDepth() }).then(({ cp, mate, pv })=>{
+    const fen = rules.fen();
+    const depth = getDepth();
+    const token = ++evaluationToken;
+    evaluate(fen, { depth }).then(({ cp, mate, pv })=>{
+      if (token !== evaluationToken) return;
       const line = mate ? `Mate in ${mate}` : pv || '';
       try{ evalBar?.update(cp, line); }catch(_){ }
+      lastEvaluation = {
+        cp: typeof cp === 'number' ? cp : null,
+        mate: typeof mate === 'number' ? mate : null,
+        pv: pv || '',
+        depth,
+        fen,
+        timestamp: Date.now(),
+      };
+    }).catch((err) => {
+      if (token === evaluationToken) {
+        warn('chess3d', '[Chess3D] evaluation failed', err);
+      }
     });
   }catch(_){ }
   if (rules.inCheckmate()) endGame(`${rules.turn()==='w'?'Black':'White'} wins by checkmate`);
@@ -161,28 +243,67 @@ function getDepth(){
   return Math.max(1, val);
 }
 
+function setAIDepth(value) {
+  const numeric = Number.parseInt(value, 10);
+  if (!Number.isFinite(numeric)) return getDepth();
+  const depth = Math.max(1, numeric);
+  if (difficultyEl) {
+    const current = parseInt(difficultyEl.value || '1', 10);
+    if (current !== depth) {
+      difficultyEl.value = String(depth);
+    }
+    let dispatched = false;
+    if (typeof Event === 'function') {
+      try {
+        difficultyEl.dispatchEvent(new Event('change', { bubbles: true }));
+        dispatched = true;
+      } catch (_) {}
+    }
+    if (!dispatched) {
+      try {
+        const legacy = difficultyEl.ownerDocument?.createEvent?.('Event');
+        if (legacy) {
+          legacy.initEvent('change', true, true);
+          difficultyEl.dispatchEvent(legacy);
+          dispatched = true;
+        }
+      } catch (_) {}
+    }
+    if (!dispatched) {
+      try { difficultyEl.onchange?.({ type: 'change' }); } catch (_) {}
+    }
+  }
+  return depth;
+}
+
 async function maybeAIMove(){
   const turn = rules.turn();
   if (turn !== 'b') return; // AI plays black
   const token = ++searchToken;
   thinkingEl.hidden = false;
   const depth = getDepth();
-  const { uci } = await bestMove(rules.fen(), depth);
-  thinkingEl.hidden = true;
-  if (token !== searchToken || !uci) return;
-  const from = uci.slice(0,2);
-  const to = uci.slice(2,4);
-  let promotion;
-  if (uci.length > 4) {
-    promotion = uci.slice(4).toLowerCase();
-  }
-  const res = rules.move({ from, to, promotion });
-  if (res?.ok) {
-    const uciMove = from + to + (promotion ? '=' + promotion : '');
-    await movePieceByUci(uciMove);
-    updateStatus();
-    try{ lastMoveHelper?.show(from,to); }catch(_){ }
-    handlePostMove();
+  const startTime = now();
+  try {
+    const { uci } = await bestMove(rules.fen(), depth);
+    if (token !== searchToken || !uci) return;
+    const from = uci.slice(0,2);
+    const to = uci.slice(2,4);
+    let promotion;
+    if (uci.length > 4) {
+      promotion = uci.slice(4).toLowerCase();
+    }
+    const res = rules.move({ from, to, promotion });
+    if (res?.ok) {
+      const uciMove = from + to + (promotion ? '=' + promotion : '');
+      await movePieceByUci(uciMove);
+      updateStatus();
+      try{ lastMoveHelper?.show(from,to); }catch(_){ }
+      handlePostMove();
+    }
+  } finally {
+    thinkingEl.hidden = true;
+    const duration = Math.max(0, now() - startTime);
+    pushEvent('probe', { type: 'ai', depth, duration: Math.round(duration) });
   }
 }
 
@@ -214,6 +335,9 @@ mountHUD({
     cancel();
     searchToken++;
     thinkingEl.hidden = true;
+    lastEvaluation = null;
+    evaluationToken++;
+    notifyStateChange('play', { reason: 'new-game' });
     maybeAIMove();
   },
   onFlip: flipCamera,
@@ -368,6 +492,7 @@ async function boot(){
   });
   updateStatus();
   maybeAIMove();
+  notifyStateChange('play', { reason: 'boot:ready' });
 
   const renderFrame = () => {
     if (renderLoopPaused) {
@@ -382,23 +507,23 @@ async function boot(){
     renderer.render(scene, camera);
     renderLoopId = requestAnimationFrame(renderFrame);
   };
-  const startRenderLoop = () => {
+  startRenderLoopImpl = () => {
     if (renderLoopId) return;
     renderLoopPaused = false;
     renderLoopId = requestAnimationFrame(renderFrame);
   };
-  const stopRenderLoop = () => {
+  stopRenderLoopImpl = () => {
     renderLoopPaused = true;
     if (renderLoopId) {
       cancelAnimationFrame(renderLoopId);
       renderLoopId = 0;
     }
   };
-  startRenderLoop();
+  startRenderLoopImpl();
 
   handleShellPause = () => {
     const wasRunning = !!renderLoopId && !renderLoopPaused;
-    stopRenderLoop();
+    stopRenderLoopImpl();
     shellLoopAutoPaused = wasRunning;
     if (!gameOver && clocks && typeof clocks.pause === 'function') {
       try {
@@ -419,16 +544,22 @@ async function boot(){
     }
     if (shellLoopAutoPaused && !renderLoopId) {
       shellLoopAutoPaused = false;
-      startRenderLoop();
+      startRenderLoopImpl();
     } else if (!renderLoopId && !renderLoopPaused) {
-      startRenderLoop();
+      startRenderLoopImpl();
     }
   };
 
   try{ window.__Chess3DBooted = true; }catch(_){}
 }
 
-boot();
+const bootPromise = boot();
+
+bootPromise
+  .then(() => import('./adapter.js'))
+  .catch((error) => {
+    warn('chess3d', '[Chess3D] diagnostics adapter failed', error);
+  });
 
 let gameOver = false;
 let clockPaused = false;
@@ -442,6 +573,7 @@ function endGame(text){
   searchToken++;
   thinkingEl.hidden = true;
   if (text) statusEl.textContent = text;
+  notifyStateChange('gameover', { reason: 'game-over', message: text || '' });
 }
 
 const origMaybeAIMove = maybeAIMove;
@@ -459,6 +591,8 @@ async function jumpToPly(ply){
   cancel();
   searchToken++;
   thinkingEl.hidden = true;
+  evaluationToken++;
+  lastEvaluation = null;
   const mod = await import('../chess/engine/chess.min.js');
   const ChessCtor = mod.default || mod.Chess || mod;
   const temp = new ChessCtor();
