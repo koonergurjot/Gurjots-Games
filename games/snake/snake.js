@@ -132,6 +132,7 @@ function resolveHudContainer() {
 }
 
 const hud = resolveHudContainer();
+const scoreNode = document.getElementById('score');
 hud.innerHTML = `Arrows/WASD or swipe • R restart • P pause
   <label><input type="checkbox" id="dailyToggle"/> Daily</label>
   <ol id="dailyScores" style="margin:4px 0 0 0;padding-left:20px;font-size:14px"></ol>
@@ -419,13 +420,18 @@ function step() {
   lastTickTime = performance.now();
 }
 
-function render() {
+function draw() {
   if(!postedReady){
     postedReady=true;
     try { window.parent?.postMessage({ type:'GAME_READY', slug:'snake' }, '*'); } catch {}
   }
   const time = performance.now();
   CELL = c.width / N;
+
+  if (scoreNode) {
+    scoreNode.textContent = String(score);
+    scoreNode.dataset.gameScore = String(score);
+  }
 
   // background with alternating tints
   for (let y = 0; y < N; y++) {
@@ -570,6 +576,6 @@ engine.update = dt => {
     step();
   }
 };
-engine.render = render;
+engine.render = draw;
 engine.start();
 if (typeof reportReady === 'function') reportReady('snake');
