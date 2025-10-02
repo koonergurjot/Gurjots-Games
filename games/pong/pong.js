@@ -27,7 +27,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
   const state = {
     ...DFLT, ...loadLS(),
     running:false, t0:0, last:0, dt:0, acc:0,
-    canvas:null, ctx:null, ratio:1, paused:false, over:false,
+    canvas:null, ctx:null, ratio:1, scaleX:1, scaleY:1, paused:false, over:false,
     score:{p1:0,p2:0}, ball:null, balls:[], p1:null, p2:null, hud:null, loopId:0,
     particles:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
     trail:[], trailMax:20, touches:{}, replay:[], replayMax:5*60, recording:true,
@@ -204,8 +204,15 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     }
   }
 
+  function pointerToGame(e){
+    const rect = state.canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (W / rect.width);
+    const y = (e.clientY - rect.top) * (H / rect.height);
+    return { x, y };
+  }
+
   function onPointer(e){
-    const r = state.canvas.getBoundingClientRect(); const y = (e.clientY - r.top) * state.ratio;
+    const { y } = pointerToGame(e);
     state.p1.y = clamp(y - state.p1.h/2, 0, H - state.p1.h);
   }
 
@@ -778,8 +785,12 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     const dpr = window.devicePixelRatio || 1;
     const targetW = Math.round(cssW * dpr), targetH = Math.round(cssH * dpr);
     if(el.width!==targetW || el.height!==targetH){ el.width=targetW; el.height=targetH; }
-    state.ctx.setTransform(targetW/W, 0, 0, targetH/H, 0, 0);
-    state.ratio = (targetW/W);
+    const scaleX = targetW / W;
+    const scaleY = targetH / H;
+    state.ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+    state.scaleX = scaleX;
+    state.scaleY = scaleY;
+    state.ratio = scaleY;
   }
 
   // ---------- Events ----------
