@@ -851,12 +851,31 @@
     if (global.GGDiagReportStore && typeof global.GGDiagReportStore.createReportStore === "function") {
       return global.GGDiagReportStore;
     }
-    const module = createReportStoreModule();
-    global.GGDiagReportStore = module;
-    return module;
+    if (typeof module === "object" && module && typeof module.require === "function") {
+      try {
+        const required = module.require("./diagnostics/report-store.js");
+        if (required && typeof required.createReportStore === "function") {
+          global.GGDiagReportStore = required;
+          return required;
+        }
+      } catch (_) {}
+    }
+    if (typeof require === "function") {
+      try {
+        const required = require("./diagnostics/report-store.js");
+        if (required && typeof required.createReportStore === "function") {
+          global.GGDiagReportStore = required;
+          return required;
+        }
+      } catch (_) {}
+    }
+    const fallback = createFallbackReportStoreModule();
+    global.GGDiagReportStore = fallback;
+    console.warn("[gg-diag] diagnostics report store module missing; using fallback store");
+    return fallback;
   }
 
-  function createReportStoreModule(){
+  function createFallbackReportStoreModule(){
     const PROBE_CATEGORIES = new Set(["performance", "service-worker", "heartbeat", "metrics", "telemetry", "probe", "resource", "feature", "capability"]);
     const DEFAULTS = {
       maxEntries: 500,
@@ -899,7 +918,6 @@
       };
 
       const state = {
-        all: [],
         console: [],
         network: [],
         probes: [],
@@ -910,7 +928,6 @@
       function add(entry){
         if (!entry) return snapshot();
         const normalized = normalizeEntry(entry);
-        pushLimited(state.all, normalized, config.maxEntries);
         pushLimited(state.console, normalized, config.maxConsole);
         categorize(normalized);
         updateSummary(normalized);
@@ -1048,17 +1065,22 @@
         };
       }
 
-      function normalizeEntry(entry){
-        const timestamp = typeof entry.timestamp === "number" ? entry.timestamp : Date.now();
-        const level = String(entry.level || "info").toLowerCase();
-        const category = String(entry.category || "general");
-        return {
-          timestamp,
-          level,
-          category,
-          message: entry.message != null ? String(entry.message) : "",
-          details: entry.details ?? null,
-        };
+      function normalizeEntry(value){
+        if (!value) {
+          return {
+            timestamp: Date.now(),
+            level: "info",
+            category: "general",
+            message: "",
+            details: null,
+          };
+        }
+        const timestamp = typeof value.timestamp === "number" ? value.timestamp : Date.now();
+        const level = typeof value.level === "string" ? value.level.toLowerCase() : "info";
+        const category = typeof value.category === "string" ? value.category : "general";
+        const message = value.message != null ? String(value.message) : "";
+        const details = value.details ?? null;
+        return { timestamp, level, category, message, details };
       }
 
       function summarizeEntry(entry, includeDetails){
@@ -1082,8 +1104,8 @@
       }
 
       function deriveSummaryStatus(value){
-        if (value.errors > 0) return "fail";
-        if (value.warns > 0) return "warn";
+        if ((value.errors || 0) > 0) return "fail";
+        if ((value.warns || 0) > 0) return "warn";
         return "pass";
       }
 
