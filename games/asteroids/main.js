@@ -35,6 +35,71 @@ const STORAGE_KEYS = {
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 
+let activeGame = null;
+let bootInProgress = false;
+
+function getActiveGame() {
+  return activeGame;
+}
+
+function forwardGameCall(method) {
+  return (...args) => {
+    const game = getActiveGame();
+    if (!game || typeof game[method] !== 'function') return undefined;
+    try {
+      return game[method](...args);
+    } catch (error) {
+      pushEvent('boot', {
+        level: 'warn',
+        message: `[${SLUG}] public api ${method} failed`,
+        details: sanitizeForLog(error),
+      });
+      return undefined;
+    }
+  };
+}
+
+function readGameState(method, fallback = null) {
+  const game = getActiveGame();
+  if (!game || typeof game[method] !== 'function') return fallback;
+  try {
+    return game[method]();
+  } catch (error) {
+    pushEvent('diagnostics', {
+      level: 'warn',
+      message: `[${SLUG}] public api ${method} snapshot failed`,
+      details: sanitizeForLog(error),
+    });
+    return fallback;
+  }
+}
+
+function createAsteroidsPublicApi() {
+  return {
+    start: forwardGameCall('start'),
+    pause: forwardGameCall('pause'),
+    resume: forwardGameCall('resume'),
+    restart: forwardGameCall('restart'),
+    getScore: () => readGameState('getScore', null),
+    getBestScore: () => readGameState('getBestScore', null),
+    getShipState: () => readGameState('getShipState', null),
+    getRockState: () => readGameState('getRockState', []),
+    isPaused: () => readGameState('isPaused', null),
+    isGameOver: () => readGameState('isGameOver', null),
+    getWave: () => readGameState('getWave', null),
+  };
+}
+
+const asteroidsPublicApi = createAsteroidsPublicApi();
+Object.defineProperty(asteroidsPublicApi, '__instance', {
+  get: getActiveGame,
+  enumerable: false,
+});
+
+if (globalScope) {
+  globalScope.Asteroids = asteroidsPublicApi;
+}
+
 function sanitizeForLog(value, depth = 0, seen = new WeakSet()) {
   if (value === null || value === undefined) return value;
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
@@ -263,9 +328,6 @@ if (typeof document !== 'undefined') {
   }
 }
 
-let activeGame = null;
-let bootInProgress = false;
-
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -413,23 +475,6 @@ class AsteroidsGame {
     emitEvent({ type: 'play', slug: SLUG });
     this.paused = true;
     this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Press start to begin!', false);
-    if (globalScope) {
-      const api = {
-        start: this.start.bind(this),
-        pause: this.pause.bind(this),
-        resume: this.resume.bind(this),
-        restart: this.restart.bind(this),
-        getScore: this.getScore.bind(this),
-        getBestScore: this.getBestScore.bind(this),
-        getShipState: () => this.getShipState(),
-        getRockState: () => this.getRockState(),
-        isPaused: () => this.isPaused(),
-        isGameOver: () => this.isGameOver(),
-        getWave: () => this.getWave(),
-      };
-      Object.defineProperty(api, '__instance', { value: this, enumerable: false });
-      globalScope.Asteroids = api;
-    }
     recordMilestone('game:constructor:ready');
     captureCanvasSnapshot('constructor:after-init', canvas, {
       canvasWidth: canvas.width,
@@ -1341,9 +1386,6 @@ class AsteroidsGame {
     recordMilestone('game:destroyed');
     if (activeGame === this) {
       activeGame = null;
-    }
-    if (globalScope?.Asteroids?.__instance === this) {
-      globalScope.Asteroids = null;
     }
     this.controls?.dispose?.();
     window.removeEventListener('resize', this.resize);
