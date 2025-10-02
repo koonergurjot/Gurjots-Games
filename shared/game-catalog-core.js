@@ -17,6 +17,22 @@ function sanitizeOptionalString(value) {
   return str ? str : null;
 }
 
+function sanitizeDateLike(value) {
+  if (value == null) return null;
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isNaN(time) ? null : value.toISOString();
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null;
+    const ms = Math.abs(value) >= 1e12 ? value : Math.abs(value) >= 1e9 ? value * 1000 : Math.abs(value) >= 1e6 ? value * 1000 : null;
+    if (ms == null) return null;
+    const date = new Date(ms);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+  return sanitizeOptionalString(value);
+}
+
 function uniqueTags(tags) {
   if (!Array.isArray(tags)) return [];
   const seen = new Set();
@@ -73,8 +89,10 @@ export function normalizeGameRecord(raw) {
   const description = sanitizeString(raw.description || raw.desc || raw.short);
   const tags = uniqueTags(raw.tags);
   const difficulty = sanitizeOptionalString(raw.difficulty);
-  const released = sanitizeOptionalString(raw.released);
-  const addedAt = sanitizeOptionalString(raw.addedAt);
+  const releasedSource = raw.released ?? raw.releaseDate ?? raw.release_date ?? null;
+  const released = sanitizeDateLike(releasedSource);
+  const addedAtSource = raw.addedAt ?? raw.added_at ?? raw.dateAdded ?? raw.date_added ?? raw.createdAt ?? raw.created_at ?? raw.date ?? releasedSource ?? null;
+  const addedAt = sanitizeDateLike(addedAtSource);
 
   const { basePath, playPath } = derivePaths(raw);
 

@@ -1,6 +1,16 @@
 /* @vitest-environment jsdom */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { injectBackButton, recordLastPlayed } from '../shared/ui.js';
+
+const mockCatalogGames = [];
+
+vi.mock('../shared/game-catalog.js', () => ({
+  loadGameCatalog: async () => ({ games: mockCatalogGames })
+}));
+
+vi.mock('../tools/reporters/console-signature.js', () => ({
+  warn: vi.fn()
+}));
 
 describe('injectBackButton', () => {
   beforeEach(() => {
@@ -70,5 +80,61 @@ describe('recordLastPlayed', () => {
     recordLastPlayed('x');
     const result = JSON.parse(localStorage.getItem('lastPlayed'));
     expect(result).toEqual(['x']);
+  });
+});
+
+describe('landing newest sort', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockCatalogGames.length = 0;
+    document.body.innerHTML = `
+      <div id="app-root">
+        <header>
+          <span id="year"></span>
+          <select id="theme"><option value="default">Default</option></select>
+          <input id="search" />
+          <select id="sort">
+            <option value="az">A-Z</option>
+            <option value="za">Z-A</option>
+            <option value="new">Newest</option>
+          </select>
+        </header>
+        <div id="tagChips"></div>
+        <div id="statusWrap"><div id="status"></div></div>
+        <div id="gamesGrid"></div>
+      </div>
+    `;
+    global.innerWidth = 1280;
+    global.innerHeight = 720;
+    Object.defineProperty(window, 'devicePixelRatio', { value: 1, configurable: true });
+    window.requestAnimationFrame = vi.fn();
+    HTMLCanvasElement.prototype.getContext = () => ({
+      clearRect: vi.fn(),
+      fillStyle: '',
+      beginPath: vi.fn(),
+      arc: vi.fn(),
+      fill: vi.fn()
+    });
+  });
+
+  it('reorders games by the newest derived timestamp', async () => {
+    mockCatalogGames.push(
+      { id: 'old', title: 'Old Game', description: 'Old', tags: [], addedAt: '2023-01-01' },
+      { id: 'fresh', title: 'Fresh Game', description: 'Fresh', tags: [], released: '2024-05-20' }
+    );
+
+    await import('../js/app.js');
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const sort = document.getElementById('sort');
+    sort.value = 'new';
+    sort.dispatchEvent(new Event('change'));
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const titles = Array.from(document.querySelectorAll('#gamesGrid article h3')).map(el => el.textContent);
+    expect(titles[0]).toBe('Fresh Game');
   });
 });
