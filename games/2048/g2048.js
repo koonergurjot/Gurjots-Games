@@ -35,14 +35,14 @@ if(sizeSel){
     if(FEATURES.boardSizeToggle && newN !== 4 && newN !== 5) return;
     N = newN;
     localStorage.setItem(LS_SIZE,N);
-    reset();
+    reset(false,'size-change');
   });
 }
 let hintDepth=parseInt(diffSel?.value||'1');
 diffSel?.addEventListener('change',()=>{
   hintDepth=parseInt(diffSel.value)||1;
 });
-const hud=HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset()});
+const hud=HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset(false,'hud-restart')});
 let postedReady=false;
 
 // UI update functions
@@ -160,6 +160,46 @@ if(isNaN(best)) best=0;
 let mergeStreak = 1;      // Current streak multiplier (x1, x2, x3...)
 let lastMoveHadMerge = false;
 
+const DIAG_MAX_READY_EVENTS = 4;
+const DIAG_MAX_SCORE_EVENTS = 12;
+const diagReadyEvents = [];
+const diagScoreEvents = [];
+
+function snapshotForDiagnostics(reason, extra = {}) {
+  const board = Array.isArray(grid) ? copyGrid(grid) : null;
+  return {
+    type: extra?.type || null,
+    reason: reason || null,
+    timestamp: Date.now(),
+    score,
+    best,
+    undoLeft,
+    size: typeof N === 'number' ? N : null,
+    over,
+    won,
+    grid: board,
+    ...extra,
+  };
+}
+
+function recordReadyEvent(reason, extra = {}) {
+  const event = snapshotForDiagnostics(reason, { ...extra, type: 'ready' });
+  diagReadyEvents.push(event);
+  if (diagReadyEvents.length > DIAG_MAX_READY_EVENTS) {
+    diagReadyEvents.splice(0, diagReadyEvents.length - DIAG_MAX_READY_EVENTS);
+  }
+  return event;
+}
+
+function recordScoreEvent(reason, extra = {}) {
+  const event = snapshotForDiagnostics(reason, { ...extra, type: 'score' });
+  diagScoreEvents.push(event);
+  if (diagScoreEvents.length > DIAG_MAX_SCORE_EVENTS) {
+    diagScoreEvents.splice(0, diagScoreEvents.length - DIAG_MAX_SCORE_EVENTS);
+  }
+  return event;
+}
+
 // Animation state
 let anim=null;
 let newTileAnim = null;   // Animation for new tiles scaling in
@@ -260,7 +300,8 @@ function applyTheme(){
   updateUI();
 }
 
-function reset(keepUndo=false){
+function reset(keepUndo=false, reasonOverride){
+  const previousScore = score || 0;
   updateCanvas();
   grid=Array.from({length:N},()=>Array(N).fill(0));
   score=0; over=false; won=false; hintDir=null; anim=null;
@@ -280,6 +321,12 @@ function reset(keepUndo=false){
   updateUI();
   net?.send('move',{grid,score});
   hideGameOverModal();
+
+  const reason = (typeof reasonOverride === 'string' && reasonOverride)
+    ? reasonOverride
+    : (keepUndo ? 'init' : 'reset');
+  recordScoreEvent(reason, { delta: score - previousScore });
+  recordReadyEvent(reason);
 }
 
 function addTile(){
@@ -303,6 +350,7 @@ function undoMove(){
   if(undoLeft>0){
     const res=undoState(history);
     if(res){
+      const previousScore = score;
       ({grid,score,history}=res);
       undoLeft--; localStorage.setItem(LS_UNDO,undoLeft); updateUI();
       over=false; won=false; hintDir=null;
@@ -314,15 +362,17 @@ function undoMove(){
       // Reset merge-streak system on undo
       mergeStreak = 1;
       lastMoveHadMerge = false;
-      
+
       hideGameOverModal();
       net?.send('move',{grid,score});
+      recordScoreEvent('undo', { delta: score - previousScore });
     }
   }
 }
 
 function move(dir){
   if(over||won||anim) return;
+  const previousScore = score;
   // Limit history size for memory management
   history.push({grid: grid.map(row => [...row]), score});
   if (history.length > MAX_HISTORY_SIZE) {
@@ -357,8 +407,9 @@ function move(dir){
   } else {
     score += gained;
   }
-  
+
   if(score>best){ best=score; localStorage.setItem(LS_BEST,best); }
+  recordScoreEvent('move', { delta: score - previousScore, gained, streak: mergeStreak });
   updateUI();
   if(gained>=128) net?.send('garbage',{count:1});
   const base=copyGrid(grid);
@@ -749,6 +800,22 @@ gameLoop.update=dt=>{
 };
 gameLoop.render=()=>{ draw(anim?{base:anim.base,tiles:anim.tiles,p:Math.min(anim.p,1)}:null); };
 
+const diagHandle = window.__g2048 = window.__g2048 || {};
+diagHandle.gameLoop = gameLoop;
+diagHandle.reset = reset;
+Object.defineProperty(diagHandle, 'score', {
+  configurable: true,
+  enumerable: true,
+  get(){ return score; }
+});
+Object.defineProperty(diagHandle, 'grid', {
+  configurable: true,
+  enumerable: true,
+  get(){ return Array.isArray(grid) ? copyGrid(grid) : null; }
+});
+diagHandle.readyEvents = diagReadyEvents;
+diagHandle.scoreEvents = diagScoreEvents;
+
 document.getElementById('hintBtn')?.addEventListener('click',()=>{ getHint(); });
 document.getElementById('themeToggle')?.addEventListener('click',()=>{
   currentTheme=currentTheme==='dark'?'light':'dark';
@@ -762,7 +829,7 @@ document.getElementById('undoBtn')?.addEventListener('click',()=>{
   if(undoLeft > 0) undoMove();
 });
 
-overlayRestartBtn?.addEventListener('click',()=>{ hideGameOverModal(); reset(); });
+overlayRestartBtn?.addEventListener('click',()=>{ hideGameOverModal(); reset(false,'overlay-restart'); });
 overlayBackBtn?.addEventListener('click',()=>{
   hideGameOverModal();
   if(window.history.length>1) window.history.back();
@@ -774,7 +841,7 @@ net?.on('garbage',msg=>injectGarbage(msg.count||1));
 net?.on('start',()=>{
   document.getElementById('lobby')?.style.setProperty('display','none');
   document.getElementById('game')?.style.removeProperty('display');
-  reset(true);
+  reset(true,'match-start');
   net?.send('move',{grid,score});
 });
 
@@ -901,3 +968,5 @@ window.DIAG?.ready?.();
 
 // Initial accessibility announcement
 announceToScreenReader('2048 game loaded. Press Tab to navigate controls or focus the game board to start playing.');
+
+import('./diag-adapter.js');
