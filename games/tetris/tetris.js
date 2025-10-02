@@ -415,8 +415,11 @@ function merge(p){
 
 function updateGhost(){
   ghost={m:cur.m.map(r=>r.slice()),x:cur.x,y:cur.y,o:cur.o,t:cur.t};
-  while(!collide(ghost)) ghost.y++;
-  ghost.y--;
+  while(true){
+    const nextPos={...ghost,y:ghost.y+1};
+    if(collide(nextPos)) break;
+    ghost.y=nextPos.y;
+  }
 }
 
 function updateBest(){
@@ -602,8 +605,12 @@ function drop(manual=false){
 }
 function hardDrop(){
   let dist=0;
-  while(!collide(cur)){ cur.y++; dist++; }
-  cur.y--;
+  while(true){
+    const nextPos={...cur,y:cur.y+1};
+    if(collide(nextPos)) break; // loop avoids counting the collision step
+    cur.y=nextPos.y;
+    dist++;
+  }
   lockPiece(0,dist);
   cur=spawn();
   canHold=true;
