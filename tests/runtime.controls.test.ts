@@ -23,3 +23,31 @@ test('dispose removes listeners', () => {
   addSpy.mockRestore();
   removeSpy.mockRestore();
 });
+
+test('touch buttons toggle each code in array mappings', () => {
+  const c = new Controls({ map: { a: ['KeyZ', 'KeyX'] } });
+  const button = Array.from(c.element!.querySelectorAll('button')).find(b => b.textContent === 'A') as HTMLButtonElement;
+  const state = (c as any).state as Map<string, boolean>;
+  button.dispatchEvent(new Event('touchstart', { cancelable: true }));
+  expect(state.get('KeyZ')).toBe(true);
+  expect(state.get('KeyX')).toBe(true);
+  button.dispatchEvent(new Event('touchend'));
+  expect(state.get('KeyZ')).toBe(false);
+  expect(state.get('KeyX')).toBe(false);
+  c.dispose();
+});
+
+test('touch buttons respect mapping changes while pressed', () => {
+  const c = new Controls({ map: { a: 'KeyZ' } });
+  const button = Array.from(c.element!.querySelectorAll('button')).find(b => b.textContent === 'A') as HTMLButtonElement;
+  const state = (c as any).state as Map<string, boolean>;
+  button.dispatchEvent(new Event('touchstart', { cancelable: true }));
+  expect(state.get('KeyZ')).toBe(true);
+  c.setMapping('a', 'KeyX');
+  expect(state.get('KeyZ')).toBe(false);
+  expect(state.get('KeyX')).toBe(true);
+  button.dispatchEvent(new Event('touchend'));
+  expect(state.get('KeyZ')).toBe(false);
+  expect(state.get('KeyX')).toBe(false);
+  c.dispose();
+});
