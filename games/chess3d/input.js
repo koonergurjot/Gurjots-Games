@@ -8,6 +8,9 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
   let selectedSquare = null;
   const markers = [];
   let hoverMesh = null;
+  let rendererRef = renderer;
+  let controlsRef = controls;
+  const canvas = rendererRef?.domElement || null;
 
   function clearMarkers() {
     while (markers.length) {
@@ -49,7 +52,8 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
   }
 
   function onPointer(e) {
-    const rect = renderer.domElement.getBoundingClientRect();
+    if (!rendererRef?.domElement) return;
+    const rect = rendererRef.domElement.getBoundingClientRect();
     mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
     raycaster.setFromCamera(mouse, camera);
@@ -73,15 +77,12 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
     }
   }
 
-  renderer.domElement.addEventListener('pointerdown', () => {
-    if (controls) controls.enabled = false;
-  });
-  renderer.domElement.addEventListener('pointerup', (e) => {
-    if (controls) controls.enabled = true;
-    onPointer(e);
-  });
-  renderer.domElement.addEventListener('pointermove', (e) => {
-    const rect = renderer.domElement.getBoundingClientRect();
+  const onPointerDown = () => {
+    if (controlsRef) controlsRef.enabled = false;
+  };
+  const onPointerMove = (e) => {
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
     mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
     raycaster.setFromCamera(mouse, camera);
@@ -98,7 +99,36 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
     }else if (hoverMesh){
       scene.remove(hoverMesh); hoverMesh = null;
     }
-  });
+  };
+
+  if (canvas) {
+    canvas.addEventListener('pointerdown', onPointerDown);
+    canvas.addEventListener('pointermove', onPointerMove);
+  }
+
+  const onWindowPointerEnd = (e) => {
+    if (!rendererRef?.domElement) return;
+    if (controlsRef) controlsRef.enabled = true;
+    onPointer(e);
+  };
+  const onWindowPointerCancel = () => {
+    if (!rendererRef?.domElement) return;
+    if (controlsRef) controlsRef.enabled = true;
+  };
+  // Use window-level listeners so we still receive pointerup/cancel events if the pointer leaves the canvas.
+  window.addEventListener('pointerup', onWindowPointerEnd);
+  window.addEventListener('pointercancel', onWindowPointerCancel);
+
+  return () => {
+    if (canvas) {
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+    }
+    window.removeEventListener('pointerup', onWindowPointerEnd);
+    window.removeEventListener('pointercancel', onWindowPointerCancel);
+    rendererRef = null;
+    controlsRef = null;
+  };
 }
 
 // Patch in promotion handling. When a pawn reaches the last rank we
