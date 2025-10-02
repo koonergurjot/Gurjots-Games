@@ -561,7 +561,8 @@ function handleFindMatch(){
   ChessNet.onMove(handleIncomingMove);
   ChessNet.onStatus(handleNetworkStatus);
   ChessNet.onPlayers(handlePlayers);
-  ChessNet.connect('wss://example.com/chess', rating);
+  const wsUrl=new URL('/ws/chess', location.origin); // Intentionally follows hosting domain/protocol.
+  ChessNet.connect(wsUrl.href, rating);
 }
 if(findMatchBtn) findMatchBtn.addEventListener('click', handleFindMatch);
 
