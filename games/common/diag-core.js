@@ -51,7 +51,27 @@
     lastFocus: null,
     styleInjected: false,
     cssHref: null,
+    adapterModule: null,
+    gameSlug: null,
+    gameAdapter: null,
+    adapterReadyFired: false,
+    lastSummarySnapshot: null,
+    lastErrorSignature: null,
+    lastScoreSerialized: null,
+    lastScoreCheck: 0,
   };
+
+  state.adapterModule = ensureDiagnosticsAdapterModule();
+  state.gameSlug = detectGameSlug();
+  if (state.gameSlug && state.adapterModule && typeof state.adapterModule.getGameDiagnostics === "function") {
+    assignGameAdapter(state.adapterModule.getGameDiagnostics(state.gameSlug));
+  }
+  if (state.adapterModule && typeof state.adapterModule.subscribe === "function") {
+    state.adapterModule.subscribe((slug, record) => {
+      if (!slug || slug !== state.gameSlug) return;
+      assignGameAdapter(record);
+    });
+  }
 
   const LEVEL_ORDER = ["debug", "info", "warn", "error"];
   const LEGACY_SELECTORS = [
@@ -186,6 +206,113 @@
       announce("Unable to export diagnostics");
       console.warn("__GG_DIAG export failed", err);
     }
+  }
+
+  function assignGameAdapter(record){
+    if (record && typeof record === "object") {
+      state.gameAdapter = {
+        slug: typeof record.slug === "string" ? record.slug : state.gameSlug,
+        hooks: record.hooks && typeof record.hooks === "object" ? record.hooks : {},
+        api: record.api && typeof record.api === "object" ? record.api : {},
+      };
+    } else {
+      state.gameAdapter = null;
+    }
+    state.adapterReadyFired = false;
+    if (state.summaryRefs?.root) {
+      maybeInvokeAdapterReady(state.summaryRefs.root);
+      if (state.lastSummarySnapshot) {
+        notifyAdapterSummaryUpdate(state.lastSummarySnapshot, null);
+      }
+    }
+  }
+
+  function detectGameSlug(){
+    try {
+      const doc = typeof document !== "undefined" ? document : null;
+      if (!doc) return "";
+      const bodySlug = doc.body?.dataset?.gameSlug;
+      if (typeof bodySlug === "string" && bodySlug.trim()) {
+        return bodySlug.trim();
+      }
+      const shell = doc.querySelector?.('[data-shell-diag][data-slug]');
+      if (shell && typeof shell.dataset?.slug === "string" && shell.dataset.slug.trim()) {
+        return shell.dataset.slug.trim();
+      }
+      return "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function ensureDiagnosticsAdapterModule(){
+    if (global.GGDiagAdapters && typeof global.GGDiagAdapters.registerGameDiagnostics === "function") {
+      return global.GGDiagAdapters;
+    }
+    if (typeof module === "object" && module && typeof module.require === "function") {
+      try {
+        const required = module.require("./diagnostics/adapter.js");
+        if (required && typeof required.registerGameDiagnostics === "function") {
+          global.GGDiagAdapters = required;
+          return required;
+        }
+      } catch (_) {}
+    }
+    if (typeof require === "function") {
+      try {
+        const required = require("./diagnostics/adapter.js");
+        if (required && typeof required.registerGameDiagnostics === "function") {
+          global.GGDiagAdapters = required;
+          return required;
+        }
+      } catch (_) {}
+    }
+    const fallback = createFallbackDiagnosticsAdapter();
+    global.GGDiagAdapters = fallback;
+    return fallback;
+  }
+
+  function createFallbackDiagnosticsAdapter(){
+    const registry = new Map();
+    const listeners = new Set();
+
+    function registerGameDiagnostics(slug, adapter){
+      if (typeof slug !== "string" || !slug.trim()) {
+        throw new TypeError("registerGameDiagnostics requires a slug");
+      }
+      const normalizedSlug = slug.trim();
+      const hooks = {};
+      const api = {};
+      const hookKeys = ["onReady", "onError", "onStateChange", "onScoreChange"];
+      const apiKeys = ["start", "pause", "resume", "reset", "getScore", "setDifficulty", "getEntities"];
+      const adapterHooks = adapter && typeof adapter === "object" ? adapter.hooks || {} : {};
+      const adapterApi = adapter && typeof adapter === "object" ? (adapter.api || adapter.apis || {}) : {};
+      for (const key of hookKeys){
+        if (typeof adapterHooks[key] === "function") hooks[key] = adapterHooks[key];
+      }
+      for (const key of apiKeys){
+        if (typeof adapterApi[key] === "function") api[key] = adapterApi[key];
+      }
+      const record = Object.freeze({ slug: normalizedSlug, hooks, api });
+      registry.set(normalizedSlug, record);
+      listeners.forEach((listener) => {
+        try { listener(normalizedSlug, record); } catch (err) { console.warn("[gg-diag] adapter listener failed", err); }
+      });
+      return record;
+    }
+
+    function getGameDiagnostics(slug){
+      if (typeof slug !== "string" || !slug.trim()) return null;
+      return registry.get(slug.trim()) || null;
+    }
+
+    function subscribe(listener){
+      if (typeof listener !== "function") return () => {};
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }
+
+    return { registerGameDiagnostics, getGameDiagnostics, subscribe };
   }
 
   function ensureUI(){
@@ -497,7 +624,12 @@
   }
 
   function renderSummaryPanel(summary){
-    if (!summary || !state.summaryRefs.statusBadge) return;
+    if (!state.summaryRefs.statusBadge) return;
+    const previous = state.lastSummarySnapshot;
+    if (!summary) {
+      state.lastSummarySnapshot = null;
+      return;
+    }
     const status = summary.status || deriveStatus(summary);
     const label = summary.statusLabel || statusLabelFromStatus(status);
     setBadgeStatus(state.summaryRefs.statusBadge, status, label);
@@ -532,6 +664,191 @@
         state.summaryRefs.lastErrorMessage.textContent = "No errors captured.";
         if (state.summaryRefs.lastErrorTime) state.summaryRefs.lastErrorTime.textContent = "";
       }
+    }
+
+    const snapshot = cloneSummaryData(summary);
+    state.lastSummarySnapshot = snapshot;
+    notifyAdapterSummaryUpdate(snapshot, previous);
+  }
+
+  function notifyAdapterSummaryUpdate(currentSummary, previousSummary){
+    const adapter = state.gameAdapter;
+    if (!adapter || !adapter.hooks) return;
+    if (currentSummary) {
+      invokeAdapterHook("onStateChange", { summary: currentSummary, previousSummary: previousSummary || null });
+      const errorSignature = currentSummary.lastError
+        ? `${currentSummary.lastError.timestamp || ""}:${currentSummary.lastError.message || ""}`
+        : null;
+      if (errorSignature && errorSignature !== state.lastErrorSignature) {
+        state.lastErrorSignature = errorSignature;
+        invokeAdapterHook("onError", { summary: currentSummary, previousSummary: previousSummary || null, error: currentSummary.lastError });
+      } else if (!errorSignature) {
+        state.lastErrorSignature = null;
+      }
+      refreshAdapterScore(currentSummary, previousSummary || null);
+    }
+  }
+
+  function invokeAdapterHook(name, payload){
+    const adapter = state.gameAdapter;
+    if (!adapter || !adapter.hooks) return;
+    const fn = adapter.hooks[name];
+    if (typeof fn !== "function") return;
+    try {
+      fn(createAdapterContext(payload || {}));
+    } catch (err) {
+      console.warn(`[gg-diag] adapter ${name} failed`, err);
+    }
+  }
+
+  function createAdapterContext(extra = {}){
+    const summaryElement = extra.summaryElement || state.summaryRefs?.root || null;
+    const context = {
+      slug: state.gameSlug || "",
+      panel: state.summaryPanel || null,
+      summaryElement,
+      summaryRefs: state.summaryRefs || {},
+      requestProbeRun,
+      api: state.gameAdapter?.api || {},
+      open,
+      close,
+      toggle,
+    };
+    return Object.assign(context, extra);
+  }
+
+  function refreshAdapterScore(currentSummary){
+    const api = state.gameAdapter?.api;
+    if (!api || typeof api.getScore !== "function") return;
+    const now = Date.now();
+    if (state.lastScoreCheck && now - state.lastScoreCheck < 1000) return;
+    state.lastScoreCheck = now;
+    let result;
+    try {
+      result = api.getScore({ summary: currentSummary, slug: state.gameSlug });
+    } catch (err) {
+      console.warn("[gg-diag] adapter getScore failed", err);
+      return;
+    }
+    Promise.resolve(result).then((score) => {
+      const serialized = serializeForComparison(score);
+      if (serialized === state.lastScoreSerialized) return;
+      state.lastScoreSerialized = serialized;
+      invokeAdapterHook("onScoreChange", { summary: currentSummary, score });
+    }).catch((err) => {
+      console.warn("[gg-diag] adapter getScore rejected", err);
+    });
+  }
+
+  function requestProbeRun(label = "Manual probe", options = {}){
+    const api = state.gameAdapter?.api;
+    if (!api || typeof api.getEntities !== "function") {
+      console.warn("[gg-diag] game adapter missing getEntities API");
+      return Promise.resolve(null);
+    }
+    const runId = Date.now();
+    const reason = typeof options.reason === "string" && options.reason.trim() ? options.reason.trim() : "manual";
+    let result;
+    try {
+      result = api.getEntities({ reason, runId, slug: state.gameSlug, options });
+    } catch (err) {
+      handleProbeFailure(label, reason, runId, err);
+      return Promise.reject(err);
+    }
+    return Promise.resolve(result).then((data) => {
+      log({
+        category: "probe",
+        level: "info",
+        message: `${label || "Probe run"}`,
+        details: {
+          slug: state.gameSlug,
+          reason,
+          runId,
+          entities: safeCloneDetails(data),
+        },
+        timestamp: Date.now(),
+      });
+      return data;
+    }).catch((err) => {
+      handleProbeFailure(label, reason, runId, err);
+      throw err;
+    });
+  }
+
+  function handleProbeFailure(label, reason, runId, error){
+    log({
+      category: "probe",
+      level: "error",
+      message: `${label || "Probe run"} failed`,
+      details: {
+        slug: state.gameSlug,
+        reason,
+        runId,
+        error: safeCloneError(error),
+      },
+      timestamp: Date.now(),
+    });
+  }
+
+  function cloneSummaryData(summary){
+    if (!summary || typeof summary !== "object") return null;
+    try {
+      return JSON.parse(JSON.stringify(summary));
+    } catch (_) {
+      return Object.assign({}, summary);
+    }
+  }
+
+  function serializeForComparison(value){
+    if (value === undefined) return "undefined";
+    try {
+      return JSON.stringify(value);
+    } catch (_) {
+      return String(value);
+    }
+  }
+
+  function safeCloneError(error){
+    if (error instanceof Error) {
+      return {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      };
+    }
+    return safeCloneDetails(error);
+  }
+
+  function safeCloneDetails(value, depth = 0){
+    if (value === null || value === undefined) return value;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+    if (typeof value === "bigint") return `${value.toString()}n`;
+    if (typeof value === "symbol") return value.toString();
+    if (typeof value === "function") return `[Function${value.name ? ` ${value.name}` : ""}]`;
+    if (value instanceof Date) return value.toISOString();
+    if (value instanceof Error) {
+      return { name: value.name, message: value.message, stack: value.stack };
+    }
+    if (depth > 3) return `[Depth ${depth}]`;
+    if (Array.isArray(value)) {
+      return value.slice(0, 25).map((item) => safeCloneDetails(item, depth + 1));
+    }
+    if (typeof value === "object") {
+      const output = {};
+      const keys = Object.keys(value).slice(0, 50);
+      for (const key of keys){
+        try {
+          output[key] = safeCloneDetails(value[key], depth + 1);
+        } catch (err) {
+          output[key] = `[Unserializable: ${err?.message || err}]`;
+        }
+      }
+      return output;
+    }
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return String(value);
     }
   }
 
@@ -795,6 +1112,7 @@
     panel.append(wrapper);
 
     state.summaryRefs = {
+      root: wrapper,
       statusBadge,
       statusUpdated,
       logsTotal: logsValue,
@@ -807,6 +1125,21 @@
       lastErrorMessage: errorMessage,
       lastErrorTime: errorTime,
     };
+    state.summaryPanel = panel;
+    maybeInvokeAdapterReady(wrapper);
+  }
+
+  function maybeInvokeAdapterReady(summaryElement){
+    const adapter = state.gameAdapter;
+    if (!adapter || !adapter.hooks || typeof adapter.hooks.onReady !== "function") return;
+    if (!summaryElement || !state.summaryPanel) return;
+    if (state.adapterReadyFired) return;
+    try {
+      adapter.hooks.onReady(createAdapterContext({ summaryElement }));
+      state.adapterReadyFired = true;
+    } catch (err) {
+      console.warn("[gg-diag] adapter onReady failed", err);
+    }
   }
 
   function buildConsolePanel(doc, panel){
