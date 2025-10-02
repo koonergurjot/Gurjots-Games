@@ -170,6 +170,7 @@ async function boot(){
 
     render(allGames);
     renderHistory(lastPlayedSlugs);
+    STATUS?.setAttribute('tabindex', '-1');
     STATUS.focus?.();
   } catch(err) {
     console.error(err);
