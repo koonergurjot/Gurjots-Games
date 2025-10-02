@@ -15,10 +15,14 @@
   }
 })(typeof window !== "undefined" ? window : (typeof self !== "undefined" ? self : undefined), function(){
   const DEFAULT_PROBES = [
-    { id: "adapter-summary", label: "Adapter summary", run: adapterSummaryProbe },
-    { id: "score-api", label: "Score API", run: scoreProbe },
-    { id: "entity-snapshot", label: "Entity snapshot", run: entitySnapshotProbe },
-    { id: "collision-overlaps", label: "Collision overlaps", run: collisionProbe },
+    { id: "adapter-summary", label: "Adapter", run: adapterSummaryProbe },
+    { id: "loop-controls", label: "Loop", run: loopProbe },
+    { id: "state-snapshot", label: "State", run: stateProbe },
+    { id: "input-snapshot", label: "Input", run: inputProbe },
+    { id: "score-api", label: "Score", run: scoreProbe },
+    { id: "asset-scan", label: "Assets", run: assetProbe },
+    { id: "entity-snapshot", label: "Entities", run: entitySnapshotProbe },
+    { id: "collision-overlaps", label: "Collision", run: collisionProbe },
   ];
 
   const STATUS_LEVEL = {
@@ -32,6 +36,9 @@
     "not-supported": "info",
     unsupported: "info",
   };
+
+  const DEFAULT_TIMING_BUCKETS = [1, 4, 8, 16, 33, 66, 100, 250, 500, 1000];
+  const ASSET_PATTERN = /(\.(png|jpe?g|gif|svg|webp|mp3|wav|ogg|m4a|aac|flac|mp4|webm|json|atlas|ttf|otf|woff2?)(\?.*)?$)|(^data:[^;]+;base64,)/i;
 
   function createProbeRunner(options = {}){
     const adapter = options.adapter || null;
@@ -107,6 +114,371 @@
     };
   }
 
+  async function callAdapterApi(adapter, method, context = {}, config = {}){
+    if (!adapter || typeof adapter !== "object" || !adapter.api || typeof adapter.api[method] !== "function") {
+      return { supported: false, reason: `Adapter does not expose ${method}()` };
+    }
+    const fn = adapter.api[method];
+    const probeId = config.probeId || method;
+    let args = [];
+    let request = null;
+    if (Array.isArray(config.args)) {
+      args = config.args;
+    } else if (config.buildRequest !== false) {
+      request = buildProbeRequest(adapter, context, probeId, config.request || {});
+      args = [request];
+    }
+    const measurement = await measureCall(() => fn.apply(adapter.api, args));
+    return Object.assign({ supported: true, method, args, request }, measurement);
+  }
+
+  function buildProbeRequest(adapter, context = {}, probeId = "probe", request = {}){
+    const payload = Object.assign({}, request.payload || {});
+    if (payload.slug === undefined) payload.slug = adapter && adapter.slug != null ? adapter.slug : null;
+    if (payload.runId === undefined && context && Object.prototype.hasOwnProperty.call(context, "runId")) {
+      payload.runId = context.runId;
+    }
+    const baseReason = request.reason || (context && context.reason) || `probe/${probeId}`;
+    payload.reason = baseReason;
+    if (request.includeOptions !== false) {
+      const baseOptions = Object.assign({ probe: probeId, source: "probeRunner" }, request.options || {});
+      payload.options = baseOptions;
+    }
+    return payload;
+  }
+
+  async function measureCall(fn){
+    const started = now();
+    try {
+      const value = await fn();
+      return { duration: now() - started, value };
+    } catch (error) {
+      return { duration: now() - started, error };
+    }
+  }
+
+  function now(){
+    if (typeof performance !== "undefined" && typeof performance.now === "function") {
+      return performance.now();
+    }
+    return Date.now();
+  }
+
+  function summarizeTimings(samples = [], options = {}){
+    const sanitized = [];
+    for (const sample of samples){
+      const num = Number(sample);
+      if (Number.isFinite(num) && num >= 0) sanitized.push(num);
+    }
+    if (!sanitized.length) {
+      return { count: 0, min: null, max: null, average: null, median: null, buckets: [] };
+    }
+    sanitized.sort((a, b) => a - b);
+    const count = sanitized.length;
+    const sum = sanitized.reduce((total, value) => total + value, 0);
+    const average = sum / count;
+    const median = sanitized[Math.floor((count - 1) / 2)];
+    return {
+      count,
+      min: roundTiming(sanitized[0]),
+      max: roundTiming(sanitized[sanitized.length - 1]),
+      average: roundTiming(average),
+      median: roundTiming(median),
+      buckets: createTimingBuckets(sanitized, options),
+    };
+  }
+
+  function createTimingBuckets(samples = [], options = {}){
+    if (!Array.isArray(samples) || !samples.length) return [];
+    const boundaries = Array.isArray(options.boundaries) && options.boundaries.length
+      ? options.boundaries.filter((value) => Number.isFinite(value) && value > 0).sort((a, b) => a - b)
+      : DEFAULT_TIMING_BUCKETS;
+    const counts = new Array(boundaries.length + 1).fill(0);
+    for (const sample of samples){
+      const value = Number(sample);
+      if (!Number.isFinite(value) || value < 0) continue;
+      let bucketIndex = boundaries.length;
+      for (let index = 0; index < boundaries.length; index += 1){
+        if (value < boundaries[index]) {
+          bucketIndex = index;
+          break;
+        }
+      }
+      counts[bucketIndex] += 1;
+    }
+    const buckets = [];
+    for (let index = 0; index < counts.length; index += 1){
+      const count = counts[index];
+      if (!count) continue;
+      if (index === 0) {
+        buckets.push({ label: `<${boundaries[0]}ms`, count });
+      } else if (index === boundaries.length) {
+        buckets.push({ label: `≥${boundaries[boundaries.length - 1]}ms`, count });
+      } else {
+        const lower = boundaries[index - 1];
+        const upper = boundaries[index];
+        buckets.push({ label: `${lower}-${upper}ms`, count });
+      }
+    }
+    return buckets;
+  }
+
+  function roundTiming(value){
+    return Math.round(value * 1000) / 1000;
+  }
+
+  function collectEntitiesFromSnapshot(snapshot, options = {}){
+    const limit = typeof options.limit === "number" && options.limit > 0 ? options.limit : 200;
+    const collected = [];
+    const pushEntity = (entity) => {
+      if (!entity || typeof entity !== "object") return;
+      collected.push(entity);
+    };
+    if (Array.isArray(snapshot)) {
+      for (const entity of snapshot){
+        pushEntity(entity);
+        if (collected.length >= limit) break;
+      }
+    }
+    if (!snapshot || typeof snapshot !== "object" || collected.length >= limit) {
+      return collected;
+    }
+    const keys = Object.keys(snapshot);
+    for (const key of keys){
+      const value = snapshot[key];
+      if (Array.isArray(value)) {
+        for (const entity of value){
+          pushEntity(entity);
+          if (collected.length >= limit) break;
+        }
+      } else if (value && typeof value === "object") {
+        if (Array.isArray(value.entities)) {
+          for (const entity of value.entities){
+            pushEntity(entity);
+            if (collected.length >= limit) break;
+          }
+        }
+        if (Array.isArray(value.players)) {
+          for (const entity of value.players){
+            pushEntity(entity);
+            if (collected.length >= limit) break;
+          }
+        }
+      }
+      if (collected.length >= limit) break;
+    }
+    return collected;
+  }
+
+  function collectStateMetadata(snapshot){
+    const entities = collectEntitiesFromSnapshot(snapshot);
+    const stateCounts = new Map();
+    const statusCounts = new Map();
+    const phaseCounts = new Map();
+    const modeCounts = new Map();
+    const flags = { active: 0, inactive: 0, removed: 0 };
+    for (const entity of entities){
+      if (!entity || typeof entity !== "object") continue;
+      countLabel(stateCounts, entity.state ?? entity.status ?? null);
+      countLabel(statusCounts, entity.status ?? entity.state ?? null);
+      countLabel(phaseCounts, entity.phase ?? entity.stage ?? null);
+      countLabel(modeCounts, entity.mode ?? entity.behaviour ?? entity.behavior ?? null);
+      if (entity.active === true || entity.isActive === true) flags.active += 1;
+      if (entity.active === false || entity.isActive === false) flags.inactive += 1;
+      if (entity.removed || entity.isRemoved || entity.destroyed) flags.removed += 1;
+    }
+    return {
+      totalEntities: entities.length,
+      states: mapToSortedList(stateCounts),
+      statuses: mapToSortedList(statusCounts),
+      phases: mapToSortedList(phaseCounts),
+      modes: mapToSortedList(modeCounts),
+      flags,
+      sample: clipValue(entities.slice(0, 5)),
+    };
+  }
+
+  function countLabel(map, value){
+    if (value === undefined || value === null) return;
+    let str = null;
+    if (typeof value === "string") {
+      str = value.trim();
+    } else if (typeof value === "number" || typeof value === "boolean") {
+      str = String(value);
+    }
+    if (!str) return;
+    map.set(str, (map.get(str) || 0) + 1);
+  }
+
+  function mapToSortedList(map, limit = 6){
+    const list = Array.from(map.entries()).map(([label, count]) => ({ label, count }));
+    list.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    return list.slice(0, limit);
+  }
+
+  function sampleInputMetadata(snapshot, options = {}){
+    const limit = typeof options.limit === "number" && options.limit > 0 ? options.limit : 8;
+    const axisThreshold = typeof options.axisThreshold === "number" ? options.axisThreshold : 0.1;
+    const sources = [];
+    const seenPaths = new Set();
+    traverseSnapshot(snapshot, (value, path) => {
+      const summary = summarizeInputValue(value);
+      if (!summary) return;
+      const location = formatPath(path);
+      if (seenPaths.has(location)) return;
+      seenPaths.add(location);
+      sources.push(Object.assign({ path: location }, summary));
+    }, { maxDepth: options.maxDepth ?? 4, maxEntries: options.maxEntries ?? 600 });
+    const activeSources = sources.filter((source) => {
+      if (Array.isArray(source.activeKeys) && source.activeKeys.length) return true;
+      if (Array.isArray(source.pressed) && source.pressed.length) return true;
+      if (Array.isArray(source.axes) && source.axes.some((axis) => Math.abs(axis.value) > axisThreshold)) return true;
+      return false;
+    });
+    return {
+      totalSources: sources.length,
+      activeSources: activeSources.length,
+      sources: sources.slice(0, limit).map((source) => ({
+        path: source.path,
+        type: source.type,
+        keys: source.keys,
+        activeKeys: source.activeKeys,
+        axes: source.axes,
+        pressed: source.pressed,
+        meta: source.meta,
+      })),
+    };
+  }
+
+  function summarizeInputValue(value){
+    if (!value || typeof value !== "object") {
+      if (Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
+        return { type: "array", pressed: value.slice(0, 10), meta: { total: value.length } };
+      }
+      return null;
+    }
+    if (Array.isArray(value)) {
+      const strings = value.filter((entry) => typeof entry === "string");
+      if (!strings.length) return null;
+      return { type: "array", pressed: strings.slice(0, 10), meta: { total: strings.length } };
+    }
+    const keys = [];
+    const activeKeys = [];
+    const axes = [];
+    const pressed = [];
+    const meta = { totalKeys: 0 };
+    let matched = false;
+    const entries = Object.entries(value).slice(0, 30);
+    for (const [key, entry] of entries){
+      if (typeof entry === "boolean") {
+        matched = true;
+        keys.push(key);
+        if (entry) activeKeys.push(key);
+      } else if (typeof entry === "number" && Number.isFinite(entry)) {
+        matched = true;
+        axes.push({ axis: key, value: roundTiming(clamp(entry, -1, 1)) });
+      } else if (Array.isArray(entry) && entry.length && entry.every((item) => typeof item === "string")) {
+        matched = true;
+        pressed.push({ key, values: entry.slice(0, 10) });
+      } else if (typeof entry === "string" && entry.trim()) {
+        matched = true;
+        pressed.push({ key, values: [entry.trim()] });
+      }
+    }
+    if (!matched) return null;
+    meta.totalKeys = keys.length;
+    return {
+      type: "object",
+      keys: keys.slice(0, 10),
+      activeKeys: activeKeys.slice(0, 10),
+      axes: axes.slice(0, 6),
+      pressed: pressed.slice(0, 6),
+      meta,
+    };
+  }
+
+  function collectAssetMetadata(snapshot, options = {}){
+    const limit = typeof options.limit === "number" && options.limit > 0 ? options.limit : 12;
+    const maxPathsPerAsset = typeof options.maxPathsPerAsset === "number" && options.maxPathsPerAsset > 0
+      ? options.maxPathsPerAsset
+      : 3;
+    const matches = new Map();
+    traverseSnapshot(snapshot, (value, path) => {
+      if (typeof value !== "string") return;
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      if (!ASSET_PATTERN.test(trimmed) && !trimmed.includes("/assets/")) return;
+      const existing = matches.get(trimmed) || { value: trimmed, occurrences: 0, paths: [] };
+      existing.occurrences += 1;
+      if (existing.paths.length < maxPathsPerAsset) {
+        existing.paths.push(formatPath(path));
+      }
+      matches.set(trimmed, existing);
+    }, { maxDepth: options.maxDepth ?? 5, maxEntries: options.maxEntries ?? 1200 });
+    const assets = Array.from(matches.values());
+    assets.sort((a, b) => b.occurrences - a.occurrences || a.value.localeCompare(b.value));
+    return {
+      total: assets.length,
+      assets: assets.slice(0, limit),
+    };
+  }
+
+  function traverseSnapshot(value, visitor, options = {}){
+    const maxDepth = typeof options.maxDepth === "number" ? options.maxDepth : 4;
+    const maxEntries = typeof options.maxEntries === "number" ? options.maxEntries : 800;
+    const maxKeys = typeof options.maxKeys === "number" ? options.maxKeys : 20;
+    const maxArray = typeof options.maxArray === "number" ? options.maxArray : 20;
+    const seen = typeof WeakSet === "function" ? new WeakSet() : null;
+    let visited = 0;
+    function walk(node, path = [], depth = 0){
+      if (visited >= maxEntries) return;
+      if (node && typeof node === "object") {
+        if (seen) {
+          if (seen.has(node)) return;
+          seen.add(node);
+        }
+      }
+      visited += 1;
+      try {
+        visitor(node, path);
+      } catch (_) { /* ignore visitor errors */ }
+      if (depth >= maxDepth) return;
+      if (Array.isArray(node)) {
+        const length = Math.min(node.length, maxArray);
+        for (let index = 0; index < length; index += 1){
+          walk(node[index], path.concat(index), depth + 1);
+          if (visited >= maxEntries) break;
+        }
+      } else if (node && typeof node === "object") {
+        const keys = Object.keys(node).slice(0, maxKeys);
+        for (const key of keys){
+          walk(node[key], path.concat(key), depth + 1);
+          if (visited >= maxEntries) break;
+        }
+      }
+    }
+    walk(value, []);
+  }
+
+  function formatPath(path = []){
+    if (!Array.isArray(path) || !path.length) return "$";
+    let output = "$";
+    for (const segment of path){
+      if (typeof segment === "number") {
+        output += `[${segment}]`;
+      } else {
+        output += `.${segment}`;
+      }
+    }
+    return output;
+  }
+
+  function clamp(value, min, max){
+    const num = Number(value);
+    if (!Number.isFinite(num)) return num;
+    return Math.min(Math.max(num, min), max);
+  }
+
   function adapterSummaryProbe(adapter, context = {}){
     if (!adapter || typeof adapter !== "object") {
       return {
@@ -129,106 +501,309 @@
     };
   }
 
-  async function scoreProbe(adapter, context = {}){
-    if (!adapter || !adapter.api || typeof adapter.api.getScore !== "function") {
+  async function loopProbe(adapter, context = {}){
+    if (!adapter || !adapter.api) {
       return {
         status: "not-supported",
-        reason: "Adapter does not expose getScore()",
+        reason: "Adapter does not expose loop controls",
         data: { context },
       };
     }
-    try {
-      const value = await adapter.api.getScore({
-        slug: adapter.slug,
-        reason: context.reason || "probe/score",
-        runId: context.runId,
-      });
+    const lifecycle = ["start", "pause", "resume", "reset"];
+    const available = lifecycle.filter((fn) => typeof adapter.api[fn] === "function");
+    if (!available.length) {
       return {
-        status: "ok",
-        message: "Score API responded successfully",
-        data: { score: value, context },
+        status: "not-supported",
+        reason: "Adapter does not expose loop controls",
+        data: { context },
       };
-    } catch (error) {
+    }
+    const operations = {};
+    const durations = [];
+    let failures = 0;
+    for (const fnName of lifecycle){
+      if (typeof adapter.api[fnName] !== "function") {
+        operations[fnName] = { supported: false };
+        continue;
+      }
+      const result = await callAdapterApi(adapter, fnName, context, { args: [] });
+      const duration = Number.isFinite(result.duration) ? roundTiming(result.duration) : result.duration;
+      if (Number.isFinite(result.duration)) durations.push(result.duration);
+      const entry = {
+        supported: true,
+        status: result.error ? "error" : "ok",
+        duration,
+      };
+      if (result.error) {
+        failures += 1;
+        entry.error = serializeError(result.error);
+      } else if (result.value !== undefined) {
+        entry.result = clipValue(result.value);
+      }
+      operations[fnName] = entry;
+    }
+    const timingSummary = summarizeTimings(durations);
+    const message = failures
+      ? `${failures} loop call${failures === 1 ? "" : "s"} failed`
+      : `Loop controls responded (${available.length} function${available.length === 1 ? "" : "s"})`;
+    return {
+      status: failures ? "warn" : "ok",
+      message,
+      data: {
+        operations,
+        timings: timingSummary,
+      },
+      meta: { functions: available },
+    };
+  }
+
+  async function stateProbe(adapter, context = {}){
+    const result = await callAdapterApi(adapter, "getEntities", context, {
+      probeId: "state",
+      request: { options: { probe: "state", source: "probeRunner", includeState: true } },
+    });
+    if (!result.supported) {
+      return {
+        status: "not-supported",
+        reason: result.reason || "Adapter does not expose getEntities()",
+        data: { context },
+      };
+    }
+    if (result.error) {
+      return {
+        status: "error",
+        message: "State snapshot probe failed",
+        error: result.error,
+        data: { context },
+        meta: { duration: result.duration },
+      };
+    }
+    const snapshot = result.value;
+    if (snapshot && typeof snapshot === "object" && snapshot.supported === false) {
+      return {
+        status: "not-supported",
+        reason: snapshot.reason || "Adapter reported unsupported",
+        data: snapshot.data ?? null,
+        meta: Object.assign({ duration: result.duration }, snapshot.meta || {}),
+      };
+    }
+    const summary = collectStateMetadata(snapshot);
+    const timingSummary = summarizeTimings([result.duration]);
+    const entityCount = summary.totalEntities;
+    const message = entityCount
+      ? `State captured for ${entityCount} entit${entityCount === 1 ? "y" : "ies"}`
+      : "No entity state detected";
+    return {
+      status: entityCount ? "ok" : "info",
+      message,
+      data: summary,
+      meta: { duration: result.duration, timings: timingSummary },
+    };
+  }
+
+  async function inputProbe(adapter, context = {}){
+    const result = await callAdapterApi(adapter, "getEntities", context, {
+      probeId: "input",
+      request: { options: { probe: "input", source: "probeRunner", includeInputs: true } },
+    });
+    if (!result.supported) {
+      return {
+        status: "not-supported",
+        reason: result.reason || "Adapter does not expose getEntities()",
+        data: { context },
+      };
+    }
+    if (result.error) {
+      return {
+        status: "error",
+        message: "Input probe failed",
+        error: result.error,
+        data: { context },
+        meta: { duration: result.duration },
+      };
+    }
+    const snapshot = result.value;
+    if (snapshot && typeof snapshot === "object" && snapshot.supported === false) {
+      return {
+        status: "not-supported",
+        reason: snapshot.reason || "Adapter reported unsupported",
+        data: snapshot.data ?? null,
+        meta: Object.assign({ duration: result.duration }, snapshot.meta || {}),
+      };
+    }
+    const summary = sampleInputMetadata(snapshot);
+    const timingSummary = summarizeTimings([result.duration]);
+    const message = summary.activeSources
+      ? `Detected ${summary.activeSources}/${summary.totalSources} active input source${summary.activeSources === 1 ? "" : "s"}`
+      : (summary.totalSources
+        ? "Input metadata detected but no active inputs"
+        : "No input metadata detected");
+    const status = summary.activeSources ? "ok" : (summary.totalSources ? "warn" : "info");
+    return {
+      status,
+      message,
+      data: summary,
+      meta: { duration: result.duration, timings: timingSummary },
+    };
+  }
+
+  async function assetProbe(adapter, context = {}){
+    const result = await callAdapterApi(adapter, "getEntities", context, {
+      probeId: "assets",
+      request: { options: { probe: "assets", source: "probeRunner", includeAssets: true } },
+    });
+    if (!result.supported) {
+      return {
+        status: "not-supported",
+        reason: result.reason || "Adapter does not expose getEntities()",
+        data: { context },
+      };
+    }
+    if (result.error) {
+      return {
+        status: "error",
+        message: "Asset probe failed",
+        error: result.error,
+        data: { context },
+        meta: { duration: result.duration },
+      };
+    }
+    const snapshot = result.value;
+    if (snapshot && typeof snapshot === "object" && snapshot.supported === false) {
+      return {
+        status: "not-supported",
+        reason: snapshot.reason || "Adapter reported unsupported",
+        data: snapshot.data ?? null,
+        meta: Object.assign({ duration: result.duration }, snapshot.meta || {}),
+      };
+    }
+    const assets = collectAssetMetadata(snapshot);
+    const timingSummary = summarizeTimings([result.duration]);
+    const message = assets.total
+      ? `Discovered ${assets.total} asset reference${assets.total === 1 ? "" : "s"}`
+      : "No asset references detected";
+    return {
+      status: assets.total ? "ok" : "info",
+      message,
+      data: assets,
+      meta: { duration: result.duration, timings: timingSummary },
+    };
+  }
+
+  async function scoreProbe(adapter, context = {}){
+    const result = await callAdapterApi(adapter, "getScore", context, {
+      probeId: "score",
+      request: { includeOptions: false },
+    });
+    if (!result.supported) {
+      return {
+        status: "not-supported",
+        reason: result.reason || "Adapter does not expose getScore()",
+        data: { context },
+      };
+    }
+    if (result.error) {
       return {
         status: "error",
         message: "Score API threw an error",
-        error,
+        error: result.error,
         data: { context },
+        meta: { duration: result.duration },
       };
     }
+    const value = result.value;
+    if (value && typeof value === "object" && value.supported === false) {
+      return {
+        status: "not-supported",
+        reason: value.reason || "Adapter reported unsupported",
+        data: value.data ?? null,
+        meta: Object.assign({ duration: result.duration }, value.meta || {}),
+      };
+    }
+    const timingSummary = summarizeTimings([result.duration]);
+    const message = Number.isFinite(result.duration)
+      ? `Score API responded in ${roundTiming(result.duration)}ms`
+      : "Score API responded successfully";
+    return {
+      status: "ok",
+      message,
+      data: {
+        score: clipValue(value),
+        timings: timingSummary,
+      },
+      meta: { duration: result.duration },
+    };
   }
 
   async function entitySnapshotProbe(adapter, context = {}){
-    if (!adapter || !adapter.api || typeof adapter.api.getEntities !== "function") {
+    const result = await callAdapterApi(adapter, "getEntities", context, {
+      probeId: "entities",
+      request: { options: { probe: "entities", source: "probeRunner" } },
+    });
+    if (!result.supported) {
       return {
         status: "not-supported",
-        reason: "Adapter does not expose getEntities()",
+        reason: result.reason || "Adapter does not expose getEntities()",
         data: { context },
       };
     }
-    try {
-      const snapshot = await adapter.api.getEntities({
-        slug: adapter.slug,
-        reason: context.reason || "probe/entities",
-        runId: context.runId,
-        options: { probe: "entities", source: "probeRunner" },
-      });
-      if (snapshot && typeof snapshot === "object" && snapshot.supported === false) {
-        return {
-          status: "not-supported",
-          reason: snapshot.reason || "Adapter reported unsupported",
-          data: snapshot.data ?? null,
-          meta: Object.assign({ context }, snapshot.meta || {}),
-        };
-      }
-      const count = countEntities(snapshot);
-      return {
-        status: "ok",
-        message: count != null ? `Captured ${count} entities` : "Captured entity snapshot",
-        data: clipValue(snapshot),
-        meta: { count, context },
-      };
-    } catch (error) {
+    if (result.error) {
       return {
         status: "error",
         message: "getEntities() threw an error",
-        error,
+        error: result.error,
         data: { context },
+        meta: { duration: result.duration },
       };
     }
+    const snapshot = result.value;
+    if (snapshot && typeof snapshot === "object" && snapshot.supported === false) {
+      return {
+        status: "not-supported",
+        reason: snapshot.reason || "Adapter reported unsupported",
+        data: snapshot.data ?? null,
+        meta: Object.assign({ duration: result.duration }, snapshot.meta || {}),
+      };
+    }
+    const count = countEntities(snapshot);
+    const timings = summarizeTimings([result.duration]);
+    return {
+      status: "ok",
+      message: count != null ? `Captured ${count} entit${count === 1 ? "y" : "ies"}` : "Captured entity snapshot",
+      data: clipValue(snapshot),
+      meta: { count, duration: result.duration, timings },
+    };
   }
 
   async function collisionProbe(adapter, context = {}){
-    if (!adapter || !adapter.api || typeof adapter.api.getEntities !== "function") {
+    const result = await callAdapterApi(adapter, "getEntities", context, {
+      probeId: "collision",
+      request: { options: { probe: "collision", source: "probeRunner", includeBounds: true } },
+    });
+    if (!result.supported) {
       return {
         status: "not-supported",
-        reason: "Adapter does not expose getEntities()",
+        reason: result.reason || "Adapter does not expose getEntities()",
         data: { context },
       };
     }
-    let snapshot;
-    try {
-      snapshot = await adapter.api.getEntities({
-        slug: adapter.slug,
-        reason: context.reason || "probe/collision",
-        runId: context.runId,
-        options: { probe: "collision", source: "probeRunner", includeBounds: true },
-      });
-    } catch (error) {
+    if (result.error) {
       return {
         status: "error",
         message: "getEntities() failed during collision probe",
-        error,
+        error: result.error,
         data: { context },
+        meta: { duration: result.duration },
       };
     }
+    const snapshot = result.value;
     const analysis = analyseCollisionSnapshot(snapshot);
     if (!analysis.supported) {
       return {
         status: "not-supported",
         reason: analysis.reason || "Collision data unavailable",
         data: analysis.sample,
-        meta: { context },
+        meta: { duration: result.duration },
       };
     }
     if (!analysis.collisions.length) {
@@ -239,7 +814,7 @@
           total: analysis.total,
           sample: analysis.sample,
         },
-        meta: { context },
+        meta: { duration: result.duration },
       };
     }
     return {
@@ -250,7 +825,7 @@
         collisions: analysis.collisions,
         sample: analysis.sample,
       },
-      meta: { context },
+      meta: { duration: result.duration },
     };
   }
 
@@ -633,8 +1208,15 @@
   return {
     createProbeRunner,
     adapterSummaryProbe,
+    loopProbe,
+    stateProbe,
+    inputProbe,
     scoreProbe,
+    assetProbe,
     entitySnapshotProbe,
     collisionProbe,
+    createTimingBuckets,
+    summarizeTimings,
+    sampleInputMetadata,
   };
 });
