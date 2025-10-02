@@ -71,15 +71,33 @@
       label.textContent = g.title || g.slug || url;
     }
 
+    function updateControls(){
+      const hasGames = games.length > 0;
+      const running = !!timer && hasGames;
+
+      startBtn.classList.toggle('is-active', running);
+      startBtn.classList.toggle('is-inactive', hasGames && !running);
+      stopBtn.classList.toggle('is-active', hasGames && !running);
+      stopBtn.classList.toggle('is-inactive', running);
+
+      startBtn.disabled = running || !hasGames;
+      stopBtn.disabled = !running || !hasGames;
+    }
+
     function start(){
-      if (!games.length) return;
-      show(idx);
+      if (!games.length) {
+        updateControls();
+        return;
+      }
       stop();
+      show(idx);
       timer = setInterval(() => show(++idx), ROTATE_MS);
+      updateControls();
     }
     function stop(){
       if (timer) clearInterval(timer);
       timer = null;
+      updateControls();
     }
 
     fsBtn.onclick = () => {
@@ -91,6 +109,7 @@
     stopBtn.onclick = stop;
 
     await loadGames();
+    updateControls();
     if (games.length) start();
   </script>
 </body>
