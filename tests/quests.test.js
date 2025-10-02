@@ -55,3 +55,35 @@ describe('profile isolation', () => {
     expect(getXP()).toBe(0);
   });
 });
+
+describe('storage failures', () => {
+  it('falls back to default profile when storage getItem throws', () => {
+    const originalGetItem = localStorage.getItem;
+    localStorage.getItem = () => { throw new Error('denied'); };
+    try {
+      const date = new Date('2024-05-05');
+      expect(() => getActiveQuests(date)).not.toThrow();
+      const first = getActiveQuests(date);
+      const second = getActiveQuests(date);
+      expect(first.daily.map(q => q.id)).toEqual(second.daily.map(q => q.id));
+      expect(first.weekly.map(q => q.id)).toEqual(second.weekly.map(q => q.id));
+    } finally {
+      localStorage.getItem = originalGetItem;
+    }
+  });
+
+  it('returns safe defaults when storage read/write fails', () => {
+    const originalGetItem = localStorage.getItem;
+    const originalSetItem = localStorage.setItem;
+    localStorage.getItem = () => { throw new Error('denied'); };
+    localStorage.setItem = () => { throw new Error('denied'); };
+    try {
+      expect(getXP()).toBe(0);
+      expect(() => recordPlay('slug', [], new Date('2024-05-05'))).not.toThrow();
+      expect(getXP()).toBe(0);
+    } finally {
+      localStorage.getItem = originalGetItem;
+      localStorage.setItem = originalSetItem;
+    }
+  });
+});
