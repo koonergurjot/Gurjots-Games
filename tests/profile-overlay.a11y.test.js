@@ -43,10 +43,13 @@ describe('profile overlay focus management', () => {
         getAggregatedStats: vi.fn(() => ({ xp: 0, plays: 0, achievements: [] })),
         login: vi.fn((name, avatar = '') => ({ name, avatar })),
         listProfiles: vi.fn(() => profiles.map(profile => ({ ...profile }))),
-        removeProfile: vi.fn(),
-        PROFILE_EVENT: 'profile:changed'
+        removeProfile: vi.fn()
       };
     });
+
+    vi.mock('../shared/profile-events.js', () => ({
+      PROFILE_EVENT: 'profile:changed'
+    }));
 
     vi.mock('../shared/achievements.js', () => ({
       getAchievements: vi.fn(() => [])
