@@ -1,51 +1,26 @@
 import '../../shared/fx/canvasFx.js';
 import '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
+import { pushEvent } from '../common/diag-adapter.js';
+import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
 const globalScope = typeof window !== 'undefined' ? window : globalThis;
-const diagPending = [];
-let diagPushEvent = null;
 
 function dispatchDiagnostics(payload){
   if(!payload) return;
-  if(diagPushEvent){
-    try{
-      diagPushEvent('network', payload);
-      return;
-    }catch(err){
-      console.warn('Tetris diagnostics dispatch failed', err);
-    }
+  try{
+    pushEvent('network', payload);
+  }catch(err){
+    console.warn('Tetris diagnostics dispatch failed', err);
   }
-  diagPending.push(payload);
 }
 
-setTimeout(()=>{
-  import('../common/diag-adapter.js')
-    .then(mod=>{
-      if(typeof mod?.pushEvent === 'function'){
-        diagPushEvent=mod.pushEvent;
-        if(diagPending.length){
-          const queued=diagPending.splice(0,diagPending.length);
-          for(const entry of queued){
-            try{
-              diagPushEvent('network', entry);
-            }catch(err){
-              console.warn('Tetris diagnostics flush failed', err);
-            }
-          }
-        }
-      }
-    })
-    .catch(error=>{
-      console.warn('Tetris diagnostics adapter unavailable', error);
-      diagPending.length=0;
-    });
-},0);
-
 const readyCallbacks=new Set();
+const diagnosticsCallbacks=new Set();
 let tetrisReady=false;
+let diagnosticsRegistered=false;
 
 function notifyReadyListeners(){
   if(!tetrisReady) return;
@@ -54,6 +29,16 @@ function notifyReadyListeners(){
   for(const cb of callbacks){
     try{ cb(globalScope.Tetris); }
     catch(err){ console.error('Tetris onReady callback failed', err); }
+  }
+}
+
+function notifyDiagnosticsListeners(){
+  if(!globalScope?.Tetris || !diagnosticsCallbacks.size) return;
+  const callbacks=Array.from(diagnosticsCallbacks);
+  diagnosticsCallbacks.clear();
+  for(const cb of callbacks){
+    try{ cb(globalScope.Tetris); }
+    catch(err){ console.error('Tetris diagnostics callback failed', err); }
   }
 }
 
@@ -72,6 +57,17 @@ function registerReadyCallback(callback){
   }
   readyCallbacks.add(callback);
   return ()=>readyCallbacks.delete(callback);
+}
+
+function registerDiagnosticsCallback(callback){
+  if(typeof callback!=='function') return ()=>{};
+  if(globalScope?.Tetris){
+    try{ callback(globalScope.Tetris); }
+    catch(err){ console.error('Tetris diagnostics callback failed', err); }
+    return ()=>{};
+  }
+  diagnosticsCallbacks.add(callback);
+  return ()=>diagnosticsCallbacks.delete(callback);
 }
 
 installErrorReporter();
@@ -148,6 +144,17 @@ const params=new URLSearchParams(location.search);
 const mode=params.has('spectate')?'spectate':(params.get('replay')?'replay':'play');
 const replayFile=params.get('replay');
 
+const broadcastState={
+  supported:false,
+  channel:'tetris',
+  mode,
+  open:false,
+  lastEvent:null,
+  lastInbound:null,
+  lastOutbound:null,
+  lastError:null,
+};
+
 let bestScore=+(localStorage.getItem('tetris:bestScore')||0);
 let bestLines=+(localStorage.getItem('tetris:bestLines')||0);
 let started=false;
@@ -190,6 +197,7 @@ function summarizeBroadcastPayload(data){
 }
 
 function logBroadcastEvent(direction,payload,details){
+  const timestamp=Date.now();
   const entry={
     channel:'tetris',
     type:'broadcast',
@@ -198,6 +206,7 @@ function logBroadcastEvent(direction,payload,details){
     started,
     paused,
     over,
+    timestamp,
     score,
     level,
     lines,
@@ -207,6 +216,25 @@ function logBroadcastEvent(direction,payload,details){
   if(details && typeof details==='object') Object.assign(entry,details);
   const summary=summarizeBroadcastPayload(payload);
   if(summary) entry.payload=summary;
+  const eventType=details?.event||null;
+  const record={
+    direction,
+    event:eventType,
+    timestamp,
+    summary:summary?{...summary}:null,
+    details:details && typeof details==='object'?{...details}:null,
+  };
+  broadcastState.supported=!!bc;
+  if(eventType==='unavailable') broadcastState.supported=false;
+  if(eventType==='open') broadcastState.open=true;
+  if(eventType==='close') broadcastState.open=false;
+  broadcastState.mode=mode;
+  broadcastState.lastEvent=record;
+  if(direction==='inbound') broadcastState.lastInbound=record;
+  if(direction==='outbound') broadcastState.lastOutbound=record;
+  if(details?.error){
+    broadcastState.lastError={ timestamp, error:details.error };
+  }
   dispatchDiagnostics(entry);
 }
 
@@ -243,6 +271,117 @@ function getPublicState(){
     hold: clonePiece(holdM),
   };
 }
+
+function cloneBroadcastEvent(record){
+  if(!record) return null;
+  const { direction=null, event=null, timestamp=null, summary=null, details=null } = record;
+  return {
+    direction,
+    event,
+    timestamp,
+    summary: summary && typeof summary==='object' ? { ...summary } : null,
+    details: details && typeof details==='object' ? { ...details } : null,
+  };
+}
+
+function getBroadcastSnapshot(){
+  return {
+    supported:broadcastState.supported,
+    channel:broadcastState.channel,
+    mode:broadcastState.mode,
+    open:broadcastState.open,
+    lastEvent:cloneBroadcastEvent(broadcastState.lastEvent),
+    lastInbound:cloneBroadcastEvent(broadcastState.lastInbound),
+    lastOutbound:cloneBroadcastEvent(broadcastState.lastOutbound),
+    lastError:broadcastState.lastError
+      ? { timestamp:broadcastState.lastError.timestamp ?? null, error:broadcastState.lastError.error ?? null }
+      : null,
+  };
+}
+
+function snapshotScore(){
+  return {
+    score,
+    bestScore,
+    bestLines,
+    level,
+    lines,
+    combo,
+    mode,
+    started,
+    paused,
+    over,
+    status: over ? 'game-over' : (paused ? 'paused' : (started ? 'running' : 'idle')),
+  };
+}
+
+function snapshotEntities(){
+  return {
+    grid: cloneMatrix(grid),
+    current: clonePiece(cur),
+    next: clonePiece(nextM),
+    hold: clonePiece(holdM),
+    ghost: showGhost ? clonePiece(ghost) : null,
+    combo,
+    broadcast: getBroadcastSnapshot(),
+    meta: {
+      mode,
+      started,
+      paused,
+      over,
+      canHold,
+      showGhost,
+    },
+  };
+}
+
+function ensureDiagnosticsRegistration(){
+  if(diagnosticsRegistered) return;
+  diagnosticsRegistered=true;
+  try{
+    registerGameDiagnostics('tetris',{
+      hooks:{
+        onReady(){
+          pushEvent('boot',{ level:'info', message:'[tetris] diagnostics adapter ready' });
+        },
+      },
+      api:{
+        start(){
+          const result=TetrisAPI.start();
+          pushEvent('control',{ level:'info', message:'[tetris] start requested via diagnostics', status: snapshotScore().status });
+          return result;
+        },
+        pause(){
+          const result=TetrisAPI.pause();
+          pushEvent('control',{ level:'info', message:'[tetris] pause requested via diagnostics', status: snapshotScore().status });
+          return result;
+        },
+        resume(){
+          const result=TetrisAPI.resume();
+          pushEvent('control',{ level:'info', message:'[tetris] resume requested via diagnostics', status: snapshotScore().status });
+          return result;
+        },
+        reset(){
+          const result=TetrisAPI.reset();
+          pushEvent('control',{ level:'info', message:'[tetris] reset requested via diagnostics', status: snapshotScore().status });
+          return result;
+        },
+        getScore(){
+          return snapshotScore();
+        },
+        getEntities(){
+          return snapshotEntities();
+        },
+      },
+    });
+    pushEvent('boot',{ level:'info', message:'[tetris] diagnostics registered' });
+  }catch(err){
+    diagnosticsRegistered=false;
+    console.error('Tetris diagnostics registration failed', err);
+  }
+}
+
+registerDiagnosticsCallback(()=>ensureDiagnosticsRegistration());
 
 const TetrisAPI={
   get mode(){ return mode; },
@@ -332,6 +471,7 @@ const TetrisAPI={
 };
 
 globalScope.Tetris=TetrisAPI;
+notifyDiagnosticsListeners();
 
 function shuffle(a){
   for(let i=a.length-1;i>0;i--){
