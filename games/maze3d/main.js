@@ -20,7 +20,12 @@ async function loadCatalog() {
   throw lastError || new Error('catalog unavailable');
 }
 
-const games = await loadCatalog();
+let games = [];
+try {
+  games = await loadCatalog();
+} catch (err) {
+  console.warn('maze3d: catalog fetch failed, using empty list', err);
+}
 
 const help = games.find(g => g.id === 'maze3d')?.help || {};
 injectHelpButton({ gameId: 'maze3d', ...help });
