@@ -41,8 +41,15 @@
     const detail = String(e?.message ?? e);
     try { parent && parent.postMessage({ type: 'GAME_ERROR', error: detail, message: detail }, '*'); } catch(_) {}
   });
+  let lastUnhandledRejectionDetail = null;
   window.addEventListener('unhandledrejection', (e)=>{
     push('error', 'unhandledrejection', { reason: (e.reason && (e.reason.message || e.reason.toString())) || 'unknown' });
+    stopHB();
+    const detail = String(e?.reason?.message ?? e?.reason ?? e);
+    if (detail !== lastUnhandledRejectionDetail) {
+      lastUnhandledRejectionDetail = detail;
+      try { parent && parent.postMessage({ type: 'GAME_ERROR', error: detail, message: detail }, '*'); } catch(_) {}
+    }
   });
 
   hbTimer = setInterval(()=>push('info', 'hb#'+Math.round((performance.now()-start)/1000)), 1000);
