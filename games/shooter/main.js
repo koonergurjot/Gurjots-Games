@@ -12,6 +12,8 @@ export function boot() {
   const bullets = [];
   const enemies = [];
   let t = 0, score = 0;
+  const scoreElement = document.getElementById('score');
+  const scoreDisplay = document.getElementById('scoreDisplay');
 
   const keys = new Set();
   addEventListener('keydown', e => keys.add(e.key));
@@ -91,6 +93,14 @@ export function boot() {
     ctx.fillText(`Score: ${score}`, 16, 26);
     ctx.fillText(`HP: ${player.hp}`, 16, 48);
     ctx.fillText('Move: WASD/Arrows • Shoot: Space/Enter', 16, 70);
+
+    if (scoreElement) {
+      scoreElement.textContent = String(score);
+      scoreElement.dataset.gameScore = String(score);
+    }
+    if (scoreDisplay) {
+      scoreDisplay.textContent = String(score);
+    }
   }
 
   let raf = 0;
