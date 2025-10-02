@@ -50,6 +50,13 @@ const paddleBaseW=120;
 let paddle={w:paddleBaseW,h:14,x:c.width/2-paddleBaseW/2,y:c.height-40};
 let ball={x:c.width/2,y:c.height-60,vx:240,vy:-360,r:8,stuck:true,speed:420};
 let bricks=[];let score=0,lives=3,level=1;let bestLevel=parseInt(localStorage.getItem('gg:bestlvl:breakout')||'1');
+const scoreNode=document.getElementById('score');
+function syncScore(){
+  if(!scoreNode)return;
+  scoreNode.textContent=String(score); // Keep the shell score display in sync.
+  scoreNode.dataset.gameScore=String(score);
+}
+syncScore();
 let paused=false;let pauseToast=null;let gameOverShown=false;
 function togglePause(){
   paused=!paused;
@@ -111,6 +118,7 @@ addEventListener('keydown',e=>{
   if(e.key.toLowerCase()==='r'&&lives<=0){
     powerEngine.reset();
     score=0;lives=3;level=1;
+    syncScore();
     loadLevel();resetBall();
     runStart=performance.now();endTime=null;submitted=false;
     clearHud();gameOverShown=false;
@@ -172,6 +180,7 @@ function updateParticles(){
 }
 
 function step(dt){
+  syncScore();
   if(paused)return;
   powerEngine.update(dt);
   if(ball.stuck)return;
@@ -193,9 +202,9 @@ function step(dt){
   }
   for(const b of bricks){
     if(b.hp<=0)continue;
-    if(ball.x>b.x&&ball.x<b.x+b.w&&ball.y>b.y&&ball.y<b.y+b.h){
-      b.hp=0;score+=10;GG.addXP(1);ball.vy*=-1;spawnParticles(b.x+b.w/2,b.y+b.h/2);if(b.pu)spawnPU(ball.x,ball.y,b.pu);SFX.beep({freq:700});
-    }
+      if(ball.x>b.x&&ball.x<b.x+b.w&&ball.y>b.y&&ball.y<b.y+b.h){
+      b.hp=0;score+=10;syncScore();GG.addXP(1);ball.vy*=-1;spawnParticles(b.x+b.w/2,b.y+b.h/2);if(b.pu)spawnPU(ball.x,ball.y,b.pu);SFX.beep({freq:700});
+      }
   }
   if(ball.y>c.height+20){
     lives--;SFX.seq([[260,0.06],[200,0.08]]);resetBall();
@@ -219,7 +228,7 @@ function step(dt){
   lasers=lasers.filter(L=>L.y>-20);
   for(const L of lasers){
     for(const b of bricks){
-      if(b.hp>0&&L.x>b.x&&L.x<b.x+b.w&&L.y<b.y+b.h&&L.y>b.y){b.hp=0;score+=10;spawnParticles(b.x+b.w/2,b.y+b.h/2);}
+      if(b.hp>0&&L.x>b.x&&L.x<b.x+b.w&&L.y<b.y+b.h&&L.y>b.y){b.hp=0;score+=10;spawnParticles(b.x+b.w/2,b.y+b.h/2);syncScore();}
     }
   }
   for(const m of multiBalls){
@@ -238,7 +247,7 @@ function step(dt){
     }
     for(const b of bricks){
       if(b.hp<=0)continue;
-      if(m.x>b.x&&m.x<b.x+b.w&&m.y>b.y&&m.y<b.y+b.h){b.hp=0;score+=10;m.vy*=-1;spawnParticles(b.x+b.w/2,b.y+b.h/2);}
+      if(m.x>b.x&&m.x<b.x+b.w&&m.y>b.y&&m.y<b.y+b.h){b.hp=0;score+=10;syncScore();m.vy*=-1;spawnParticles(b.x+b.w/2,b.y+b.h/2);}
     }
   }
   multiBalls=multiBalls.filter(m=>m.y<=c.height+20);
