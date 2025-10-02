@@ -131,8 +131,9 @@ class RunnerGame {
       throw new Error('[runner] Canvas 2D context unavailable');
     }
 
-    this.scaleX = 1;
-    this.scaleY = 1;
+    this.scaleFactor = 1;
+    this.offsetX = 0;
+    this.offsetY = 0;
     this.lastTime = 0;
     this.rafId = 0;
     this.running = false;
@@ -479,8 +480,12 @@ class RunnerGame {
       this.canvas.width = width;
       this.canvas.height = height;
     }
-    this.scaleX = width / VIRTUAL_WIDTH;
-    this.scaleY = height / VIRTUAL_HEIGHT;
+    const factor = Math.min(width / VIRTUAL_WIDTH, height / VIRTUAL_HEIGHT);
+    const displayWidth = VIRTUAL_WIDTH * factor;
+    const displayHeight = VIRTUAL_HEIGHT * factor;
+    this.offsetX = (width - displayWidth) / 2;
+    this.offsetY = (height - displayHeight) / 2;
+    this.scaleFactor = factor;
   }
 
   loop(timestamp) {
@@ -784,9 +789,12 @@ class RunnerGame {
     const canSave = typeof ctx.save === 'function';
     if (canSave) ctx.save();
     if (typeof ctx.setTransform === 'function') {
-      ctx.setTransform(this.scaleX, 0, 0, this.scaleY, 0, 0);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
-    ctx.clearRect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.translate(this.offsetX, this.offsetY);
+    ctx.scale(this.scaleFactor, this.scaleFactor);
+    // Apply a uniform scale with letterboxing so the virtual resolution keeps its aspect.
 
     const gradient = typeof ctx.createLinearGradient === 'function'
       ? ctx.createLinearGradient(0, 0, 0, VIRTUAL_HEIGHT)
