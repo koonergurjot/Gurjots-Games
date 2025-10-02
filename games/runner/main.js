@@ -582,7 +582,11 @@ class RunnerGame {
     if (force || newScore !== this.lastDrawnScore) {
       this.score = newScore;
       this.lastDrawnScore = newScore;
-      if (this.hud.score) this.hud.score.textContent = String(newScore);
+      if (this.hud.score) {
+        this.hud.score.textContent = String(newScore);
+        // Shell observer expects the score attribute to stay in sync.
+        this.hud.score.dataset.gameScore = String(newScore);
+      }
     }
   }
 
