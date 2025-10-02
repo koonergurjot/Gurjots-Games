@@ -494,13 +494,18 @@ class RunnerGame {
     this.lastTime = timestamp;
     const step = clamp(delta, 0, 3);
     if (!this.paused && !this.gameOver) {
-      this.advance(step);
+      let remaining = step;
+      while (remaining > 0) {
+        const slice = Math.min(1, remaining);
+        this.advanceStep(slice);
+        remaining -= slice;
+      }
     }
     this.draw();
     this.rafId = requestAnimationFrame(this.boundLoop);
   }
 
-  advance(step) {
+  advanceStep(step) {
     const travel = this.speed * step;
     this.distance += travel;
     this.spawnTimer -= travel;
