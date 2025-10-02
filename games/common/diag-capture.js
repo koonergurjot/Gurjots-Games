@@ -19,6 +19,33 @@
     }
   }
 
+  function normalizeEvent(category, payload){
+    const normalizedCategory = typeof category === "string" && category.trim()
+      ? category.trim()
+      : "capture";
+    const source = payload && typeof payload === "object" ? payload : {};
+    const entry = Object.assign({}, source);
+    if (!payload || typeof payload !== "object") {
+      if (payload !== undefined) entry.message = String(payload);
+    }
+    entry.category = normalizedCategory;
+    if (!entry.level) entry.level = "info";
+    if (entry.details !== undefined) {
+      entry.details = safeSerialize(entry.details);
+    }
+    if (entry.error !== undefined) {
+      entry.error = safeSerialize(entry.error);
+    }
+    if (typeof entry.timestamp !== "number") entry.timestamp = Date.now();
+    return entry;
+  }
+
+  function pushEvent(category, payload){
+    const entry = normalizeEvent(category, payload);
+    emit(entry);
+    return entry;
+  }
+
   function safeSerialize(value, seen = new WeakSet(), depth = 0){
     const MAX_DEPTH = 4;
     if (value === null || value === undefined) return value;
@@ -391,4 +418,13 @@
   reportServiceWorker();
   installHeartbeat();
   installNetworkListeners();
+
+  if (global) {
+    global.__GG_DIAG_PUSH_EVENT__ = pushEvent;
+    global.__DIAG_CAPTURE_READY = true;
+  }
+
+  if (typeof module === "object" && module && typeof module.exports === "object") {
+    module.exports = Object.assign(module.exports || {}, { pushEvent });
+  }
 })();

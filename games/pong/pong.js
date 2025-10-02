@@ -31,6 +31,26 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     gridPhase:0
   };
 
+  const globalScope = typeof window !== "undefined" ? window : undefined;
+
+  function pushDiagnostics(level, message, details){
+    if (!globalScope) return;
+    const payload = {
+      level: typeof level === "string" ? level : "info",
+      message: message || "",
+    };
+    if (details !== undefined) payload.details = details;
+    if (typeof globalScope.__GG_DIAG_PUSH_EVENT__ === "function") {
+      globalScope.__GG_DIAG_PUSH_EVENT__("game", payload);
+      return;
+    }
+    const queue = globalScope.__GG_DIAG_QUEUE || (globalScope.__GG_DIAG_QUEUE = []);
+    queue.push(Object.assign({ category: "game", timestamp: Date.now() }, payload));
+    if (queue.length > 1200) {
+      queue.splice(0, queue.length - 1200);
+    }
+  }
+
   // ---------- Utilities ----------
   function hasDebug(){ return location.search.includes("debug"); }
   function post(type, detail){ try{ window.parent && window.parent.postMessage({type, slug:SLUG, detail}, "*"); }catch{} }
@@ -165,6 +185,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
   function toast(msg){
     if(state.diag){ const pre=state.diag.querySelector("pre"); pre.textContent = `[note] ${msg}\n` + pre.textContent; }
+    pushDiagnostics("info", `[${SLUG}] ${msg}`);
   }
 
   function updateHUD(){
@@ -506,6 +527,7 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
       ),
       h("pre",{},"Diagnostics ready.")
     );
+    pushDiagnostics("info", `[${SLUG}] diagnostics ready`);
 
     const keyModal = state.keyModal = h("div",{class:"pong-modal", id:"key-modal"},
       h("div",{class:"pong-card"},
@@ -665,6 +687,7 @@ balls=${state.balls.length} p1.y=${state.p1.y|0} p2.y=${state.p2.y|0}
       console.error("[pong] boot error", err);
       post("GAME_ERROR", String(err&&err.message||err));
       if(state.diag){ const pre=state.diag.querySelector("pre"); pre.textContent = String(err && (err.stack||err.message)||err) + "\n" + pre.textContent; state.diag.classList.add("show"); }
+      pushDiagnostics("error", `[${SLUG}] boot error`, { error: err && (err.stack || err.message) || err });
     }
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot, {once:true});
