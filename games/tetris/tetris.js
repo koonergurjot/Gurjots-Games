@@ -81,6 +81,7 @@ let bc=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('tetris'):null
 if(bc && mode==='spectate'){
   bc.onmessage=e=>{
     ({grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost}=e.data);
+    syncScoreDisplay();
     updateGhost();
   };
 }
@@ -118,6 +119,15 @@ let cur;
 let ghost;
 let showGhost=localStorage.getItem('tetris:ghost')!=='0';
 let score=0, level=1, lines=0, over=false, dropMs=700, last=0, paused=false;
+const scoreDisplay=document.getElementById('score');
+
+function syncScoreDisplay(){
+  if(!scoreDisplay) return;
+  scoreDisplay.textContent=String(score);
+  scoreDisplay.dataset.gameScore=String(score); // Surface score for shell integration.
+}
+
+syncScoreDisplay();
 let lockTimer=0; const LOCK_DELAY=0.5; let lastFrame=0;
 let shellPaused=false;
 let pausedByShell=false;
@@ -209,6 +219,7 @@ function lockPiece(soft=0,hard=0){
     combo=-1;
   }
   score+=pts;
+  syncScoreDisplay();
   lines+=cleared;
   GG.addXP(2*cleared);
   if(lines>=level*LINES_PER_LEVEL){ level++; dropMs=Math.max(120,dropMs-60); }
@@ -334,7 +345,7 @@ function drop(manual=false){
       if(mode==='play'){ Replay.stop(); Replay.download('tetris-replay-'+Date.now()+'.json'); }
     }
   } else {
-    if(manual){ score++; updateBest(); }
+    if(manual){ score++; updateBest(); syncScoreDisplay(); }
     lockTimer=0;
   }
   updateGhost();
@@ -416,6 +427,7 @@ addEventListener('keydown',e=>{
     grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
     bag=[]; initGame();
     score=0; level=1; lines=0; holdM=null; canHold=true;
+    syncScoreDisplay();
     over=false; started=false;
     updateGhost();
     return;
