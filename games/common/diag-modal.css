@@ -10,6 +10,17 @@ body.gg-diag-scroll-locked {
   display: none !important;
 }
 
+.diag-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483599;
+}
+
+.diag-overlay .gg-diag-modal {
+  pointer-events: auto;
+}
+
 .gg-diag-fab {
   position: fixed;
   bottom: 1.5rem;
@@ -128,11 +139,68 @@ body.gg-diag-scroll-locked {
 .gg-diag-modal-body {
   padding: clamp(0.75rem, 3vw, 1.5rem);
   flex: 1;
-  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   background: rgba(9, 15, 24, 0.96);
+}
+
+.gg-diag-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.14);
+}
+
+.gg-diag-tab {
+  border: 1px solid transparent;
+  background: rgba(37, 99, 235, 0.12);
+  color: rgba(226, 232, 240, 0.85);
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.gg-diag-tab:hover,
+.gg-diag-tab:focus-visible {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(147, 197, 253, 0.6);
+  color: #f8fbff;
+  transform: translateY(-1px);
+}
+
+.gg-diag-tab:focus-visible {
+  outline: 3px solid rgba(96, 165, 250, 0.45);
+  outline-offset: 2px;
+}
+
+.gg-diag-tab[aria-selected="true"] {
+  background: rgba(37, 99, 235, 0.45);
+  border-color: rgba(147, 197, 253, 0.8);
+  color: #fdfcff;
+  box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.35);
+}
+
+.gg-diag-panels {
+  flex: 1;
+  position: relative;
+}
+
+.gg-diag-panel {
+  height: 100%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gg-diag-panel[hidden] {
+  display: none !important;
 }
 
 .gg-diag-loglist {
@@ -144,6 +212,21 @@ body.gg-diag-scroll-locked {
   gap: 0.65rem;
   font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.8125rem;
+}
+
+.gg-diag-panel-list {
+  padding-bottom: 0.5rem;
+}
+
+.gg-diag-panel-empty {
+  margin: 0;
+  padding: 1rem 0.75rem;
+  border-radius: 12px;
+  border: 1px dashed rgba(96, 165, 250, 0.3);
+  background: rgba(15, 23, 42, 0.52);
+  color: rgba(191, 219, 254, 0.75);
+  text-align: center;
+  font-size: 0.85rem;
 }
 
 .gg-diag-logitem {
@@ -203,6 +286,130 @@ body.gg-diag-scroll-locked {
   justify-content: flex-end;
   background: rgba(10, 17, 28, 0.92);
   border-top: 1px solid rgba(96, 165, 250, 0.14);
+}
+
+.gg-diag-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(96, 165, 250, 0.18);
+  border: 1px solid rgba(96, 165, 250, 0.38);
+  color: #dbeafe;
+}
+
+.gg-diag-badge--pass {
+  background: rgba(34, 197, 94, 0.22);
+  border-color: rgba(74, 222, 128, 0.55);
+  color: #bbf7d0;
+}
+
+.gg-diag-badge--warn {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(250, 204, 21, 0.55);
+  color: #fde68a;
+}
+
+.gg-diag-badge--fail {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+}
+
+.gg-diag-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.gg-diag-summary-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.gg-diag-summary-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(191, 219, 254, 0.82);
+}
+
+.gg-diag-summary-updated {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: rgba(148, 163, 184, 0.7);
+}
+
+.gg-diag-summary-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.gg-diag-summary-card {
+  background: rgba(17, 27, 42, 0.72);
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.42);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.gg-diag-summary-value {
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.gg-diag-summary-sub {
+  font-size: 0.82rem;
+  color: rgba(191, 219, 254, 0.78);
+}
+
+.gg-diag-summary-subtle {
+  font-size: 0.75rem;
+  color: rgba(148, 163, 184, 0.7);
+}
+
+.gg-diag-summary-metric {
+  font-weight: 600;
+  color: rgba(244, 244, 245, 0.9);
+}
+
+.gg-diag-env {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gg-diag-env-meta {
+  font-size: 0.85rem;
+  color: rgba(191, 219, 254, 0.78);
+}
+
+.gg-diag-env-pre {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  border-radius: 12px;
+  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  color: rgba(226, 232, 240, 0.9);
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
 }
 
 .gg-diag-action {
