@@ -36,6 +36,13 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
   };
 
   const globalScope = typeof window !== "undefined" ? window : undefined;
+  const pongReadyQueue = (() => {
+    if (!globalScope) return [];
+    if (Array.isArray(globalScope.__PONG_READY__)) return globalScope.__PONG_READY__;
+    const queue = [];
+    globalScope.__PONG_READY__ = queue;
+    return queue;
+  })();
 
   function emitStateChange(field, value){
     pushEvent("state", {
@@ -148,6 +155,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
   function reset(){
     state.score.p1=0; state.score.p2=0; updateHUD();
     state.balls.length=0;
+    powerups.length=0;
     state.p1 = {x:32, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
     state.p2 = {x:W-50, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
     spawnBall(Math.random()<0.5? -1 : 1);
@@ -301,6 +309,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
   // ---------- Powerups ----------
   const powerups = [];
+  state.powerups = powerups;
   function maybeSpawnPowerup(dt){
     if(!state.powerups) return;
     if(Math.random() < dt * 0.25){ // avg every ~4s
@@ -603,6 +612,111 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     requestAnimationFrame(step);
   }
 
+  function matchStatus(){
+    if(state.over) return "game-over";
+    if(state.paused) return "paused";
+    if(state.running) return "running";
+    return "idle";
+  }
+
+  function getScoreSnapshot(){
+    return {
+      status: matchStatus(),
+      p1: state.score?.p1 ?? 0,
+      p2: state.score?.p2 ?? 0,
+      mode: state.mode,
+      ai: state.ai,
+      target: state.toScore,
+      winByTwo: !!state.winByTwo,
+    };
+  }
+
+  function getLifecycleSnapshot(){
+    return {
+      status: matchStatus(),
+      running: !!state.running,
+      paused: !!state.paused,
+      over: !!state.over,
+      shellPaused: !!state.shellPaused,
+    };
+  }
+
+  function getEntitySnapshot(){
+    const paddles = [];
+    if(state.p1){
+      paddles.push({
+        id:"p1",
+        x: state.p1.x,
+        y: state.p1.y,
+        w: state.p1.w,
+        h: state.p1.h,
+        dy: state.p1.dy,
+        speed: state.p1.speed,
+      });
+    }
+    if(state.p2){
+      paddles.push({
+        id:"p2",
+        x: state.p2.x,
+        y: state.p2.y,
+        w: state.p2.w,
+        h: state.p2.h,
+        dy: state.p2.dy,
+        speed: state.p2.speed,
+      });
+    }
+    const balls = state.balls.map((b, index)=>({
+      id:index,
+      x:b.x,
+      y:b.y,
+      dx:b.dx,
+      dy:b.dy,
+      r:b.r,
+      spin:b.spin,
+      lastHit:b.lastHit||null,
+    }));
+    const activePowerups = powerups.map((pu, index)=>({
+      id:index,
+      kind:pu.kind,
+      x:pu.x,
+      y:pu.y,
+      r:pu.r,
+      life:pu.life,
+    }));
+    return {
+      score: getScoreSnapshot(),
+      lifecycle: getLifecycleSnapshot(),
+      paddles,
+      balls,
+      powerups: activePowerups,
+    };
+  }
+
+  function startGame(){
+    reset();
+    state.running=true;
+    state.over=false;
+    state.shellPaused=false;
+    state.paused=false;
+    state.last=performance.now();
+  }
+
+  function pauseGame(){
+    if(state.over || state.paused) return;
+    state.shellPaused=false;
+    togglePause();
+  }
+
+  function resumeGame(){
+    if(state.over || !state.paused) return;
+    if(state.shellPaused){
+      resumeFromShell();
+      return;
+    }
+    state.shellPaused=false;
+    togglePause();
+  }
+
   if(globalScope){
     const api = globalScope.Pong || {};
     api.state = state;
@@ -613,7 +727,31 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     api.emitStateChange = emitStateChange;
     api.playReplay = playReplay;
     api.pushEvent = pushEvent;
+    api.getScoreSnapshot = getScoreSnapshot;
+    api.getLifecycleSnapshot = getLifecycleSnapshot;
+    api.getEntitySnapshot = getEntitySnapshot;
+    api.start = startGame;
+    api.pause = pauseGame;
+    api.resume = resumeGame;
+    api.controls = Object.assign({}, api.controls, {
+      start: startGame,
+      pause: pauseGame,
+      resume: resumeGame,
+      reset,
+    });
+    api.ready = (callback)=>{
+      if(typeof callback!=="function") return;
+      try{ callback(api); }catch(err){ console.error("[pong] ready callback failed", err); }
+    };
     globalScope.Pong = api;
+    const queueTarget = Array.isArray(pongReadyQueue) ? pongReadyQueue : [];
+    globalScope.__PONG_READY__ = queueTarget;
+    if(queueTarget.length){
+      const pending = queueTarget.splice(0, queueTarget.length);
+      for(const cb of pending){
+        try{ cb(api); }catch(err){ console.error("[pong] ready callback failed", err); }
+      }
+    }
   }
 
   // ---------- Canvas ----------
