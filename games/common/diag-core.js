@@ -59,10 +59,15 @@
     lastErrorSignature: null,
     lastScoreSerialized: null,
     lastScoreCheck: 0,
+    probesModule: null,
+    probeRunner: null,
+    probeRunPromise: null,
+    probeAutoTriggered: false,
   };
 
   state.adapterModule = ensureDiagnosticsAdapterModule();
   state.gameSlug = detectGameSlug();
+  state.probesModule = ensureDiagnosticsProbesModule();
   if (state.gameSlug && state.adapterModule && typeof state.adapterModule.getGameDiagnostics === "function") {
     assignGameAdapter(state.adapterModule.getGameDiagnostics(state.gameSlug));
   }
@@ -209,6 +214,7 @@
   }
 
   function assignGameAdapter(record){
+    resetProbeRunner();
     if (record && typeof record === "object") {
       state.gameAdapter = {
         slug: typeof record.slug === "string" ? record.slug : state.gameSlug,
@@ -224,6 +230,9 @@
       if (state.lastSummarySnapshot) {
         notifyAdapterSummaryUpdate(state.lastSummarySnapshot, null);
       }
+    }
+    if (state.activeTab === "probes") {
+      triggerAutoProbeRun("adapter-change");
     }
   }
 
@@ -272,6 +281,33 @@
     return fallback;
   }
 
+  function ensureDiagnosticsProbesModule(){
+    if (global.GGDiagProbes && typeof global.GGDiagProbes.createProbeRunner === "function") {
+      return global.GGDiagProbes;
+    }
+    if (typeof module === "object" && module && typeof module.require === "function") {
+      try {
+        const required = module.require("./diagnostics/probes.js");
+        if (required && typeof required.createProbeRunner === "function") {
+          global.GGDiagProbes = required;
+          return required;
+        }
+      } catch (_) {}
+    }
+    if (typeof require === "function") {
+      try {
+        const required = require("./diagnostics/probes.js");
+        if (required && typeof required.createProbeRunner === "function") {
+          global.GGDiagProbes = required;
+          return required;
+        }
+      } catch (_) {}
+    }
+    const fallback = createFallbackProbesModule();
+    global.GGDiagProbes = fallback;
+    return fallback;
+  }
+
   function createFallbackDiagnosticsAdapter(){
     const registry = new Map();
     const listeners = new Set();
@@ -313,6 +349,33 @@
     }
 
     return { registerGameDiagnostics, getGameDiagnostics, subscribe };
+  }
+
+  function createFallbackProbesModule(){
+    function createProbeRunner(options = {}){
+      const logFn = typeof options.log === "function" ? options.log : () => {};
+      let hasRun = false;
+      return {
+        run(reason){
+          if (hasRun) return Promise.resolve([]);
+          hasRun = true;
+          const entry = {
+            category: "probe",
+            level: "info",
+            message: "Probe module unavailable",
+            details: {
+              reason: "missing-module",
+              requested: reason || "unknown",
+            },
+            timestamp: Date.now(),
+          };
+          try { logFn(entry); } catch (_) {}
+          return Promise.resolve([entry]);
+        },
+        reset(){ hasRun = false; },
+      };
+    }
+    return { createProbeRunner };
   }
 
   function ensureUI(){
@@ -464,6 +527,9 @@
       renderProbesPanel(snapshot.probes || []);
       renderNetworkPanel(snapshot.network || []);
       renderEnvironmentPanel(snapshot.environment || null);
+    }
+    if (state.activeTab === "probes") {
+      triggerAutoProbeRun("ui-ready");
     }
   }
 
@@ -790,6 +856,63 @@
     });
   }
 
+  function resetProbeRunner(){
+    if (state.probeRunner && typeof state.probeRunner.reset === "function") {
+      try { state.probeRunner.reset(); } catch (_) {}
+    }
+    state.probeRunner = null;
+    state.probeRunPromise = null;
+    state.probeAutoTriggered = false;
+  }
+
+  function ensureProbeRunner(){
+    if (state.probeRunner) return state.probeRunner;
+    const globalModule = global.GGDiagProbes;
+    if (globalModule && globalModule !== state.probesModule && typeof globalModule.createProbeRunner === "function") {
+      state.probesModule = globalModule;
+    }
+    if (!state.probesModule) {
+      state.probesModule = ensureDiagnosticsProbesModule();
+    }
+    if (!state.probesModule || typeof state.probesModule.createProbeRunner !== "function") return null;
+    const runner = state.probesModule.createProbeRunner({
+      adapter: state.gameAdapter,
+      log(entry){
+        try { log(entry); } catch (err) { console.warn("[gg-diag] probe log failed", err); }
+      },
+      cloneDetails: safeCloneDetails,
+    });
+    state.probeRunner = runner;
+    return runner;
+  }
+
+  function triggerAutoProbeRun(reason = "auto"){
+    if (state.probeAutoTriggered) {
+      return state.probeRunPromise || Promise.resolve(null);
+    }
+    const runner = ensureProbeRunner();
+    if (!runner || typeof runner.run !== "function") return Promise.resolve(null);
+    state.probeAutoTriggered = true;
+    const label = typeof reason === "string" && reason ? reason : "auto";
+    const promise = Promise.resolve().then(() => runner.run(label));
+    state.probeRunPromise = promise;
+    promise.catch((err) => {
+      log({
+        category: "probe",
+        level: "error",
+        message: "Automatic probe run failed",
+        details: {
+          reason: label,
+          error: safeCloneError(err),
+        },
+        timestamp: Date.now(),
+      });
+    }).finally(() => {
+      state.probeRunPromise = null;
+    });
+    return promise;
+  }
+
   function cloneSummaryData(summary){
     if (!summary || typeof summary !== "object") return null;
     try {
@@ -988,6 +1111,9 @@
       if (panel){
         panel.hidden = !selected;
       }
+    }
+    if (tabId === "probes") {
+      triggerAutoProbeRun("tab-visible");
     }
     if (tabId === "console" && state.logList) {
       requestAnimationFrame(() => {
