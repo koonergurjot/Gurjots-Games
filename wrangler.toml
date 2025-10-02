@@ -1,0 +1,11 @@
+name = "game-library"
+main = "cloudflare/worker.ts"
+compatibility_date = "2024-06-20"
+
+assets = { directory = ".", exclude = [
+  "node_modules/**",
+  "scripts/**",
+  "tests/**",
+  "tools/**",
+  ".git/**"
+] }
