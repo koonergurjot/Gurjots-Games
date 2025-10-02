@@ -119,9 +119,11 @@ resetBall();
 
 c.addEventListener('pointermove',e=>{
   const r=c.getBoundingClientRect();
-  const mx=e.clientX-r.left;
-  paddle.x=Math.max(0,Math.min(c.width-paddle.w,mx-paddle.w/2));
-  if(ball.stuck){ball.x=paddle.x+paddle.w/2;}
+  const scaleX=c.width/r.width;
+  const mx=(e.clientX-r.left)*scaleX;
+  const center=Math.max(paddle.w/2,Math.min(c.width-paddle.w/2,mx));
+  paddle.x=center-paddle.w/2;
+  if(ball.stuck){ball.x=center;}
 });
 c.addEventListener('pointerdown',()=>{if(ball.stuck)ball.stuck=false});
 function resetMatch(){
