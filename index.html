@@ -102,14 +102,24 @@
   </section>
 
   <!-- GAMES SECTION -->
-  <section id="games" class="bolt-games">
+  <section id="games" class="bolt-games" aria-labelledby="games-title">
     <div class="bolt-container">
-      <h2 class="bolt-section-title">Browse Games</h2>
-      <form class="bolt-search" role="search" aria-label="Search games" onsubmit="return false;">
-        <input id="bolt-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
-        <button id="bolt-clear" type="button" title="Clear search">✕</button>
-      </form>
-      <div id="bolt-filters" class="bolt-filters" aria-label="Filter by category" role="tablist"></div>
+      <div class="bolt-section-head">
+        <div class="bolt-section-title-group">
+          <h2 class="bolt-section-title" id="games-title">Browse Games</h2>
+          <p class="bolt-section-sub">Explore our curated mix of retro favorites, new releases, and indie gems to find your next go-to adventure.</p>
+        </div>
+        <div class="bolt-filter-bar">
+          <form class="bolt-search" role="search" aria-label="Search games" onsubmit="return false;">
+            <input id="bolt-search" type="search" placeholder="Search games… (e.g., Tetris, Pong)" autocomplete="off" />
+            <button id="bolt-clear" type="button" title="Clear search">✕</button>
+          </form>
+          <div class="bolt-filter-group">
+            <span class="bolt-filter-label" id="bolt-filter-label">Browse by genre</span>
+            <div id="bolt-filters" class="bolt-filters" aria-labelledby="bolt-filter-label" role="tablist"></div>
+          </div>
+        </div>
+      </div>
       <div id="bolt-status" class="bolt-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1">
         <span class="sr-only">Game loading status:</span>
         Loading games…
