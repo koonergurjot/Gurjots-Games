@@ -19,6 +19,7 @@ if (trigger) {
   let overlay = null;
   let dialog = null;
   let lastFocused = null;
+  let releaseFocusTrap = null;
   let catalogPromise = null;
   let catalogTitles = new Map();
 
@@ -29,6 +30,87 @@ if (trigger) {
     history: '[data-profile-history]',
     add: '[data-add-profile]'
   };
+
+  function trapFocus(dialogNode) {
+    if (!dialogNode || typeof dialogNode.addEventListener !== 'function') {
+      return () => {};
+    }
+
+    const FOCUSABLE_SELECTOR = [
+      'a[href]',
+      'area[href]',
+      'button:not([disabled]):not([aria-hidden="true"])',
+      'input:not([type="hidden"]):not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(',');
+
+    const isVisible = element => {
+      if (!element) return false;
+      if (element.hidden) return false;
+      if (element.getAttribute('aria-hidden') === 'true') return false;
+      const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
+      if (style && (style.display === 'none' || style.visibility === 'hidden')) {
+        return false;
+      }
+      return true;
+    };
+
+    const getFocusableElements = () => {
+      const elements = Array.from(dialogNode.querySelectorAll(FOCUSABLE_SELECTOR)).filter(isVisible);
+      if (dialogNode.tabIndex >= 0 && isVisible(dialogNode)) {
+        elements.unshift(dialogNode);
+      }
+      return elements;
+    };
+
+    const handleKeyDown = event => {
+      if (event.key !== 'Tab') return;
+
+      const focusable = getFocusableElements();
+      if (!focusable.length) {
+        event.preventDefault();
+        dialogNode.focus();
+        return;
+      }
+
+      const active = document.activeElement;
+      const currentIndex = focusable.indexOf(active);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey) {
+        if (currentIndex <= 0 || currentIndex === -1) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+
+      if (currentIndex === -1 || active === dialogNode) {
+        event.preventDefault();
+        first.focus();
+        return;
+      }
+
+      if (currentIndex === focusable.length - 1) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    dialogNode.addEventListener('keydown', handleKeyDown);
+    return () => dialogNode.removeEventListener('keydown', handleKeyDown);
+  }
+
+  function applyFocusTrap() {
+    if (!dialog) return;
+    if (typeof releaseFocusTrap === 'function') {
+      releaseFocusTrap();
+    }
+    releaseFocusTrap = trapFocus(dialog);
+  }
 
   function setAvatarVisual(node, profile) {
     if (!node || !profile) return;
@@ -346,6 +428,9 @@ if (trigger) {
     renderMetrics();
     renderQuests(detail);
     renderHistory();
+    if (overlay && overlay.getAttribute('aria-hidden') === 'false') {
+      applyFocusTrap();
+    }
   }
 
   function openOverlay(detail) {
@@ -355,6 +440,7 @@ if (trigger) {
     trigger.setAttribute('aria-expanded', 'true');
     document.body.classList.add('profile-overlay-open');
     lastFocused = document.activeElement;
+    applyFocusTrap();
     dialog?.focus();
     window.addEventListener('keydown', onKeyDown);
   }
@@ -365,6 +451,10 @@ if (trigger) {
     trigger.setAttribute('aria-expanded', 'false');
     document.body.classList.remove('profile-overlay-open');
     window.removeEventListener('keydown', onKeyDown);
+    if (typeof releaseFocusTrap === 'function') {
+      releaseFocusTrap();
+      releaseFocusTrap = null;
+    }
     if (lastFocused && typeof lastFocused.focus === 'function') {
       lastFocused.focus();
     } else {
