@@ -9,6 +9,8 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
   const SLUG = "pong";
   const LS_KEY = "pong.v3";
   const W = 1280, H = 720;
+  const STEP = 1/60;
+  const MAX_FRAME_DELTA = 0.1;
 
   const DFLT = {
     mode:"1P",            // 1P, 2P, Endless, Mayhem
@@ -24,7 +26,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
   const state = {
     ...DFLT, ...loadLS(),
-    running:false, t0:0, last:0, dt:0,
+    running:false, t0:0, last:0, dt:0, acc:0,
     canvas:null, ctx:null, ratio:1, paused:false, over:false,
     score:{p1:0,p2:0}, ball:null, balls:[], p1:null, p2:null, hud:null, loopId:0,
     particles:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
@@ -353,31 +355,26 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
   }
 
   // ---------- Frame ----------
-  function frame(t){
-    state.loopId = requestAnimationFrame(frame);
-    state.dt = Math.min(0.033, (t - (state.last||t)) / 1000);
-    state.last = t;
-    if(!state.running || state.paused) return;
+  function update(dt){
+    state.dt = dt;
 
-    // Update paddles
-    updatePaddle(state.p1, state.dt);
-    updatePaddle(state.p2, state.dt);
-    if(state.mode!=="2P") moveAI(state.dt);
+    updatePaddle(state.p1, dt);
+    updatePaddle(state.p2, dt);
+    if(state.mode!=="2P") moveAI(dt);
 
-    // Powerups + balls
-    maybeSpawnPowerup(state.dt);
-    updatePowerups(state.dt);
+    maybeSpawnPowerup(dt);
+    updatePowerups(dt);
 
-    for(const b of state.balls){ updateBall(b, state.dt); }
+    for(const b of state.balls){ updateBall(b, dt); }
     checkPowerupCollisions();
 
-    // Replay ring buffer (store last N seconds of state)
     if(state.recording){
       state.replay.push({p1y:state.p1.y, p2y:state.p2.y, balls:state.balls.map(b=>({x:b.x,y:b.y,dx:b.dx,dy:b.dy,r:b.r}))});
       if(state.replay.length>state.replayMax) state.replay.shift();
     }
+  }
 
-    // Render
+  function render(){
     const ctx=state.ctx;
     ctx.save();
     clear();
@@ -385,16 +382,13 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
     drawNet();
 
-    // paddles
     rect(state.p1.x, state.p1.y, state.p1.w, state.p1.h, getCSS("--pong-fg"));
     rect(state.p2.x, state.p2.y, state.p2.w, state.p2.h, getCSS("--pong-fg"));
 
-    // trails
     if(!state.reduceMotion){
       for(const b of state.balls){
         state.trail.push({x:b.x,y:b.y,r:b.r,life:0.35});
       }
-      // draw trail
       const t2=[];
       for(const t of state.trail){
         t.life -= state.dt;
@@ -408,7 +402,6 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
       state.ctx.globalAlpha = 1;
     }
 
-    // balls
     for(const b of state.balls){ circle(b.x,b.y,b.r, getCSS("--pong-fg")); }
 
     if(typeof drawParticles === "function"){
@@ -416,7 +409,33 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     }
     endShake();
     ctx.restore();
+  }
 
+  function frame(t){
+    state.loopId = requestAnimationFrame(frame);
+    const delta = Math.min(MAX_FRAME_DELTA, (t - (state.last||t)) / 1000); // Fixed-step integration with an accumulator; clamp to avoid spiral of death.
+    state.last = t;
+
+    if(!state.running){
+      state.dt = 0;
+      render();
+      return;
+    }
+
+    if(state.paused){
+      state.acc = 0;
+      state.dt = 0;
+      render();
+      return;
+    }
+
+    state.acc += delta;
+    while(state.acc >= STEP){
+      update(STEP);
+      state.acc -= STEP;
+    }
+
+    render();
   }
 
   // ---------- UI ----------
