@@ -1,4 +1,5 @@
 import { pushEvent } from '../common/diag-adapter.js';
+import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 
 const globalScope = typeof window !== 'undefined'
   ? window
@@ -112,6 +113,110 @@ function installAdapter(handle) {
   }
 }
 
+function attachQueueListener(listeners, queue, listener) {
+  if (!listeners || typeof listeners.add !== 'function') return () => {};
+  if (typeof listener !== 'function') return () => {};
+  if (Array.isArray(queue)) {
+    for (const event of queue) {
+      try {
+        listener(event);
+      } catch (_) {
+        /* ignore listener errors */
+      }
+    }
+  }
+  listeners.add(listener);
+  return () => {
+    try {
+      listeners.delete(listener);
+    } catch (_) {
+      /* ignore unsubscription errors */
+    }
+  };
+}
+
+function registerDiagnostics(handle) {
+  if (!handle) {
+    pushEvent('game', {
+      level: 'warn',
+      message: `[${GAME_ID}] diagnostics registration skipped: handle unavailable`,
+    });
+    return;
+  }
+  try {
+    registerGameDiagnostics('g2048', {
+      hooks: {
+        onReady(listener) {
+          return attachQueueListener(handle.readyListeners, handle.readyEvents, listener);
+        },
+        onScoreChange(listener) {
+          return attachQueueListener(handle.scoreListeners, handle.scoreEvents, listener);
+        },
+      },
+      api: {
+        start() {
+          handle.gameLoop?.start?.();
+        },
+        pause() {
+          handle.gameLoop?.stop?.();
+        },
+        resume() {
+          handle.gameLoop?.start?.();
+        },
+        reset() {
+          handle.reset?.(false, 'diagnostics');
+        },
+        getScore() {
+          return {
+            score: typeof handle.score === 'number' ? handle.score : 0,
+            best: typeof handle.best === 'number' ? handle.best : null,
+            undoLeft: typeof handle.undoLeft === 'number' ? handle.undoLeft : null,
+            over: typeof handle.over === 'boolean' ? handle.over : null,
+            won: typeof handle.won === 'boolean' ? handle.won : null,
+            size: typeof handle.size === 'number' ? handle.size : null,
+          };
+        },
+        getEntities() {
+          const details = buildDetails(handle);
+          return {
+            grid: details.grid,
+            state: {
+              score: details.score,
+              best: details.best,
+              undoLeft: details.undoLeft,
+              over: details.over,
+              won: details.won,
+              size: details.size,
+            },
+            readyEvents: Array.isArray(handle.readyEvents) ? handle.readyEvents.slice() : [],
+            scoreEvents: Array.isArray(handle.scoreEvents) ? handle.scoreEvents.slice() : [],
+          };
+        },
+      },
+    });
+    pushEvent('game', {
+      level: 'info',
+      message: `[${GAME_ID}] diagnostics adapter registered`,
+    });
+  } catch (error) {
+    pushEvent('game', {
+      level: 'error',
+      message: `[${GAME_ID}] diagnostics registration failed`,
+      details: {
+        error: error?.message || String(error),
+        stack: error?.stack || null,
+      },
+    });
+  }
+}
+
 if (globalScope?.__g2048) {
-  installAdapter(globalScope.__g2048);
+  const handle = globalScope.__g2048;
+  installAdapter(handle);
+  registerDiagnostics(handle);
+} else {
+  pushEvent('game', {
+    level: 'warn',
+    message: `[${GAME_ID}] diagnostics handle unavailable`,
+  });
 }

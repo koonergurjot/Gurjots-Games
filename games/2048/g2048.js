@@ -165,6 +165,20 @@ const DIAG_MAX_READY_EVENTS = 4;
 const DIAG_MAX_SCORE_EVENTS = 12;
 const diagReadyEvents = [];
 const diagScoreEvents = [];
+const diagReadyListeners = new Set();
+const diagScoreListeners = new Set();
+
+function notifyDiagListeners(listeners, event) {
+  if (!listeners || typeof listeners.forEach !== 'function') return;
+  listeners.forEach((listener) => {
+    if (typeof listener !== 'function') return;
+    try {
+      listener(event);
+    } catch (_) {
+      /* ignore listener failures */
+    }
+  });
+}
 
 function snapshotForDiagnostics(reason, extra = {}) {
   const board = Array.isArray(grid) ? copyGrid(grid) : null;
@@ -189,6 +203,7 @@ function recordReadyEvent(reason, extra = {}) {
   if (diagReadyEvents.length > DIAG_MAX_READY_EVENTS) {
     diagReadyEvents.splice(0, diagReadyEvents.length - DIAG_MAX_READY_EVENTS);
   }
+  notifyDiagListeners(diagReadyListeners, event);
   return event;
 }
 
@@ -198,6 +213,7 @@ function recordScoreEvent(reason, extra = {}) {
   if (diagScoreEvents.length > DIAG_MAX_SCORE_EVENTS) {
     diagScoreEvents.splice(0, diagScoreEvents.length - DIAG_MAX_SCORE_EVENTS);
   }
+  notifyDiagListeners(diagScoreListeners, event);
   return event;
 }
 
@@ -820,8 +836,35 @@ Object.defineProperty(diagHandle, 'grid', {
   enumerable: true,
   get(){ return Array.isArray(grid) ? copyGrid(grid) : null; }
 });
+Object.defineProperty(diagHandle, 'best', {
+  configurable: true,
+  enumerable: true,
+  get(){ return best; }
+});
+Object.defineProperty(diagHandle, 'undoLeft', {
+  configurable: true,
+  enumerable: true,
+  get(){ return undoLeft; }
+});
+Object.defineProperty(diagHandle, 'over', {
+  configurable: true,
+  enumerable: true,
+  get(){ return over; }
+});
+Object.defineProperty(diagHandle, 'won', {
+  configurable: true,
+  enumerable: true,
+  get(){ return won; }
+});
+Object.defineProperty(diagHandle, 'size', {
+  configurable: true,
+  enumerable: true,
+  get(){ return N; }
+});
 diagHandle.readyEvents = diagReadyEvents;
 diagHandle.scoreEvents = diagScoreEvents;
+diagHandle.readyListeners = diagReadyListeners;
+diagHandle.scoreListeners = diagScoreListeners;
 
 document.getElementById('hintBtn')?.addEventListener('click',()=>{ getHint(); });
 document.getElementById('themeToggle')?.addEventListener('click',()=>{
