@@ -95,6 +95,7 @@
     exportText,
     copyToClipboard,
     download,
+    openInNewTab,
   };
 
   Object.defineProperty(global, "__GG_DIAG", {
@@ -188,9 +189,11 @@
         document.execCommand("copy");
         textarea.remove();
       }
-      announce("Copied diagnostics to clipboard");
+      const formatLabel = format === "json" ? "JSON" : "report";
+      announce(`Copied diagnostics ${formatLabel} to clipboard`);
     } catch (err) {
-      announce("Unable to copy diagnostics");
+      const formatLabel = format === "json" ? "JSON" : "report";
+      announce(`Unable to copy diagnostics ${formatLabel}`);
       console.warn("__GG_DIAG copy failed", err);
     }
   }
@@ -210,6 +213,32 @@
     } catch (err) {
       announce("Unable to export diagnostics");
       console.warn("__GG_DIAG export failed", err);
+    }
+  }
+
+  function openInNewTab(){
+    let url = "";
+    try {
+      const blob = new Blob([exportJSON()], { type: "application/json" });
+      url = URL.createObjectURL(blob);
+      const opener = typeof window !== "undefined" && typeof window.open === "function"
+        ? window.open(url, "_blank", "noopener")
+        : global?.open?.(url, "_blank", "noopener");
+      if (opener) {
+        announce("Diagnostics opened in new tab");
+      } else {
+        announce("Unable to open diagnostics in new tab");
+        console.warn("__GG_DIAG open in new tab blocked or failed");
+      }
+    } catch (err) {
+      announce("Unable to open diagnostics in new tab");
+      console.warn("__GG_DIAG open in new tab failed", err);
+    } finally {
+      if (url) {
+        setTimeout(() => {
+          try { URL.revokeObjectURL(url); } catch (_) {}
+        }, 0);
+      }
     }
   }
 
@@ -499,13 +528,25 @@
     btnCopy.textContent = "Copy report";
     btnCopy.addEventListener("click", () => copyToClipboard("text"));
 
+    const btnCopyJSON = doc.createElement("button");
+    btnCopyJSON.type = "button";
+    btnCopyJSON.className = "gg-diag-action";
+    btnCopyJSON.textContent = "Copy JSON";
+    btnCopyJSON.addEventListener("click", () => copyToClipboard("json"));
+
     const btnDownload = doc.createElement("button");
     btnDownload.type = "button";
     btnDownload.className = "gg-diag-action";
     btnDownload.textContent = "Download JSON";
     btnDownload.addEventListener("click", () => download());
 
-    actions.append(btnCopy, btnDownload);
+    const btnOpenNewTab = doc.createElement("button");
+    btnOpenNewTab.type = "button";
+    btnOpenNewTab.className = "gg-diag-action";
+    btnOpenNewTab.textContent = "Open in new tab";
+    btnOpenNewTab.addEventListener("click", () => openInNewTab());
+
+    actions.append(btnCopy, btnCopyJSON, btnOpenNewTab, btnDownload);
 
     modal.append(header, body, actions);
     backdrop.append(modal);
