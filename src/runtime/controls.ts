@@ -21,6 +21,14 @@ export class Controls {
   private state = new Map<string, boolean>();
   private handlers: Array<Map<string, Set<() => void>>>;
   private disposers: Array<[EventTarget, string, EventListenerOrEventListenerObject, any?]> = [];
+  private touchBindings = new Map<
+    string,
+    {
+      pressed: boolean;
+      activeCodes: string[];
+      refresh(): void;
+    }
+  >();
   /** Root element for touch controls */
   public element: HTMLElement | null = null;
 
@@ -67,6 +75,10 @@ export class Controls {
   setMapping(action: string, key: string | string[], player = 0): void {
     if (!this.maps[player]) this.maps[player] = {};
     this.maps[player][action] = key;
+    if (player === 0) {
+      const binding = this.touchBindings.get(action);
+      binding?.refresh();
+    }
   }
 
   /** Remove all listeners and DOM nodes. */
@@ -76,6 +88,7 @@ export class Controls {
     }
     this.disposers = [];
     this.handlers.forEach(h => h.clear());
+    this.touchBindings.clear();
     if (this.element) this.element.remove();
     this.element = null;
   }
@@ -84,6 +97,12 @@ export class Controls {
     const m = this.maps[player]?.[action];
     if (Array.isArray(m)) return m.includes(code);
     return m === code;
+  }
+
+  private resolveCodes(action: string, player: number): string[] {
+    const mapping = this.maps[player]?.[action];
+    if (!mapping) return [];
+    return Array.isArray(mapping) ? [...mapping] : [mapping];
   }
 
   private bindKeyboard(): void {
@@ -114,14 +133,46 @@ export class Controls {
   private createButton(action: string, label: string): HTMLElement {
     const btn = document.createElement('button');
     btn.textContent = label;
-    const code = this.maps[0][action];
+    const binding = {
+      pressed: false,
+      activeCodes: [] as string[],
+      refresh: () => {
+        if (!binding.pressed) return;
+        const codes = this.resolveCodes(action, 0);
+        const next = new Set(codes);
+        for (const code of binding.activeCodes) {
+          if (!next.has(code)) this.state.set(code, false);
+        }
+        for (const code of codes) {
+          this.state.set(code, true);
+        }
+        binding.activeCodes = codes;
+      },
+    };
+    const setActive = (active: boolean) => {
+      const codes = this.resolveCodes(action, 0);
+      if (active) {
+        binding.pressed = true;
+        binding.activeCodes = codes;
+        for (const code of codes) this.state.set(code, true);
+      } else {
+        for (const code of binding.activeCodes) this.state.set(code, false);
+        binding.activeCodes = [];
+        binding.pressed = false;
+      }
+    };
+    this.touchBindings.set(action, binding);
     const start = (e: Event) => {
       e.preventDefault();
-      if (Array.isArray(code)) this.state.set(code[0], true); else this.state.set(code, true);
+      if (!binding.pressed) {
+        setActive(true);
+      } else {
+        binding.refresh();
+      }
       this.fire(action, 0);
     };
     const end = () => {
-      if (Array.isArray(code)) this.state.set(code[0], false); else this.state.set(code, false);
+      if (binding.pressed) setActive(false);
     };
     btn.addEventListener('touchstart', start, { passive: false });
     btn.addEventListener('touchend', end);
