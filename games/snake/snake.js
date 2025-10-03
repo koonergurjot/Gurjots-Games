@@ -97,22 +97,42 @@ bootLog('init:start', { readyState: document.readyState });
 const SLUG = 'snake';
 
 const SPRITE_SOURCES = {
-  background: '/assets/backgrounds/arcade.png',
+  background: [
+    '/assets/backgrounds/parallax/arcade_layer1.png',
+    '/assets/backgrounds/parallax/arcade_layer2.png'
+  ],
   snakeHead: '/assets/sprites/enemy2.png',
   snakeBody: '/assets/sprites/block.png',
-  fruit: '/assets/sprites/coin.png',
-  obstacle: '/assets/sprites/brick.png',
+  fruit: '/assets/sprites/collectibles/gem_red.png',
+  fruitGemBlue: '/assets/sprites/collectibles/gem_blue.png',
+  fruitGemGreen: '/assets/sprites/collectibles/gem_green.png',
+  obstacle: '/assets/tilesets/industrial.png',
   spark: '/assets/effects/spark.png',
   explosion: '/assets/effects/explosion.png'
 };
 
 const spriteCache = {};
 
+const BACKGROUND_SCROLL_SPEEDS = [0.004, 0.008];
+let backgroundScrollOffsets = [];
+let lastBackgroundTime = performance.now();
+
 function ensureSprite(name) {
   if (spriteCache[name]) return spriteCache[name];
+  const source = SPRITE_SOURCES[name];
+  if (Array.isArray(source)) {
+    const images = source.map(src => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+      return img;
+    });
+    spriteCache[name] = images;
+    return images;
+  }
   const img = new Image();
   img.decoding = 'async';
-  img.src = SPRITE_SOURCES[name];
+  img.src = source;
   spriteCache[name] = img;
   return img;
 }
@@ -356,14 +376,29 @@ const SNAKE_SKINS = [
   { id: 'emerald', name: 'Emerald', color: tokens['snake-emerald'] || '#10b981', unlock: p => p.plays >= 5 }
 ];
 const FRUIT_SKINS = [
-  { id: 'classic', name: 'Classic', icons: ['🍎','🍌','🍇','🍒','🍊','🍉'], color: tokens['fruit-classic'] || '#22d3ee', unlock: p => true },
-  { id: 'gems', name: 'Gems', icons: ['💎','🔶','🔷'], color: tokens['fruit-gems'] || '#eab308', unlock: p => p.best >= 15 }
+  {
+    id: 'classic',
+    name: 'Classic',
+    icons: ['🍎','🍌','🍇','🍒','🍊','🍉'],
+    color: tokens['fruit-classic'] || '#22d3ee',
+    unlock: p => true
+  },
+  {
+    id: 'gems',
+    name: 'Gems',
+    icons: ['💎','🔶','🔷'],
+    sprites: ['fruit', 'fruitGemBlue', 'fruitGemGreen'],
+    color: tokens['fruit-gems'] || '#eab308',
+    unlock: p => p.best >= 15
+  }
 ];
 const BOARD_THEMES = [
   { id: 'dark', name: 'Dark', colors: [tokens['board-dark1'] || '#111623', tokens['board-dark2'] || '#0f1320'], unlock: p => true },
   { id: 'light', name: 'Light', colors: [tokens['board-light1'] || '#f3f4f6', tokens['board-light2'] || '#e5e7eb'], unlock: p => p.plays >= 3 }
 ];
 let FRUITS = ['🍎', '🍌', '🍇', '🍒', '🍊', '🍉'];
+let FRUIT_ART = FRUITS.map(icon => ({ icon, label: icon, spriteKey: 'fruit' }));
+let gemSpriteIndex = 0;
 const PROGRESS_KEY = 'snake:progress';
 const SKIN_KEY = 'snake:skin';
 const defaultProgress = { plays: 0, best: 0 };
@@ -455,7 +490,18 @@ function applySkin() {
   boardColors = b.colors;
   snakeColorHead = s.color;
   snakeColorRGB = hexToRgb(s.color);
-  FRUITS = f.icons;
+  const fallbackIcons = Array.isArray(f.icons) && f.icons.length ? f.icons : ['🍎'];
+  if (Array.isArray(f.sprites) && f.sprites.length) {
+    FRUIT_ART = f.sprites.map((spriteKey, idx) => ({
+      icon: SPRITE_SOURCES[spriteKey] || SPRITE_SOURCES.fruit,
+      label: fallbackIcons[idx % fallbackIcons.length] || '',
+      spriteKey
+    }));
+  } else {
+    FRUIT_ART = fallbackIcons.map(icon => ({ icon, label: icon, spriteKey: 'fruit' }));
+  }
+  FRUITS = FRUIT_ART.map(art => art.icon);
+  gemSpriteIndex = 0;
   fruitColor = f.color;
   saveSkinSelection();
 }
@@ -587,7 +633,18 @@ function spawnFood() {
     if (r < acc) { type = t; break; }
   }
   if (!type) {
-    type = { icon: FRUITS[Math.floor(rand() * FRUITS.length)], color: fruitColor, points: 1 };
+    let art = FRUIT_ART.length ? FRUIT_ART[Math.floor(rand() * FRUIT_ART.length)] : { icon: '🍎', label: '🍎', spriteKey: 'fruit' };
+    if (fruitSkinId === 'gems' && FRUIT_ART.length) {
+      art = FRUIT_ART[gemSpriteIndex % FRUIT_ART.length];
+      gemSpriteIndex = (gemSpriteIndex + 1) % FRUIT_ART.length;
+    }
+    type = {
+      icon: art.icon,
+      label: art.label ?? art.icon,
+      spriteKey: art.spriteKey || 'fruit',
+      color: fruitColor,
+      points: 1
+    };
   }
   const occupied = new Set();
   for (const segment of snake) occupied.add(`${segment.x},${segment.y}`);
@@ -684,6 +741,8 @@ function draw() {
   const side = Math.min(c.width, c.height);
   const offsetX = (c.width - side) / 2;
   const offsetY = (c.height - side) / 2;
+  const backgroundDelta = Math.min(Math.max(time - lastBackgroundTime, 0), 1000);
+  lastBackgroundTime = time;
   // CELL is derived from the square side length so that N cells always fit exactly.
   CELL = side / N;
   // Store offsets so any canvas-space interaction can subtract them before using CELL.
@@ -692,8 +751,32 @@ function draw() {
 
   ctx.clearRect(0, 0, c.width, c.height);
 
+  let backgroundDrawn = false;
   const bg = ensureSprite('background');
-  if (bg && bg.complete && bg.naturalWidth) {
+  if (Array.isArray(bg)) {
+    if (backgroundScrollOffsets.length !== bg.length) backgroundScrollOffsets = new Array(bg.length).fill(0);
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    bg.forEach((layer, idx) => {
+      if (!layer || !layer.complete || !layer.naturalWidth || !layer.naturalHeight) return;
+      const speed = BACKGROUND_SCROLL_SPEEDS[idx] ?? BACKGROUND_SCROLL_SPEEDS[BACKGROUND_SCROLL_SPEEDS.length - 1] ?? 0.004;
+      const width = layer.naturalWidth;
+      const height = layer.naturalHeight;
+      if (!width || !height) return;
+      backgroundScrollOffsets[idx] = (backgroundScrollOffsets[idx] + backgroundDelta * speed) % width;
+      const scrollX = backgroundScrollOffsets[idx];
+      ctx.save();
+      ctx.globalAlpha = idx === 0 ? 0.9 : 0.7;
+      for (let x = -width; x < side + width; x += width) {
+        for (let y = -height; y < side + height; y += height) {
+          ctx.drawImage(layer, x - scrollX, y, width, height);
+        }
+      }
+      ctx.restore();
+      backgroundDrawn = true;
+    });
+    ctx.restore();
+  } else if (bg && bg.complete && bg.naturalWidth) {
     ctx.save();
     ctx.translate(offsetX, offsetY);
     const pattern = ctx.createPattern(bg, 'repeat');
@@ -704,7 +787,9 @@ function draw() {
       ctx.drawImage(bg, 0, 0, side, side);
     }
     ctx.restore();
-  } else {
+    backgroundDrawn = true;
+  }
+  if (!backgroundDrawn) {
     ctx.fillStyle = boardColors[0];
     ctx.fillRect(offsetX, offsetY, side, side);
   }
@@ -720,13 +805,14 @@ function draw() {
   // fruit with spawn animation
   if (food) {
     const ft = Math.min((time - fruitSpawnTime) / 300, 1);
-    const fruitImg = ensureSprite('fruit');
+    const fruitSpriteKey = food.spriteKey || 'fruit';
+    const fruitImg = ensureSprite(fruitSpriteKey);
     const size = CELL * (0.6 + 0.4 * ft);
     const drawX = (food.x + 0.5) * CELL - size / 2;
     const drawY = (food.y + 0.5) * CELL - size / 2;
     ctx.save();
     ctx.globalAlpha = ft;
-    if (fruitImg && fruitImg.complete && fruitImg.naturalWidth) {
+    if (fruitImg && !Array.isArray(fruitImg) && fruitImg.complete && fruitImg.naturalWidth) {
       ctx.drawImage(fruitImg, drawX, drawY, size, size);
     } else {
       ctx.fillStyle = food.color;
@@ -753,8 +839,17 @@ function draw() {
 
   // obstacles
   const obstacleSprite = ensureSprite('obstacle');
-  if (obstacleSprite && obstacleSprite.complete && obstacleSprite.naturalWidth) {
-    obstacles.forEach(o => ctx.drawImage(obstacleSprite, o.x * CELL, o.y * CELL, CELL, CELL));
+  if (obstacleSprite && !Array.isArray(obstacleSprite) && obstacleSprite.complete && obstacleSprite.naturalWidth && obstacleSprite.naturalHeight) {
+    const tileSize = Math.min(obstacleSprite.naturalWidth, obstacleSprite.naturalHeight);
+    const columns = Math.max(1, Math.floor(obstacleSprite.naturalWidth / tileSize));
+    const rows = Math.max(1, Math.floor(obstacleSprite.naturalHeight / tileSize));
+    const totalTiles = columns * rows;
+    obstacles.forEach((o, idx) => {
+      const tileIndex = totalTiles > 0 ? idx % totalTiles : 0;
+      const sx = (tileIndex % columns) * tileSize;
+      const sy = Math.floor(tileIndex / columns) * tileSize;
+      ctx.drawImage(obstacleSprite, sx, sy, tileSize, tileSize, o.x * CELL, o.y * CELL, CELL, CELL);
+    });
   } else {
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     obstacles.forEach(o => ctx.fillRect(o.x * CELL, o.y * CELL, CELL, CELL));
