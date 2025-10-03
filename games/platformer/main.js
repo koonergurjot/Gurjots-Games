@@ -1,6 +1,7 @@
 import * as net from './net.js';
 import { pushEvent } from '../common/diag-adapter.js';
 import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
+import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
 import { tiles } from './tiles.js';
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
@@ -604,6 +605,7 @@ export function boot() {
     }
     gameOver = false;
     paused = false;
+    setAudioPaused(false);
     finalTime = null;
     runStart = performance.now();
     keys.clear();
@@ -662,8 +664,10 @@ export function boot() {
 
   function triggerGameOver(title, info) {
     if (gameOver) return;
+    playSfx('powerdown', { allowWhilePaused: true });
     gameOver = true;
     paused = true;
+    setAudioPaused(true);
     finalTime = performance.now();
     showOverlay(title, info, { showShare: true });
     if (net.isConnected()) sendState();
@@ -676,6 +680,7 @@ export function boot() {
     const next = typeof forceState === 'boolean' ? forceState : !paused;
     if (next === paused) return;
     paused = next;
+    setAudioPaused(paused);
     if (paused) {
       showOverlay('Paused', 'Press P to resume or R to restart.', { showShare: false });
     } else {
@@ -686,6 +691,7 @@ export function boot() {
 
   function restartGame() {
     resetState();
+    setAudioPaused(false);
     if (net.isConnected()) {
       net.sendAssist();
       sendState();
@@ -972,6 +978,7 @@ export function boot() {
     for (const coin of coins) {
       if (!coin.collected && aabb(localPlayer, coin)) {
         coin.collected = true;
+        playSfx('coin');
         localPlayer.collected += 1;
         emitScore('collect', { coinId: coin.id });
         emitState('collect', { coinId: coin.id });
