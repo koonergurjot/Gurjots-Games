@@ -7,6 +7,9 @@ import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
 const globalScope = typeof window !== 'undefined' ? window : globalThis;
+const reduceMotionQuery = typeof globalScope.matchMedia === 'function'
+  ? globalScope.matchMedia('(prefers-reduced-motion: reduce)')
+  : null;
 
 function dispatchDiagnostics(payload){
   if(!payload) return;
@@ -141,6 +144,11 @@ function getCellSize(){
 }
 
 const params=new URLSearchParams(location.search);
+const motionPreference=params.get('motion');
+const motionPrefersAnimation=motionPreference==='animate'||motionPreference==='on';
+const motionPrefersReduction=motionPreference==='reduce'||motionPreference==='off';
+const shouldReduceMotion=motionPrefersReduction||(!motionPrefersAnimation && !!reduceMotionQuery?.matches);
+const bgShiftStep=shouldReduceMotion?0:0.5;
 const mode=params.has('spectate')?'spectate':(params.get('replay')?'replay':'play');
 const replayFile=params.get('replay');
 
@@ -657,7 +665,7 @@ function draw(){
     markReady();
   }
   const cell=getCellSize();
-  bgShift=(bgShift+0.5)%c.height;
+  bgShift=(bgShift+bgShiftStep)%c.height;
   const bg=ctx.createLinearGradient(0,bgShift,0,c.height+bgShift);
   bg.addColorStop(0,'#0f1320');
   bg.addColorStop(1,'#19253f');
