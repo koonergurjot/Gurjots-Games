@@ -1,5 +1,5 @@
 import { drawGlow } from '../../shared/fx/canvasFx.js';
-import '../../shared/ui/hud.js';
+import { showToast } from '../../shared/ui/hud.js';
 import getThemeTokens from '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { pushEvent } from '../common/diag-adapter.js';
@@ -65,6 +65,10 @@ let localColor='w';
 let lastSentMove=null;
 const netMoveQueue=[];
 let postedReady=false;
+
+const AI_UNAVAILABLE_MESSAGE='AI unavailable – switching to local play';
+let aiMoveTimeout=null;
+let aiUnavailableNotified=false;
 
 const ChessNamespace = window.Chess = window.Chess || {};
 const stateCallbacks = Array.isArray(ChessNamespace.stateCallbacks)
@@ -570,6 +574,40 @@ function currentTurnLabel(){
   }
   return (turn==='w'?'White':'Black')+' to move';
 }
+
+function hasUsableAi(){
+  const aiEngine=window.ai;
+  return !!(aiEngine && typeof aiEngine.bestMove==='function');
+}
+
+function cancelPendingAiMove(){
+  if(aiMoveTimeout!==null){
+    clearTimeout(aiMoveTimeout);
+    aiMoveTimeout=null;
+  }
+}
+
+function handleAiUnavailable(){
+  cancelPendingAiMove();
+  if(!aiUnavailableNotified){
+    const payload=baseState({ reason:'ai-unavailable' });
+    pushEvent('state', {
+      level:'warn',
+      message:`[chess] ${AI_UNAVAILABLE_MESSAGE}`,
+      details:payload,
+      slug:'chess',
+    });
+    if(typeof showToast==='function') showToast(AI_UNAVAILABLE_MESSAGE);
+  }
+  aiUnavailableNotified=true;
+  let labelMessage='';
+  if(!over){
+    const label=currentTurnLabel();
+    labelMessage=inCheck(turn)?`${label} — CHECK!`:label;
+  }
+  const combined=labelMessage?`${AI_UNAVAILABLE_MESSAGE} ${labelMessage}`:AI_UNAVAILABLE_MESSAGE;
+  status(combined);
+}
 function startOnlineMode(){
   onlineMode=true;
   clearNetworkQueues();
@@ -796,13 +834,20 @@ function finalizeMove({source,moveStr}){
     scheduleProcessNetQueue();
     return;
   }
+  let aiUnavailableThisTurn=false;
   if(!onlineMode && puzzleIndex<0 && turn==='b'){
-    status('AI thinking...');
-    setTimeout(aiMove,20);
-    scheduleProcessNetQueue();
-    return;
+    if(hasUsableAi()){
+      aiUnavailableNotified=false;
+      status('AI thinking...');
+      cancelPendingAiMove();
+      aiMoveTimeout=setTimeout(()=>{ aiMoveTimeout=null; aiMove(); },20);
+      scheduleProcessNetQueue();
+      return;
+    }
+    handleAiUnavailable();
+    aiUnavailableThisTurn=true;
   }
-  if(!over){
+  if(!over && !aiUnavailableThisTurn){
     const label=currentTurnLabel();
     if(inCheck(turn)) status(label+' — CHECK!');
     else status(label);
@@ -911,9 +956,15 @@ function movePiece(from,to,opts={}){
 
 function aiMove(){
   if(over || onlineMode) return;
+  if(!hasUsableAi()){
+    handleAiUnavailable();
+    return;
+  }
+  aiUnavailableNotified=false;
   const depth=parseInt(depthEl.value,10)||1;
   const fen=boardToFEN()+" "+turn;
-  const move=ai.bestMove(fen, depth);
+  const aiEngine=window.ai;
+  const move=aiEngine.bestMove(fen, depth);
   if(!move) return;
   const from={x:move.from.x,y:move.from.y};
   const to={x:move.to.x,y:move.to.y};
