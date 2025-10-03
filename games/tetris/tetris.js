@@ -3,6 +3,7 @@ import '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { pushEvent } from '../common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
+import { showModal } from '../../shared/ui/hud.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
@@ -76,27 +77,61 @@ const GAME_ID='tetris';GG.incPlays();
 const BASE_W=300;
 const BASE_H=600;
 
-let c=document.getElementById('t');
-if(!c){
-  const fallback=document.getElementById('gameCanvas');
-  if(fallback){
-    c=fallback;
-  }else{
-    const host=document.getElementById('game-root')||document.body;
-    if(host){
-      const created=document.createElement('canvas');
-      created.id='t';
-      created.width=BASE_W;
-      created.height=BASE_H;
-      created.dataset.basew=String(BASE_W);
-      created.dataset.baseh=String(BASE_H);
-      host.appendChild(created);
-      c=created;
-    }
-  }
+let c;
+let ctx;
+let bootErrorHandled=false;
+let bootAborted=false;
+
+function handleBootError(error){
+  if(bootErrorHandled) return;
+  bootErrorHandled=true;
+  bootAborted=true;
+  const message=error?.message||'Tetris failed to start.';
+  const detail=error?.stack||error?.message||String(error||'');
+  console.error('Tetris boot failed',error);
+  try{ pushEvent('boot',{level:'error',message,error:detail}); }catch(reportErr){ console.warn('Failed to push boot error',reportErr); }
+  try{
+    const content=document.createElement('div');
+    const heading=document.createElement('h2');
+    heading.textContent='Sorry, Tetris is unavailable';
+    const body=document.createElement('p');
+    body.textContent=message;
+    const action=document.createElement('p');
+    action.textContent='Please try refreshing the page.';
+    content.append(heading,body,action);
+    showModal(content);
+  }catch(modalErr){ console.warn('Failed to show boot error modal',modalErr); }
+  try{ window.parent?.postMessage({ type:'GAME_ERROR', slug:'tetris', message, error: detail }, '*'); }catch{}
+  try{ window.parent?.postMessage({ type:'GAME_READY', slug:'tetris' }, '*'); }catch{}
 }
 
-if(c){
+function bootstrap(){
+  c=document.getElementById('t');
+  if(!c){
+    const fallback=document.getElementById('gameCanvas');
+    if(fallback){
+      c=fallback;
+    }else{
+      const host=document.getElementById('game-root')||document.body;
+      if(host){
+        const created=document.createElement('canvas');
+        created.id='t';
+        created.width=BASE_W;
+        created.height=BASE_H;
+        created.dataset.basew=String(BASE_W);
+        created.dataset.baseh=String(BASE_H);
+        host.appendChild(created);
+        c=created;
+      }
+    }
+  }
+
+  if(!c){
+    const error=new Error('Tetris: unable to locate a canvas element (#t or #gameCanvas).');
+    console.error(error);
+    throw error;
+  }
+
   c.dataset.basew=String(BASE_W);
   c.dataset.baseh=String(BASE_H);
   c.width=BASE_W;
@@ -124,12 +159,20 @@ if(c){
 
   applyResponsiveCanvas();
   addEventListener('resize',applyResponsiveCanvas);
-}else{
-  const error=new Error('Tetris: unable to locate a canvas element (#t or #gameCanvas).');
-  console.error(error);
-  throw error;
+
+  ctx=c.getContext('2d');
+  if(!ctx){
+    const error=new Error('Tetris: unable to obtain 2D canvas context.');
+    console.error(error);
+    throw error;
+  }
 }
-const ctx=c.getContext('2d');
+
+try{
+  bootstrap();
+}catch(err){
+  handleBootError(err);
+}
 let postedReady=false;
 const COLS=10, ROWS=20;
 const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
@@ -948,12 +991,37 @@ window.addEventListener('ggshell:resume', onShellResume);
 document.addEventListener('visibilitychange', onVisibility);
 window.addEventListener('message', onShellMessage, {passive:true});
 
-if(mode==='replay'){
-  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;startGameLoop();if(typeof reportReady==='function') reportReady('tetris'); markReady();});
-}else{
-  initGame();
-  if(mode==='spectate') started=true;
-  startGameLoop();
+function finalizeBoot(){
   if(typeof reportReady==='function') reportReady('tetris');
   markReady();
+}
+
+function startStandardMode(){
+  try{
+    if(bootAborted) return;
+    initGame();
+    if(mode==='spectate') started=true;
+    startGameLoop();
+    finalizeBoot();
+  }catch(err){
+    handleBootError(err);
+  }
+}
+
+if(!bootAborted){
+  if(mode==='replay'){
+    Replay.load(`./replays/${replayFile}`).then(()=>{
+      if(bootAborted) return;
+      try{
+        initGame();
+        started=true;
+        startGameLoop();
+        finalizeBoot();
+      }catch(err){
+        handleBootError(err);
+      }
+    }).catch(handleBootError);
+  }else{
+    startStandardMode();
+  }
 }
