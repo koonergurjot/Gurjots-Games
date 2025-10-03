@@ -328,6 +328,7 @@ function reset(keepUndo=false, reasonOverride){
   updateCanvas();
   grid=Array.from({length:N},()=>Array(N).fill(0));
   score=0; over=false; won=false; hintDir=null; anim=null;
+  lastAnnouncedScore = 0;
   
   // Clean up animation state
   newTileAnim = null;
