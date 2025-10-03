@@ -534,7 +534,7 @@ addEventListener('keydown', e=>{
   }
   if(e.key==='h'||e.key==='H') {
     e.preventDefault();
-    showHint();
+    getHint();
     announceToScreenReader('Hint shown on board.');
   }
 });
