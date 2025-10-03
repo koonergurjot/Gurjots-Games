@@ -311,7 +311,7 @@
 
     <main>
       <section class="game-card" aria-live="polite">
-        <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
+        <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-pointer-lock"></iframe>
         <div class="overlay" id="overlay" aria-hidden="false">
           <div class="status" id="statusPanel" role="status" aria-live="polite" aria-atomic="true">
             <span class="sr-only" id="statusContext">Game status message</span>
@@ -423,7 +423,15 @@
       // Wire buttons
       btnReload.addEventListener("click", () => {
         write("manual: reload requested");
-        frame.contentWindow?.location.reload();
+        if (frame.src) {
+          const current = frame.src;
+          frame.src = "about:blank";
+          requestAnimationFrame(() => {
+            frame.src = current;
+          });
+        } else {
+          frame.removeAttribute("src");
+        }
       });
       // Load the game iframe
       pillSlug.textContent = "slug: " + (slug || "—");
@@ -482,7 +490,7 @@
           const mark = frame.contentWindow && frame.contentWindow.__gg_autoSignalInstalled;
           write("child autosignal: " + (mark ? "present" : "absent/x-origin"));
         } catch (e) {
-          write("child-access error (likely cross-origin): " + (e && e.message ? e.message : e));
+          write("child-access blocked by sandbox (expected for cross-origin)");
         }
       });
 
