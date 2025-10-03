@@ -1,6 +1,14 @@
 const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
 const state={games:[],tags:new Set(),activeTag:null,search:"",sort:"az"};
+
+const fxQuery=(()=>{try{return new URLSearchParams(window.location.search).has('fx');}catch{return false;}})();
+const reduceMotionQuery=typeof window!=='undefined'&&typeof window.matchMedia==='function'
+  ? window.matchMedia('(prefers-reduced-motion: reduce)')
+  : null;
+const fxEnabled=()=>fxQuery&&!((reduceMotionQuery&&reduceMotionQuery.matches));
+let teardownLandingFx=null;
+let landingFxSetupPromise=null;
 function deriveComparableTimestamp(game){
   if(!game||typeof game!=='object')return 0;
   const candidates=[game.addedAt,game.added_at,game.released,game.releaseDate,game.release_date,game.publishedAt,game.published_at,game.updatedAt,game.updated_at,game.createdAt,game.created_at,game.date];
@@ -65,7 +73,82 @@ function buildTagChips(){
   });
 }
 function skeletonCards(n=6){const grid=$("#gamesGrid");grid.innerHTML="";for(let i=0;i<n;i++){const card=document.createElement("article");card.className="card";const th=document.createElement("div");th.className="thumb skeleton";card.appendChild(th);const t=document.createElement("div");t.className="skeleton";t.style.cssText="height:18px;width:60%;margin:10px 0 8px;border-radius:6px;";card.appendChild(t);const l=document.createElement("div");l.className="skeleton";l.style.cssText="height:14px;width:90%;border-radius:6px;";card.appendChild(l);grid.appendChild(card);}}
-function particleBG(){const cvs=document.createElement('canvas');cvs.id='bgParticles';Object.assign(cvs.style,{position:'fixed',inset:0,zIndex:0,pointerEvents:'none'});document.body.prepend(cvs);const ctx=cvs.getContext('2d');let w,h,dpr,dots=[];function resize(){dpr=window.devicePixelRatio||1;w=cvs.width=innerWidth*dpr;h=cvs.height=innerHeight*dpr;cvs.style.width=innerWidth+'px';cvs.style.height=innerHeight+'px';dots=new Array(80).fill(0).map(()=>({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*0.4*dpr,vy:(Math.random()-.5)*0.4*dpr,r:(0.6+Math.random()*1.6)*dpr}));}resize();addEventListener('resize',resize);function draw(){ctx.clearRect(0,0,w,h);ctx.fillStyle='rgba(255,255,255,0.15)';dots.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>w)p.vx*=-1;if(p.y<0||p.y>h)p.vy*=-1;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();});requestAnimationFrame(draw);}draw();}
+async function setupLandingFx(){
+  if(!fxEnabled()||teardownLandingFx)return landingFxSetupPromise;
+  if(landingFxSetupPromise)return landingFxSetupPromise;
+  landingFxSetupPromise=(async()=>{
+    try{
+      const { createParticleSystem }=await import('../shared/fx/canvasFx.js');
+      const canvas=document.createElement('canvas');
+      canvas.id='bgParticles';
+      Object.assign(canvas.style,{position:'fixed',inset:0,zIndex:0,pointerEvents:'none'});
+      document.body.prepend(canvas);
+      const ctx=canvas.getContext('2d');
+      const system=createParticleSystem(ctx);
+      const targetCount=80;
+      let frameId=null;
+      let width=0;
+      let height=0;
+      let dpr=1;
+      function resize(){
+        dpr=window.devicePixelRatio||1;
+        width=canvas.width=innerWidth*dpr;
+        height=canvas.height=innerHeight*dpr;
+        canvas.style.width=innerWidth+'px';
+        canvas.style.height=innerHeight+'px';
+      }
+      function spawn(){
+        const angle=Math.random()*Math.PI*2;
+        const speed=(0.15+Math.random()*0.35)*dpr;
+        system.add(Math.random()*width,Math.random()*height,{
+          vx:Math.cos(angle)*speed,
+          vy:Math.sin(angle)*speed,
+          life:420+Math.random()*180,
+          size:(0.6+Math.random()*1.6)*dpr,
+          color:'rgba(255,255,255,0.2)',
+          decay:0.997
+        });
+      }
+      function frame(){
+        while(system.particles.length<targetCount)spawn();
+        ctx.clearRect(0,0,width,height);
+        system.update();
+        system.draw();
+        frameId=requestAnimationFrame(frame);
+      }
+      resize();
+      addEventListener('resize',resize);
+      frame();
+      teardownLandingFx=()=>{
+        if(frameId!=null)cancelAnimationFrame(frameId);
+        removeEventListener('resize',resize);
+        canvas.remove();
+        teardownLandingFx=null;
+      };
+    }catch(e){
+      console.warn('Landing FX unavailable',e);
+      teardownLandingFx=null;
+    }finally{
+      landingFxSetupPromise=null;
+    }
+  })();
+  return landingFxSetupPromise;
+}
+
+if(reduceMotionQuery&&fxQuery){
+  const handleMotionChange=event=>{
+    if(event.matches){
+      if(teardownLandingFx)teardownLandingFx();
+    }else if(!teardownLandingFx&&fxEnabled()){
+      setupLandingFx();
+    }
+  };
+  if(typeof reduceMotionQuery.addEventListener==='function'){
+    reduceMotionQuery.addEventListener('change',handleMotionChange);
+  }else if(typeof reduceMotionQuery.addListener==='function'){
+    reduceMotionQuery.addListener(handleMotionChange);
+  }
+}
 function getGameMetaText(id){return localStorage.getItem('gg:meta:'+id)||'';}
 function getGameBadges(id){const v=localStorage.getItem('gg:ach:'+id)||'';return v?v.split(',').filter(Boolean):[];}
 let lastFocus=null;
@@ -166,5 +249,5 @@ async function loadGames(){
   buildTagChips();
   render();
 }
-document.addEventListener('DOMContentLoaded',()=>{particleBG();const status=document.getElementById('status');status.parentElement.insertBefore(xpBadge(),status.nextSibling);});
+document.addEventListener('DOMContentLoaded',()=>{if(fxEnabled())setupLandingFx();const status=document.getElementById('status');status.parentElement.insertBefore(xpBadge(),status.nextSibling);});
 hydrateUI();loadGames();
