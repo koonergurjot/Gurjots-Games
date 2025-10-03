@@ -1,5 +1,7 @@
 import * as net from './net.js';
 import { pushEvent } from '../common/diag-adapter.js';
+import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
+import { tiles } from './tiles.js';
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 const GAME_ID = 'platformer';
@@ -373,6 +375,9 @@ const KEY_LEFT = ['arrowleft', 'a'];
 const KEY_RIGHT = ['arrowright', 'd'];
 const KEY_JUMP = ['space', 'spacebar', 'arrowup', 'w'];
 
+const COIN_SPRITE = tiles['2']?.sprite ?? null;
+const GOAL_SPRITE = tiles['3']?.sprite ?? null;
+
 function normKey(key) {
   if (key === ' ') return 'space';
   return key.toLowerCase();
@@ -395,15 +400,17 @@ function createPlatforms(width, groundY) {
 
 function createCoins(groundY) {
   return [
-    { id: 'coin-0', x: 250, y: groundY - 172, w: 18, h: 18, collected: false },
-    { id: 'coin-1', x: 570, y: groundY - 232, w: 18, h: 18, collected: false },
-    { id: 'coin-2', x: 640, y: groundY - 62, w: 18, h: 18, collected: false },
-    { id: 'coin-3', x: 790, y: groundY - 122, w: 18, h: 18, collected: false }
+    { id: 'coin-0', x: 250, y: groundY - 172, w: 18, h: 18, collected: false, sprite: COIN_SPRITE },
+    { id: 'coin-1', x: 570, y: groundY - 232, w: 18, h: 18, collected: false, sprite: COIN_SPRITE },
+    { id: 'coin-2', x: 640, y: groundY - 62, w: 18, h: 18, collected: false, sprite: COIN_SPRITE },
+    { id: 'coin-3', x: 790, y: groundY - 122, w: 18, h: 18, collected: false, sprite: COIN_SPRITE }
   ];
 }
 
 function createGoal(groundY, width) {
-  return { x: width - 90, y: groundY - 120, w: 50, h: 120 };
+  const goal = { x: width - 90, y: groundY - 120, w: 50, h: 120 };
+  if (GOAL_SPRITE) goal.sprite = GOAL_SPRITE;
+  return goal;
 }
 
 function clamp(v, min, max) {
@@ -439,6 +446,21 @@ export function boot() {
     markPhase('boot:error', { reason: 'no-2d-context' });
     return;
   }
+  let blockPattern = null;
+  let lavaPattern = null;
+  const hydratePatterns = () => {
+    if (!blockPattern) {
+      const next = getTilePattern(ctx, 'block');
+      if (next) blockPattern = next;
+    }
+    if (!lavaPattern) {
+      const next = getTilePattern(ctx, 'lava');
+      if (next) lavaPattern = next;
+    }
+  };
+  preloadTileTextures().then(() => {
+    hydratePatterns();
+  }).catch(() => {});
   const VIRTUAL_WIDTH = 960;
   const VIRTUAL_HEIGHT = 540;
   let cssWidth = VIRTUAL_WIDTH;
@@ -982,25 +1004,34 @@ export function boot() {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, W, H);
 
-    ctx.fillStyle = '#223757';
+    hydratePatterns();
+
+    const lavaFill = lavaPattern ?? '#223757';
+    ctx.fillStyle = lavaFill;
     ctx.fillRect(0, groundY + 30, W, H - groundY - 30);
 
-    ctx.fillStyle = '#385a88';
+    const blockFill = blockPattern ?? '#385a88';
+    ctx.fillStyle = blockFill;
     for (const platform of platforms) {
       ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
     }
 
-    ctx.fillStyle = '#ffe066';
     for (const coin of coins) {
       if (coin.collected) continue;
-      const cx = coin.x + coin.w / 2;
-      const cy = coin.y + coin.h / 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, coin.w / 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#d4a514';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      const spriteKey = coin.sprite?.key ?? 'coin';
+      const spriteFrame = coin.sprite?.frame;
+      const rendered = drawTileSprite(ctx, spriteKey, coin.x, coin.y, coin.w, coin.h, spriteFrame);
+      if (!rendered) {
+        const cx = coin.x + coin.w / 2;
+        const cy = coin.y + coin.h / 2;
+        ctx.fillStyle = '#ffe066';
+        ctx.beginPath();
+        ctx.arc(cx, cy, coin.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#d4a514';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
     }
 
     ctx.fillStyle = '#98c1ff';

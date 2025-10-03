@@ -1,3 +1,5 @@
+import { getSpriteFrame } from '../../shared/render/tileTextures.js';
+
 export const TILE = 50;
 
 // Collision masks describe the ground height for each x coordinate within a tile.
@@ -8,15 +10,23 @@ export const tileMasks = {
   '4': Array.from({ length: TILE }, (_, x) => TILE - x),
   // Slope rising to the left: ground goes from top-left to bottom-right
   '5': Array.from({ length: TILE }, (_, x) => x + 1),
+  '6': Array(TILE).fill(TILE), // lava top, treated as solid surface for collisions
 };
 
 export const tiles = {
   '0': { name: 'empty' },
-  '1': { name: 'block', solid: true, mask: tileMasks['1'] },
-  '2': { name: 'coin' },
-  '3': { name: 'goal' },
-  '4': { name: 'slopeR', solid: true, slope: true, mask: tileMasks['4'] },
-  '5': { name: 'slopeL', solid: true, slope: true, mask: tileMasks['5'] },
+  '1': { name: 'block', solid: true, mask: tileMasks['1'], texture: 'block' },
+  '2': {
+    name: 'coin',
+    sprite: { key: 'coin', frame: getSpriteFrame('coin') },
+  },
+  '3': {
+    name: 'goal',
+    sprite: { key: 'goal', frame: getSpriteFrame('goal') },
+  },
+  '4': { name: 'slopeR', solid: true, slope: true, mask: tileMasks['4'], texture: 'block' },
+  '5': { name: 'slopeL', solid: true, slope: true, mask: tileMasks['5'], texture: 'block' },
+  '6': { name: 'lava', solid: true, mask: tileMasks['6'], texture: 'lava' },
 };
 
 // Level JSON files to be loaded at runtime.
