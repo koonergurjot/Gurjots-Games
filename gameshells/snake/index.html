@@ -12,9 +12,10 @@
       }
     }
     </script>
+    <script id="gg-diag-autowire" data-shell-diag></script>
     <style>html,body{height:100%;margin:0;background:#000;overflow:hidden}</style>
   </head>
-  <body>
+  <body data-shell-diag>
     <canvas id="game-canvas" width="800" height="600" aria-label="Snake canvas"></canvas>
     <div id="hud">
       <div id="score" aria-live="polite">0</div>
@@ -30,6 +31,7 @@
         ensureElement("#score");
       });
     </script>
+    <script src="../../js/gameUtil.js"></script>
     <script type="module" src="../../games/snake/snake.js"></script>
   
 <!-- Auto-signal bootstrap: emits READY/ERROR to parent -->
