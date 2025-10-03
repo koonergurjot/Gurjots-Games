@@ -1,6 +1,5 @@
+import { loadAudio, loadImage } from './assets.js';
 import { getGameById } from './game-catalog.js';
-
-const reportedFailures = new Set();
 
 function normalizeList(value) {
   if (!value) return [];
@@ -27,79 +26,6 @@ function toAbsoluteUrl(url) {
   } catch (_) {
     return url;
   }
-}
-
-function reportAssetError(slug, url, err) {
-  const key = `${slug}|${url}`;
-  if (reportedFailures.has(key)) return;
-  reportedFailures.add(key);
-  const detail = `[assets] failed to load ${url}: ${err?.message || err || 'unknown error'}`;
-  console.error(detail);
-  try {
-    window.parent?.postMessage?.({
-      type: 'GAME_ERROR',
-      slug,
-      error: detail,
-      message: detail
-    }, '*');
-  } catch (_) {}
-}
-
-function loadImage(url, slug) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.decoding = 'async';
-    img.referrerPolicy = 'no-referrer';
-    const done = () => {
-      cleanup();
-      resolve();
-    };
-    const fail = (event) => {
-      cleanup();
-      const err = event?.error || new Error('image load error');
-      reportAssetError(slug, url, err);
-      reject(err);
-    };
-    function cleanup() {
-      img.removeEventListener('load', done);
-      img.removeEventListener('error', fail);
-    }
-    img.addEventListener('load', done, { once: true });
-    img.addEventListener('error', fail, { once: true });
-    img.src = url;
-  });
-}
-
-function loadAudio(url, slug) {
-  return new Promise((resolve, reject) => {
-    try {
-      const audio = new Audio();
-      audio.preload = 'auto';
-      const done = () => {
-        cleanup();
-        resolve();
-      };
-      const fail = () => {
-        const err = new Error('audio load error');
-        cleanup();
-        reportAssetError(slug, url, err);
-        reject(err);
-      };
-      function cleanup() {
-        audio.removeEventListener('canplaythrough', done);
-        audio.removeEventListener('loadeddata', done);
-        audio.removeEventListener('error', fail);
-      }
-      audio.addEventListener('canplaythrough', done, { once: true });
-      audio.addEventListener('loadeddata', done, { once: true });
-      audio.addEventListener('error', fail, { once: true });
-      audio.src = url;
-      audio.load();
-    } catch (err) {
-      reportAssetError(slug, url, err);
-      reject(err);
-    }
-  });
 }
 
 function classifyAsset(url, hint) {
@@ -132,9 +58,9 @@ export async function preloadFirstFrameAssets(slug) {
     seen.add(key);
     ensureLink(href, type);
     if (type === 'image') {
-      pending.push(loadImage(href, slug).catch(() => {}));
+      pending.push(loadImage(href, { slug }).catch(() => {}));
     } else if (type === 'audio') {
-      pending.push(loadAudio(href, slug).catch(() => {}));
+      pending.push(loadAudio(href, { slug }).catch(() => {}));
     }
   }
   if (pending.length) {
