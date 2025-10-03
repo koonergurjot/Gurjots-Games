@@ -1,0 +1,311 @@
+{
+  "documentation": "./README.md",
+  "assets": [
+    {
+      "path": "/assets/audio/click.wav",
+      "checksum": "64a354d20edb457fd32a5e634649144be5134c5323e32e6d54603e0c5f35b895",
+      "type": "audio/wav",
+      "usage": "Default UI click effect shared by the shell and multiple games for button feedback."
+    },
+    {
+      "path": "/assets/audio/coin.wav",
+      "checksum": "c7f17190bae7fb080cae103a1fae3b8e17a52b9b3bee0e9b043b9d8e83e29704",
+      "type": "audio/wav",
+      "usage": "Coin pickup chime available to arcade titles; add via loader when awarding currency."
+    },
+    {
+      "path": "/assets/audio/explode.wav",
+      "checksum": "64a354d20edb457fd32a5e634649144be5134c5323e32e6d54603e0c5f35b895",
+      "type": "audio/wav",
+      "usage": "Generic impact sample used as an explosion fallback for shooters and effects tests."
+    },
+    {
+      "path": "/assets/audio/gameover.wav",
+      "checksum": "fece12da25c8aaa64ef9a867f5490cd850b71d091e6ef7f08f23b00d32b40d1c",
+      "type": "audio/wav",
+      "usage": "Asteroids game-over sting triggered when the player loses all lives."
+    },
+    {
+      "path": "/assets/audio/hit.wav",
+      "checksum": "64a354d20edb457fd32a5e634649144be5134c5323e32e6d54603e0c5f35b895",
+      "type": "audio/wav",
+      "usage": "Shared hit sound bundled into preload manifests for collision feedback."
+    },
+    {
+      "path": "/assets/audio/jump.wav",
+      "checksum": "cf5e391bd0b8cc84c71b84130ffd7ab986953ed7969bcb5af1cf61ed1617ddda",
+      "type": "audio/wav",
+      "usage": "Jump cue intended for platformers and runners when a character leaves the ground."
+    },
+    {
+      "path": "/assets/audio/laser.wav",
+      "checksum": "3e2597b44136109b2cfa74ef89bdf159abb88c4fa1e85ae5a746f5ecd4081145",
+      "type": "audio/wav",
+      "usage": "Laser shot effect referenced by space shooter prototypes."
+    },
+    {
+      "path": "/assets/audio/powerdown.wav",
+      "checksum": "d91d5153e3204601e8fcfad5a9f6d37b53b6ff19dcca0504e61bf5e4c7c900dc",
+      "type": "audio/wav",
+      "usage": "Power-down jingle used for negative pickups or penalties."
+    },
+    {
+      "path": "/assets/audio/powerup.wav",
+      "checksum": "64a354d20edb457fd32a5e634649144be5134c5323e32e6d54603e0c5f35b895",
+      "type": "audio/wav",
+      "usage": "Primary power-up reward sound, preloaded by several games via games.json."
+    },
+    {
+      "path": "/assets/audio/victory.wav",
+      "checksum": "009b082c68c16e0a9ca3d45ae19db018db5a6f58b50bffd4d525458d6bd56928",
+      "type": "audio/wav",
+      "usage": "Victory fanfare for post-level celebrations and score screens."
+    },
+    {
+      "path": "/assets/backgrounds/arcade.png",
+      "checksum": "45e9055336041a3c8ae0715f9cafd388eddec8c56c9750e18cd6ed4d919f99fc",
+      "type": "image/png",
+      "usage": "Arcade cabinet backdrop rendered in Pong and other retro shells."
+    },
+    {
+      "path": "/assets/backgrounds/city.png",
+      "checksum": "f8d4a9b14bbadf23c0cf6ef7542c3314440fb3867a09f448b817b7270577857c",
+      "type": "image/png",
+      "usage": "City skyline background reserved for future urban-themed levels."
+    },
+    {
+      "path": "/assets/backgrounds/forest.png",
+      "checksum": "2f85455c7f63564c7d4672d3e5d2a067abe6b6f267ce176b5df9878ea0d993df",
+      "type": "image/png",
+      "usage": "Forest environment art kept for nature-themed scenes and menus."
+    },
+    {
+      "path": "/assets/backgrounds/space.png",
+      "checksum": "d9aa1c9091d974813751101a21b4ab2752db00cf9fb55b034b2668ad2d060846",
+      "type": "image/png",
+      "usage": "Starfield background drawn behind the Asteroids playfield."
+    },
+    {
+      "path": "/assets/effects/explosion.png",
+      "checksum": "02f645b839f260f202550c41abdf8a4b1565b624f361d4b4369d3887b7cca31d",
+      "type": "image/png",
+      "usage": "Explosion sprite sheet used by Pong particle tests and Asteroids."
+    },
+    {
+      "path": "/assets/effects/particle.png",
+      "checksum": "b378ef6c4a76d424e1d46e9ec7522875073e60ddb1ceb5446e1418481c4babf4",
+      "type": "image/png",
+      "usage": "General particle texture reused for Pong trails and spark effects."
+    },
+    {
+      "path": "/assets/effects/shield.png",
+      "checksum": "b0479e66af0ee45a86c134673e689ccf435e3e6d57d59a8e0eeb7dc2d14425c8",
+      "type": "image/png",
+      "usage": "Energy shield visual applied in Pong power-ups and Asteroids barrier states."
+    },
+    {
+      "path": "/assets/effects/spark.png",
+      "checksum": "0fd8acd2e61b63cfba9d4c3f1fca0b82e53ece710918b071f3e2eb03c7c15185",
+      "type": "image/png",
+      "usage": "Spark sprite leveraged by Pong\u2019s impact animations."
+    },
+    {
+      "path": "/assets/favicon.png",
+      "checksum": "970b2ae3889d7b3059e478b61aecbf65ba94735ce1ccd9ecabf750355475bddf",
+      "type": "image/png",
+      "usage": "Primary site favicon referenced by top-level HTML documents and avatars."
+    },
+    {
+      "path": "/assets/gurjots-games-banner.png",
+      "checksum": "ba41f731f96a04479a66b37c4d82f4477f7fa1da6fe106482dd7c5770e47c222",
+      "type": "image/png",
+      "usage": "Marketing banner displayed in the repository README and launch pages."
+    },
+    {
+      "path": "/assets/icons/joystick.svg",
+      "checksum": "ad3ed96a2e98c322bbd345e8702e21cd7423665590210f3636e7b1b6f9949d06",
+      "type": "image/svg+xml",
+      "usage": "Landing page metric icon illustrating total games shipped."
+    },
+    {
+      "path": "/assets/icons/players.svg",
+      "checksum": "14fd2e9122bcd508af886e54c7010a6ad02e8e7ba8e587385ab06e52b6ae682a",
+      "type": "image/svg+xml",
+      "usage": "Landing page metric icon showing player counts."
+    },
+    {
+      "path": "/assets/icons/star.svg",
+      "checksum": "13225fb19872f79db8d7c9c889dacf3e573b21a80ed1614fe924996b606711db",
+      "type": "image/svg+xml",
+      "usage": "Landing page metric icon for rating-related stats."
+    },
+    {
+      "path": "/assets/icons/uptime.svg",
+      "checksum": "a10b973557b8d494fe67fb511217c2fccdc7ae7ffe463cda5895fa243dbc0db2",
+      "type": "image/svg+xml",
+      "usage": "Landing page metric icon highlighting uptime and reliability."
+    },
+    {
+      "path": "/assets/logo.svg",
+      "checksum": "9ac916ac9e7ba249e253d311d687734f22d62b8fca81b53f67a35f55d01557d1",
+      "type": "image/svg+xml",
+      "usage": "Main Gurjot\u2019s Games logomark used in navigation and marketing surfaces."
+    },
+    {
+      "path": "/assets/placeholder-thumb.png",
+      "checksum": "7d959ae9353a02d3707dbeefe68f0af43e35d3ff8b479e8a9b16121d90ce947c",
+      "type": "image/png",
+      "usage": "Fallback thumbnail served when a game is missing bespoke artwork."
+    },
+    {
+      "path": "/assets/powerups/heart.png",
+      "checksum": "0b91dd23aa06bc6ca1c17c39c0e4091b341eecd7a90337614eca1991fca65f57",
+      "type": "image/png",
+      "usage": "Heart pickup graphic for health restoration mechanics."
+    },
+    {
+      "path": "/assets/powerups/lightning.png",
+      "checksum": "4437bae68bb92f367f9496de1076f292b0572c0131ed14fa90ad41bac29d2b8c",
+      "type": "image/png",
+      "usage": "Lightning bolt pickup art signaling speed boosts."
+    },
+    {
+      "path": "/assets/powerups/multi.png",
+      "checksum": "1950659fa6a97c4c4c90d1250ec1a094a9c2e35e72eef8a6d919ce86dfd1bdb2",
+      "type": "image/png",
+      "usage": "Multi-shot power-up icon made available to shooters."
+    },
+    {
+      "path": "/assets/powerups/shield.png",
+      "checksum": "546816a608c67fe4287f7c334f4f8e20d5dc927080e57c5cac3a600285cb654e",
+      "type": "image/png",
+      "usage": "Shield pickup badge for temporary invulnerability buffs."
+    },
+    {
+      "path": "/assets/powerups/slow.png",
+      "checksum": "a7d39859470700510086ca116699752220e73026a343707ae1ccb78b8788447b",
+      "type": "image/png",
+      "usage": "Hourglass slowdown pickup texture for time dilation effects."
+    },
+    {
+      "path": "/assets/sprites/ball.png",
+      "checksum": "e05acaad469f7eb11ef8272506cf0c4199dd7aba40e40a17f2d3894a90bca044",
+      "type": "image/png",
+      "usage": "Shared ball sprite used by Pong and Breakout implementations."
+    },
+    {
+      "path": "/assets/sprites/block.png",
+      "checksum": "635567d3a5a646b43bd1c3bc8347bcf9d7c09fcfe795fb883034d4a26625b531",
+      "type": "image/png",
+      "usage": "Tile texture registered in shared render helpers for block-based maps."
+    },
+    {
+      "path": "/assets/sprites/brick.png",
+      "checksum": "f854c968bb605cd4a008e690dfc2c052c973578ed72fddf2e193244f29f675ac",
+      "type": "image/png",
+      "usage": "Breakout brick sprite referenced by preload manifests."
+    },
+    {
+      "path": "/assets/sprites/bullet.png",
+      "checksum": "732118aafb15e45235d027d7c3bdd789172ef8ee6b245ed81230390135ef10d0",
+      "type": "image/png",
+      "usage": "Projectile sprite loaded in Asteroids for player shots."
+    },
+    {
+      "path": "/assets/sprites/coin.png",
+      "checksum": "7f9e7c484c7bab7c2edc6aef6164d9c8a1829e84e413d881683622b9a4189cba",
+      "type": "image/png",
+      "usage": "Coin sprite preloaded by runner, platformer, and snake experiences."
+    },
+    {
+      "path": "/assets/sprites/enemy1.png",
+      "checksum": "b9dda2d10995ab7c12439476818d76bd749c6e208e457c8c5038885b00e6087b",
+      "type": "image/png",
+      "usage": "First enemy sprite option for arcade shooters and AI demos."
+    },
+    {
+      "path": "/assets/sprites/enemy2.png",
+      "checksum": "309749124d6631405d9f2bd980a2e15b92e0c2fa947ad8e7d0be85b05d6f8743",
+      "type": "image/png",
+      "usage": "Second enemy sprite variant to diversify shooter enemy waves."
+    },
+    {
+      "path": "/assets/sprites/laser.png",
+      "checksum": "d2562307f818211885d9ad7d8a83cdeb0d3ab8057ac62c032fa7a1c7b5879cd0",
+      "type": "image/png",
+      "usage": "Enemy laser projectile art used alongside the bullet sprite in Asteroids."
+    },
+    {
+      "path": "/assets/sprites/lava.png",
+      "checksum": "40b533cee08285bdcd0e4f239fa6c351af4f20747050c1edc18975514156af41",
+      "type": "image/png",
+      "usage": "Lava tile texture exposed through shared tile renderer helpers."
+    },
+    {
+      "path": "/assets/sprites/paddle.png",
+      "checksum": "36c2afa47cc5016f16e26715757b2b5e571a3328c0e4be237167804dc9c1a5a5",
+      "type": "image/png",
+      "usage": "Paddle sprite consumed by Pong and Breakout canvases."
+    },
+    {
+      "path": "/assets/sprites/ship.png",
+      "checksum": "988cfe33f4318bea1cd2785731698c99a99f73bf1edd07d7091fbe715597aa91",
+      "type": "image/png",
+      "usage": "Player ship sprite preloaded by Asteroids and Shooter games."
+    },
+    {
+      "path": "/assets/ui/button-hover.png",
+      "checksum": "f23ce86ce357c0fc7b0c1d45c0574245c102eae1fa3bd8fd7ef06b696477e8ef",
+      "type": "image/png",
+      "usage": "Hover state for pixel UI buttons within retro-styled overlays."
+    },
+    {
+      "path": "/assets/ui/button.png",
+      "checksum": "9e73ed9db0c40b793d1294587968bfaf9e4dc89125bf287ac1a401239e933dad",
+      "type": "image/png",
+      "usage": "Default pixel UI button face for menu prompts."
+    },
+    {
+      "path": "/assets/ui/healthbar-empty.png",
+      "checksum": "e70ba70db524c16018f91a66c7eaebeb8613695e4d176d44340bd8618395826c",
+      "type": "image/png",
+      "usage": "Empty health bar frame graphic for HUD overlays."
+    },
+    {
+      "path": "/assets/ui/healthbar-filled.png",
+      "checksum": "15704e4006b9a55aff9123eebb81309eb15b386000e12ff940b3689386ef4093",
+      "type": "image/png",
+      "usage": "Filled health bar interior used alongside the empty frame."
+    },
+    {
+      "path": "/assets/ui/panel.png",
+      "checksum": "460fe3b23530ca8c4f081b6c06fb91989ca2b005f435946390de995743cbc71d",
+      "type": "image/png",
+      "usage": "UI panel frame featured in Chess overlays and HUD mockups."
+    },
+    {
+      "path": "/assets/ui/star.png",
+      "checksum": "5997107d4a8ac564bec2cde874e55f7b9363dc91a80da277a16e74f10bf6fed8",
+      "type": "image/png",
+      "usage": "Decorative star accent placed on Chess pixel panels."
+    },
+    {
+      "path": "/games/2048/assets/board-bg.png",
+      "checksum": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+      "type": "image/png",
+      "usage": "2048-specific board background used by the standalone HTML bundle."
+    },
+    {
+      "path": "/public/css/game-shell.css",
+      "checksum": "c07bab2e563fc1d8cfa225879ed5f9f41f741f8c05969a48f64a62790bc8a62b",
+      "type": "text/css",
+      "usage": "Externalized game shell stylesheet served from /public for embeds."
+    },
+    {
+      "path": "/public/logo.svg",
+      "checksum": "467e2d3cb772f48ce0e42ed628d4f322a68e56d5541265ae7a2637c2371f6621",
+      "type": "image/svg+xml",
+      "usage": "Public-facing logomark used by hosting platforms outside the app shell."
+    }
+  ]
+}
