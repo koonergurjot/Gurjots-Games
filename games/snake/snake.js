@@ -346,6 +346,13 @@ let fruitSpawnTime = performance.now();
 let turnBuffer = [];
 const MAX_TURN_BUFFER = 2;
 
+function enqueueTurn(nd) {
+  if (!nd) return;
+  const lastQueued = turnBuffer.length ? turnBuffer[turnBuffer.length - 1] : dir;
+  if (nd.x === -lastQueued.x && nd.y === -lastQueued.y) return;
+  if (turnBuffer.length < MAX_TURN_BUFFER) turnBuffer.push(nd);
+}
+
 function pauseGame(reason = 'manual') {
   if (paused) return;
   paused = true;
@@ -398,8 +405,10 @@ document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') tog
     const t = e.touches[0];
     const dx = t.clientX - start.clientX, dy = t.clientY - start.clientY;
     if (Math.abs(dx) + Math.abs(dy) > 24) {
-      if (Math.abs(dx) > Math.abs(dy)) dir = { x: Math.sign(dx), y: 0 };
-      else dir = { x: 0, y: Math.sign(dy) };
+      let nd;
+      if (Math.abs(dx) > Math.abs(dy)) nd = { x: Math.sign(dx), y: 0 };
+      else nd = { x: 0, y: Math.sign(dy) };
+      enqueueTurn(nd);
       start = t;
     }
     e.preventDefault();
@@ -657,12 +666,7 @@ document.addEventListener('keydown', e => {
     'arrowleft': { x: -1, y: 0 }, 'a': { x: -1, y: 0 },
     'arrowright': { x: 1, y: 0 }, 'd': { x: 1, y: 0 }
   };
-  if (map[k]) {
-    const nd = map[k];
-    if (!(nd.x === -dir.x && nd.y === -dir.y)) {
-      if (turnBuffer.length < MAX_TURN_BUFFER) turnBuffer.push(nd);
-    }
-  }
+  if (map[k]) enqueueTurn(map[k]);
 });
 
 engine = new GameEngine();
