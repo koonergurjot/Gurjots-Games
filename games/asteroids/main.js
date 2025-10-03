@@ -2,6 +2,7 @@ import { Controls } from '../../src/runtime/controls.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { pushEvent } from '../common/diag-adapter.js';
+import { loadStrip } from '../../shared/assets.js';
 import {
   connect as netConnect,
   disconnect as netDisconnect,
@@ -32,6 +33,7 @@ const FIRE_MODES = ['single', 'burst', 'rapid'];
 const STORAGE_KEYS = {
   best: `${SLUG}:best`,
 };
+const EXPLOSION_SPRITE_SRC = '../../assets/effects/explosion.png';
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 
@@ -591,7 +593,7 @@ class AsteroidsGame {
       background: loadImage('../../assets/backgrounds/space.png'),
       bullet: loadImage('../../assets/sprites/bullet.png'),
       enemyBullet: loadImage('../../assets/sprites/laser.png'),
-      explosion: loadImage('../../assets/effects/explosion.png'),
+      explosion: null,
       shield: loadImage('../../assets/effects/shield.png'),
     };
     this.backgroundPattern = null;
@@ -601,12 +603,28 @@ class AsteroidsGame {
       enemy: this.images.enemyBullet,
     };
     this.explosionSprite = {
+      frameWidth: 0,
+      frameHeight: 0,
       frameSize: 0,
-      framesPerRow: 1,
+      framesPerRow: 8,
       totalFrames: 16,
       frameDuration: 0.045,
     };
     this.explosions = [];
+
+    loadStrip(EXPLOSION_SPRITE_SRC, this.explosionSprite.frameWidth, this.explosionSprite.frameHeight, {
+      slug: SLUG,
+      columns: this.explosionSprite.framesPerRow,
+    })
+      .then((strip) => {
+        this.images.explosion = strip.image;
+        this.explosionSprite.frameWidth = strip.frameWidth;
+        this.explosionSprite.frameHeight = strip.frameHeight;
+        this.explosionSprite.frameSize = Math.min(strip.frameWidth, strip.frameHeight);
+        this.explosionSprite.framesPerRow = strip.columns;
+        this.explosionSprite.totalFrames = strip.frameCount;
+      })
+      .catch(() => {});
 
     this.width = BASE_WIDTH;
     this.height = BASE_HEIGHT;
@@ -653,10 +671,6 @@ class AsteroidsGame {
     if (this.images.bullet) {
       if (this.isSpriteReady(this.images.bullet)) this.prepareBulletVariants();
       else this.images.bullet.addEventListener('load', () => this.prepareBulletVariants());
-    }
-    if (this.images.explosion) {
-      if (this.isSpriteReady(this.images.explosion)) this.prepareExplosionSprite();
-      else this.images.explosion.addEventListener('load', () => this.prepareExplosionSprite());
     }
 
     this.events = {
@@ -833,21 +847,6 @@ class AsteroidsGame {
     this.bulletSprites.player = this.images.bullet;
     const tinted = createTintedSprite(this.images.bullet, '#5eead4');
     this.bulletSprites.remote = tinted || this.images.bullet;
-  }
-
-  prepareExplosionSprite() {
-    if (!this.images?.explosion) return;
-    if (!this.isSpriteReady(this.images.explosion)) return;
-    const image = this.images.explosion;
-    const framesPerRow = 8;
-    const frameSize = Math.floor((image.naturalWidth || image.width) / framesPerRow) || 1;
-    const framesPerColumn = Math.max(
-      1,
-      Math.floor((image.naturalHeight || image.height) / frameSize),
-    );
-    this.explosionSprite.frameSize = frameSize;
-    this.explosionSprite.framesPerRow = framesPerRow;
-    this.explosionSprite.totalFrames = framesPerRow * framesPerColumn;
   }
 
   createShip() {
@@ -1286,8 +1285,8 @@ class AsteroidsGame {
   }
 
   spawnExplosion(x, y, radius) {
-    const baseSize = this.explosionSprite.frameSize || radius * 2;
-    const size = Math.max(radius * 2, baseSize);
+    const baseWidth = this.explosionSprite.frameWidth || this.explosionSprite.frameSize || radius * 2;
+    const size = Math.max(radius * 2, baseWidth);
     this.explosions.push({
       x,
       y,
@@ -1545,8 +1544,9 @@ class AsteroidsGame {
     if (!this.explosions.length) return;
     const ctx = this.ctx;
     const sprite = this.images?.explosion;
-    if (sprite && this.isSpriteReady(sprite) && this.explosionSprite.frameSize) {
-      const frameSize = this.explosionSprite.frameSize;
+    const frameWidth = this.explosionSprite.frameWidth || this.explosionSprite.frameSize || 0;
+    const frameHeight = this.explosionSprite.frameHeight || this.explosionSprite.frameSize || 0;
+    if (sprite && this.isSpriteReady(sprite) && frameWidth > 0 && frameHeight > 0) {
       const framesPerRow = this.explosionSprite.framesPerRow || 1;
       const totalFrames = Math.max(1, this.explosionSprite.totalFrames || 1);
       const frameDuration = this.explosionSprite.frameDuration || 0.05;
@@ -1554,16 +1554,30 @@ class AsteroidsGame {
       ctx.imageSmoothingEnabled = false;
       for (const explosion of this.explosions) {
         const frameIndex = Math.min(totalFrames - 1, explosion.frameIndex || 0);
-        const sx = (frameIndex % framesPerRow) * frameSize;
-        const sy = Math.floor(frameIndex / framesPerRow) * frameSize;
-        const size = explosion.size || frameSize;
-        const half = size / 2;
+        const sx = (frameIndex % framesPerRow) * frameWidth;
+        const sy = Math.floor(frameIndex / framesPerRow) * frameHeight;
+        const baseWidth = explosion.size || frameWidth;
+        const aspect = frameHeight / frameWidth || 1;
+        const drawWidth = baseWidth;
+        const drawHeight = baseWidth * aspect;
+        const halfW = drawWidth / 2;
+        const halfH = drawHeight / 2;
         const progress = Math.min(
           1,
           ((explosion.frameIndex || 0) + (explosion.frameTimer || 0) / frameDuration) / totalFrames,
         );
         ctx.globalAlpha = 0.9 - progress * 0.4;
-        ctx.drawImage(sprite, sx, sy, frameSize, frameSize, explosion.x - half, explosion.y - half, size, size);
+        ctx.drawImage(
+          sprite,
+          sx,
+          sy,
+          frameWidth,
+          frameHeight,
+          explosion.x - halfW,
+          explosion.y - halfH,
+          drawWidth,
+          drawHeight,
+        );
       }
       ctx.restore();
     } else {

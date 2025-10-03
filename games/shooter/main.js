@@ -1,6 +1,6 @@
 // Minimal top-down shooter (canvas id='game')
 import { pushEvent } from '../common/diag-adapter.js';
-import { getCachedAudio, getCachedImage, loadAudio, loadImage, drawTiledBackground } from '../../shared/assets.js';
+import { getCachedAudio, getCachedImage, loadAudio, loadImage, loadStrip, drawTiledBackground } from '../../shared/assets.js';
 import './diagnostics-adapter.js';
 
 export function boot() {
@@ -46,6 +46,8 @@ export function boot() {
   };
 
   const explosionSprite = {
+    frameWidth: 0,
+    frameHeight: 0,
     frameSize: 0,
     framesPerRow: 8,
     totalFrames: 0,
@@ -66,18 +68,6 @@ export function boot() {
     } catch (_) {
       backgroundPattern = null;
     }
-  }
-
-  function prepareExplosionSprite() {
-    const image = sprites.explosion;
-    if (!isImageReady(image)) return;
-    const framesPerRow = explosionSprite.framesPerRow || 8;
-    const size = Math.floor((image.naturalWidth || image.width || 0) / framesPerRow) || 0;
-    if (!size) return;
-    const rows = Math.max(1, Math.floor((image.naturalHeight || image.height || 0) / size));
-    explosionSprite.frameSize = size;
-    explosionSprite.framesPerRow = framesPerRow;
-    explosionSprite.totalFrames = Math.max(1, framesPerRow * rows);
   }
 
   function createSoundPlayer(src, volume = 0.6) {
@@ -113,11 +103,19 @@ export function boot() {
     sprites.enemy = img;
   }).catch(() => {});
 
-  if (sprites.explosion) prepareExplosionSprite();
-  loadImage(ASSET_PATHS.explosion, { slug: SLUG }).then(img => {
-    sprites.explosion = img;
-    prepareExplosionSprite();
-  }).catch(() => {});
+  loadStrip(ASSET_PATHS.explosion, explosionSprite.frameWidth, explosionSprite.frameHeight, {
+    slug: SLUG,
+    columns: explosionSprite.framesPerRow,
+  })
+    .then((strip) => {
+      sprites.explosion = strip.image;
+      explosionSprite.frameWidth = strip.frameWidth;
+      explosionSprite.frameHeight = strip.frameHeight;
+      explosionSprite.frameSize = Math.min(strip.frameWidth, strip.frameHeight);
+      explosionSprite.framesPerRow = strip.columns;
+      explosionSprite.totalFrames = strip.frameCount;
+    })
+    .catch(() => {});
 
   const keys = new Set();
   addEventListener('keydown', e => keys.add(e.key));
@@ -269,16 +267,28 @@ export function boot() {
   function drawExplosions() {
     if (!explosions.length) return;
     const sprite = sprites.explosion;
-    const frameSize = explosionSprite.frameSize || 0;
+    const frameWidth = explosionSprite.frameWidth || explosionSprite.frameSize || 0;
+    const frameHeight = explosionSprite.frameHeight || explosionSprite.frameSize || 0;
     const framesPerRow = Math.max(1, explosionSprite.framesPerRow || 1);
     const totalFrames = Math.max(1, explosionSprite.totalFrames || 1);
-    if (isImageReady(sprite) && frameSize > 0) {
+    if (isImageReady(sprite) && frameWidth > 0 && frameHeight > 0) {
       for (const explosion of explosions) {
         const index = Math.min(totalFrames - 1, explosion.frameIndex || 0);
-        const sx = (index % framesPerRow) * frameSize;
-        const sy = Math.floor(index / framesPerRow) * frameSize;
-        const size = frameSize;
-        ctx.drawImage(sprite, sx, sy, frameSize, frameSize, explosion.x - size / 2, explosion.y - size / 2, size, size);
+        const sx = (index % framesPerRow) * frameWidth;
+        const sy = Math.floor(index / framesPerRow) * frameHeight;
+        const drawWidth = frameWidth;
+        const drawHeight = frameHeight;
+        ctx.drawImage(
+          sprite,
+          sx,
+          sy,
+          frameWidth,
+          frameHeight,
+          explosion.x - drawWidth / 2,
+          explosion.y - drawHeight / 2,
+          drawWidth,
+          drawHeight,
+        );
       }
     } else {
       const prevFill = ctx.fillStyle;

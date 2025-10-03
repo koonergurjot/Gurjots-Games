@@ -23,8 +23,10 @@ function createError(message) {
 
 const imageCache = new Map();
 const audioCache = new Map();
+const stripCache = new Map();
 const imagePromises = new Map();
 const audioPromises = new Map();
+const stripPromises = new Map();
 
 export { imageCache, audioCache };
 
@@ -89,6 +91,137 @@ export function loadImage(src, opts = {}) {
   promise.catch(() => {
     imagePromises.delete(src);
   });
+  return promise;
+}
+
+function toPositiveNumber(value) {
+  if (value == null) return 0;
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  return num;
+}
+
+function toPositiveInt(value) {
+  const num = toPositiveNumber(value);
+  if (!num) return 0;
+  return Math.floor(num);
+}
+
+function normalizeStripKey(src, frameWidth, frameHeight, opts) {
+  const columns = toPositiveInt(opts?.columns ?? opts?.framesPerRow);
+  const rows = toPositiveInt(opts?.rows ?? opts?.framesPerColumn);
+  const total = toPositiveInt(opts?.totalFrames ?? opts?.frames ?? opts?.count);
+  const width = toPositiveInt(frameWidth);
+  const height = toPositiveInt(frameHeight);
+  return `${src}|${width}|${height}|${columns}|${rows}|${total}`;
+}
+
+function computeStripMetadata(image, frameWidth, frameHeight, opts = {}) {
+  const width = Math.max(0, image?.naturalWidth || image?.width || 0);
+  const height = Math.max(0, image?.naturalHeight || image?.height || 0);
+  if (!width || !height) {
+    throw createError('strip image has no dimensions');
+  }
+  const hints = opts || {};
+  const hintColumns = toPositiveInt(hints.columns ?? hints.framesPerRow);
+  const hintRows = toPositiveInt(hints.rows ?? hints.framesPerColumn);
+  const hintTotal = toPositiveInt(hints.totalFrames ?? hints.frames ?? hints.count);
+
+  let columns = hintColumns;
+  let rows = hintRows;
+  let fw = toPositiveNumber(frameWidth);
+  let fh = toPositiveNumber(frameHeight);
+
+  if (!fw && columns) fw = width / columns;
+  if (!fh && rows) fh = height / rows;
+
+  if (!fw && hintTotal && rows) {
+    columns = columns || Math.max(1, Math.ceil(hintTotal / rows));
+    fw = columns ? width / columns : 0;
+  }
+
+  if (!fh && hintTotal && columns) {
+    rows = rows || Math.max(1, Math.ceil(hintTotal / columns));
+    fh = rows ? height / rows : 0;
+  }
+
+  if (!fw) fw = columns ? width / columns : width;
+  if (!fh) fh = rows ? height / rows : fw || height;
+  if (!fh) fh = height;
+
+  fw = Math.max(1, Math.floor(fw));
+  fh = Math.max(1, Math.floor(fh));
+
+  if (!columns && fw) columns = Math.max(1, Math.floor(width / fw));
+  if (!rows && fh) rows = Math.max(1, Math.floor(height / fh));
+
+  if (!columns) columns = Math.max(1, hintTotal || 1);
+  if (!rows) rows = Math.max(1, hintTotal ? Math.ceil(hintTotal / columns) : 1);
+
+  const frameCount = hintTotal ? Math.min(hintTotal, columns * rows) : columns * rows;
+
+  return Object.freeze({
+    image,
+    width,
+    height,
+    frameWidth: fw,
+    frameHeight: fh,
+    columns,
+    rows,
+    framesPerRow: columns,
+    framesPerColumn: rows,
+    frameCount,
+  });
+}
+
+/**
+ * Load an evenly spaced sprite strip and provide metadata describing its layout.
+ * The helper reuses {@link loadImage} so cached images are shared and the
+ * computed frame data is memoized for subsequent callers.
+ *
+ * @param {string} src - Image source URL.
+ * @param {number} frameWidth - Optional fixed frame width (pixels).
+ * @param {number} frameHeight - Optional fixed frame height (pixels).
+ * @param {object} [opts] - Options forwarded to {@link loadImage} plus layout hints.
+ * @param {string} [opts.slug] - Identifier used when reporting load errors.
+ * @param {string} [opts.crossOrigin] - Cross-origin mode for the image request.
+ * @param {number} [opts.columns] - Expected number of frames per row.
+ * @param {number} [opts.rows] - Expected number of frame rows.
+ * @param {number} [opts.totalFrames] - Total frames contained in the strip.
+ * @returns {Promise<object>} Resolves with metadata containing the image, frame
+ * dimensions, and counts.
+ */
+export function loadStrip(src, frameWidth, frameHeight, opts = {}) {
+  if (!src) {
+    const err = createError('strip src required');
+    reportAssetError(opts?.slug, src, err);
+    return Promise.reject(err);
+  }
+  const key = normalizeStripKey(src, frameWidth, frameHeight, opts);
+  if (stripCache.has(key)) {
+    return Promise.resolve(stripCache.get(key));
+  }
+  if (stripPromises.has(key)) {
+    return stripPromises.get(key);
+  }
+  const promise = loadImage(src, opts)
+    .then((image) => {
+      try {
+        const metadata = computeStripMetadata(image, frameWidth, frameHeight, opts);
+        stripCache.set(key, metadata);
+        return metadata;
+      } catch (err) {
+        reportAssetError(opts?.slug, src, err);
+        throw err;
+      } finally {
+        stripPromises.delete(key);
+      }
+    })
+    .catch((err) => {
+      stripPromises.delete(key);
+      throw err;
+    });
+  stripPromises.set(key, promise);
   return promise;
 }
 
