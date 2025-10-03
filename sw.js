@@ -56,6 +56,28 @@ function normalizeAsset(asset) {
   return null;
 }
 
+function normalizeList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') return value.split(/[,\s]+/).filter(Boolean);
+  return [];
+}
+
+function classifyAsset(url, hint) {
+  if (hint === 'audio' || /\.(mp3|ogg|wav|m4a)(\?.*)?$/i.test(url)) return 'audio';
+  if (hint === 'image' || /\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(url)) return 'image';
+  return null;
+}
+
+function toAbsoluteUrl(url) {
+  if (!url) return null;
+  try {
+    return new URL(url, self.location.origin).href;
+  } catch (_) {
+    return url;
+  }
+}
+
 async function stashAssets(assets = []) {
   if (!assets.length) return;
   const cache = await caches.open(CACHE_NAME);
@@ -79,8 +101,16 @@ self.addEventListener('install', (event) => {
   const manifestAssets = Array.isArray(self.__PRECACHE_MANIFEST)
     ? self.__PRECACHE_MANIFEST.map(normalizeAsset).filter(Boolean)
     : [];
-  const precacheTargets = [...CORE_SHELL_ASSETS, ...manifestAssets];
   event.waitUntil((async () => {
+    const precacheTargets = [...CORE_SHELL_ASSETS, ...manifestAssets];
+    try {
+      const catalogAssets = await loadCatalogAssets();
+      if (catalogAssets.length) {
+        precacheTargets.push(...catalogAssets);
+      }
+    } catch (error) {
+      console.warn('[sw] failed to load catalog assets', error);
+    }
     await stashAssets(precacheTargets);
     await self.skipWaiting();
   })());
@@ -113,12 +143,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  const isScript = req.destination === 'script' || url.pathname.endsWith('.js') || url.pathname.endsWith('.mjs');
-  if (isScript && url.pathname.startsWith('/games/')) {
-    event.respondWith(fetch(req));
-    return;
-  }
-
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     try {
@@ -145,3 +169,105 @@ self.addEventListener('fetch', (event) => {
     }
   })());
 });
+
+async function loadCatalog() {
+  try {
+    const response = await fetch('/games.json', { credentials: 'omit' });
+    if (response && response.ok) {
+      const json = await response.json();
+      if (Array.isArray(json)) {
+        return json;
+      }
+    }
+  } catch (error) {
+    console.warn('[sw] failed to read games.json', error);
+  }
+
+  try {
+    return await parseOfflineCatalog();
+  } catch (error) {
+    console.warn('[sw] failed to parse offline catalog', error);
+  }
+
+  return [];
+}
+
+async function parseOfflineCatalog() {
+  const response = await fetch('/data/games-offline.js', { credentials: 'omit' });
+  if (!response || !response.ok) {
+    return [];
+  }
+  const text = await response.text();
+  const match = text.match(/export const games\s*=\s*(\[[\s\S]*\])/);
+  if (!match) {
+    return [];
+  }
+  try {
+    return JSON.parse(match[1]);
+  } catch (error) {
+    console.warn('[sw] unable to parse offline catalog JSON', error);
+    return [];
+  }
+}
+
+async function loadCatalogAssets() {
+  const catalog = await loadCatalog();
+  if (!Array.isArray(catalog) || !catalog.length) {
+    return [];
+  }
+
+  const assets = [];
+  const seen = new Set();
+
+  const addAsset = (url) => {
+    const absolute = toAbsoluteUrl(url);
+    if (!absolute) {
+      return;
+    }
+    if (seen.has(absolute)) {
+      return;
+    }
+    seen.add(absolute);
+    assets.push(absolute);
+  };
+
+  const addTypedAsset = (url, hint) => {
+    const absolute = toAbsoluteUrl(url);
+    if (!absolute) {
+      return;
+    }
+    const type = classifyAsset(absolute, hint);
+    const key = type ? `${type}|${absolute}` : absolute;
+    if (seen.has(key) || seen.has(absolute)) {
+      return;
+    }
+    seen.add(key);
+    seen.add(absolute);
+    assets.push(absolute);
+  };
+
+  for (const game of catalog) {
+    if (game && typeof game.playUrl === 'string') {
+      addAsset(game.playUrl);
+    }
+
+    const meta = game?.firstFrame || game?.firstFrameAssets;
+    if (!meta) continue;
+
+    const sprites = normalizeList(meta.sprites || meta.images);
+    const audio = normalizeList(meta.audio || meta.sounds);
+    const misc = normalizeList(meta.assets);
+
+    for (const sprite of sprites) {
+      addTypedAsset(sprite, 'image');
+    }
+    for (const sound of audio) {
+      addTypedAsset(sound, 'audio');
+    }
+    for (const asset of misc) {
+      addTypedAsset(asset);
+    }
+  }
+
+  return assets;
+}
