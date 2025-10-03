@@ -4,6 +4,7 @@ const textureRegistry = Object.freeze({
   block: Object.freeze({ src: '/assets/tilesets/grass.png', repeat: 'repeat' }),
   brick: Object.freeze({ src: '/assets/tilesets/dirt.png', repeat: 'repeat' }),
   lava: Object.freeze({ src: '/assets/tilesets/stone.png', repeat: 'repeat-x' }),
+  industrial: Object.freeze({ src: '/assets/tilesets/industrial.png', repeat: 'repeat' }),
 });
 
 const keySprite = Object.freeze({
@@ -21,12 +22,30 @@ const checkpointSprite = Object.freeze({
   frame: Object.freeze({ sx: 0, sy: 0, sw: 32, sh: 48 }),
 });
 
+const cloudSpriteOne = Object.freeze({
+  src: '/assets/effects/clouds/cloud1.png',
+  frame: Object.freeze({ sx: 0, sy: 0, sw: 128, sh: 64 }),
+});
+
+const cloudSpriteTwo = Object.freeze({
+  src: '/assets/effects/clouds/cloud2.png',
+  frame: Object.freeze({ sx: 0, sy: 0, sw: 128, sh: 64 }),
+});
+
+const portalSprite = Object.freeze({
+  src: '/assets/effects/portal.png',
+  frame: Object.freeze({ sx: 0, sy: 0, sw: 256, sh: 64 }),
+});
+
 const spriteRegistry = Object.freeze({
   coin: keySprite,
   key: keySprite,
   goal: doorSprite,
   door: doorSprite,
   checkpoint: checkpointSprite,
+  cloud1: cloudSpriteOne,
+  cloud2: cloudSpriteTwo,
+  portal: portalSprite,
 });
 
 const imageCache = new Map();

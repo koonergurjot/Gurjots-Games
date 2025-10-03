@@ -29,10 +29,51 @@ const DEFAULT_LEVEL = {
 
 const SKY_GRADIENT = ['#1e293b', '#0f172a'];
 
+const PARALLAX_LAYER_CONFIGS = Object.freeze([
+  Object.freeze({ src: '/assets/backgrounds/parallax/city_layer1.png', speed: 0.25, alpha: 0.65 }),
+  Object.freeze({ src: '/assets/backgrounds/parallax/city_layer2.png', speed: 0.45, alpha: 0.85 }),
+]);
+
 preloadTileTextures().catch(() => null);
 let postedReady = false;
 
 const globalScope = typeof window !== 'undefined' ? window : null;
+
+const parallaxAssets = (() => {
+  if (!globalScope || typeof globalScope.Image !== 'function') return [];
+  return PARALLAX_LAYER_CONFIGS.map(config => {
+    const img = new globalScope.Image();
+    const entry = {
+      image: img,
+      speed: typeof config.speed === 'number' ? config.speed : 0.25,
+      alpha: typeof config.alpha === 'number' ? clamp(config.alpha, 0, 1) : 1,
+      loaded: false,
+      width: 0,
+      height: 0,
+    };
+    try {
+      img.decoding = 'async';
+    } catch (_) {
+      /* noop */
+    }
+    if ('loading' in img) {
+      img.loading = 'eager';
+    }
+    img.addEventListener('load', () => {
+      entry.loaded = true;
+      entry.width = img.naturalWidth || img.width || 0;
+      entry.height = img.naturalHeight || img.height || 0;
+    });
+    img.addEventListener('error', () => {
+      entry.loaded = false;
+    });
+    img.src = config.src;
+    if (typeof img.decode === 'function') {
+      img.decode().catch(() => null);
+    }
+    return entry;
+  });
+})();
 
 const runnerBridge = (() => {
   if (!globalScope) return null;
@@ -166,6 +207,7 @@ class RunnerGame {
     this.speed = DIFFICULTY_SETTINGS.med.speed;
     this.spawnRange = [...DIFFICULTY_SETTINGS.med.spawnRange];
     this.levelName = '';
+    this.parallaxLayers = parallaxAssets.map(asset => ({ asset, offset: 0 }));
 
     this.input = {
       jumpHeld: false,
@@ -354,6 +396,11 @@ class RunnerGame {
     this.manualIndex = 0;
     this.obstacles = [];
     this.background = this.buildBackground(prepared.background);
+    if (Array.isArray(this.parallaxLayers)) {
+      for (const layer of this.parallaxLayers) {
+        if (layer) layer.offset = 0;
+      }
+    }
     this.spawnTimer = 120;
     if (resetScore) {
       this.distance = 0;
@@ -512,9 +559,27 @@ class RunnerGame {
     this.rafId = requestAnimationFrame(this.boundLoop);
   }
 
+  updateParallax(travel) {
+    if (!Array.isArray(this.parallaxLayers) || !this.parallaxLayers.length) return;
+    const ground = this.groundY();
+    for (const layer of this.parallaxLayers) {
+      const asset = layer?.asset;
+      if (!asset) continue;
+      const baseWidth = asset.width || VIRTUAL_WIDTH;
+      const baseHeight = asset.height || ground;
+      if (baseWidth <= 0 || baseHeight <= 0) continue;
+      const scale = ground / baseHeight;
+      const destWidth = baseWidth * scale || VIRTUAL_WIDTH;
+      if (!Number.isFinite(destWidth) || destWidth <= 0) continue;
+      layer.offset = (layer.offset + travel * asset.speed) % destWidth;
+      if (layer.offset < 0) layer.offset += destWidth;
+    }
+  }
+
   advanceStep(step) {
     const travel = this.speed * step;
     this.distance += travel;
+    this.updateParallax(travel);
     this.spawnTimer -= travel;
     this.spawnManualObstacles();
     if (this.spawnTimer <= 0) {
@@ -824,6 +889,7 @@ class RunnerGame {
     }
     ctx.fillRect(0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
 
+    this.drawParallax(ctx);
     this.drawBackground(ctx);
     this.drawGround(ctx);
     this.drawObstacles(ctx);
@@ -834,18 +900,46 @@ class RunnerGame {
     if (canSave && typeof ctx.restore === 'function') ctx.restore();
   }
 
+  drawParallax(ctx) {
+    if (!Array.isArray(this.parallaxLayers) || !this.parallaxLayers.length) return;
+    const ground = this.groundY();
+    for (const layer of this.parallaxLayers) {
+      const asset = layer?.asset;
+      if (!asset || !asset.loaded || !asset.image) continue;
+      const baseWidth = asset.width || VIRTUAL_WIDTH;
+      const baseHeight = asset.height || ground;
+      if (baseWidth <= 0 || baseHeight <= 0) continue;
+      const scale = ground / baseHeight;
+      const destWidth = baseWidth * scale || VIRTUAL_WIDTH;
+      const destHeight = ground;
+      if (!Number.isFinite(destWidth) || destWidth <= 0) continue;
+      let startX = -layer.offset;
+      if (!Number.isFinite(startX)) startX = 0;
+      while (startX > -destWidth) startX -= destWidth;
+      ctx.save();
+      ctx.globalAlpha = asset.alpha ?? 1;
+      for (let x = startX; x < VIRTUAL_WIDTH; x += destWidth) {
+        ctx.drawImage(asset.image, x, ground - destHeight, destWidth, destHeight);
+      }
+      ctx.restore();
+    }
+  }
+
   drawBackground(ctx) {
     const ground = this.groundY();
-    const buildingPattern = getTilePattern(ctx, 'brick') || getTilePattern(ctx, 'block');
+    const buildingPattern = getTilePattern(ctx, 'industrial')
+      || getTilePattern(ctx, 'brick')
+      || getTilePattern(ctx, 'block');
     const stripePattern = getTilePattern(ctx, 'lava');
-    const foregroundPattern = getTilePattern(ctx, 'block');
+    const foregroundPattern = getTilePattern(ctx, 'industrial') || getTilePattern(ctx, 'block');
 
-    for (const cloud of this.background.clouds) {
+    this.background.clouds.forEach((cloud, index) => {
       const left = cloud.x - cloud.w / 2;
       const top = cloud.y - cloud.h / 2;
       ctx.save();
       ctx.globalAlpha = 0.8;
-      const rendered = drawTileSprite(ctx, 'coin', left, top, cloud.w, cloud.h);
+      const spriteKey = index % 2 === 0 ? 'cloud1' : 'cloud2';
+      const rendered = drawTileSprite(ctx, spriteKey, left, top, cloud.w, cloud.h);
       ctx.restore();
       if (!rendered) {
         ctx.save();
@@ -855,7 +949,7 @@ class RunnerGame {
         ctx.fill();
         ctx.restore();
       }
-    }
+    });
 
     for (const building of this.background.buildings) {
       const top = ground - building.h;
@@ -901,7 +995,7 @@ class RunnerGame {
 
   drawGround(ctx) {
     const ground = this.groundY();
-    const basePattern = getTilePattern(ctx, 'block');
+    const basePattern = getTilePattern(ctx, 'industrial') || getTilePattern(ctx, 'block');
     const accentPattern = getTilePattern(ctx, 'lava');
 
     ctx.save();
@@ -929,7 +1023,7 @@ class RunnerGame {
     for (let i = 0; i < 6; i++) {
       const start = (i / 6) * VIRTUAL_WIDTH;
       const x = start + (this.distance % 120);
-      highlightsDrawn = drawTileSprite(ctx, 'coin', x - 12, ground + 18, 24, 24) || highlightsDrawn;
+      highlightsDrawn = drawTileSprite(ctx, 'portal', x - 12, ground + 18, 32, 18) || highlightsDrawn;
     }
     if (!highlightsDrawn) {
       ctx.globalAlpha = 0.25;
@@ -944,7 +1038,9 @@ class RunnerGame {
 
   drawObstacles(ctx) {
     const hazardPattern = getTilePattern(ctx, 'lava');
-    const barPattern = getTilePattern(ctx, 'brick') || getTilePattern(ctx, 'block');
+    const barPattern = getTilePattern(ctx, 'industrial')
+      || getTilePattern(ctx, 'brick')
+      || getTilePattern(ctx, 'block');
     for (const obs of this.obstacles) {
       ctx.save();
       if (obs.type === 'bar') {
@@ -957,7 +1053,7 @@ class RunnerGame {
 
         ctx.save();
         ctx.globalAlpha = 0.85;
-        const topperRendered = drawTileSprite(ctx, 'goal', obs.x - 4, obs.y - 12, obs.w + 8, 12);
+        const topperRendered = drawTileSprite(ctx, 'cloud2', obs.x - 6, obs.y - 16, obs.w + 12, 18);
         ctx.restore();
         if (!topperRendered) {
           ctx.fillStyle = 'rgba(250,204,21,0.45)';
@@ -973,7 +1069,7 @@ class RunnerGame {
 
         ctx.save();
         ctx.globalAlpha = 0.85;
-        const glowRendered = drawTileSprite(ctx, 'coin', obs.x - 6, obs.y - 18, obs.w + 12, 24);
+        const glowRendered = drawTileSprite(ctx, 'portal', obs.x - 8, obs.y - 22, obs.w + 16, 26);
         ctx.restore();
         if (!glowRendered) {
           ctx.strokeStyle = 'rgba(248,113,113,0.4)';
@@ -991,7 +1087,7 @@ class RunnerGame {
     const bodyTop = p.y + (p.height - bodyHeight);
 
     ctx.save();
-    const bodyRendered = drawTileSprite(ctx, 'goal', p.x, bodyTop, p.width, bodyHeight);
+    const bodyRendered = drawTileSprite(ctx, 'portal', p.x, bodyTop, p.width, bodyHeight);
     if (!bodyRendered) {
       ctx.fillStyle = '#22d3ee';
       ctx.fillRect(p.x, bodyTop, p.width, bodyHeight);
@@ -1004,7 +1100,7 @@ class RunnerGame {
     ctx.globalAlpha = 0.95;
     const headRendered = drawTileSprite(
       ctx,
-      'coin',
+      'cloud1',
       p.x + (p.width - headSize) / 2,
       headY,
       headSize,
