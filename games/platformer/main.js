@@ -822,6 +822,16 @@ export function boot() {
   function initNet() {
     if (!startCoopBtn || !connStatus) return;
 
+    if (!net.isAvailable()) {
+      startCoopBtn.textContent = 'Co-op unavailable';
+      startCoopBtn.style.pointerEvents = 'none';
+      startCoopBtn.style.opacity = '0.7';
+      startCoopBtn.setAttribute('aria-disabled', 'true');
+      startCoopBtn.title = 'Co-op mode requires BroadcastChannel support';
+      connStatus.textContent = 'Unavailable';
+      return;
+    }
+
     startCoopBtn.addEventListener('click', () => {
       if (net.isConnected()) return;
       startCoopBtn.textContent = 'Pairing…';
