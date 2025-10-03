@@ -27,7 +27,11 @@ export function createParticleSystem(ctx) {
       p.vx *= p.decay;
       p.vy *= p.decay;
       p.life--;
-      if (p.life <= 0) particles.splice(i, 1);
+      if (p.life <= 0) {
+        const lastIndex = particles.length - 1;
+        if (i !== lastIndex) particles[i] = particles[lastIndex];
+        particles.pop();
+      }
     }
   }
   function draw() {
