@@ -168,6 +168,82 @@ hud.innerHTML = `Arrows/WASD or swipe • R restart • P pause
     </select></label>
 `;
 
+const storageState = {
+  native: null,
+  disabled: false,
+  cache: new Map(),
+  memory: new Map(),
+  notice: null
+};
+
+function markStorageDisabled(err) {
+  if (storageState.disabled) return;
+  storageState.disabled = true;
+  storageState.native = null;
+  const detail = err && typeof err === 'object' ? { error: err?.message || String(err), name: err?.name || undefined } : { error: String(err) };
+  bootLog('storage:disabled', detail);
+  if (!storageState.notice) {
+    storageState.notice = document.createElement('div');
+    storageState.notice.className = 'hud-notice';
+    storageState.notice.textContent = 'Persistent storage unavailable — progress will reset when you reload.';
+    storageState.notice.style.cssText = 'margin-top:6px;font-size:12px;color:#fbbf24;';
+    try {
+      hud?.appendChild(storageState.notice);
+    } catch (_) {}
+  }
+}
+
+try {
+  storageState.native = window.localStorage;
+} catch (err) {
+  markStorageDisabled(err);
+}
+if (!storageState.native) markStorageDisabled('unavailable');
+
+function safeStorageGetItem(key) {
+  if (storageState.cache.has(key)) {
+    return storageState.cache.get(key);
+  }
+  if (storageState.disabled || !storageState.native) {
+    const fallback = storageState.memory.has(key) ? storageState.memory.get(key) : null;
+    storageState.cache.set(key, fallback);
+    return fallback;
+  }
+  try {
+    const value = storageState.native.getItem(key);
+    storageState.cache.set(key, value);
+    return value;
+  } catch (err) {
+    markStorageDisabled(err);
+    const fallback = storageState.memory.has(key) ? storageState.memory.get(key) : null;
+    storageState.cache.set(key, fallback);
+    return fallback;
+  }
+}
+
+function safeStorageSetItem(key, value) {
+  storageState.cache.set(key, value);
+  storageState.memory.set(key, value);
+  if (storageState.disabled || !storageState.native) return false;
+  try {
+    storageState.native.setItem(key, value);
+    return true;
+  } catch (err) {
+    markStorageDisabled(err);
+    return false;
+  }
+}
+
+function parseJSONSafe(raw, fallback) {
+  if (typeof raw !== 'string' || !raw.length) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed ?? fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 const params = new URLSearchParams(location.search);
 const DAILY_SEED = new Date().toISOString().slice(0, 10);
 const DAILY_MODE = params.get('daily') === '1';
@@ -231,7 +307,9 @@ let snake = [
 let lastSnake = snake.map(s => ({ ...s }));
 let speedMs = 120;
 let score = 0;
-let bestScore = Number(localStorage.getItem('snake:best') || 0);
+const storedBest = safeStorageGetItem('snake:best');
+let bestScore = storedBest != null ? Number(storedBest) : 0;
+if (!Number.isFinite(bestScore)) bestScore = 0;
 let dead = false;
 let deadHandled = false;
 const GAME_ID = 'snake';
@@ -254,14 +332,22 @@ const BOARD_THEMES = [
 let FRUITS = ['🍎', '🍌', '🍇', '🍒', '🍊', '🍉'];
 const PROGRESS_KEY = 'snake:progress';
 const SKIN_KEY = 'snake:skin';
-let progress = JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{"plays":0,"best":0}');
-function saveProgress() { localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); }
+const defaultProgress = { plays: 0, best: 0 };
+const progressData = parseJSONSafe(safeStorageGetItem(PROGRESS_KEY), defaultProgress) || defaultProgress;
+let progress = {
+  plays: Number(progressData.plays) || 0,
+  best: Number(progressData.best) || 0
+};
+function saveProgress() {
+  safeStorageSetItem(PROGRESS_KEY, JSON.stringify({ plays: progress.plays, best: progress.best }));
+}
 progress.plays++;
 saveProgress();
-let selected = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
-let snakeSkinId = selected.snake || 'default';
-let fruitSkinId = selected.fruit || 'classic';
-let boardSkinId = selected.board || 'dark';
+const selectedData = parseJSONSafe(safeStorageGetItem(SKIN_KEY), {}) || {};
+const selected = (selectedData && typeof selectedData === 'object') ? selectedData : {};
+let snakeSkinId = typeof selected.snake === 'string' ? selected.snake : 'default';
+let fruitSkinId = typeof selected.fruit === 'string' ? selected.fruit : 'classic';
+let boardSkinId = typeof selected.board === 'string' ? selected.board : 'dark';
 function ensureUnlocked(id, arr) {
   const s = arr.find(t => t.id === id);
   return s && s.unlock(progress) ? id : arr[0].id;
@@ -270,7 +356,7 @@ snakeSkinId = ensureUnlocked(snakeSkinId, SNAKE_SKINS);
 fruitSkinId = ensureUnlocked(fruitSkinId, FRUIT_SKINS);
 boardSkinId = ensureUnlocked(boardSkinId, BOARD_THEMES);
 function saveSkinSelection() {
-  localStorage.setItem(SKIN_KEY, JSON.stringify({ snake: snakeSkinId, fruit: fruitSkinId, board: boardSkinId }));
+  safeStorageSetItem(SKIN_KEY, JSON.stringify({ snake: snakeSkinId, fruit: fruitSkinId, board: boardSkinId }));
 }
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -459,7 +545,9 @@ function addObstacleRow() {
 
 function maybeLevelUp() {
   level = 1 + Math.floor(score / 5);
-  const best = JSON.parse(localStorage.getItem('gg:lb:' + GAME_ID) || '[]')[0]?.score || score;
+  const bestList = parseJSONSafe(safeStorageGetItem('gg:lb:' + GAME_ID), []);
+  const bestEntry = Array.isArray(bestList) ? bestList[0] : null;
+  const best = Number(bestEntry?.score) || score;
   GG.setMeta(GAME_ID, 'Best: ' + best + ' • Lv ' + level);
 }
 
@@ -633,16 +721,17 @@ function draw() {
 
 function saveScore(s) {
   const key = 'gg:lb:' + GAME_ID;
-  const lb = JSON.parse(localStorage.getItem(key) || '[]');
+  const storedScores = parseJSONSafe(safeStorageGetItem(key), []);
+  const lb = Array.isArray(storedScores) ? storedScores.slice() : [];
   lb.push({ score: s, at: Date.now() });
-  lb.sort((a, b) => b.score - a.score);
+  lb.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
   const top = lb.slice(0, 5);
-  localStorage.setItem(key, JSON.stringify(top));
-  const best = top[0]?.score || 0;
+  safeStorageSetItem(key, JSON.stringify(top));
+  const best = Number(top[0]?.score) || 0;
   GG.setMeta(GAME_ID, 'Best: ' + best);
   if (s > bestScore) {
     bestScore = s;
-    localStorage.setItem('snake:best', bestScore);
+    safeStorageSetItem('snake:best', String(bestScore));
   }
   progress.best = Math.max(progress.best, s);
   saveProgress();
