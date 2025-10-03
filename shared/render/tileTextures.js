@@ -1,0 +1,139 @@
+const globalScope = typeof window !== 'undefined' ? window : typeof globalThis !== 'undefined' ? globalThis : null;
+
+const textureRegistry = Object.freeze({
+  block: Object.freeze({ src: '/assets/sprites/block.png', repeat: 'repeat' }),
+  lava: Object.freeze({ src: '/assets/sprites/lava.png', repeat: 'repeat-x' }),
+});
+
+const spriteRegistry = Object.freeze({
+  coin: Object.freeze({
+    src: '/assets/sprites/coin.png',
+    frame: Object.freeze({ sx: 0, sy: 0, sw: 48, sh: 48 }),
+  }),
+  goal: Object.freeze({
+    src: '/assets/sprites/block.png',
+    frame: Object.freeze({ sx: 0, sy: 0, sw: 32, sh: 32 }),
+  }),
+});
+
+const imageCache = new Map();
+const imagePromises = new Map();
+const patternCache = new WeakMap();
+
+function createImage(src) {
+  if (imageCache.has(src)) {
+    return Promise.resolve(imageCache.get(src));
+  }
+  if (imagePromises.has(src)) {
+    return imagePromises.get(src);
+  }
+  if (!globalScope || typeof globalScope.Image !== 'function') {
+    return Promise.resolve(null);
+  }
+  const promise = new Promise((resolve, reject) => {
+    const img = new globalScope.Image();
+    try {
+      img.decoding = 'async';
+    } catch (_) {
+      /* noop */
+    }
+    if ('loading' in img) {
+      img.loading = 'eager';
+    }
+    img.onload = () => {
+      imageCache.set(src, img);
+      imagePromises.delete(src);
+      resolve(img);
+    };
+    img.onerror = (err) => {
+      imagePromises.delete(src);
+      reject(err);
+    };
+    img.src = src;
+  });
+  imagePromises.set(src, promise);
+  return promise;
+}
+
+function uniqueSources() {
+  const sources = new Set();
+  Object.values(textureRegistry).forEach((def) => sources.add(def.src));
+  Object.values(spriteRegistry).forEach((def) => sources.add(def.src));
+  return Array.from(sources);
+}
+
+export function preloadTileTextures() {
+  return Promise.all(
+    uniqueSources().map((src) =>
+      createImage(src).catch(() => {
+        // Ignore failures so other textures can continue loading.
+        return null;
+      }),
+    ),
+  );
+}
+
+export function getTilePattern(ctx, key) {
+  if (!ctx || typeof ctx.createPattern !== 'function') return null;
+  const texture = textureRegistry[key];
+  if (!texture) return null;
+  let ctxCache = patternCache.get(ctx);
+  if (!ctxCache) {
+    ctxCache = new Map();
+    patternCache.set(ctx, ctxCache);
+  }
+  if (ctxCache.has(key)) {
+    return ctxCache.get(key);
+  }
+  const image = imageCache.get(texture.src);
+  if (!image) return null;
+  const pattern = ctx.createPattern(image, texture.repeat || 'repeat');
+  if (!pattern) return null;
+  ctxCache.set(key, pattern);
+  return pattern;
+}
+
+function resolveSpriteDefinition(keyOrDef) {
+  if (!keyOrDef) return null;
+  if (typeof keyOrDef === 'string') {
+    return spriteRegistry[keyOrDef] || null;
+  }
+  if (typeof keyOrDef === 'object') {
+    if (keyOrDef.src && keyOrDef.frame) return keyOrDef;
+    if (keyOrDef.key && spriteRegistry[keyOrDef.key]) {
+      return spriteRegistry[keyOrDef.key];
+    }
+  }
+  return null;
+}
+
+function imageForSprite(def) {
+  if (!def) return null;
+  const cached = imageCache.get(def.src);
+  if (cached) return cached;
+  if (!globalScope || typeof globalScope.Image !== 'function') return null;
+  // Kick off loading if it hasn't started yet.
+  createImage(def.src).catch(() => null);
+  return null;
+}
+
+export function drawTileSprite(ctx, keyOrDef, dx, dy, dw, dh, frameOverride) {
+  if (!ctx || typeof ctx.drawImage !== 'function') return false;
+  const def = resolveSpriteDefinition(keyOrDef);
+  if (!def) return false;
+  const image = imageForSprite(def);
+  if (!image) return false;
+  const frame = frameOverride || def.frame;
+  if (!frame) return false;
+  const width = typeof dw === 'number' ? dw : frame.sw;
+  const height = typeof dh === 'number' ? dh : frame.sh;
+  ctx.drawImage(image, frame.sx, frame.sy, frame.sw, frame.sh, dx, dy, width, height);
+  return true;
+}
+
+export function getSpriteFrame(key) {
+  return spriteRegistry[key]?.frame ?? null;
+}
+
+export const tileTextureDefinitions = textureRegistry;
+export const tileSpriteDefinitions = spriteRegistry;
