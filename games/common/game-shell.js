@@ -1,5 +1,45 @@
-const current = document.currentScript;
-const dataset = current ? current.dataset : {};
+const toAbsoluteUrl = (value) => {
+  if (!value) return null;
+  try {
+    return new URL(value, window.location.href).href;
+  } catch (_) {
+    return null;
+  }
+};
+
+const findOwningScript = () => {
+  if (document.currentScript) return document.currentScript;
+
+  let moduleUrl = null;
+  try {
+    moduleUrl = eval('import.meta && import.meta.url');
+  } catch (_) {
+    moduleUrl = null;
+  }
+  if (moduleUrl) {
+    const normalizedModuleUrl = toAbsoluteUrl(moduleUrl);
+    if (normalizedModuleUrl) {
+      const match = Array.from(document.querySelectorAll('script[src]')).find((script) => {
+        const normalizedSrc = toAbsoluteUrl(script.src);
+        return normalizedSrc && normalizedSrc === normalizedModuleUrl;
+      });
+      if (match) return match;
+    }
+  }
+
+  const fallback =
+    document.querySelector('script[src*="game-shell.js"][data-game]') ||
+    document.querySelector('script[src*="game-shell.js"][data-slug]') ||
+    document.querySelector('script[src*="game-shell.js"]');
+  return fallback || null;
+};
+
+const current = findOwningScript();
+if (!current) {
+  console.warn('[game-shell] Unable to locate owning <script> element.');
+}
+
+const dataset = current?.dataset || {};
 const applyTheme = dataset.applyTheme !== 'false';
 const slug = dataset.game || dataset.slug || '';
 const diagSrc = dataset.diagSrc || '../common/diag-autowire.js';
