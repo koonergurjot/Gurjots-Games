@@ -171,6 +171,18 @@ if(isNaN(best)) best=0;
 let mergeStreak = 1;      // Current streak multiplier (x1, x2, x3...)
 let lastMoveHadMerge = false;
 
+let reduceMotion = false;
+let reduceMotionQuery = null;
+try {
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reduceMotion = !!reduceMotionQuery.matches;
+  }
+} catch (_) {
+  reduceMotionQuery = null;
+  reduceMotion = false;
+}
+
 const DIAG_MAX_READY_EVENTS = 4;
 const DIAG_MAX_SCORE_EVENTS = 12;
 const diagReadyEvents = [];
@@ -331,6 +343,10 @@ function applyTheme(){
   
   // Update all UI elements with current values
   updateUI();
+
+  if(reduceMotion){
+    draw();
+  }
 }
 
 function reset(keepUndo=false, reasonOverride){
@@ -361,16 +377,26 @@ function reset(keepUndo=false, reasonOverride){
     : (keepUndo ? 'init' : 'reset');
   recordScoreEvent(reason, { delta: score - previousScore });
   recordReadyEvent(reason);
+
+  if(reduceMotion){
+    draw();
+  }
 }
 
-function addTile(){
+function addTile(options = {}){
+  const { skipAnimation = false } = options || {};
   const empty=[];
   for(let y=0;y<N;y++) for(let x=0;x<N;x++) if(!grid[y][x]) empty.push([x,y]);
   if(!empty.length) return;
   const [x,y]=empty[(Math.random()*empty.length)|0];
   const value = Math.random()<0.9?2:4;
   grid[y][x] = value;
-  
+
+  if(skipAnimation || reduceMotion){
+    newTileAnim = null;
+    return;
+  }
+
   // Create scale-in animation for new tile
   newTileAnim = {
     x, y, value,
@@ -400,6 +426,10 @@ function undoMove(){
       hideGameOverModal();
       net?.send('move',{grid,score});
       recordScoreEvent('undo', { delta: score - previousScore });
+
+      if(reduceMotion){
+        draw();
+      }
     }
   }
 }
@@ -417,11 +447,13 @@ function move(dir){
   
   // Track merged tiles for animation
   mergedAnim.clear();
-  animations.forEach(a => {
-    if(after[a.toY][a.toX] !== a.value) { // This is a merge
-      mergedAnim.set(`${a.toX},${a.toY}`, { p: 0, scale: 1.1 });
-    }
-  });
+  if(!reduceMotion){
+    animations.forEach(a => {
+      if(after[a.toY][a.toX] !== a.value) { // This is a merge
+        mergedAnim.set(`${a.toX},${a.toY}`, { p: 0, scale: 1.1 });
+      }
+    });
+  }
 
   // Merge-streak multiplier system
   if(FEATURES.mergeStreaks) {
@@ -448,6 +480,17 @@ function move(dir){
   if(gained>=128) net?.send('garbage',{count:1});
   const base=copyGrid(grid);
   animations.forEach(a=>{ base[a.fromY][a.fromX]=0; });
+
+  if(reduceMotion){
+    grid = after;
+    anim = null;
+    addTile({ skipAnimation: true });
+    check();
+    net?.send('move',{grid,score});
+    draw();
+    return;
+  }
+
   anim={base, tiles:animations, after, p:0};
 }
 
@@ -575,22 +618,28 @@ c.addEventListener('touchend',e=>{
 });
 
 function draw(anim){
+  if(!Array.isArray(grid)) return;
   announceGameReady();
   // Frame rate optimization - skip frames when performance is poor
   const now = performance.now();
-  if (renderCache.skipFrames > 0) {
-    renderCache.skipFrames--;
-    return;
-  }
-  
-  // Adaptive frame rate based on performance
-  const deltaTime = now - renderCache.lastFrameTime;
-  if (deltaTime < 16) { // Running above 60 FPS
+  if(!reduceMotion){
+    if (renderCache.skipFrames > 0) {
+      renderCache.skipFrames--;
+      return;
+    }
+
+    // Adaptive frame rate based on performance
+    const deltaTime = now - renderCache.lastFrameTime;
+    if (deltaTime < 16) { // Running above 60 FPS
+      renderCache.skipFrames = 0;
+    } else if (deltaTime > 33) { // Running below 30 FPS
+      renderCache.skipFrames = 1; // Skip every other frame
+    }
+    renderCache.lastFrameTime = now;
+  } else {
     renderCache.skipFrames = 0;
-  } else if (deltaTime > 33) { // Running below 30 FPS
-    renderCache.skipFrames = 1; // Skip every other frame
+    renderCache.lastFrameTime = now;
   }
-  renderCache.lastFrameTime = now;
   
   // Cache theme and computed values
   const theme = themes[currentTheme];
@@ -620,44 +669,44 @@ function draw(anim){
   ctx.fillStyle = theme.text;
   ctx.font = '16px Inter,system-ui';
   ctx.fillText(scoreText, 12, 20);
-  const base=anim?anim.base:grid;
+  const base=(!reduceMotion && anim)?anim.base:grid;
   for(let y=0;y<N;y++) for(let x=0;x<N;x++){
     // Skip rendering base tile if new tile animation is active at this position
-    if(newTileAnim && newTileAnim.x === x && newTileAnim.y === y) {
+    if(!reduceMotion && newTileAnim && newTileAnim.x === x && newTileAnim.y === y) {
       // Draw empty cell background only
       const px=PAD + x*(S+GAP); const py=40 + y*(S+GAP);
       ctx.fillStyle=theme.empty; ctx.strokeStyle=c.style.borderColor; ctx.lineWidth=1;
       roundRect(ctx,px,py,S,S,10,true,true);
       continue;
     }
-    
+
     const v=base[y][x]; const px=PAD + x*(S+GAP); const py=40 + y*(S+GAP);
-    
+
     // Check if this is a merged tile for scale effect
     let scale = 1;
     const mergedKey = `${x},${y}`;
-    if(mergedAnim.has(mergedKey) && !anim) {
+    if(!reduceMotion && mergedAnim.has(mergedKey) && !anim) {
       scale = mergedAnim.get(mergedKey).scale;
     }
     
     ctx.fillStyle=v?tileColor(v):theme.empty; ctx.strokeStyle=c.style.borderColor; ctx.lineWidth=1;
     roundRect(ctx,px,py,S,S,10,true,true,scale);
     if(v){ 
-      if(scale !== 1) {
+      if(!reduceMotion && scale !== 1) {
         ctx.save();
         const cx = px + S/2, cy = py + S/2;
         ctx.translate(cx, cy);
         ctx.scale(scale, scale);
         ctx.translate(-cx, -cy);
       }
-      ctx.fillStyle=(v<=4)?theme.tileTextDark:theme.tileTextLight; 
-      ctx.font=(v<100)?'28px Inter':'24px Inter'; 
-      ctx.textAlign='center'; ctx.textBaseline='middle'; 
+      ctx.fillStyle=(v<=4)?theme.tileTextDark:theme.tileTextLight;
+      ctx.font=(v<100)?'28px Inter':'24px Inter';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(v,px+S/2,py+S/2+2);
-      if(scale !== 1) ctx.restore();
+      if(!reduceMotion && scale !== 1) ctx.restore();
     }
   }
-  if(anim){
+  if(!reduceMotion && anim){
     for(const t of anim.tiles){
       const px=PAD + (t.fromX + (t.toX - t.fromX)*anim.p)*(S+GAP);
       const py=40 + (t.fromY + (t.toY - t.fromY)*anim.p)*(S+GAP);
@@ -668,9 +717,9 @@ function draw(anim){
       ctx.font=(v<100)?'28px Inter':'24px Inter'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(v,px+S/2,py+S/2+2);
     }
   }
-  
+
   // Render new tile scale-in animation
-  if(newTileAnim && newTileAnim.scale > 0) {
+  if(!reduceMotion && newTileAnim && newTileAnim.scale > 0) {
     const px = PAD + newTileAnim.x * (S + GAP);
     const py = 40 + newTileAnim.y * (S + GAP);
     const v = newTileAnim.value;
@@ -790,6 +839,9 @@ function hideHint(){
 
 const gameLoop=new GameEngine();
 gameLoop.update=dt=>{
+  if(reduceMotion){
+    return;
+  }
   // Animation optimization - batch updates
   let needsRedraw = false;
   
@@ -844,7 +896,53 @@ gameLoop.update=dt=>{
     gameLoop.render();
   }
 };
-gameLoop.render=()=>{ draw(anim?{base:anim.base,tiles:anim.tiles,p:Math.min(anim.p,1)}:null); };
+gameLoop.render=()=>{
+  if(reduceMotion && gameLoop.running){
+    return;
+  }
+  draw(anim?{base:anim.base,tiles:anim.tiles,p:Math.min(anim.p,1)}:null);
+};
+
+const handleReduceMotionChange = (eventMatches) => {
+  const shouldReduce = !!eventMatches;
+  if(shouldReduce === reduceMotion) return;
+
+  reduceMotion = shouldReduce;
+
+  if(reduceMotion){
+    gameLoop.stop?.();
+    if(anim){
+      const pendingAfter = anim.after;
+      anim = null;
+      grid = pendingAfter;
+      addTile({ skipAnimation: true });
+      check();
+      net?.send('move',{grid,score});
+    }
+    newTileAnim = null;
+    mergedAnim.clear();
+    renderCache.skipFrames = 0;
+  }else{
+    renderCache.skipFrames = 0;
+    renderCache.lastFrameTime = 0;
+    if(!gameLoop.running && Array.isArray(grid)){
+      gameLoop.start();
+    }
+  }
+
+  if(Array.isArray(grid)){
+    draw();
+  }
+};
+
+if(reduceMotionQuery){
+  const onMotionChange = (event) => handleReduceMotionChange(event?.matches);
+  if(typeof reduceMotionQuery.addEventListener === 'function'){
+    reduceMotionQuery.addEventListener('change', onMotionChange);
+  }else if(typeof reduceMotionQuery.addListener === 'function'){
+    reduceMotionQuery.addListener(onMotionChange);
+  }
+}
 
 const diagHandle = window.__g2048 = window.__g2048 || {};
 diagHandle.gameLoop = gameLoop;
@@ -1073,7 +1171,9 @@ function initializeGame(){
     updateCanvas();
     applyTheme();
     reset(true);
-    gameLoop.start();
+    if(!reduceMotion){
+      gameLoop.start();
+    }
     net?.send('move',{grid,score});
     window.DIAG?.ready?.();
     announceGameReady();
