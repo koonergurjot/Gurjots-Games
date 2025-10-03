@@ -588,13 +588,19 @@ class AsteroidsGame {
     };
 
     this.images = {
-      background: loadImage('../../assets/backgrounds/space.png'),
+      spaceLayer1: loadImage('../../assets/backgrounds/parallax/space_layer1.png'),
+      spaceLayer2: loadImage('../../assets/backgrounds/parallax/space_layer2.png'),
+      portal: loadImage('../../assets/effects/portal.png'),
+      hudPanel: loadImage('../../assets/sprites/maze3d/floor.png'),
       bullet: loadImage('../../assets/sprites/bullet.png'),
       enemyBullet: loadImage('../../assets/sprites/laser.png'),
       explosion: loadImage('../../assets/effects/explosion.png'),
       shield: loadImage('../../assets/effects/shield.png'),
     };
-    this.backgroundPattern = null;
+    this.backgroundLayers = [
+      { image: this.images.spaceLayer1, offsetX: 0, offsetY: 0, speedX: -8, speedY: 0, opacity: 0.45 },
+      { image: this.images.spaceLayer2, offsetX: 0, offsetY: 0, speedX: -18, speedY: -10, opacity: 0.75 },
+    ];
     this.bulletSprites = {
       player: this.images.bullet,
       remote: null,
@@ -607,6 +613,15 @@ class AsteroidsGame {
       frameDuration: 0.045,
     };
     this.explosions = [];
+    this.portalSprite = {
+      frameWidth: 0,
+      frameHeight: 0,
+      framesPerRow: 1,
+      totalFrames: 4,
+      frameDuration: 0.08,
+    };
+    this.portalEffects = [];
+    this.hudPatternUrl = null;
 
     this.width = BASE_WIDTH;
     this.height = BASE_HEIGHT;
@@ -646,10 +661,6 @@ class AsteroidsGame {
 
     this.starfield = this.createStars(120);
 
-    if (this.images.background) {
-      if (this.isSpriteReady(this.images.background)) this.prepareBackgroundPattern();
-      else this.images.background.addEventListener('load', () => this.prepareBackgroundPattern());
-    }
     if (this.images.bullet) {
       if (this.isSpriteReady(this.images.bullet)) this.prepareBulletVariants();
       else this.images.bullet.addEventListener('load', () => this.prepareBulletVariants());
@@ -657,6 +668,26 @@ class AsteroidsGame {
     if (this.images.explosion) {
       if (this.isSpriteReady(this.images.explosion)) this.prepareExplosionSprite();
       else this.images.explosion.addEventListener('load', () => this.prepareExplosionSprite());
+    }
+    if (this.images.portal) {
+      if (this.isSpriteReady(this.images.portal)) this.preparePortalSprite();
+      else {
+        const handlePortalLoad = () => {
+          this.preparePortalSprite();
+          this.images.portal?.removeEventListener?.('load', handlePortalLoad);
+        };
+        this.images.portal.addEventListener('load', handlePortalLoad);
+      }
+    }
+    if (this.images.hudPanel) {
+      if (this.isSpriteReady(this.images.hudPanel)) this.prepareHudTextures();
+      else {
+        const handleHudLoad = () => {
+          this.prepareHudTextures();
+          this.images.hudPanel?.removeEventListener?.('load', handleHudLoad);
+        };
+        this.images.hudPanel.addEventListener('load', handleHudLoad);
+      }
     }
 
     this.events = {
@@ -681,6 +712,7 @@ class AsteroidsGame {
 
     this.hud = this.buildHud();
     this.updateLivesDisplay();
+    this.prepareHudTextures();
 
     this.resize();
     this.spawnWave();
@@ -705,22 +737,22 @@ class AsteroidsGame {
       const style = document.createElement('style');
       style.id = 'asteroids-hud-style';
       style.textContent = `
-        .asteroids-hud{position:absolute;top:16px;left:16px;z-index:10;color:var(--fg,#eaeaf2);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+        .asteroids-hud{position:absolute;top:16px;left:16px;z-index:10;color:var(--fg,#f8fafc);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px 20px;border-radius:14px;background-color:rgba(2,6,23,0.88);background-image:var(--asteroids-panel-image,url("../../assets/sprites/maze3d/floor.png"));background-size:128px 128px;background-blend-mode:soft-light;border:1px solid rgba(148,163,184,0.35);box-shadow:0 18px 48px rgba(2,6,23,0.45);backdrop-filter:blur(8px);min-width:190px;}
         .asteroids-hud__row{display:flex;gap:12px;align-items:center;margin-bottom:6px;}
-        .asteroids-hud__label{opacity:0.7;text-transform:uppercase;font-size:12px;letter-spacing:0.1em;}
-        .asteroids-hud__value{font-size:20px;font-weight:600;min-width:60px;}
+        .asteroids-hud__label{opacity:0.82;text-transform:uppercase;font-size:12px;letter-spacing:0.1em;text-shadow:0 2px 4px rgba(2,6,23,0.85);}
+        .asteroids-hud__value{font-size:20px;font-weight:600;min-width:60px;text-shadow:0 2px 6px rgba(2,6,23,0.9);}
         .asteroids-hud__lives{display:flex;gap:6px;}
-        .asteroids-hud__life{width:18px;height:18px;border:2px solid currentColor;transform:rotate(45deg);border-radius:4px;opacity:0.85;}
-        .asteroids-overlay{position:absolute;inset:0;background:rgba(5,7,15,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--fg,#f8fafc);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;opacity:0;pointer-events:none;transition:opacity 0.25s;z-index:20;text-align:center;padding:24px;}
+        .asteroids-hud__life{width:18px;height:18px;border:2px solid rgba(148,233,215,0.9);transform:rotate(45deg);border-radius:4px;opacity:0.9;background:rgba(45,212,191,0.14);box-shadow:0 2px 6px rgba(15,118,110,0.4);}
+        .asteroids-overlay{position:absolute;inset:0;background-color:rgba(2,6,23,0.9);background-image:var(--asteroids-panel-image,url("../../assets/sprites/maze3d/floor.png"));background-size:180px 180px;background-blend-mode:soft-light;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--fg,#f8fafc);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;opacity:0;pointer-events:none;transition:opacity 0.25s;z-index:20;text-align:center;padding:24px;text-shadow:0 3px 8px rgba(2,6,23,0.85);}
         .asteroids-overlay.is-active{opacity:1;pointer-events:auto;}
-        .asteroids-overlay h1{font-size:42px;margin:0 0 12px;}
+        .asteroids-overlay h1{font-size:42px;margin:0 0 12px;text-shadow:0 6px 16px rgba(2,6,23,0.85);}
         .asteroids-overlay p{margin:6px 0;font-size:16px;max-width:480px;}
         .asteroids-overlay__actions{margin-top:20px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
-        .asteroids-overlay button{background:var(--accent,#6ee7b7);color:#021016;border:none;border-radius:999px;font-size:16px;font-weight:600;padding:10px 20px;cursor:pointer;}
-        .asteroids-players{position:absolute;top:16px;right:16px;z-index:10;color:var(--muted,#9aa0a6);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;text-align:right;}
-        .asteroids-players h2{margin:0 0 6px;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--fg,#eaeaf2);}
+        .asteroids-overlay button{background:var(--accent,#6ee7b7);color:#021016;border:none;border-radius:999px;font-size:16px;font-weight:600;padding:10px 20px;cursor:pointer;box-shadow:0 12px 24px rgba(110,231,183,0.35);}
+        .asteroids-players{position:absolute;top:16px;right:16px;z-index:10;color:var(--muted,#d0d6e5);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;text-align:right;padding:16px 18px;border-radius:14px;background-color:rgba(2,6,23,0.82);background-image:var(--asteroids-panel-image,url("../../assets/sprites/maze3d/floor.png"));background-size:120px 120px;background-blend-mode:soft-light;border:1px solid rgba(148,163,184,0.3);box-shadow:0 18px 48px rgba(2,6,23,0.45);backdrop-filter:blur(6px);}
+        .asteroids-players h2{margin:0 0 6px;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--fg,#f8faf2);text-shadow:0 2px 5px rgba(2,6,23,0.8);}
         .asteroids-players ul{list-style:none;margin:0;padding:0;font-size:14px;}
-        .asteroids-players li{margin-bottom:2px;}
+        .asteroids-players li{margin-bottom:2px;text-shadow:0 1px 3px rgba(2,6,23,0.8);}
       `;
       document.head.appendChild(style);
     }
@@ -821,10 +853,80 @@ class AsteroidsGame {
     return false;
   }
 
-  prepareBackgroundPattern() {
-    if (!this.ctx || !this.images?.background) return;
-    if (!this.isSpriteReady(this.images.background)) return;
-    this.backgroundPattern = this.ctx.createPattern(this.images.background, 'repeat');
+  prepareHudTextures() {
+    if (typeof document === 'undefined') return;
+    const image = this.images?.hudPanel;
+    if (!image) return;
+    if (!this.isSpriteReady(image)) {
+      if (this.hudPatternUrl) this.applyHudTexture();
+      return;
+    }
+
+    const width = image.naturalWidth || image.width || 0;
+    const height = image.naturalHeight || image.height || 0;
+    if (!width || !height) return;
+
+    const baseCanvas = document.createElement('canvas');
+    baseCanvas.width = width;
+    baseCanvas.height = height;
+    const ctx = baseCanvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.fillStyle = '#020617';
+    ctx.fillRect(0, 0, width, height);
+
+    const patternSource = document.createElement('canvas');
+    patternSource.width = width;
+    patternSource.height = height;
+    const patternCtx = patternSource.getContext('2d');
+    if (!patternCtx) return;
+    patternCtx.drawImage(image, 0, 0, width, height);
+
+    const pattern = ctx.createPattern(patternSource, 'repeat');
+    if (pattern) {
+      ctx.globalAlpha = 0.68;
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, width, height);
+    }
+    ctx.globalAlpha = 1;
+
+    const overlay = ctx.createLinearGradient(0, 0, width, height);
+    overlay.addColorStop(0, 'rgba(148, 163, 184, 0.1)');
+    overlay.addColorStop(1, 'rgba(15, 23, 42, 0.18)');
+    ctx.fillStyle = overlay;
+    ctx.fillRect(0, 0, width, height);
+
+    this.hudPatternUrl = baseCanvas.toDataURL('image/png');
+    this.applyHudTexture();
+  }
+
+  applyHudTexture() {
+    if (typeof document === 'undefined') return;
+    if (!this.hudPatternUrl) return;
+    const imageValue = `url(${this.hudPatternUrl})`;
+    document.documentElement?.style?.setProperty('--asteroids-panel-image', imageValue);
+    this.hud?.root?.style?.setProperty('--asteroids-panel-image', imageValue);
+    this.hud?.overlay?.style?.setProperty('--asteroids-panel-image', imageValue);
+    this.hud?.players?.style?.setProperty('--asteroids-panel-image', imageValue);
+  }
+
+  preparePortalSprite() {
+    const image = this.images?.portal;
+    if (!image) return;
+    if (!this.isSpriteReady(image)) return;
+
+    const width = image.naturalWidth || image.width || 0;
+    const height = image.naturalHeight || image.height || 0;
+    if (!width || !height) return;
+
+    const frameSize = Math.min(width, height);
+    const framesPerRow = Math.max(1, Math.floor(width / frameSize));
+    const framesPerColumn = Math.max(1, Math.floor(height / frameSize));
+
+    this.portalSprite.frameWidth = frameSize;
+    this.portalSprite.frameHeight = frameSize;
+    this.portalSprite.framesPerRow = framesPerRow;
+    this.portalSprite.totalFrames = framesPerRow * framesPerColumn;
   }
 
   prepareBulletVariants() {
@@ -1029,6 +1131,7 @@ class AsteroidsGame {
   }
 
   update(dt) {
+    this.updatePortals(dt);
     if (!this.ship.alive) {
       this.updateExplosions(dt);
       this.updateParticles(dt);
@@ -1297,6 +1400,24 @@ class AsteroidsGame {
     });
   }
 
+  spawnPortalEffect(x, y, options = {}) {
+    const frameWidth = this.portalSprite.frameWidth || this.portalSprite.frameHeight || 0;
+    const referenceSize = frameWidth || (this.images?.portal?.naturalHeight || this.images?.portal?.height || 64);
+    const baseScale = referenceSize ? ((this.ship?.radius || SHIP_RADIUS) * (options.followShip ? 2.4 : 2.1)) / referenceSize : 1;
+    const effect = {
+      x,
+      y,
+      followShip: !!options.followShip,
+      frameIndex: 0,
+      frameTimer: 0,
+      scale: options.scale ?? baseScale,
+      rotation: options.rotation ?? randomRange(0, TWO_PI),
+      rotationSpeed: options.rotationSpeed ?? randomRange(-0.9, 0.9),
+      opacity: options.opacity ?? 1,
+    };
+    this.portalEffects.push(effect);
+  }
+
   updateParticles(dt) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -1322,6 +1443,35 @@ class AsteroidsGame {
       }
       if ((explosion.frameIndex || 0) >= totalFrames) {
         this.explosions.splice(i, 1);
+      }
+    }
+  }
+
+  updatePortals(dt) {
+    if (!this.portalEffects.length) return;
+    const frameDuration = Math.max(0.02, this.portalSprite.frameDuration || 0.08);
+    const totalFrames = Math.max(1, this.portalSprite.totalFrames || 1);
+    for (let i = this.portalEffects.length - 1; i >= 0; i--) {
+      const effect = this.portalEffects[i];
+      if (effect.followShip && this.ship) {
+        effect.x = this.ship.x;
+        effect.y = this.ship.y;
+      }
+
+      effect.frameTimer = (effect.frameTimer || 0) + dt;
+      while (effect.frameTimer >= frameDuration) {
+        effect.frameTimer -= frameDuration;
+        effect.frameIndex = (effect.frameIndex || 0) + 1;
+      }
+
+      effect.rotation = (effect.rotation || 0) + (effect.rotationSpeed || 0) * dt;
+      const denom = Math.max(1, totalFrames - 1);
+      const progress = Math.min(1, (effect.frameIndex || 0) / denom);
+      const fade = effect.followShip ? 0.35 : 0.65;
+      effect.opacity = Math.max(0, 1 - progress * fade);
+
+      if ((effect.frameIndex || 0) >= totalFrames) {
+        this.portalEffects.splice(i, 1);
       }
     }
   }
@@ -1397,7 +1547,7 @@ class AsteroidsGame {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.width, this.height);
 
-    this.drawBackground();
+    this.drawBackground(dt);
 
     ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
     for (const star of this.starfield) {
@@ -1435,6 +1585,7 @@ class AsteroidsGame {
     }
 
     this.drawRemoteShots();
+    this.drawPortals();
 
     if (this.ship.alive) {
       const blink = this.ship.invulnerable > 0 && Math.floor(this.ship.invulnerable * 10) % 2 === 0;
@@ -1449,18 +1600,44 @@ class AsteroidsGame {
     ctx.restore();
   }
 
-  drawBackground() {
+  drawBackground(dt = 0) {
     const ctx = this.ctx;
     if (!ctx) return;
-    if (!this.backgroundPattern && this.images?.background && this.isSpriteReady(this.images.background)) {
-      this.prepareBackgroundPattern();
-    }
-    if (this.backgroundPattern) {
-      ctx.fillStyle = this.backgroundPattern;
-    } else {
-      ctx.fillStyle = '#05070f';
-    }
+    ctx.fillStyle = '#05070f';
     ctx.fillRect(0, 0, this.width, this.height);
+
+    const layers = this.backgroundLayers;
+    if (!Array.isArray(layers) || !layers.length) return;
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    for (const layer of layers) {
+      const image = layer?.image;
+      if (!image || !this.isSpriteReady(image)) continue;
+      const width = image.naturalWidth || image.width || 0;
+      const height = image.naturalHeight || image.height || 0;
+      if (!width || !height) continue;
+
+      layer.offsetX = (layer.offsetX || 0) + (layer.speedX || 0) * dt;
+      layer.offsetY = (layer.offsetY || 0) + (layer.speedY || 0) * dt;
+
+      let offsetX = layer.offsetX % width;
+      let offsetY = layer.offsetY % height;
+      if (offsetX < 0) offsetX += width;
+      if (offsetY < 0) offsetY += height;
+
+      ctx.globalAlpha = layer.opacity ?? 1;
+      for (let x = -offsetX; x < this.width; x += width) {
+        for (let y = -offsetY; y < this.height; y += height) {
+          ctx.drawImage(image, x, y, width, height);
+        }
+      }
+
+      layer.offsetX = ((layer.offsetX % width) + width) % width;
+      layer.offsetY = ((layer.offsetY % height) + height) % height;
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   drawPlayerBullets() {
@@ -1579,6 +1756,48 @@ class AsteroidsGame {
     }
   }
 
+  drawPortals() {
+    if (!this.portalEffects.length) return;
+    const sprite = this.images?.portal;
+    if (!sprite || !this.isSpriteReady(sprite)) return;
+    const frameWidth = this.portalSprite.frameWidth || sprite.naturalHeight || sprite.height || 0;
+    const frameHeight = this.portalSprite.frameHeight || frameWidth;
+    if (!frameWidth || !frameHeight) return;
+    const framesPerRow = this.portalSprite.framesPerRow || Math.max(1, Math.floor((sprite.naturalWidth || sprite.width || frameWidth) / frameWidth));
+    const totalFrames = Math.max(1, this.portalSprite.totalFrames || framesPerRow);
+
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    for (const effect of this.portalEffects) {
+      const frameIndex = Math.min(totalFrames - 1, effect.frameIndex || 0);
+      const sx = (frameIndex % framesPerRow) * frameWidth;
+      const sy = Math.floor(frameIndex / framesPerRow) * frameHeight;
+      const baseFrame = frameWidth || 1;
+      const scale = effect.scale ?? ((this.ship?.radius || SHIP_RADIUS) * 2.3) / baseFrame;
+      const drawWidth = frameWidth * scale;
+      const drawHeight = frameHeight * scale;
+      ctx.globalAlpha = effect.opacity ?? 1;
+      ctx.save();
+      ctx.translate(effect.x ?? 0, effect.y ?? 0);
+      ctx.rotate(effect.rotation || 0);
+      ctx.drawImage(
+        sprite,
+        sx,
+        sy,
+        frameWidth,
+        frameHeight,
+        -drawWidth / 2,
+        -drawHeight / 2,
+        drawWidth,
+        drawHeight,
+      );
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
   drawShield(x, y) {
     const sprite = this.images?.shield;
     if (!sprite || !this.isSpriteReady(sprite)) return;
@@ -1690,15 +1909,20 @@ class AsteroidsGame {
     if (this.lives <= 0) return;
     this.ship = this.createShip();
     this.ship.invulnerable = 2.5;
+    this.spawnPortalEffect(this.ship.x, this.ship.y, { followShip: true });
   }
 
   hyperspace() {
     if (!this.ship.alive || this.ship.invulnerable > 0) return;
+    const originX = this.ship.x;
+    const originY = this.ship.y;
+    this.spawnPortalEffect(originX, originY, { rotationSpeed: randomRange(-1, 1) });
     this.ship.x = Math.random() * this.width;
     this.ship.y = Math.random() * this.height;
     this.ship.vx *= 0.25;
     this.ship.vy *= 0.25;
     this.ship.invulnerable = 1.2;
+    this.spawnPortalEffect(this.ship.x, this.ship.y, { followShip: true });
   }
 
   togglePause() {
@@ -1740,6 +1964,7 @@ class AsteroidsGame {
     this.enemyBullets = [];
     this.particles = [];
     this.explosions = [];
+    this.portalEffects = [];
     this.waveTimer = 0;
     this.fireCooldown = 0;
     this.paused = false;
@@ -1751,6 +1976,7 @@ class AsteroidsGame {
     this.applyWavePowerups();
     this.spawnWave();
     this.startSession();
+    this.spawnPortalEffect(this.ship.x, this.ship.y, { followShip: true });
   }
 
   showOverlay(title, message, once = false) {
