@@ -57,6 +57,12 @@ export const games = [
     "released": "2025-08-26",
     "playUrl": "/games/tetris/",
     "firstFrame": {
+      "sprites": [
+        "/assets/sprites/block.png",
+        "/assets/backgrounds/arcade.png",
+        "/assets/effects/spark.png",
+        "/assets/effects/explosion.png"
+      ],
       "audio": [
         "/assets/audio/hit.wav",
         "/assets/audio/powerup.wav",

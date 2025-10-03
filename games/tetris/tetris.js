@@ -1,6 +1,9 @@
 import '../../shared/fx/canvasFx.js';
 import '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
+import { loadImage, drawTiledBackground } from '../../shared/assets.js';
+import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
+import { play as playSfx } from '../../shared/juice/audio.js';
 import { pushEvent } from '../common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 
@@ -76,6 +79,15 @@ function registerDiagnosticsCallback(callback){
 installErrorReporter();
 
 const GAME_ID='tetris';GG.incPlays();
+preloadFirstFrameAssets(GAME_ID).catch(()=>{});
+const SPRITE_SOURCES={
+  block:'/assets/sprites/block.png',
+  background:'/assets/backgrounds/arcade.png',
+  effects:{
+    spark:'/assets/effects/spark.png',
+    explosion:'/assets/effects/explosion.png',
+  },
+};
 const BASE_W=300;
 const BASE_H=600;
 
@@ -133,10 +145,17 @@ if(c){
   throw error;
 }
 const ctx=c.getContext('2d');
+if(ctx) ctx.imageSmoothingEnabled=false;
+ensureSprites();
 let postedReady=false;
 const COLS=10, ROWS=20;
 const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
 const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L:[[0,0,7],[7,7,7]]};
+const spriteStore={ block:null, background:null, effects:{} };
+const spriteRequests=new Set();
+const tintCache=new Map();
+const effects=[];
+const CLEAR_EFFECT_DURATION=0.6;
 const LINES_PER_LEVEL=10;
 
 function getCellSize(){
@@ -148,7 +167,6 @@ const motionPreference=params.get('motion');
 const motionPrefersAnimation=motionPreference==='animate'||motionPreference==='on';
 const motionPrefersReduction=motionPreference==='reduce'||motionPreference==='off';
 const shouldReduceMotion=motionPrefersReduction||(!motionPrefersAnimation && !!reduceMotionQuery?.matches);
-const bgShiftStep=shouldReduceMotion?0:0.5;
 const mode=params.has('spectate')?'spectate':(params.get('replay')?'replay':'play');
 const replayFile=params.get('replay');
 
@@ -162,6 +180,203 @@ const broadcastState={
   lastOutbound:null,
   lastError:null,
 };
+
+function ensureSprites(){
+  if(!spriteStore.block && !spriteRequests.has('block')){
+    spriteRequests.add('block');
+    loadImage(SPRITE_SOURCES.block,{slug:GAME_ID}).then(img=>{
+      spriteStore.block=img;
+      tintCache.clear();
+    }).catch(()=>{}).finally(()=>spriteRequests.delete('block'));
+  }
+  if(!spriteStore.background && !spriteRequests.has('background')){
+    spriteRequests.add('background');
+    loadImage(SPRITE_SOURCES.background,{slug:GAME_ID}).then(img=>{
+      spriteStore.background=img;
+    }).catch(()=>{}).finally(()=>spriteRequests.delete('background'));
+  }
+  for(const [key,src] of Object.entries(SPRITE_SOURCES.effects)){
+    if(spriteStore.effects[key]) continue;
+    const requestKey=`effect:${key}`;
+    if(spriteRequests.has(requestKey)) continue;
+    spriteRequests.add(requestKey);
+    loadImage(src,{slug:GAME_ID}).then(img=>{
+      spriteStore.effects[key]=img;
+    }).catch(()=>{}).finally(()=>spriteRequests.delete(requestKey));
+  }
+}
+
+function isImageReady(img){
+  return !!img && img.complete && img.naturalWidth>0 && img.naturalHeight>0;
+}
+
+function getTintedBlock(color){
+  const base=spriteStore.block;
+  if(!isImageReady(base) || !color) return null;
+  if(tintCache.has(color)) return tintCache.get(color);
+  const canvas=document.createElement('canvas');
+  const width=base.naturalWidth||base.width||24;
+  const height=base.naturalHeight||base.height||24;
+  canvas.width=width;
+  canvas.height=height;
+  const context=canvas.getContext('2d');
+  if(!context) return null;
+  context.imageSmoothingEnabled=false;
+  context.clearRect(0,0,width,height);
+  context.drawImage(base,0,0,width,height);
+  context.globalCompositeOperation='source-atop';
+  context.fillStyle=color;
+  context.fillRect(0,0,width,height);
+  context.globalCompositeOperation='source-over';
+  tintCache.set(color,canvas);
+  return canvas;
+}
+
+function drawBlockAtPixel(px,py,size,color,alpha=1,opts={}){
+  if(!ctx || !color || size<=0) return;
+  const shadow=opts.shadow!==false;
+  if(shadow){
+    const shadowSprite=getTintedBlock('#000000');
+    ctx.save();
+    ctx.globalAlpha=alpha*0.35;
+    if(shadowSprite){
+      ctx.drawImage(shadowSprite,px+2,py+2,size,size);
+    }else{
+      ctx.fillStyle='#000000';
+      ctx.fillRect(px+2,py+2,size,size);
+    }
+    ctx.restore();
+  }
+  const sprite=getTintedBlock(color);
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  if(sprite){
+    ctx.drawImage(sprite,px,py,size,size);
+  }else{
+    ctx.fillStyle=color;
+    ctx.fillRect(px,py,size,size);
+  }
+  ctx.restore();
+}
+
+function playSound(name){
+  try{ playSfx(name); }
+  catch(err){ console.warn('[tetris] sfx failed',err); }
+}
+
+function spawnEffect(type,x,y,opts={}){
+  if(shouldReduceMotion) return;
+  ensureSprites();
+  const duration=opts.duration ?? 0.45;
+  effects.push({
+    type,
+    x,
+    y,
+    duration,
+    life:duration,
+    scale:opts.scale ?? 1,
+    vx:opts.vx ?? 0,
+    vy:opts.vy ?? 0,
+    rotation:opts.rotation ?? 0,
+    rotationSpeed:opts.rotationSpeed ?? 0,
+  });
+}
+
+function getPieceBlockCenters(piece){
+  const centers=[];
+  if(!piece||!Array.isArray(piece.m)) return centers;
+  const cell=getCellSize();
+  for(let y=0;y<piece.m.length;y++){
+    for(let x=0;x<piece.m[y].length;x++){
+      if(!piece.m[y][x]) continue;
+      centers.push({
+        x:(piece.x+x+0.5)*cell,
+        y:(piece.y+y+0.5)*cell,
+      });
+    }
+  }
+  return centers;
+}
+
+function emitLockEffects(piece,hard=0){
+  if(shouldReduceMotion) return;
+  const centers=getPieceBlockCenters(piece);
+  const cell=getCellSize();
+  const sparkScale=Math.max(0.6,cell/32);
+  for(const center of centers){
+    spawnEffect('spark',center.x,center.y,{duration:0.3,scale:sparkScale,vx:(Math.random()-0.5)*40,vy:(Math.random()-0.5)*40});
+  }
+  if(hard>0 && centers.length){
+    const avgX=centers.reduce((sum,p)=>sum+p.x,0)/centers.length;
+    const maxY=centers.reduce((max,p)=>Math.max(max,p.y),centers[0].y);
+    const explosionScale=Math.max(1,cell/18);
+    spawnEffect('explosion',avgX,maxY,{duration:0.5,scale:explosionScale});
+  }
+}
+
+function emitLineClearEffects(rows){
+  if(shouldReduceMotion || !rows?.length) return;
+  const cell=getCellSize();
+  const boardWidth=COLS*cell;
+  const sparkScale=Math.max(0.8,cell/28);
+  for(const row of rows){
+    const y=(row+0.5)*cell;
+    spawnEffect('explosion',boardWidth/2,y,{duration:0.55,scale:Math.max(1.1,boardWidth/160)});
+    for(let col=0;col<COLS;col+=1){
+      const x=(col+0.5)*cell;
+      spawnEffect('spark',x,y,{duration:0.4,scale:sparkScale,vx:(Math.random()-0.5)*120,vy:(Math.random()-0.5)*80});
+    }
+  }
+}
+
+function updateEffects(dt){
+  if(!effects.length) return;
+  const remaining=[];
+  for(const fx of effects){
+    fx.life-=dt;
+    fx.x+=fx.vx*dt;
+    fx.y+=fx.vy*dt;
+    fx.rotation+=fx.rotationSpeed*dt;
+    if(fx.life>0) remaining.push(fx);
+  }
+  effects.length=0;
+  effects.push(...remaining);
+}
+
+function drawEffects(){
+  if(!effects.length || !ctx) return;
+  ctx.save();
+  ctx.imageSmoothingEnabled=false;
+  for(const fx of effects){
+    const sprite=spriteStore.effects?.[fx.type];
+    if(!isImageReady(sprite)) continue;
+    const progress=Math.max(0,Math.min(1,fx.life/fx.duration));
+    const alpha=Math.pow(progress,0.6);
+    const baseW=sprite.naturalWidth||sprite.width;
+    const baseH=sprite.naturalHeight||sprite.height;
+    const w=(baseW||32)*(fx.scale||1);
+    const h=(baseH||32)*(fx.scale||1);
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    ctx.translate(fx.x,fx.y);
+    if(fx.rotation) ctx.rotate(fx.rotation);
+    ctx.drawImage(sprite,-w/2,-h/2,w,h);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function updateClearState(dt){
+  if(clearTimer<=0) return;
+  clearTimer=Math.max(0,clearTimer-dt);
+  if(clearTimer<=0 && clearRows.length){
+    const toClear=new Set(clearRows);
+    grid=grid.filter((row,index)=>!toClear.has(index));
+    while(grid.length<ROWS) grid.unshift(Array(COLS).fill(0));
+    clearRows.length=0;
+    updateGhost();
+  }
+}
 
 let bestScore=+(localStorage.getItem('tetris:bestScore')||0);
 let bestLines=+(localStorage.getItem('tetris:bestLines')||0);
@@ -466,7 +681,7 @@ const TetrisAPI={
     pausedByShell=false;
     lockTimer=0;
     clearRows.length=0;
-    clearAnim=0;
+    clearTimer=0;
     last=0;
     lastFrame=0;
     dropMs=700;
@@ -531,8 +746,7 @@ let lockTimer=0; const LOCK_DELAY=0.5; let lastFrame=0;
 let shellPaused=false;
 let pausedByShell=false;
 let rafId=0;
-let clearAnim=0, clearRows=[];
-let bgShift=0;
+let clearTimer=0, clearRows=[];
 let rotated=false;
 
 function initGame(){
@@ -587,7 +801,7 @@ function clearLines(){
   for(let y=0;y<ROWS;y++)
     if(grid[y].every(v=>v)) clearRows.push(y);
   if(clearRows.length){
-    clearAnim=8;
+    clearTimer=CLEAR_EFFECT_DURATION;
   }
   return clearRows.length;
 }
@@ -604,6 +818,7 @@ function isTSpin(p){
 }
 
 function lockPiece(soft=0,hard=0){
+  const lockedPiece=clonePiece(cur);
   merge(cur);
   const tSpin=isTSpin(cur);
   const cleared=clearLines();
@@ -623,40 +838,44 @@ function lockPiece(soft=0,hard=0){
   syncScoreDisplay();
   lines+=cleared;
   GG.addXP(2*cleared);
-  if(lines>=level*LINES_PER_LEVEL){ level++; dropMs=Math.max(120,dropMs-60); }
+  let leveledUp=false;
+  while(lines>=level*LINES_PER_LEVEL){
+    level++;
+    dropMs=Math.max(120,dropMs-60);
+    leveledUp=true;
+  }
   updateBest();
   GG.setMeta(GAME_ID,'Best lines: '+lines);
-  if(cleared) SFX.seq([[600,0.06],[800,0.06],[1000,0.06]].slice(0,cleared));
+  emitLockEffects(lockedPiece,hard);
+  playSound('hit');
+  if(cleared>0){
+    emitLineClearEffects(clearRows);
+    playSound('explode');
+  }
+  if(leveledUp) playSound('power');
   rotated=false;
 }
 
 function drawCell(x,y,v,cell){
   if(!v) return;
-  ctx.fillStyle=COLORS[v];
-  ctx.fillRect(x*cell,y*cell,cell-1,cell-1);
+  drawBlockAtPixel(x*cell,y*cell,cell,COLORS[v],1,{shadow:false});
 }
 function drawPieceCell(x,y,v,cell,alpha=1){
-  ctx.fillStyle=`rgba(0,0,0,${0.4*alpha})`;
-  ctx.fillRect(x*cell+2,y*cell+2,cell-1,cell-1);
-  ctx.globalAlpha=alpha;
-  ctx.fillStyle=COLORS[v];
-  ctx.fillRect(x*cell,y*cell,cell-1,cell-1);
-  ctx.globalAlpha=1;
+  drawBlockAtPixel(x*cell,y*cell,cell,COLORS[v],alpha,{shadow:true});
 }
 function drawMatrix(m,ox,oy,cell){
   const previewCell=cell*0.8;
   for(let y=0;y<m.length;y++)
     for(let x=0;x<m[y].length;x++){
       if(!m[y][x]) continue;
-      ctx.fillStyle=COLORS[m[y][x]];
-      ctx.fillRect(ox+x*previewCell, oy+y*previewCell, previewCell-2, previewCell-2);
+      drawBlockAtPixel(ox+x*previewCell,oy+y*previewCell,previewCell-2,COLORS[m[y][x]],1,{shadow:false});
     }
 }
 function drawGhost(cell){
   if(!showGhost||!ghost) return;
   for(let y=0;y<ghost.m.length;y++)
     for(let x=0;x<ghost.m[y].length;x++)
-      if(ghost.m[y][x]) drawPieceCell(ghost.x+x,ghost.y+y,ghost.m[y][x],cell,0.3);
+      if(ghost.m[y][x]) drawBlockAtPixel((ghost.x+x)*cell,(ghost.y+y)*cell,cell,COLORS[ghost.m[y][x]],0.35,{shadow:false});
 }
 function draw(){
   if(!postedReady){
@@ -665,12 +884,14 @@ function draw(){
     markReady();
   }
   const cell=getCellSize();
-  bgShift=(bgShift+bgShiftStep)%c.height;
-  const bg=ctx.createLinearGradient(0,bgShift,0,c.height+bgShift);
-  bg.addColorStop(0,'#0f1320');
-  bg.addColorStop(1,'#19253f');
-  ctx.fillStyle=bg;
-  ctx.fillRect(0,0,c.width,c.height);
+  ensureSprites();
+  const bgImage=spriteStore.background;
+  if(isImageReady(bgImage)){
+    drawTiledBackground(ctx,bgImage,0,0,c.width,c.height);
+  }else{
+    ctx.fillStyle='#0f1320';
+    ctx.fillRect(0,0,c.width,c.height);
+  }
 
   if(!started){
     ctx.fillStyle='#e6e7ea';
@@ -692,17 +913,7 @@ function draw(){
     for(let x=0;x<cur.m[y].length;x++)
       if(cur.m[y][x]) drawPieceCell(cur.x+x,cur.y+y,cur.m[y][x],cell);
 
-  if(clearAnim>0){
-    const alpha=clearAnim/8;
-    ctx.fillStyle=`rgba(255,255,255,${alpha})`;
-    for(const y of clearRows) ctx.fillRect(0,y*cell,COLS*cell,cell);
-    clearAnim--;
-    if(clearAnim===0){
-      grid=grid.filter((r,i)=>!clearRows.includes(i));
-      while(grid.length<ROWS) grid.unshift(Array(COLS).fill(0));
-      clearRows=[];
-    }
-  }
+  drawEffects();
 
   ctx.fillStyle='#e6e7ea';
   ctx.font='bold 14px Inter';
@@ -798,13 +1009,13 @@ function applyAction(a){
   }
   if(a==='rotate'){
     const cand=TetrisEngine.rotate(cur,grid,1);
-    if(cand!==cur){ cur=cand; SFX.beep({freq:500,dur:0.03}); lockTimer=0; updateGhost(); rotated=true; }
+    if(cand!==cur){ cur=cand; playSound('click'); lockTimer=0; updateGhost(); rotated=true; }
   }
   if(a==='down'){
-    drop(true); SFX.beep({freq:500,dur:0.03}); GG.addXP(1);
+    drop(true); GG.addXP(1);
   }
   if(a==='hardDrop'){
-    hardDrop(); SFX.seq([[600,0.05],[700,0.05]]);
+    hardDrop();
   }
   if(a==='hold'){
     hold();
@@ -839,7 +1050,7 @@ addEventListener('keydown',e=>{
     return;
   }
   if(keyLower==='p'){ paused=!paused; return; }
-  if(paused || over || clearAnim) return;
+  if(paused || over || clearTimer>0) return;
 
   if(e.key==='ArrowLeft'){ applyAction('left'); Replay.recordAction('left'); }
   if(e.key==='ArrowRight'){ applyAction('right'); Replay.recordAction('right'); }
@@ -852,7 +1063,7 @@ addEventListener('keydown',e=>{
 
 let touchX=null,touchY=null;
 function handleAction(a){
-  if(mode!=='play' || paused || over || clearAnim) return;
+  if(mode!=='play' || paused || over || clearTimer>0) return;
   applyAction(a);
   Replay.recordAction(a);
 }
@@ -879,11 +1090,11 @@ function loop(ts){
     const acts=Replay.tick(dt); acts.forEach(a=>applyAction(a));
   }
 
-  if(mode!=='spectate' && started && !paused && !over && clearAnim===0 && ts-last>dropMs){
+  if(mode!=='spectate' && started && !paused && !over && clearTimer<=0 && ts-last>dropMs){
     drop();
     last=ts;
   }
-  if(mode!=='spectate' && started && !paused && !over && clearAnim===0){
+  if(mode!=='spectate' && started && !paused && !over && clearTimer<=0){
     const touching=collide({...cur,y:cur.y+1});
     if(touching){
       lockTimer+=dt;
@@ -904,6 +1115,8 @@ function loop(ts){
       lockTimer=0;
     }
   }
+  updateEffects(dt);
+  updateClearState(dt);
   ctx.clearRect(0,0,c.width,c.height);
   draw();
   if(bc && mode==='play'){
