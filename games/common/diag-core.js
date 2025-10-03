@@ -54,6 +54,7 @@
     adapterModule: null,
     gameSlug: null,
     gameAdapter: null,
+    adapterUnsubscribe: null,
     adapterReadyFired: false,
     lastSummarySnapshot: null,
     lastErrorSignature: null,
@@ -68,15 +69,8 @@
   state.adapterModule = ensureDiagnosticsAdapterModule();
   state.gameSlug = detectGameSlug();
   state.probesModule = ensureDiagnosticsProbesModule();
-  if (state.gameSlug && state.adapterModule && typeof state.adapterModule.getGameDiagnostics === "function") {
-    assignGameAdapter(state.adapterModule.getGameDiagnostics(state.gameSlug));
-  }
-  if (state.adapterModule && typeof state.adapterModule.subscribe === "function") {
-    state.adapterModule.subscribe((slug, record) => {
-      if (!slug || slug !== state.gameSlug) return;
-      assignGameAdapter(record);
-    });
-  }
+  setupAdapterIntegration(state.adapterModule);
+  whenDiagnosticsAdapterReady(setupAdapterIntegration);
 
   const LEVEL_ORDER = ["debug", "info", "warn", "error"];
   const LEGACY_SELECTORS = [
@@ -242,6 +236,25 @@
     }
   }
 
+  function setupAdapterIntegration(adapterModule){
+    const resolved = normalizeDiagnosticsAdapterModule(adapterModule);
+    if (!resolved) return;
+    state.adapterModule = resolved;
+    if (typeof state.adapterUnsubscribe === "function") {
+      try { state.adapterUnsubscribe(); } catch (_) {}
+      state.adapterUnsubscribe = null;
+    }
+    if (state.gameSlug && typeof resolved.getGameDiagnostics === "function") {
+      assignGameAdapter(resolved.getGameDiagnostics(state.gameSlug));
+    }
+    if (typeof resolved.subscribe === "function") {
+      state.adapterUnsubscribe = resolved.subscribe((slug, record) => {
+        if (!slug || slug !== state.gameSlug) return;
+        assignGameAdapter(record);
+      });
+    }
+  }
+
   function assignGameAdapter(record){
     resetProbeRunner();
     if (record && typeof record === "object") {
@@ -283,31 +296,126 @@
     }
   }
 
+  const ADAPTER_READY_TIMEOUT_MS = 5000;
+  const ADAPTER_READY_POLL_INTERVAL_MS = 50;
+  const adapterReadyWaiters = [];
+  let adapterReadyTimer = null;
+  let adapterReadyDeadline = 0;
+
   function ensureDiagnosticsAdapterModule(){
-    if (global.GGDiagAdapters && typeof global.GGDiagAdapters.registerGameDiagnostics === "function") {
-      return global.GGDiagAdapters;
+    const resolved = resolveDiagnosticsAdapterModule();
+    if (resolved) return resolved;
+    const required = loadDiagnosticsAdapterModule();
+    const normalized = normalizeDiagnosticsAdapterModule(required);
+    if (normalized) {
+      const attached = attachDiagnosticsAdapterModule(normalized);
+      notifyDiagnosticsAdapterReady(attached);
+      return attached;
     }
+    requestDiagnosticsAdapterScript();
+    return resolveDiagnosticsAdapterModule();
+  }
+
+  function resolveDiagnosticsAdapterModule(){
+    return normalizeDiagnosticsAdapterModule(global.GGDiagAdapters);
+  }
+
+  function normalizeDiagnosticsAdapterModule(candidate){
+    if (!candidate) return null;
+    if (typeof candidate === "object") {
+      if (typeof candidate.registerGameDiagnostics === "function" && typeof candidate.getGameDiagnostics === "function") {
+        return candidate;
+      }
+      if (candidate.default && candidate.default !== candidate) {
+        return normalizeDiagnosticsAdapterModule(candidate.default);
+      }
+    }
+    return null;
+  }
+
+  function attachDiagnosticsAdapterModule(moduleApi){
+    if (!moduleApi) return null;
+    const existing = normalizeDiagnosticsAdapterModule(global.GGDiagAdapters);
+    if (existing === moduleApi) return moduleApi;
+    const merged = Object.assign({}, existing || {}, moduleApi);
+    global.GGDiagAdapters = merged;
+    return merged;
+  }
+
+  function loadDiagnosticsAdapterModule(){
+    let required = null;
     if (typeof module === "object" && module && typeof module.require === "function") {
-      try {
-        const required = module.require("./diagnostics/adapter.js");
-        if (required && typeof required.registerGameDiagnostics === "function") {
-          global.GGDiagAdapters = required;
-          return required;
-        }
-      } catch (_) {}
+      try { required = module.require("./diagnostics/adapter.js"); } catch (_) {}
     }
-    if (typeof require === "function") {
-      try {
-        const required = require("./diagnostics/adapter.js");
-        if (required && typeof required.registerGameDiagnostics === "function") {
-          global.GGDiagAdapters = required;
-          return required;
-        }
-      } catch (_) {}
+    if (!required && typeof require === "function") {
+      try { required = require("./diagnostics/adapter.js"); } catch (_) {}
     }
-    const fallback = createFallbackDiagnosticsAdapter();
-    global.GGDiagAdapters = fallback;
-    return fallback;
+    if (!required) {
+      requestDiagnosticsAdapterScript();
+    }
+    return required;
+  }
+
+  function requestDiagnosticsAdapterScript(){
+    if (typeof document === "undefined") return;
+    try {
+      const doc = document;
+      if (!doc) return;
+      if (doc.querySelector('script[data-gg-diag-adapter]')) return;
+      const script = doc.createElement("script");
+      script.type = "module";
+      script.src = "/games/common/diagnostics/adapter.js";
+      script.setAttribute("data-gg-diag-adapter", "true");
+      script.setAttribute("data-origin", "diag-core");
+      const parent = doc.head || doc.documentElement || doc.body;
+      parent?.appendChild(script);
+    } catch (_) {}
+  }
+
+  function whenDiagnosticsAdapterReady(callback){
+    if (typeof callback !== "function") return;
+    const resolved = resolveDiagnosticsAdapterModule();
+    if (resolved) {
+      callback(resolved);
+      return;
+    }
+    adapterReadyWaiters.push(callback);
+    requestDiagnosticsAdapterScript();
+    scheduleDiagnosticsAdapterPoll();
+  }
+
+  function scheduleDiagnosticsAdapterPoll(){
+    if (!adapterReadyWaiters.length) return;
+    if (adapterReadyTimer) return;
+    const scheduler = typeof global.setTimeout === "function" ? global.setTimeout : (typeof setTimeout === "function" ? setTimeout : null);
+    if (!scheduler) return;
+    if (!adapterReadyDeadline) adapterReadyDeadline = Date.now() + ADAPTER_READY_TIMEOUT_MS;
+    adapterReadyTimer = scheduler(() => {
+      adapterReadyTimer = null;
+      const moduleApi = resolveDiagnosticsAdapterModule();
+      if (moduleApi) {
+        notifyDiagnosticsAdapterReady(moduleApi);
+        return;
+      }
+      if (adapterReadyDeadline && Date.now() >= adapterReadyDeadline) {
+        adapterReadyWaiters.length = 0;
+        adapterReadyDeadline = 0;
+        return;
+      }
+      scheduleDiagnosticsAdapterPoll();
+    }, ADAPTER_READY_POLL_INTERVAL_MS);
+  }
+
+  function notifyDiagnosticsAdapterReady(moduleApi){
+    const resolved = normalizeDiagnosticsAdapterModule(moduleApi);
+    if (!resolved) return;
+    attachDiagnosticsAdapterModule(resolved);
+    if (!adapterReadyWaiters.length) return;
+    const waiters = adapterReadyWaiters.splice(0);
+    adapterReadyDeadline = 0;
+    for (const waiter of waiters){
+      try { waiter(resolved); } catch (err) { console.warn("[gg-diag] adapter waiter failed", err); }
+    }
   }
 
   function ensureDiagnosticsProbesModule(){
@@ -335,49 +443,6 @@
     const fallback = createFallbackProbesModule();
     global.GGDiagProbes = fallback;
     return fallback;
-  }
-
-  function createFallbackDiagnosticsAdapter(){
-    const registry = new Map();
-    const listeners = new Set();
-
-    function registerGameDiagnostics(slug, adapter){
-      if (typeof slug !== "string" || !slug.trim()) {
-        throw new TypeError("registerGameDiagnostics requires a slug");
-      }
-      const normalizedSlug = slug.trim();
-      const hooks = {};
-      const api = {};
-      const hookKeys = ["onReady", "onError", "onStateChange", "onScoreChange"];
-      const apiKeys = ["start", "pause", "resume", "reset", "getScore", "setDifficulty", "getEntities"];
-      const adapterHooks = adapter && typeof adapter === "object" ? adapter.hooks || {} : {};
-      const adapterApi = adapter && typeof adapter === "object" ? (adapter.api || adapter.apis || {}) : {};
-      for (const key of hookKeys){
-        if (typeof adapterHooks[key] === "function") hooks[key] = adapterHooks[key];
-      }
-      for (const key of apiKeys){
-        if (typeof adapterApi[key] === "function") api[key] = adapterApi[key];
-      }
-      const record = Object.freeze({ slug: normalizedSlug, hooks, api });
-      registry.set(normalizedSlug, record);
-      listeners.forEach((listener) => {
-        try { listener(normalizedSlug, record); } catch (err) { console.warn("[gg-diag] adapter listener failed", err); }
-      });
-      return record;
-    }
-
-    function getGameDiagnostics(slug){
-      if (typeof slug !== "string" || !slug.trim()) return null;
-      return registry.get(slug.trim()) || null;
-    }
-
-    function subscribe(listener){
-      if (typeof listener !== "function") return () => {};
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    }
-
-    return { registerGameDiagnostics, getGameDiagnostics, subscribe };
   }
 
   function createFallbackProbesModule(){

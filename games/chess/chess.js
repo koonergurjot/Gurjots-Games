@@ -2,7 +2,7 @@ import { drawGlow } from '../../shared/fx/canvasFx.js';
 import { showToast, showModal } from '../../shared/ui/hud.js';
 import getThemeTokens from '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
-import { pushEvent } from '../common/diag-adapter.js';
+import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 
 installErrorReporter();

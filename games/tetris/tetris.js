@@ -4,7 +4,7 @@ import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { loadImage, drawTiledBackground } from '../../shared/assets.js';
 import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
 import { play as playSfx } from '../../shared/juice/audio.js';
-import { pushEvent } from '../common/diag-adapter.js';
+import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };

@@ -1,7 +1,7 @@
 
 import { GameEngine } from '../../shared/gameEngine.js';
 import { copyGrid, computeMove, pushState, undo as undoState, getHint as engineHint, canMove } from './engine.js';
-import { pushEvent } from '../common/diag-adapter.js';
+import { pushEvent } from '/games/common/diag-adapter.js';
 
 // Feature Configuration (all feature-flagged)
 const FEATURES = {

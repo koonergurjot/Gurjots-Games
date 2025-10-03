@@ -1,5 +1,5 @@
 import { registerGameDiagnostics } from "../common/diagnostics/adapter.js";
-import { pushEvent } from "../common/diag-adapter.js";
+import { pushEvent } from "/games/common/diag-adapter.js";
 
 const GAME_ID = "chess3d";
 const globalScope = typeof window !== "undefined" ? window : undefined;

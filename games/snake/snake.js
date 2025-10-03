@@ -3,7 +3,7 @@ import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
 import { play as playSfx } from '../../shared/juice/audio.js';
 import getThemeTokens from '../../shared/skins/index.js';
 import '../../shared/ui/hud.js';
-import { pushEvent } from '../common/diag-adapter.js';
+import { pushEvent } from '/games/common/diag-adapter.js';
 import '../common/diagnostics/adapter.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };

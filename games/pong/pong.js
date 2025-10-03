@@ -1,5 +1,5 @@
 
-import { pushEvent } from "../common/diag-adapter.js";
+import { pushEvent } from "/games/common/diag-adapter.js";
 import { preloadFirstFrameAssets } from "../../shared/game-asset-preloader.js";
 import { play as playSfx } from "../../shared/juice/audio.js";
 

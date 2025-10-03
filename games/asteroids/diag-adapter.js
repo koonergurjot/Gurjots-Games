@@ -1,5 +1,5 @@
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
-import { pushEvent } from '../common/diag-adapter.js';
+import { pushEvent } from '/games/common/diag-adapter.js';
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 const SLUG = 'asteroids';

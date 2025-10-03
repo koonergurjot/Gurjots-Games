@@ -6,7 +6,7 @@
 4. To enable diagnostics everywhere without touching each game page:
    - Add this line to your game pages (or your router/shell that wraps them):
      ```html
-     <script src="../common/diag-autowire.js" data-game="{{slug}}"></script>
+     <script src="/games/common/diag-autowire.js" data-game="{{slug}}"></script>
      ```
    - This will bootstrap the new diagnostics loader (`diag-autowire.js`), which pulls in the full diagnostics stack automatically.
 
