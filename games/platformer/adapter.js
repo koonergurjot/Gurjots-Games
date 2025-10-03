@@ -1,5 +1,4 @@
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
-import { pushEvent } from '../common/diag-adapter.js';
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 const GAME_SLUG = 'platformer';
@@ -46,40 +45,9 @@ if (globalScope) {
   platformer.onState.push(handleState);
   platformer.onScore.push(handleScore);
 
-  const openDiagnostics = () => {
-    if (globalScope.__GG_DIAG && typeof globalScope.__GG_DIAG.open === 'function') {
-      globalScope.__GG_DIAG.open();
-    } else {
-      pushEvent('diagnostics', {
-        level: 'info',
-        message: `[${GAME_SLUG}] diagnostics UI not ready yet`,
-      });
-    }
-  };
-
-  const wireButton = () => {
-    const btn = globalScope.document?.getElementById('diag-open');
-    if (!btn) return;
-    const existing = btn.dataset.ggDiagWired === 'true';
-    if (existing) return;
-    btn.dataset.ggDiagWired = 'true';
-    btn.setAttribute('aria-haspopup', 'dialog');
-    btn.addEventListener('click', (event) => {
-      event.preventDefault();
-      openDiagnostics();
-    });
-  };
-
-  if (globalScope.document?.readyState === 'loading') {
-    globalScope.document.addEventListener('DOMContentLoaded', wireButton, { once: true });
-  } else {
-    wireButton();
-  }
-
   registerGameDiagnostics(GAME_SLUG, {
     hooks: {
       onReady(context) {
-        wireButton();
         if (platformer.onState.includes(handleState) === false) {
           platformer.onState.push(handleState);
         }
