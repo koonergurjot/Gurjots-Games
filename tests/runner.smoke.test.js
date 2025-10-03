@@ -33,6 +33,10 @@ function installCanvasStub() {
     font: '',
     textAlign: '',
     globalAlpha: 1,
+    translate: vi.fn(),
+    scale: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
   };
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(ctxStub);
 }

@@ -1,3 +1,5 @@
+import { adaptGameForLanding } from './catalog-utils.js';
+
 const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
 const state={games:[],tags:new Set(),activeTag:null,search:"",sort:"az"};
@@ -9,22 +11,6 @@ const reduceMotionQuery=typeof window!=='undefined'&&typeof window.matchMedia===
 const fxEnabled=()=>fxQuery&&!((reduceMotionQuery&&reduceMotionQuery.matches));
 let teardownLandingFx=null;
 let landingFxSetupPromise=null;
-function deriveComparableTimestamp(game){
-  if(!game||typeof game!=='object')return 0;
-  const candidates=[game.addedAt,game.added_at,game.released,game.releaseDate,game.release_date,game.publishedAt,game.published_at,game.updatedAt,game.updated_at,game.createdAt,game.created_at,game.date];
-  for(const value of candidates){
-    const stamp=normalizeTimestamp(value);
-    if(stamp)return stamp;
-  }
-  return 0;
-}
-function normalizeTimestamp(value){
-  if(value==null)return 0;
-  if(value instanceof Date){const t=value.getTime();return Number.isNaN(t)?0:t;}
-  if(typeof value==='number'){if(!Number.isFinite(value))return 0;if(Math.abs(value)>=1e12)return value;if(Math.abs(value)>=1e9)return value*1000;if(Math.abs(value)>=1e6)return value*1000;return 0;}
-  if(typeof value==='string'){const trimmed=value.trim();if(!trimmed)return 0;const asNumber=Number(trimmed);if(Number.isFinite(asNumber))return normalizeTimestamp(asNumber);const parsed=Date.parse(trimmed);return Number.isNaN(parsed)?0:parsed;}
-  return 0;
-}
 function setTheme(name){document.body.classList.remove("theme-retro","theme-neon","theme-minimal");if(name==="retro")document.body.classList.add("theme-retro");if(name==="neon")document.body.classList.add("theme-neon");if(name==="minimal")document.body.classList.add("theme-minimal");localStorage.setItem("gg:theme",name);}
 function hydrateUI(){$("#year").textContent=new Date().getFullYear();const saved=localStorage.getItem("gg:theme")||"default";$("#theme").value=saved;setTheme(saved);$("#theme").addEventListener("change",e=>setTheme(e.target.value));$("#search").addEventListener("input",e=>{state.search=e.target.value.toLowerCase().trim();render();});$("#sort").addEventListener("change",e=>{state.sort=e.target.value;render();});}
 function buildTagChips(){
@@ -223,18 +209,7 @@ function persistStats(stats){const context=getProfileStorageContext();const payl
 function readStat(){const context=getProfileStorageContext();try{let raw=localStorage.getItem(context.key);if(!raw&&context.normalized==='guest'){const legacy=localStorage.getItem(LEGACY_XP_KEY);if(legacy){raw=legacy;localStorage.setItem(context.key,legacy);}}const parsed=safeJSONParse(raw)||{xp:0,plays:0};return{xp:Number.isFinite(Number(parsed.xp))?Number(parsed.xp):0,plays:Number.isFinite(Number(parsed.plays))?Number(parsed.plays):0};}catch{return{xp:0,plays:0};}}
 function addXP(n){const stats=readStat();stats.xp+=n|0;persistStats(stats);}
 function xpBadge(){const {xp,plays}=readStat();const b=document.createElement('div');b.className='status info';b.style.margin='6px 0 0';b.textContent=`Your XP: ${xp} • Plays: ${plays}`;return b;}
-function render(){const grid=$("#gamesGrid");const status=$("#status");let list=[...state.games];if(state.activeTag)list=list.filter(g=>g.tags.includes(state.activeTag));if(state.search)list=list.filter(g=>g.title.toLowerCase().includes(state.search)||(g.description||g.desc||'').toLowerCase().includes(state.search));if(state.sort==='az')list.sort((a,b)=>a.title.localeCompare(b.title));if(state.sort==='za')list.sort((a,b)=>b.title.localeCompare(a.title));if(state.sort==='new')list.sort((a,b)=>deriveComparableTimestamp(b)-deriveComparableTimestamp(a));status.textContent=list.length?`${list.length} game${list.length>1?'s':''} ready to play`:"No matches. Try a different search or tag.";grid.innerHTML="";list.forEach(game=>{const card=document.createElement('article');card.className='card';const badge=document.createElement('div');badge.className='badge';badge.textContent=game.new?'NEW':'PLAY';card.appendChild(badge);const thumb=document.createElement('div');thumb.className='thumb';if(game.thumb){const img=document.createElement('img');img.src=game.thumb;img.alt=game.title+' thumbnail';img.loading='lazy';img.style.width='100%';img.style.height='100%';img.style.objectFit='cover';thumb.appendChild(img);}else{thumb.textContent=game.emoji||'🎮';}card.appendChild(thumb);const h3=document.createElement('h3');h3.textContent=game.title;card.appendChild(h3);const p=document.createElement('p');p.textContent=game.description||game.desc;card.appendChild(p);const meta=getGameMetaText(game.id);if(meta){const m=document.createElement('p');m.style.margin='6px 0 0';m.style.fontSize='.85rem';m.style.opacity='.85';m.textContent=meta;card.appendChild(m);}const badges=getGameBadges(game.id);if(badges.length){const row=document.createElement('div');row.style.margin='8px 0 0';row.style.display='flex';row.style.gap='6px';badges.forEach(b=>{const s=document.createElement('span');s.className='chip';s.textContent=b;row.appendChild(s);});card.appendChild(row);}const actions=document.createElement('div');actions.className='actions';const play=document.createElement('button');play.className='btn primary';play.textContent='Play';play.onclick=()=>playInModal(game.path,game.id);actions.appendChild(play);const share=document.createElement('button');share.className='btn';share.textContent='Share';share.onclick=()=>shareGame(game);actions.appendChild(share);const open=document.createElement('a');open.href=game.path;open.className='btn';open.textContent='Open Tab';open.target='_blank';open.setAttribute('rel','noopener');actions.appendChild(open);card.appendChild(actions);grid.appendChild(card);});}
-function adaptGameForLanding(raw){
-  if(!raw)return null;
-  const description=raw.description||raw.short||raw.desc||'';
-  const tags=Array.isArray(raw.tags)?raw.tags.filter(Boolean):[];
-  let path=raw.playPath||raw.path||raw.playUrl||raw.url||null;
-  if(!path&&raw.basePath){
-    const base=String(raw.basePath).replace(/\/+$/,'');
-    path=base&&base!=='/'?`${base}/index.html`:'/index.html';
-  }
-  return {...raw,description,desc:description,tags,path};
-}
+function render(){const grid=$("#gamesGrid");const status=$("#status");let list=[...state.games];if(state.activeTag)list=list.filter(g=>g.tags.includes(state.activeTag));if(state.search)list=list.filter(g=>g.title.toLowerCase().includes(state.search)||(g.description||g.desc||'').toLowerCase().includes(state.search));if(state.sort==='az')list.sort((a,b)=>a.title.localeCompare(b.title));if(state.sort==='za')list.sort((a,b)=>b.title.localeCompare(a.title));if(state.sort==='new')list.sort((a,b)=>(b.comparableTimestamp??0)-(a.comparableTimestamp??0));status.textContent=list.length?`${list.length} game${list.length>1?'s':''} ready to play`:"No matches. Try a different search or tag.";grid.innerHTML="";list.forEach(game=>{const card=document.createElement('article');card.className='card';const badge=document.createElement('div');badge.className='badge';badge.textContent=game.new?'NEW':'PLAY';card.appendChild(badge);const thumb=document.createElement('div');thumb.className='thumb';if(game.thumb){const img=document.createElement('img');img.src=game.thumb;img.alt=game.title+' thumbnail';img.loading='lazy';img.style.width='100%';img.style.height='100%';img.style.objectFit='cover';thumb.appendChild(img);}else{thumb.textContent=game.emoji||'🎮';}card.appendChild(thumb);const h3=document.createElement('h3');h3.textContent=game.title;card.appendChild(h3);const p=document.createElement('p');p.textContent=game.description||game.desc;card.appendChild(p);const meta=getGameMetaText(game.id);if(meta){const m=document.createElement('p');m.style.margin='6px 0 0';m.style.fontSize='.85rem';m.style.opacity='.85';m.textContent=meta;card.appendChild(m);}const badges=getGameBadges(game.id);if(badges.length){const row=document.createElement('div');row.style.margin='8px 0 0';row.style.display='flex';row.style.gap='6px';badges.forEach(b=>{const s=document.createElement('span');s.className='chip';s.textContent=b;row.appendChild(s);});card.appendChild(row);}const actions=document.createElement('div');actions.className='actions';const play=document.createElement('button');play.className='btn primary';play.textContent='Play';play.onclick=()=>playInModal(game.path,game.id);actions.appendChild(play);const share=document.createElement('button');share.className='btn';share.textContent='Share';share.onclick=()=>shareGame(game);actions.appendChild(share);const open=document.createElement('a');open.href=game.path;open.className='btn';open.textContent='Open Tab';open.target='_blank';open.setAttribute('rel','noopener');actions.appendChild(open);card.appendChild(actions);grid.appendChild(card);});}
 async function loadGames(){
   skeletonCards();
   try{
