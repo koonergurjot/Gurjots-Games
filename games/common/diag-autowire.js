@@ -138,12 +138,22 @@
     return '';
   };
 
-  const baseUrl = resolveBase();
-
-  const buildUrl = (path) => {
-    if (!path || !baseUrl) return null;
+  const buildRootUrl = (path) => {
+    if (!path) return null;
+    const getBase = () => {
+      try {
+        if (win && win.location && win.location.href) return win.location.href;
+      } catch (_err) {}
+      try {
+        if (doc && doc.baseURI) return doc.baseURI;
+      } catch (_err) {}
+      const base = resolveBase();
+      return base || null;
+    };
+    const base = getBase();
+    if (!base) return null;
     try {
-      return new URL(path, baseUrl).toString();
+      return new URL(path, base).toString();
     } catch (_err) {}
     return null;
   };
@@ -155,8 +165,8 @@
 
     win.__GG_DIAG_OPTS = { suppressButton: true };
 
-    ensureScript(buildUrl('diagnostics/report-store.js'), 'data-gg-diag-report');
-    ensureScript(buildUrl('diag-core.js'), 'data-gg-diag-core');
-    ensureScript(buildUrl('diag-capture.js'), 'data-gg-diag-capture');
+    ensureScript(buildRootUrl('/games/common/diagnostics/report-store.js'), 'data-gg-diag-report');
+    ensureScript(buildRootUrl('/games/common/diag-core.js'), 'data-gg-diag-core');
+    ensureScript(buildRootUrl('/games/common/diag-capture.js'), 'data-gg-diag-capture');
   });
 })();
