@@ -8,6 +8,12 @@ import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 installErrorReporter();
 getThemeTokens();
 
+const victoryAudio=(typeof Audio!=='undefined')?new Audio('/assets/audio/victory.wav'):null;
+if(victoryAudio){
+  victoryAudio.preload='auto';
+  victoryAudio.volume=0.85;
+}
+
 function requireElementById(id){
   const el=document.getElementById(id);
   if(!el) throw new Error(`Chess: required element #${id} was not found.`);
@@ -67,6 +73,24 @@ let localColor='w';
 let lastSentMove=null;
 const netMoveQueue=[];
 let postedReady=false;
+let victorySoundPlayed=false;
+
+function resetVictorySound(){
+  victorySoundPlayed=false;
+  if(victoryAudio){
+    try{
+      victoryAudio.pause();
+      victoryAudio.currentTime=0;
+    }catch{}
+  }
+}
+
+function playVictorySound(){
+  if(victorySoundPlayed||!victoryAudio) return;
+  victorySoundPlayed=true;
+  try{ victoryAudio.currentTime=0; victoryAudio.play().catch(()=>{}); }
+  catch{}
+}
 
 const AI_UNAVAILABLE_MESSAGE='AI unavailable – switching to local play';
 let aiMoveTimeout=null;
@@ -227,6 +251,13 @@ function handleGameOverState(stateId, extra={}){
     details:payload,
     slug:'chess',
   });
+  if(stateId==='checkmate'&&extra&&typeof extra.winner==='string'){
+    const lower=extra.winner.toLowerCase();
+    const winnerColor=lower.startsWith('white')?'w':lower.startsWith('black')?'b':null;
+    if(winnerColor&&winnerColor===localColor){
+      playVictorySound();
+    }
+  }
   return payload;
 }
 
@@ -303,6 +334,7 @@ if(puzzleSelect && window.puzzles){
 updatePuzzleAvailability();
 
 function reset(options={}){
+  resetVictorySound();
   if(puzzleIndex>=0){ loadPuzzle(puzzleIndex, options); return; }
   board = parseFEN(START); turn='w'; sel=null; moves=[]; over=false; overMsg=null;
   castleRights={w:{K:true,Q:true},b:{K:true,Q:true}};
@@ -327,6 +359,7 @@ function reset(options={}){
   });
 }
 function loadPuzzle(i, options={}){
+  resetVictorySound();
   if(onlineMode){
     status('Puzzles are unavailable during online play.');
     return;

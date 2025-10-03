@@ -8,39 +8,168 @@
   <link rel="stylesheet" href="../common/game-shell.css" />
   <link rel="stylesheet" href="../../css/styles.css?v=5.3" />
   <style>
+    :root {
+      color-scheme: dark;
+    }
     body {
       margin: 0;
-      background: #0b1220;
-      color: #e6e7ea;
+      background: #050914;
+      color: #f4f7ff;
+      font-family: "Press Start 2P", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0.01em;
     }
-    .chess-shell {
+    .chess-layout {
       display: flex;
-      gap: 16px;
+      flex-wrap: wrap;
       justify-content: center;
       align-items: flex-start;
-      padding: 16px 16px 80px;
-      flex-wrap: wrap;
+      gap: 24px;
+      padding: 24px 24px 96px;
     }
-    .chess-board {
+    .chess-layout__board {
       position: relative;
+      display: flex;
+      justify-content: center;
     }
-    .chess-board canvas {
+    .chess-layout__board canvas {
       border: 1px solid #243047;
       border-radius: 12px;
       background: #0f172a;
       display: block;
       width: min(100%, 480px);
       height: auto;
+      image-rendering: pixelated;
+      box-shadow: 0 0 0 4px rgba(7, 16, 33, 0.6);
     }
-    .chess-info {
-      max-width: 260px;
+    .chess-hud {
+      flex: 0 1 320px;
+      display: flex;
+      justify-content: center;
     }
-    .chess-info h3 {
-      margin: 0 0 8px 0;
+    .pixel-panel {
+      position: relative;
+      min-width: 260px;
+      max-width: 320px;
+      padding: 36px 28px 44px;
+      color: #fcefe8;
     }
-    .chess-info label {
-      display: block;
-      margin: 8px 0;
+    .pixel-panel__frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      image-rendering: pixelated;
+      pointer-events: none;
+    }
+    .pixel-panel__star {
+      position: absolute;
+      width: 64px;
+      height: 64px;
+      image-rendering: pixelated;
+      pointer-events: none;
+    }
+    .pixel-panel__star--top {
+      top: -18px;
+      right: 28px;
+    }
+    .pixel-panel__star--bottom {
+      bottom: -12px;
+      left: 24px;
+    }
+    .pixel-panel__body {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 1;
+      text-shadow: 0 2px 0 rgba(10, 16, 34, 0.8);
+    }
+    .pixel-panel__title {
+      font-size: 1.25rem;
+      margin: 0;
+      color: #ffe082;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .pixel-panel__copy {
+      margin: 0;
+      font-size: 0.8rem;
+      line-height: 1.75;
+      color: #fefefe;
+    }
+    .pixel-panel__field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .pixel-panel__field select {
+      background: rgba(8, 16, 34, 0.85);
+      border: 1px solid #2f3b5f;
+      border-radius: 8px;
+      color: inherit;
+      padding: 10px 12px;
+      font-size: 0.75rem;
+      text-transform: none;
+    }
+    .pixel-panel__status {
+      min-height: 48px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: rgba(12, 20, 40, 0.85);
+      border: 1px solid rgba(56, 72, 112, 0.8);
+      font-size: 0.78rem;
+      line-height: 1.55;
+    }
+    .pixel-panel__footer {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #lobby {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #lobby button {
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid #2f3b5f;
+      background: rgba(12, 20, 40, 0.85);
+      color: inherit;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+    }
+    #lobby button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    #lobby-status {
+      min-height: 18px;
+      font-size: 0.7rem;
+    }
+    #rankings {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 0.7rem;
+      display: grid;
+      gap: 4px;
+    }
+    @media (max-width: 720px) {
+      body {
+        font-size: 14px;
+      }
+      .pixel-panel {
+        padding: 32px 24px 40px;
+      }
+      .pixel-panel__title {
+        font-size: 1.1rem;
+      }
     }
   </style>
 
@@ -54,32 +183,41 @@
 <body class="game-shell">
   <main class="game-shell__main">
     <div class="game-shell__surface game-shell__surface--plain">
-      <div class="chess-shell">
-        <div class="chess-board">
+      <div class="chess-layout">
+        <div class="chess-layout__board">
           <canvas id="board" aria-label="Chess board"></canvas>
           <canvas id="fx" aria-hidden="true"></canvas>
         </div>
-        <aside class="chess-info">
-          <h3>Chess</h3>
-          <p>Click a piece, then a target square. <br />Press <b>R</b> to restart. <br />Press <b>F1</b> for control remap.</p>
-          <label>Difficulty:
-            <select id="difficulty">
-              <option value="1">Easy</option>
-              <option value="2" selected>Medium</option>
-              <option value="3">Hard</option>
-              <option value="4">Expert</option>
-            </select>
-          </label>
-          <label>Puzzles:
-            <select id="puzzle-select">
-              <option value="-1">Free Play</option>
-            </select>
-          </label>
-          <div id="status"></div>
-          <div id="lobby" style="margin-top:16px;">
-            <button id="find-match">Find Match</button>
-            <div id="lobby-status"></div>
-            <ol id="rankings"></ol>
+        <aside class="chess-hud" aria-labelledby="chess-title">
+          <div class="pixel-panel">
+            <img src="../../assets/ui/panel.png" alt="" class="pixel-panel__frame" aria-hidden="true" />
+            <img src="../../assets/ui/star.png" alt="" class="pixel-panel__star pixel-panel__star--top" aria-hidden="true" />
+            <img src="../../assets/ui/star.png" alt="" class="pixel-panel__star pixel-panel__star--bottom" aria-hidden="true" />
+            <div class="pixel-panel__body">
+              <h3 id="chess-title" class="pixel-panel__title">Chess</h3>
+              <p class="pixel-panel__copy">Click a piece, then choose a target square. Press <b>R</b> to restart or <b>F1</b> to remap controls.</p>
+              <label class="pixel-panel__field">Difficulty
+                <select id="difficulty">
+                  <option value="1">Easy</option>
+                  <option value="2" selected>Medium</option>
+                  <option value="3">Hard</option>
+                  <option value="4">Expert</option>
+                </select>
+              </label>
+              <label class="pixel-panel__field">Puzzles
+                <select id="puzzle-select">
+                  <option value="-1">Free Play</option>
+                </select>
+              </label>
+              <div id="status" class="pixel-panel__status" role="status" aria-live="polite"></div>
+              <div class="pixel-panel__footer">
+                <div id="lobby">
+                  <button id="find-match">Find Match</button>
+                  <div id="lobby-status" aria-live="polite"></div>
+                  <ol id="rankings"></ol>
+                </div>
+              </div>
+            </div>
           </div>
         </aside>
       </div>
