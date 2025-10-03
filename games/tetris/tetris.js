@@ -483,7 +483,8 @@ function shuffle(a){
 function nextFromBag(){
   if(mode==='replay'){
     const t=Replay.nextPiece();
-    return {m:SHAPES[t].map(r=>r.slice()),t};
+    const key=(t&&SHAPES[t])?t:'I';
+    return {m:SHAPES[key].map(r=>r.slice()),t:key};
   }
   if(bag.length===0){
     bag=Object.keys(SHAPES);
@@ -949,7 +950,23 @@ document.addEventListener('visibilitychange', onVisibility);
 window.addEventListener('message', onShellMessage, {passive:true});
 
 if(mode==='replay'){
-  Replay.load(`./replays/${replayFile}`).then(()=>{initGame();started=true;startGameLoop();if(typeof reportReady==='function') reportReady('tetris'); markReady();});
+  const replayPath=`./replays/${replayFile}`;
+  Replay.load(replayPath).then(()=>{initGame();started=true;startGameLoop();if(typeof reportReady==='function') reportReady('tetris'); markReady();}).catch(err=>{
+    const message=err&&typeof err.message==='string'?err.message:String(err);
+    const stack=err&&err.stack?String(err.stack):undefined;
+    pushEvent('network',{event:'tetris_replay_load_failed',level:'error',message,replay:replayFile||null,stack});
+    dispatchDiagnostics({event:'tetris_replay_load_failed',message,error:message,level:'error',replay:replayFile||null,stack});
+    console.error('Failed to load Tetris replay',err);
+    const toastFn=typeof globalScope?.GG?.toast==='function'?globalScope.GG.toast:(typeof globalScope.toast==='function'?globalScope.toast:null);
+    if(toastFn){
+      toastFn('Unable to load replay. Starting fallback mode.');
+    }
+    initGame();
+    started=true;
+    startGameLoop();
+    if(typeof reportReady==='function') reportReady('tetris');
+    markReady();
+  });
 }else{
   initGame();
   if(mode==='spectate') started=true;
