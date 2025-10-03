@@ -531,6 +531,34 @@ function createAudio(src, volume = 0.6) {
   };
 }
 
+function loadImage(src) {
+  if (typeof Image === 'undefined') return null;
+  const image = new Image();
+  image.decoding = 'async';
+  image.loading = 'eager';
+  image.src = src;
+  return image;
+}
+
+function createTintedSprite(image, color) {
+  if (typeof document === 'undefined') return null;
+  const width = image.naturalWidth || image.width || 0;
+  const height = image.naturalHeight || image.height || 0;
+  if (!width || !height) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(image, 0, 0, width, height);
+  ctx.globalCompositeOperation = 'source-in';
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, width, height);
+  ctx.globalCompositeOperation = 'source-over';
+  return canvas;
+}
+
 class AsteroidsGame {
   constructor(canvas, context = {}) {
     recordMilestone('game:constructor:start');
@@ -553,10 +581,32 @@ class AsteroidsGame {
     });
 
     this.sounds = {
-      shoot: createAudio('../../assets/audio/hit.wav', 0.35),
+      laser: createAudio('../../assets/audio/laser.wav', 0.45),
       explode: createAudio('../../assets/audio/explode.wav', 0.6),
       power: createAudio('../../assets/audio/powerup.wav', 0.5),
+      gameover: createAudio('../../assets/audio/gameover.wav', 0.6),
     };
+
+    this.images = {
+      background: loadImage('../../assets/backgrounds/space.png'),
+      bullet: loadImage('../../assets/sprites/bullet.png'),
+      enemyBullet: loadImage('../../assets/sprites/laser.png'),
+      explosion: loadImage('../../assets/effects/explosion.png'),
+      shield: loadImage('../../assets/effects/shield.png'),
+    };
+    this.backgroundPattern = null;
+    this.bulletSprites = {
+      player: this.images.bullet,
+      remote: null,
+      enemy: this.images.enemyBullet,
+    };
+    this.explosionSprite = {
+      frameSize: 0,
+      framesPerRow: 1,
+      totalFrames: 16,
+      frameDuration: 0.045,
+    };
+    this.explosions = [];
 
     this.width = BASE_WIDTH;
     this.height = BASE_HEIGHT;
@@ -595,6 +645,19 @@ class AsteroidsGame {
     this.sessionActive = false;
 
     this.starfield = this.createStars(120);
+
+    if (this.images.background) {
+      if (this.isSpriteReady(this.images.background)) this.prepareBackgroundPattern();
+      else this.images.background.addEventListener('load', () => this.prepareBackgroundPattern());
+    }
+    if (this.images.bullet) {
+      if (this.isSpriteReady(this.images.bullet)) this.prepareBulletVariants();
+      else this.images.bullet.addEventListener('load', () => this.prepareBulletVariants());
+    }
+    if (this.images.explosion) {
+      if (this.isSpriteReady(this.images.explosion)) this.prepareExplosionSprite();
+      else this.images.explosion.addEventListener('load', () => this.prepareExplosionSprite());
+    }
 
     this.events = {
       onVisibility: () => this.handleVisibilityChange(),
@@ -745,6 +808,46 @@ class AsteroidsGame {
       });
     }
     return stars;
+  }
+
+  isSpriteReady(sprite) {
+    if (!sprite) return false;
+    if ('naturalWidth' in sprite) {
+      return sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
+    }
+    if ('width' in sprite && 'height' in sprite) {
+      return sprite.width > 0 && sprite.height > 0;
+    }
+    return false;
+  }
+
+  prepareBackgroundPattern() {
+    if (!this.ctx || !this.images?.background) return;
+    if (!this.isSpriteReady(this.images.background)) return;
+    this.backgroundPattern = this.ctx.createPattern(this.images.background, 'repeat');
+  }
+
+  prepareBulletVariants() {
+    if (!this.images?.bullet) return;
+    if (!this.isSpriteReady(this.images.bullet)) return;
+    this.bulletSprites.player = this.images.bullet;
+    const tinted = createTintedSprite(this.images.bullet, '#5eead4');
+    this.bulletSprites.remote = tinted || this.images.bullet;
+  }
+
+  prepareExplosionSprite() {
+    if (!this.images?.explosion) return;
+    if (!this.isSpriteReady(this.images.explosion)) return;
+    const image = this.images.explosion;
+    const framesPerRow = 8;
+    const frameSize = Math.floor((image.naturalWidth || image.width) / framesPerRow) || 1;
+    const framesPerColumn = Math.max(
+      1,
+      Math.floor((image.naturalHeight || image.height) / frameSize),
+    );
+    this.explosionSprite.frameSize = frameSize;
+    this.explosionSprite.framesPerRow = framesPerRow;
+    this.explosionSprite.totalFrames = framesPerRow * framesPerColumn;
   }
 
   createShip() {
@@ -927,6 +1030,8 @@ class AsteroidsGame {
 
   update(dt) {
     if (!this.ship.alive) {
+      this.updateExplosions(dt);
+      this.updateParticles(dt);
       this.ship.respawnTimer -= dt;
       if (this.ship.respawnTimer <= 0) {
         this.respawnShip();
@@ -941,6 +1046,7 @@ class AsteroidsGame {
     this.updateAsteroids(dt);
     this.updateEnemyBullets(dt);
     this.updateParticles(dt);
+    this.updateExplosions(dt);
     this.updateRemote(dt);
 
     if (!this.asteroids.length && !this.waveClearTimer) {
@@ -1049,7 +1155,7 @@ class AsteroidsGame {
       this.fireCooldown = 0.12;
     }
 
-    this.sounds.shoot();
+    this.sounds.laser();
   }
 
   spawnBullet(x, y, angle, speed) {
@@ -1180,19 +1286,15 @@ class AsteroidsGame {
   }
 
   spawnExplosion(x, y, radius) {
-    const count = 12 + Math.floor(radius * 0.6);
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * TWO_PI;
-      const speed = randomRange(40, 180);
-      this.particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 0.6,
-        color: 'rgba(249, 115, 22, 0.7)',
-      });
-    }
+    const baseSize = this.explosionSprite.frameSize || radius * 2;
+    const size = Math.max(radius * 2, baseSize);
+    this.explosions.push({
+      x,
+      y,
+      size,
+      frameIndex: 0,
+      frameTimer: 0,
+    });
   }
 
   updateParticles(dt) {
@@ -1204,6 +1306,23 @@ class AsteroidsGame {
       p.vx *= 1 - dt * 0.8;
       p.vy *= 1 - dt * 0.8;
       if (p.life <= 0) this.particles.splice(i, 1);
+    }
+  }
+
+  updateExplosions(dt) {
+    if (!this.explosions.length) return;
+    const frameDuration = this.explosionSprite.frameDuration || 0.05;
+    const totalFrames = Math.max(1, this.explosionSprite.totalFrames || 1);
+    for (let i = this.explosions.length - 1; i >= 0; i--) {
+      const explosion = this.explosions[i];
+      explosion.frameTimer = (explosion.frameTimer || 0) + dt;
+      while (explosion.frameTimer >= frameDuration) {
+        explosion.frameTimer -= frameDuration;
+        explosion.frameIndex = (explosion.frameIndex || 0) + 1;
+      }
+      if ((explosion.frameIndex || 0) >= totalFrames) {
+        this.explosions.splice(i, 1);
+      }
     }
   }
 
@@ -1278,8 +1397,7 @@ class AsteroidsGame {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.width, this.height);
 
-    ctx.fillStyle = '#05070f';
-    ctx.fillRect(0, 0, this.width, this.height);
+    this.drawBackground();
 
     ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
     for (const star of this.starfield) {
@@ -1301,20 +1419,8 @@ class AsteroidsGame {
     }
     ctx.globalAlpha = 1;
 
-    ctx.strokeStyle = '#6ee7b7';
-    ctx.lineWidth = 2;
-    for (const bullet of this.bullets) {
-      ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, bullet.r, 0, TWO_PI);
-      ctx.stroke();
-    }
-
-    ctx.strokeStyle = 'rgba(248, 113, 113, 0.9)';
-    for (const bullet of this.enemyBullets) {
-      ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, 3, 0, TWO_PI);
-      ctx.stroke();
-    }
+    this.drawPlayerBullets();
+    this.drawEnemyBullets();
 
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 2;
@@ -1322,25 +1428,167 @@ class AsteroidsGame {
       this.drawAsteroid(asteroid);
     }
 
+    this.drawExplosions();
+
     for (const ship of this.remoteShips.values()) {
       this.drawShipModel(ship.x, ship.y, ship.angle ?? -Math.PI / 2, 'rgba(94, 234, 212, 0.6)', 0.8);
     }
 
-    for (const bullet of this.remoteShots) {
-      ctx.strokeStyle = 'rgba(94, 234, 212, 0.3)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(bullet.x, bullet.y, 2.5, 0, TWO_PI);
-      ctx.stroke();
-    }
+    this.drawRemoteShots();
 
     if (this.ship.alive) {
       const blink = this.ship.invulnerable > 0 && Math.floor(this.ship.invulnerable * 10) % 2 === 0;
+      if (this.ship.invulnerable > 0) {
+        this.drawShield(this.ship.x, this.ship.y);
+      }
       if (!blink) {
         this.drawShipModel(this.ship.x, this.ship.y, this.ship.angle, '#6ee7b7');
       }
     }
 
+    ctx.restore();
+  }
+
+  drawBackground() {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (!this.backgroundPattern && this.images?.background && this.isSpriteReady(this.images.background)) {
+      this.prepareBackgroundPattern();
+    }
+    if (this.backgroundPattern) {
+      ctx.fillStyle = this.backgroundPattern;
+    } else {
+      ctx.fillStyle = '#05070f';
+    }
+    ctx.fillRect(0, 0, this.width, this.height);
+  }
+
+  drawPlayerBullets() {
+    if (!this.bullets.length) return;
+    const ctx = this.ctx;
+    const sprite = this.bulletSprites.player;
+    if (sprite && this.isSpriteReady(sprite)) {
+      const width = sprite.naturalWidth || sprite.width;
+      const height = sprite.naturalHeight || sprite.height;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      for (const bullet of this.bullets) {
+        ctx.drawImage(sprite, bullet.x - width / 2, bullet.y - height / 2, width, height);
+      }
+      ctx.restore();
+    } else {
+      ctx.strokeStyle = '#6ee7b7';
+      ctx.lineWidth = 2;
+      for (const bullet of this.bullets) {
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, bullet.r, 0, TWO_PI);
+        ctx.stroke();
+      }
+    }
+  }
+
+  drawEnemyBullets() {
+    if (!this.enemyBullets.length) return;
+    const ctx = this.ctx;
+    const sprite = this.bulletSprites.enemy;
+    if (sprite && this.isSpriteReady(sprite)) {
+      const width = sprite.naturalWidth || sprite.width;
+      const height = sprite.naturalHeight || sprite.height;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      for (const bullet of this.enemyBullets) {
+        ctx.save();
+        ctx.translate(bullet.x, bullet.y);
+        const angle = Math.atan2(bullet.vy, bullet.vx);
+        ctx.rotate(angle);
+        ctx.drawImage(sprite, -width / 2, -height / 2, width, height);
+        ctx.restore();
+      }
+      ctx.restore();
+    } else {
+      ctx.strokeStyle = 'rgba(248, 113, 113, 0.9)';
+      ctx.lineWidth = 2;
+      for (const bullet of this.enemyBullets) {
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, 3, 0, TWO_PI);
+        ctx.stroke();
+      }
+    }
+  }
+
+  drawRemoteShots() {
+    if (!this.remoteShots.length) return;
+    const ctx = this.ctx;
+    const sprite = this.bulletSprites.remote;
+    if (sprite && this.isSpriteReady(sprite)) {
+      const width = sprite.naturalWidth || sprite.width;
+      const height = sprite.naturalHeight || sprite.height;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = 0.75;
+      for (const bullet of this.remoteShots) {
+        ctx.drawImage(sprite, bullet.x - width / 2, bullet.y - height / 2, width, height);
+      }
+      ctx.restore();
+    } else {
+      ctx.strokeStyle = 'rgba(94, 234, 212, 0.3)';
+      ctx.lineWidth = 1.5;
+      for (const bullet of this.remoteShots) {
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, 2.5, 0, TWO_PI);
+        ctx.stroke();
+      }
+    }
+  }
+
+  drawExplosions() {
+    if (!this.explosions.length) return;
+    const ctx = this.ctx;
+    const sprite = this.images?.explosion;
+    if (sprite && this.isSpriteReady(sprite) && this.explosionSprite.frameSize) {
+      const frameSize = this.explosionSprite.frameSize;
+      const framesPerRow = this.explosionSprite.framesPerRow || 1;
+      const totalFrames = Math.max(1, this.explosionSprite.totalFrames || 1);
+      const frameDuration = this.explosionSprite.frameDuration || 0.05;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      for (const explosion of this.explosions) {
+        const frameIndex = Math.min(totalFrames - 1, explosion.frameIndex || 0);
+        const sx = (frameIndex % framesPerRow) * frameSize;
+        const sy = Math.floor(frameIndex / framesPerRow) * frameSize;
+        const size = explosion.size || frameSize;
+        const half = size / 2;
+        const progress = Math.min(
+          1,
+          ((explosion.frameIndex || 0) + (explosion.frameTimer || 0) / frameDuration) / totalFrames,
+        );
+        ctx.globalAlpha = 0.9 - progress * 0.4;
+        ctx.drawImage(sprite, sx, sy, frameSize, frameSize, explosion.x - half, explosion.y - half, size, size);
+      }
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(248, 250, 252, 0.4)';
+      for (const explosion of this.explosions) {
+        const radius = (explosion.size || 0) / 2;
+        ctx.beginPath();
+        ctx.arc(explosion.x, explosion.y, radius, 0, TWO_PI);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  drawShield(x, y) {
+    const sprite = this.images?.shield;
+    if (!sprite || !this.isSpriteReady(sprite)) return;
+    const ctx = this.ctx;
+    const width = sprite.naturalWidth || sprite.width;
+    const height = sprite.naturalHeight || sprite.height;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(sprite, x - width / 2, y - height / 2, width, height);
     ctx.restore();
   }
 
@@ -1431,6 +1679,7 @@ class AsteroidsGame {
     this.lives--;
     this.updateLivesDisplay();
     if (this.lives <= 0) {
+      this.sounds.gameover();
       this.gameOver = true;
       this.endSession();
       this.showOverlay('Game Over', `Final score: ${this.score}. Press restart to try again.`, true);
@@ -1490,6 +1739,7 @@ class AsteroidsGame {
     this.bullets = [];
     this.enemyBullets = [];
     this.particles = [];
+    this.explosions = [];
     this.waveTimer = 0;
     this.fireCooldown = 0;
     this.paused = false;
