@@ -66,8 +66,8 @@ function ensureLegacyDiagnostics() {
     return Promise.resolve();
   }
   if (loaderPromise) return loaderPromise;
-  const coreUrl = new URL('../games/common/diag-core.js', import.meta.url).href;
-  const captureUrl = new URL('../games/common/diag-capture.js', import.meta.url).href;
+  const coreUrl = new URL('/games/common/diag-core.js', import.meta.url).href;
+  const captureUrl = new URL('/games/common/diag-capture.js', import.meta.url).href;
   loaderPromise = loadScript(coreUrl)
     .then(() => loadScript(captureUrl))
     .then(() => {

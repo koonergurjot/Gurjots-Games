@@ -1,5 +1,5 @@
 import { Controls } from '../../src/runtime/controls.js';
-import { pushEvent } from '../common/diag-adapter.js';
+import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerRunnerAdapter } from './adapter.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
 import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';

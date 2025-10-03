@@ -9,7 +9,7 @@ import { mountCameraPresets } from "./ui/cameraPresets.js";
 import { envDataUrl } from "./textures/env.js";
 import { log, warn } from '../../tools/reporters/console-signature.js';
 import { injectHelpButton } from '../../shared/ui.js';
-import { pushEvent } from "../common/diag-adapter.js";
+import { pushEvent } from "/games/common/diag-adapter.js";
 
 async function loadCatalog() {
   const urls = ['/games.json', '/public/games.json'];

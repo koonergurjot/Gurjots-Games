@@ -1,5 +1,5 @@
 import * as net from './net.js';
-import { pushEvent } from '../common/diag-adapter.js';
+import { pushEvent } from '/games/common/diag-adapter.js';
 import { drawTileSprite, getTilePattern, getSpriteFrame, preloadTileTextures } from '../../shared/render/tileTextures.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
 import { tiles } from './tiles.js';

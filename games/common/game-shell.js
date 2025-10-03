@@ -42,7 +42,7 @@ if (!current) {
 const dataset = current?.dataset || {};
 const applyTheme = dataset.applyTheme !== 'false';
 const slug = dataset.game || dataset.slug || '';
-const diagSrc = dataset.diagSrc || '../common/diag-autowire.js';
+const diagSrc = dataset.diagSrc || '/games/common/diag-autowire.js';
 const backHref = dataset.backHref || '/index.html';
 const preloadTargets = (dataset.preloadFirst || '')
   .split(',')

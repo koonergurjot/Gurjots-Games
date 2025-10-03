@@ -1,7 +1,7 @@
 import { Controls } from '../../src/runtime/controls.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
-import { pushEvent } from '../common/diag-adapter.js';
+import { pushEvent } from '/games/common/diag-adapter.js';
 import {
   connect as netConnect,
   disconnect as netDisconnect,

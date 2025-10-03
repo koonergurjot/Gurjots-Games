@@ -1,5 +1,5 @@
 // Minimal top-down shooter (canvas id='game')
-import { pushEvent } from '../common/diag-adapter.js';
+import { pushEvent } from '/games/common/diag-adapter.js';
 import { getCachedAudio, getCachedImage, loadAudio, loadImage, drawTiledBackground } from '../../shared/assets.js';
 import './diagnostics-adapter.js';
 

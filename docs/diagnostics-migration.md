@@ -33,7 +33,7 @@ shared capture shim (`diag-capture.js`) and the modern diagnostics UI.
      details: { scene: 'intro' },
    });
    ```
-3. Keep loading `games/common/diag-capture.js` (either directly or through the
+3. Keep loading `/games/common/diag-capture.js` (either directly or through the
    shell) so console/error/network hooks remain active.
 
 ## Updating HTML-only integrations
@@ -43,7 +43,7 @@ module pipeline, replace the legacy loader with a direct reference to the
 capture shim and use the global helper when you need to emit manual events:
 
 ```html
-<script src="../common/diag-capture.js" defer></script>
+<script src="/games/common/diag-capture.js" defer></script>
 <script>
   window.__GG_DIAG_PUSH_EVENT__?.('game', {
     level: 'info',
