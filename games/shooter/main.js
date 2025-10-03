@@ -1,6 +1,6 @@
 // Minimal top-down shooter (canvas id='game')
 import { pushEvent } from '/games/common/diag-adapter.js';
-import { getCachedAudio, getCachedImage, loadAudio, loadImage, drawTiledBackground } from '../../shared/assets.js';
+import { getCachedAudio, getCachedImage, loadAudio, loadImage } from '../../shared/assets.js';
 import './diagnostics-adapter.js';
 
 export function boot() {
@@ -31,7 +31,6 @@ export function boot() {
 
   const SLUG = 'shooter';
   const ASSET_PATHS = {
-    background: '../../assets/backgrounds/space.png',
     bullet: '../../assets/sprites/bullet.png',
     enemies: [
       '../../assets/sprites/enemy1.png',
@@ -44,12 +43,28 @@ export function boot() {
   };
 
   const sprites = {
-    background: getCachedImage(ASSET_PATHS.background),
     bullet: getCachedImage(ASSET_PATHS.bullet),
     enemies: ASSET_PATHS.enemies.map(path => getCachedImage(path)),
     explosion: getCachedImage(ASSET_PATHS.explosion),
     portal: getCachedImage(ASSET_PATHS.portal),
   };
+
+  const PARALLAX_LAYERS = [
+    { key: 'layer1', src: '/assets/backgrounds/parallax/space_layer1.png', speed: 40, alpha: 0.85 },
+    { key: 'layer2', src: '/assets/backgrounds/parallax/space_layer2.png', speed: 80, alpha: 1 },
+  ];
+  const parallaxLayers = PARALLAX_LAYERS.map(config => ({
+    key: config.key,
+    src: config.src,
+    speed: Number.isFinite(config.speed) ? config.speed : 0,
+    alpha: typeof config.alpha === 'number' ? Math.max(0, Math.min(1, config.alpha)) : 1,
+    offset: 0,
+    image: getCachedImage(config.src) || null,
+    width: 0,
+    height: 0,
+  }));
+  const parallaxRequests = new Set();
+  let lastParallaxTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   const explosionSprite = {
     frameSize: 0,
@@ -63,21 +78,87 @@ export function boot() {
     totalFrames: 4,
   };
 
-  let backgroundPattern = null;
-
   function isImageReady(image) {
     return !!image && (image.complete === undefined || image.complete) && (image.naturalWidth || image.width);
   }
 
-  function ensureBackgroundPattern() {
-    if (!ctx) return;
-    const image = sprites.background;
-    if (!isImageReady(image)) return;
-    try {
-      backgroundPattern = ctx.createPattern(image, 'repeat');
-    } catch (_) {
-      backgroundPattern = null;
+  function ensureParallaxLayers() {
+    for (const layer of parallaxLayers) {
+      if (layer.image && isImageReady(layer.image)) continue;
+      const requestKey = layer.src;
+      if (parallaxRequests.has(requestKey)) continue;
+      parallaxRequests.add(requestKey);
+      loadImage(layer.src, { slug: SLUG }).then(img => {
+        layer.image = img;
+        layer.width = img.naturalWidth || img.width || layer.width || 0;
+        layer.height = img.naturalHeight || img.height || layer.height || 0;
+      }).catch(() => {}).finally(() => {
+        parallaxRequests.delete(requestKey);
+      });
     }
+  }
+
+  function getParallaxMetrics(layer) {
+    if (!layer) return null;
+    const img = layer.image;
+    const baseW = img?.naturalWidth || img?.width || layer.width || 0;
+    const baseH = img?.naturalHeight || img?.height || layer.height || 0;
+    if (!baseW || !baseH) return null;
+    const destHeight = H;
+    const destWidth = destHeight * (baseW / baseH);
+    if (!Number.isFinite(destWidth) || destWidth <= 0) return null;
+    layer.width = baseW;
+    layer.height = baseH;
+    layer.renderWidth = destWidth;
+    layer.renderHeight = destHeight;
+    return { width: destWidth, height: destHeight };
+  }
+
+  function updateParallax(delta) {
+    ensureParallaxLayers();
+    if (!Number.isFinite(delta)) delta = 0;
+    for (const layer of parallaxLayers) {
+      const metrics = getParallaxMetrics(layer);
+      if (!metrics) continue;
+      const speed = Number.isFinite(layer.speed) ? layer.speed : 0;
+      if (!speed) continue;
+      let offset = (layer.offset || 0) + speed * delta;
+      const span = metrics.width;
+      if (span > 0) {
+        offset %= span;
+        if (offset < 0) offset += span;
+      }
+      layer.offset = offset;
+    }
+  }
+
+  function drawParallaxBackground() {
+    if (!ctx) return;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#0a101f';
+    ctx.fillRect(0, 0, W, H);
+    ensureParallaxLayers();
+    for (const layer of parallaxLayers) {
+      const metrics = getParallaxMetrics(layer);
+      if (!metrics || !isImageReady(layer.image)) continue;
+      let startX = -(layer.offset || 0);
+      while (startX > 0) startX -= metrics.width;
+      ctx.save();
+      ctx.globalAlpha = layer.alpha ?? 1;
+      for (let x = startX; x < W; x += metrics.width) {
+        ctx.drawImage(layer.image, x, 0, metrics.width, metrics.height);
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function resetParallax() {
+    for (const layer of parallaxLayers) {
+      if (layer) layer.offset = 0;
+    }
+    lastParallaxTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   }
 
   function prepareExplosionSprite() {
@@ -123,11 +204,7 @@ export function boot() {
   const playShootSound = createSoundPlayer(ASSET_PATHS.shoot, 0.5);
   const playGameOverSound = createSoundPlayer(ASSET_PATHS.gameover, 0.6);
 
-  if (sprites.background) ensureBackgroundPattern();
-  loadImage(ASSET_PATHS.background, { slug: SLUG }).then(img => {
-    sprites.background = img;
-    ensureBackgroundPattern();
-  }).catch(() => {});
+  ensureParallaxLayers();
 
   loadImage(ASSET_PATHS.bullet, { slug: SLUG }).then(img => {
     sprites.bullet = img;
@@ -249,16 +326,7 @@ export function boot() {
     if (ctx && 'imageSmoothingEnabled' in ctx) {
       ctx.imageSmoothingEnabled = false;
     }
-    const bgImage = sprites.background;
-    if (backgroundPattern) {
-      ctx.fillStyle = backgroundPattern;
-      ctx.fillRect(0, 0, W, H);
-    } else if (isImageReady(bgImage)) {
-      drawTiledBackground(ctx, bgImage, 0, 0, W, H);
-    } else {
-      ctx.fillStyle = '#10151a';
-      ctx.fillRect(0,0,W,H);
-    }
+    drawParallaxBackground();
     // player
     ctx.fillStyle = '#4ade80';
     ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI*2); ctx.fill();
@@ -394,8 +462,16 @@ export function boot() {
   let shellPaused = false;
   let pausedByShell = false;
 
-  function frame(){
+  function frame(timestamp){
     if(shellPaused){ raf = 0; return; }
+    const now = typeof timestamp === 'number'
+      ? timestamp
+      : (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    let delta = (now - lastParallaxTime) / 1000;
+    if (!Number.isFinite(delta)) delta = 0;
+    delta = Math.max(0, Math.min(0.1, delta));
+    lastParallaxTime = now;
+    updateParallax(delta);
     update();
     draw();
     if (player.hp>0) {
@@ -408,7 +484,12 @@ export function boot() {
     }
   }
 
-  function startLoop(){ if(!raf && player.hp>0){ raf=requestAnimationFrame(frame); } }
+  function startLoop(){
+    if(!raf && player.hp>0){
+      lastParallaxTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      raf=requestAnimationFrame(frame);
+    }
+  }
 
   function stopLoop(){ if(raf){ cancelAnimationFrame(raf); raf=0; } }
 
@@ -439,7 +520,9 @@ export function boot() {
     bullets.length = 0;
     enemies.length = 0;
     explosions.length = 0;
+    portalEffects.length = 0;
     t = 0;
+    resetParallax();
     score = 0;
     shellPaused = false;
     pausedByShell = false;
@@ -535,6 +618,7 @@ export function boot() {
     }
   }
 
+  resetParallax();
   startLoop();
   addEventListener('beforeunload', ()=>stopLoop());
 }

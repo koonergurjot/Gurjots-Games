@@ -1,7 +1,7 @@
 import '../../shared/fx/canvasFx.js';
 import '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
-import { loadImage, drawTiledBackground } from '../../shared/assets.js';
+import { loadImage } from '../../shared/assets.js';
 import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
 import { play as playSfx } from '../../shared/juice/audio.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
@@ -82,7 +82,6 @@ const GAME_ID='tetris';GG.incPlays();
 preloadFirstFrameAssets(GAME_ID).catch(()=>{});
 const SPRITE_SOURCES={
   block:'/assets/sprites/block.png',
-  background:'/assets/backgrounds/arcade.png',
   effects:{
     spark:'/assets/effects/spark.png',
     explosion:'/assets/effects/explosion.png',
@@ -149,10 +148,26 @@ if(c){
 }
 const ctx=c.getContext('2d');
 if(ctx) ctx.imageSmoothingEnabled=false;
-const spriteStore={ block:null, background:null, effects:{}, ui:{ trophy:null } };
+const spriteStore={ block:null, effects:{}, ui:{ trophy:null } };
 const spriteRequests=new Set();
 const tintCache=new Map();
 const effects=[];
+
+const PARALLAX_LAYERS=[
+  {key:'layer1',src:'/assets/backgrounds/parallax/arcade_layer1.png',speed:18,alpha:0.85},
+  {key:'layer2',src:'/assets/backgrounds/parallax/arcade_layer2.png',speed:36,alpha:1}
+];
+const parallaxLayers=PARALLAX_LAYERS.map(cfg=>({
+  key:cfg.key,
+  src:cfg.src,
+  speed:cfg.speed,
+  alpha:typeof cfg.alpha==='number'?Math.max(0,Math.min(1,cfg.alpha)):1,
+  offset:0,
+  image:null,
+  width:0,
+  height:0
+}));
+const parallaxRequests=new Set();
 
 ensureSprites();
 let postedReady=false;
@@ -193,12 +208,6 @@ function ensureSprites(){
       tintCache.clear();
     }).catch(()=>{}).finally(()=>spriteRequests.delete('block'));
   }
-  if(!spriteStore.background && !spriteRequests.has('background')){
-    spriteRequests.add('background');
-    loadImage(SPRITE_SOURCES.background,{slug:GAME_ID}).then(img=>{
-      spriteStore.background=img;
-    }).catch(()=>{}).finally(()=>spriteRequests.delete('background'));
-  }
   for(const [key,src] of Object.entries(SPRITE_SOURCES.effects)){
     if(spriteStore.effects[key]) continue;
     const requestKey=`effect:${key}`;
@@ -217,6 +226,84 @@ function ensureSprites(){
       spriteStore.ui[key]=img;
     }).catch(()=>{}).finally(()=>spriteRequests.delete(requestKey));
   }
+  ensureParallaxLayers();
+}
+
+function ensureParallaxLayers(){
+  for(const layer of parallaxLayers){
+    if(layer.image && isImageReady(layer.image)) continue;
+    const requestKey=`parallax:${layer.key}`;
+    if(parallaxRequests.has(requestKey)) continue;
+    parallaxRequests.add(requestKey);
+    loadImage(layer.src,{slug:GAME_ID}).then(img=>{
+      layer.image=img;
+      layer.width=img.naturalWidth||img.width||layer.width||0;
+      layer.height=img.naturalHeight||img.height||layer.height||0;
+    }).catch(()=>{}).finally(()=>parallaxRequests.delete(requestKey));
+  }
+}
+
+function getParallaxMetrics(layer){
+  if(!layer) return null;
+  const img=layer.image;
+  const baseW=img?.naturalWidth||img?.width||layer.width||0;
+  const baseH=img?.naturalHeight||img?.height||layer.height||0;
+  if(!baseW||!baseH) return null;
+  const destHeight=c.height||BASE_H;
+  const destWidth=destHeight*(baseW/baseH);
+  if(!Number.isFinite(destWidth)||destWidth<=0) return null;
+  layer.width=baseW;
+  layer.height=baseH;
+  layer.renderWidth=destWidth;
+  layer.renderHeight=destHeight;
+  return {width:destWidth,height:destHeight};
+}
+
+function updateParallax(dt){
+  if(shouldReduceMotion) return;
+  ensureParallaxLayers();
+  if(!Number.isFinite(dt)) dt=0;
+  for(const layer of parallaxLayers){
+    const metrics=getParallaxMetrics(layer);
+    if(!metrics) continue;
+    const speed=Number.isFinite(layer.speed)?layer.speed:0;
+    if(!speed) continue;
+    let offset=(layer.offset||0)+speed*dt;
+    const span=metrics.width;
+    if(span>0){
+      offset%=span;
+      if(offset<0) offset+=span;
+    }
+    layer.offset=offset;
+  }
+}
+
+function resetParallax(){
+  for(const layer of parallaxLayers){
+    if(layer) layer.offset=0;
+  }
+}
+
+function drawParallaxBackground(){
+  if(!ctx) return;
+  ctx.save();
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#0f1320';
+  ctx.fillRect(0,0,c.width,c.height);
+  ensureParallaxLayers();
+  for(const layer of parallaxLayers){
+    const metrics=getParallaxMetrics(layer);
+    if(!metrics || !isImageReady(layer.image)) continue;
+    let startX=-(layer.offset||0);
+    while(startX>0) startX-=metrics.width;
+    ctx.save();
+    ctx.globalAlpha=layer.alpha ?? 1;
+    for(let x=startX; x<c.width; x+=metrics.width){
+      ctx.drawImage(layer.image,x,0,metrics.width,metrics.height);
+    }
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function isImageReady(img){
@@ -763,6 +850,7 @@ let clearTimer=0, clearRows=[];
 let rotated=false;
 
 function initGame(){
+  resetParallax();
   nextM=nextFromBag();
   cur=spawn();
   updateGhost();
@@ -933,13 +1021,7 @@ function draw(){
   }
   const cell=getCellSize();
   ensureSprites();
-  const bgImage=spriteStore.background;
-  if(isImageReady(bgImage)){
-    drawTiledBackground(ctx,bgImage,0,0,c.width,c.height);
-  }else{
-    ctx.fillStyle='#0f1320';
-    ctx.fillRect(0,0,c.width,c.height);
-  }
+  drawParallaxBackground();
 
   if(!started){
     ctx.fillStyle='#e6e7ea';
@@ -1163,6 +1245,7 @@ function loop(ts){
       lockTimer=0;
     }
   }
+  updateParallax(dt);
   updateEffects(dt);
   updateClearState(dt);
   ctx.clearRect(0,0,c.width,c.height);
