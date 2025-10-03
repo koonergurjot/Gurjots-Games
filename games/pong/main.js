@@ -115,6 +115,7 @@ function loadRealGameScript() {
       return;
     }
     const script = document.createElement('script');
+    script.type = 'module';
     script.src = new URL('./pong.js', import.meta.url).href;
     script.defer = true;
     script.dataset.pongMain = '1';
