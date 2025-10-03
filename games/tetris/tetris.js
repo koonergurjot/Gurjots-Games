@@ -87,6 +87,9 @@ const SPRITE_SOURCES={
     spark:'/assets/effects/spark.png',
     explosion:'/assets/effects/explosion.png',
   },
+  ui:{
+    trophy:'/assets/ui/icons/trophy.png',
+  },
 };
 const BASE_W=300;
 const BASE_H=600;
@@ -146,7 +149,7 @@ if(c){
 }
 const ctx=c.getContext('2d');
 if(ctx) ctx.imageSmoothingEnabled=false;
-const spriteStore={ block:null, background:null, effects:{} };
+const spriteStore={ block:null, background:null, effects:{}, ui:{ trophy:null } };
 const spriteRequests=new Set();
 const tintCache=new Map();
 const effects=[];
@@ -203,6 +206,15 @@ function ensureSprites(){
     spriteRequests.add(requestKey);
     loadImage(src,{slug:GAME_ID}).then(img=>{
       spriteStore.effects[key]=img;
+    }).catch(()=>{}).finally(()=>spriteRequests.delete(requestKey));
+  }
+  for(const [key,src] of Object.entries(SPRITE_SOURCES.ui)){
+    if(spriteStore.ui[key]) continue;
+    const requestKey=`ui:${key}`;
+    if(spriteRequests.has(requestKey)) continue;
+    spriteRequests.add(requestKey);
+    loadImage(src,{slug:GAME_ID}).then(img=>{
+      spriteStore.ui[key]=img;
     }).catch(()=>{}).finally(()=>spriteRequests.delete(requestKey));
   }
 }
@@ -872,6 +884,41 @@ function drawMatrix(m,ox,oy,cell){
       drawBlockAtPixel(ox+x*previewCell,oy+y*previewCell,previewCell-2,COLORS[m[y][x]],1,{shadow:false});
     }
 }
+
+function drawHighScoreWithIcon(text,centerX,baselineY){
+  if(!ctx) return;
+  const trophy=spriteStore.ui?.trophy;
+  if(!isImageReady(trophy)){
+    ctx.save();
+    ctx.textAlign='center';
+    ctx.fillText(text,centerX,baselineY);
+    ctx.restore();
+    return;
+  }
+  const metrics=ctx.measureText(text);
+  const rawAscent=metrics.actualBoundingBoxAscent||metrics.fontBoundingBoxAscent||0;
+  const rawDescent=metrics.actualBoundingBoxDescent||metrics.fontBoundingBoxDescent||0;
+  const ascent=rawAscent||10;
+  const descent=rawDescent||4;
+  const textHeight=Math.max(12,ascent+descent);
+  const iconHeight=textHeight;
+  const spriteWidth=trophy.naturalWidth||trophy.width||iconHeight;
+  const spriteHeight=trophy.naturalHeight||trophy.height||iconHeight;
+  const ratio=spriteHeight?spriteWidth/spriteHeight:1;
+  const iconWidth=iconHeight*ratio;
+  const spacing=8;
+  const totalWidth=metrics.width+iconWidth+spacing;
+  const startX=centerX-totalWidth/2;
+  const iconY=baselineY-ascent;
+  ctx.save();
+  ctx.textAlign='left';
+  ctx.save();
+  ctx.imageSmoothingEnabled=true;
+  ctx.drawImage(trophy,startX,iconY,iconWidth,iconHeight);
+  ctx.restore();
+  ctx.fillText(text,startX+iconWidth+spacing,baselineY);
+  ctx.restore();
+}
 function drawGhost(cell){
   if(!showGhost||!ghost) return;
   for(let y=0;y<ghost.m.length;y++)
@@ -900,7 +947,7 @@ function draw(){
     ctx.textAlign='center';
     ctx.fillText('Tetris',c.width/2,c.height/2-40);
     ctx.font='14px Inter';
-    ctx.fillText(`High Score ${bestScore}`,c.width/2,c.height/2);
+    drawHighScoreWithIcon(`High Score ${bestScore}`,c.width/2,c.height/2);
     ctx.fillText(`Best Lines ${bestLines}`,c.width/2,c.height/2+20);
     ctx.fillText('Press Space to start',c.width/2,c.height/2+60);
     ctx.textAlign='start';
