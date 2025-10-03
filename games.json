@@ -54,7 +54,7 @@
     ],
     "difficulty": "medium",
     "released": "2025-08-26",
-    "playUrl": "/games/tetris/",
+    "playUrl": "/games/tetris/play.html",
     "firstFrame": {
       "audio": [
         "/assets/audio/hit.wav",
