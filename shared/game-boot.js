@@ -13,35 +13,29 @@ const urlSlug = pathSegments.slice(-1)[0];
 const slug = currentScript?.dataset?.slug || urlSlug || 'unknown';
 
 injectBackButton('/');
-injectHelpButton({ gameId: slug, ...(window.helpData || { steps: window.helpSteps || [] }) });
+
+const catalogEntryPromise = resolveCatalogEntry(slug);
+
+catalogEntryPromise
+  .then(({ entry }) => {
+    const helpPayload = buildHelpPayload(entry?.help);
+    window.helpData = helpPayload;
+    injectHelpButton({ gameId: slug, ...helpPayload });
+  })
+  .catch(() => {
+    const helpPayload = buildHelpPayload(window.helpData);
+    window.helpData = helpPayload;
+    injectHelpButton({ gameId: slug, ...helpPayload });
+  });
+
 recordLastPlayed(slug);
 preloadFirstFrameAssets(slug);
 
 async function track(){
   let tags = [];
   try {
-    const urls = ['/games.json', '/public/games.json'];
-    let data = null;
-    for (const url of urls) {
-      try {
-        const res = await fetch(url, { cache: 'no-store' });
-        if (!res?.ok) throw new Error(`bad status ${res?.status}`);
-        data = await res.json();
-        break;
-      } catch (_) {
-        data = null;
-      }
-    }
-    if (!data) throw new Error('catalog unavailable');
-    const games = Array.isArray(data.games) ? data.games : (Array.isArray(data) ? data : []);
-    const normalized = normalizeCatalogEntries(games);
-    const normalizedMatch = normalized.find(g => g.slug === slug || g.id === slug);
-    const rawMatch = normalizedMatch ? null : games.find(g => g?.slug === slug || g?.id === slug);
-    const match = normalizedMatch || rawMatch;
-    if (match) {
-      const sourceTags = normalizedMatch ? normalizedMatch.tags : match.tags;
-      tags = Array.isArray(sourceTags) ? sourceTags : [];
-    }
+    const { tags: resolvedTags } = await catalogEntryPromise;
+    tags = Array.isArray(resolvedTags) ? resolvedTags : [];
   } catch {}
   recordPlay(slug, tags);
 }
@@ -56,3 +50,88 @@ function showFallback(e){
 
 window.addEventListener('error', showFallback);
 window.addEventListener('unhandledrejection', showFallback);
+
+function toTrimmedString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toTrimmedList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map(item => toTrimmedString(item))
+      .filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  return [];
+}
+
+function getFallbackSteps() {
+  const fallback = window.helpSteps;
+  if (Array.isArray(fallback)) return toTrimmedList(fallback);
+  if (typeof fallback === 'string') return toTrimmedList(fallback);
+  return [];
+}
+
+function hasHelpContent(help) {
+  if (!help) return false;
+  return Boolean(
+    (help.objective && help.objective.length) ||
+    (help.controls && help.controls.length) ||
+    (Array.isArray(help.tips) && help.tips.length) ||
+    (Array.isArray(help.steps) && help.steps.length)
+  );
+}
+
+function sanitizeHelpData(source, fallbackSteps = []) {
+  const base = source && typeof source === 'object' ? source : {};
+  const help = {
+    objective: toTrimmedString(base.objective),
+    controls: toTrimmedString(base.controls),
+    tips: toTrimmedList(base.tips),
+    steps: toTrimmedList(base.steps)
+  };
+  if (!help.steps.length && fallbackSteps.length) {
+    help.steps = fallbackSteps.slice();
+  }
+  return help;
+}
+
+function buildHelpPayload(source) {
+  const fallbackSteps = getFallbackSteps();
+  const fromSource = sanitizeHelpData(source, fallbackSteps);
+  if (hasHelpContent(fromSource)) {
+    return fromSource;
+  }
+  const fromWindow = sanitizeHelpData(window.helpData, fallbackSteps);
+  if (hasHelpContent(fromWindow)) {
+    return fromWindow;
+  }
+  return sanitizeHelpData({}, fallbackSteps);
+}
+
+async function resolveCatalogEntry(id) {
+  const urls = ['/games.json', '/public/games.json'];
+  let lastError = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res?.ok) throw new Error(`bad status ${res?.status}`);
+      const payload = await res.json();
+      const games = Array.isArray(payload?.games) ? payload.games : (Array.isArray(payload) ? payload : []);
+      const normalized = normalizeCatalogEntries(games);
+      const normalizedMatch = normalized.find(g => g.slug === id || g.id === id);
+      const rawMatch = normalizedMatch ? null : games.find(g => g?.slug === id || g?.id === id);
+      const match = normalizedMatch || rawMatch || null;
+      const tags = normalizedMatch
+        ? (Array.isArray(normalizedMatch.tags) ? normalizedMatch.tags : [])
+        : (Array.isArray(rawMatch?.tags) ? rawMatch.tags.filter(tag => typeof tag === 'string' && tag.trim()) : []);
+      return { entry: match, tags };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('catalog unavailable');
+}
