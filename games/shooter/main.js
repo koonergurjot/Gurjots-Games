@@ -268,8 +268,8 @@ export function boot() {
     player.vx = (keys.has('ArrowRight')||keys.has('d')||keys.has('D') ? 1 : 0) - (keys.has('ArrowLeft')||keys.has('a')||keys.has('A') ? 1 : 0);
     player.vy = (keys.has('ArrowDown')||keys.has('s')||keys.has('S') ? 1 : 0) - (keys.has('ArrowUp')||keys.has('w')||keys.has('W') ? 1 : 0);
     const len = Math.hypot(player.vx, player.vy) || 1;
-    player.x = Math.max(0, Math.min(W, player.x + (player.vx/len)*player.speed));
-    player.y = Math.max(0, Math.min(H, player.y + (player.vy/len)*player.speed));
+    player.x = Math.max(player.r, Math.min(W - player.r, player.x + (player.vx/len)*player.speed));
+    player.y = Math.max(player.r, Math.min(H - player.r, player.y + (player.vy/len)*player.speed));
 
     // shooting
     player.cd = Math.max(0, player.cd-1);
