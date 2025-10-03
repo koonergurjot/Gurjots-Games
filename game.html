@@ -311,7 +311,7 @@
 
     <main>
       <section class="game-card" aria-live="polite">
-        <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
+        <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-pointer-lock"></iframe>
         <div class="overlay" id="overlay" aria-hidden="false">
           <div class="status" id="statusPanel" role="status" aria-live="polite" aria-atomic="true">
             <span class="sr-only" id="statusContext">Game status message</span>
@@ -423,7 +423,18 @@
       // Wire buttons
       btnReload.addEventListener("click", () => {
         write("manual: reload requested");
-        frame.contentWindow?.location.reload();
+        try {
+          if (frame.contentWindow) {
+            frame.contentWindow.location.reload();
+            return;
+          }
+        } catch (err) {
+          write("reload fallback (cross-origin): " + (err && err.message ? err.message : err));
+        }
+        const currentSrc = frame.getAttribute("src");
+        if (currentSrc) {
+          frame.src = currentSrc;
+        }
       });
       // Load the game iframe
       pillSlug.textContent = "slug: " + (slug || "—");
