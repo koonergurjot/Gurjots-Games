@@ -1,7 +1,7 @@
 
 import { pushEvent } from "../common/diag-adapter.js";
-
-window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ };
+import { preloadFirstFrameAssets } from "../../shared/game-asset-preloader.js";
+import { play as playSfx } from "../../shared/juice/audio.js";
 
 (function(){
   "use strict";
@@ -29,10 +29,10 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     running:false, t0:0, last:0, dt:0, acc:0,
     canvas:null, ctx:null, ratio:1, scaleX:1, scaleY:1, paused:false, over:false,
     score:{p1:0,p2:0}, ball:null, balls:[], p1:null, p2:null, hud:null, loopId:0,
-    particles:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
+    effects:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
     trail:[], trailMax:20, touches:{}, replay:[], replayMax:5*60, recording:true,
     shellPaused:false,
-    gridPhase:0
+    images:{ powerups:{}, effects:{} }
   };
 
   const globalScope = typeof window !== "undefined" ? window : undefined;
@@ -43,6 +43,65 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     globalScope.__PONG_READY__ = queue;
     return queue;
   })();
+
+  const SPRITE_SOURCES = {
+    paddle: "/assets/sprites/paddle.png",
+    ball: "/assets/sprites/ball.png",
+    background: "/assets/backgrounds/arcade.png",
+    particle: "/assets/effects/particle.png",
+    net: "/assets/effects/particle.png",
+    spark: "/assets/effects/spark.png",
+    explosion: "/assets/effects/explosion.png",
+    shield: "/assets/effects/shield.png",
+  };
+
+  const POWERUP_SOURCES = {
+    grow: SPRITE_SOURCES.shield,
+    shrink: SPRITE_SOURCES.particle,
+    slow: SPRITE_SOURCES.particle,
+    fast: SPRITE_SOURCES.spark,
+    multiball: SPRITE_SOURCES.explosion,
+    ghost: SPRITE_SOURCES.shield,
+  };
+
+  preloadFirstFrameAssets(SLUG).catch(()=>{});
+
+  function createImage(src){
+    const img = new Image();
+    img.decoding = "async";
+    img.src = src;
+    return img;
+  }
+
+  function ensureSprites(){
+    if(!state.images) state.images = { powerups:{}, effects:{} };
+    const images = state.images;
+    images.paddle = images.paddle || createImage(SPRITE_SOURCES.paddle);
+    images.ball = images.ball || createImage(SPRITE_SOURCES.ball);
+    images.background = images.background || createImage(SPRITE_SOURCES.background);
+    images.net = images.net || createImage(SPRITE_SOURCES.net);
+    if(!images.effects) images.effects = {};
+    images.effects.spark = images.effects.spark || createImage(SPRITE_SOURCES.spark);
+    images.effects.explosion = images.effects.explosion || createImage(SPRITE_SOURCES.explosion);
+    images.effects.shield = images.effects.shield || createImage(SPRITE_SOURCES.shield);
+    if(!images.powerups) images.powerups = {};
+    for(const [kind, src] of Object.entries(POWERUP_SOURCES)){
+      if(!images.powerups[kind]) images.powerups[kind] = createImage(src);
+    }
+  }
+
+  function drawSprite(img, x, y, w, h, alpha=1){
+    if(!img || !img.complete || !img.naturalWidth) return;
+    const ctx = state.ctx;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+  }
+
+  function drawSpriteCentered(img, x, y, w, h, alpha=1){
+    drawSprite(img, x - w/2, y - h/2, w, h, alpha);
+  }
 
   function emitStateChange(field, value){
     pushEvent("state", {
@@ -68,87 +127,120 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     try{ localStorage.setItem(LS_KEY, JSON.stringify(o)); }catch{}
   }
 
-  // ---------- Audio (WebAudio beeps) ----------
-  let ac=null;
-  function ensureAC(){ if(!ac) try{ ac=new (window.AudioContext||window.webkitAudioContext)(); }catch{} }
-  function beep(freq=440, len=0.06, type="sine", gain=0.08){
+  // ---------- Audio ----------
+  function playSound(name){
     if(!state.sfx) return;
-    ensureAC(); if(!ac) return;
-    const t = ac.currentTime;
-    const o = ac.createOscillator(); const g = ac.createGain();
-    o.type=type; o.frequency.value=freq;
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t+0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, t+len);
-    o.connect(g); g.connect(ac.destination);
-    o.start(t); o.stop(t+len+0.02);
+    try{ playSfx(name); }catch(err){ console.warn("[pong] sfx failed", err); }
   }
 
   // ---------- Rendering helpers ----------
   function clear(){
+    ensureSprites();
     const ctx = state.ctx;
-    // Fancy gradient grid background
-    state.gridPhase += state.dt * 0.5;
-    const grad = ctx.createLinearGradient(0,0,W,H);
-    grad.addColorStop(0, "rgba(255,255,255,0.02)");
-    grad.addColorStop(1, "rgba(255,255,255,0.06)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0,0,W,H);
-
-    // moving grid
-    ctx.save();
-    ctx.globalAlpha = 0.18;
-    const cell = 40;
-    ctx.translate((state.gridPhase*20)%cell, (state.gridPhase*14)%cell);
-    ctx.beginPath();
-    for(let x=-cell; x<=W+cell; x+=cell){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
-    for(let y=-cell; y<=H+cell; y+=cell){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
-    ctx.strokeStyle = getCSS("--pong-grid"); ctx.lineWidth=1;
-    ctx.stroke();
-    ctx.restore();
+    const bg = state.images?.background;
+    if(bg && bg.complete && bg.naturalWidth){
+      ctx.drawImage(bg, 0, 0, W, H);
+    } else {
+      ctx.clearRect(0,0,W,H);
+    }
   }
   function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#fff"; }
 
   function drawNet(){
-    const ctx=state.ctx;
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.setLineDash([14,14]);
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = getCSS("--pong-accent");
-    ctx.beginPath();
-    ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H);
-    ctx.stroke();
-    ctx.restore();
+    const img = state.images?.net;
+    if(!img || !img.complete || !img.naturalWidth) return;
+    const segmentHeight = 48;
+    const segmentWidth = 24;
+    const gap = 18;
+    for(let y=0; y<H; y+=segmentHeight+gap){
+      drawSprite(img, W/2 - segmentWidth/2, y, segmentWidth, segmentHeight, 0.85);
+    }
   }
 
-  function circle(x,y,r, color){ const c=state.ctx; c.fillStyle=color; c.beginPath(); c.arc(x,y,r,0,Math.PI*2); c.fill(); }
-  function rect(x,y,w,h, color){ const c=state.ctx; c.fillStyle=color; c.fillRect(x,y,w,h); }
-
-  function addParticles(x,y, color, n=12, speed=240){
+  function spawnEffect(type, x, y, opts={}){
     if(state.reduceMotion) return;
-    for(let i=0;i<n;i++){
-      state.particles.push({x,y, vx:rand(-1,1)*speed, vy:rand(-1,1)*speed, life:rand(0.35,0.75), r:rand(2,4), color});
+    ensureSprites();
+    const sprite = state.images?.effects?.[type];
+    if(!sprite) return;
+    const duration = opts.duration || 0.5;
+    state.effects.push({
+      type,
+      x,
+      y,
+      duration,
+      life: duration,
+      scale: opts.scale || 1,
+    });
+  }
+
+  function updateEffects(dt){
+    if(!state.effects || !state.effects.length) return;
+    const remaining=[];
+    for(const fx of state.effects){
+      fx.life -= dt;
+      if(fx.life>0){
+        remaining.push(fx);
+      }
+    }
+    state.effects = remaining;
+  }
+
+  function drawEffects(){
+    if(!state.effects || !state.effects.length) return;
+    for(const fx of state.effects){
+      const img = state.images?.effects?.[fx.type];
+      if(!img || !img.complete || !img.naturalWidth) continue;
+      const progress = Math.max(0, Math.min(1, fx.life / fx.duration));
+      const alpha = Math.pow(progress, 0.6);
+      const w = img.naturalWidth * fx.scale;
+      const h = img.naturalHeight * fx.scale;
+      drawSpriteCentered(img, fx.x, fx.y, w, h, alpha);
     }
   }
 
-  function updateParticles(dt){
-    const a=[]; const g=800;
-    for(const p of state.particles){
-      p.life -= dt;
-      p.vy += g*dt*0.25;
-      p.x += p.vx*dt; p.y += p.vy*dt;
-      if(p.life>0 && p.x>-40 && p.x<W+40 && p.y>-40 && p.y<H+40) a.push(p);
+  function drawPaddleSprite(p){
+    const img = state.images?.paddle;
+    if(img && img.complete && img.naturalWidth){
+      drawSprite(img, p.x, p.y, p.w, p.h, 1);
+    } else {
+      const ctx = state.ctx;
+      ctx.fillStyle = getCSS("--pong-fg");
+      ctx.fillRect(p.x, p.y, p.w, p.h);
     }
-    state.particles=a;
   }
-  function drawParticles(){
-    const c=state.ctx;
-    for(const p of state.particles){
-      c.globalAlpha = Math.max(0, Math.min(1, p.life*1.8));
-      circle(p.x, p.y, p.r, p.color);
+
+  function drawBallSprite(b, alpha=1){
+    const img = state.images?.ball;
+    const size = b.r * 2;
+    if(img && img.complete && img.naturalWidth){
+      drawSpriteCentered(img, b.x, b.y, size, size, alpha);
+    } else {
+      const ctx = state.ctx;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = getCSS("--pong-fg");
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
     }
-    c.globalAlpha = 1;
+  }
+
+  function drawPowerupSprite(pu){
+    const img = state.images?.powerups?.[pu.kind];
+    const size = pu.r * 2;
+    if(img && img.complete && img.naturalWidth){
+      drawSpriteCentered(img, pu.x, pu.y, size, size, Math.min(1, pu.life/8 + 0.2));
+    } else {
+      const ctx = state.ctx;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, pu.life/8 + 0.2);
+      ctx.fillStyle = getCSS("--pong-accent");
+      ctx.beginPath();
+      ctx.arc(pu.x, pu.y, pu.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   // ---------- Game objects ----------
@@ -156,6 +248,8 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     state.score.p1=0; state.score.p2=0; updateHUD();
     state.balls.length=0;
     powerups.length=0;
+    state.effects.length=0;
+    state.trail.length=0;
     state.p1 = {x:32, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
     state.p2 = {x:W-50, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
     spawnBall(Math.random()<0.5? -1 : 1);
@@ -184,7 +278,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     return false;
   }
 
-  function endMatch(){ state.over=true; state.paused=true; toast("Match over"); beep(220,0.25,"triangle",0.12); }
+  function endMatch(){ state.over=true; state.paused=true; toast("Match over"); playSound("explode"); }
 
   function toast(msg){
     pushEvent("game", { level:"info", message:`[${SLUG}] ${msg}` });
@@ -266,8 +360,8 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     b.y += b.dy * dt;
 
     // Wall bounce
-    if(b.y < b.r && b.dy < 0){ b.y=b.r; b.dy = -b.dy; addParticles(b.x,b.y,getCSS("--pong-accent"), 10, 180); beep(880,0.02); }
-    if(b.y > H-b.r && b.dy > 0){ b.y=H-b.r; b.dy = -b.dy; addParticles(b.x,b.y,getCSS("--pong-accent"), 10, 180); beep(880,0.02); }
+    if(b.y < b.r && b.dy < 0){ b.y=b.r; b.dy = -b.dy; spawnEffect("spark", b.x, b.y, {scale:0.6, duration:0.3}); playSound("hit"); }
+    if(b.y > H-b.r && b.dy > 0){ b.y=H-b.r; b.dy = -b.dy; spawnEffect("spark", b.x, b.y, {scale:0.6, duration:0.3}); playSound("hit"); }
 
     // Paddle collisions
     // P1
@@ -330,9 +424,9 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     b.lastHit = p===state.p1 ? "p1" : "p2";
 
     // Add FX
-    addParticles(b.x, b.y, getCSS("--pong-accent"), 16, 240);
+    spawnEffect("spark", b.x, b.y, {scale:0.8, duration:0.35});
     shake(6);
-    beep(520,0.03,"square",0.08);
+    playSound("hit");
   }
 
   // ---------- Screen shake ----------
@@ -362,13 +456,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
     for(let i=powerups.length-1;i>=0;i--) if(powerups[i].life<=0) powerups.splice(i,1);
   }
   function drawPowerups(){
-    const c=state.ctx;
-    for(const pu of powerups){
-      c.globalAlpha = Math.min(1, pu.life/8 + 0.2);
-      circle(pu.x, pu.y, pu.r+2, "rgba(0,0,0,0.3)");
-      circle(pu.x, pu.y, pu.r, getCSS("--pong-accent"));
-      c.globalAlpha = 1;
-    }
+    for(const pu of powerups){ drawPowerupSprite(pu); }
   }
   function checkPowerupCollisions(){
     // Ball collects, applies to last hitter's paddle
@@ -379,8 +467,8 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
         if(d < b.r + pu.r + 2){
           const who = b.lastHit || (b.dx>0? "p2":"p1");
           applyPowerup(pu.kind, who);
-          addParticles(pu.x, pu.y, getCSS("--pong-good"), 20, 260);
-          beep(880,0.08,"sawtooth",0.1);
+          spawnEffect("explosion", pu.x, pu.y, {scale:1.2, duration:0.6});
+          playSound("power");
           powerups.splice(i,1);
           break;
         }
@@ -421,6 +509,7 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
     for(const b of state.balls){ updateBall(b, dt); }
     checkPowerupCollisions();
+    updateEffects(dt);
 
     if(state.recording){
       state.replay.push({p1y:state.p1.y, p2y:state.p2.y, balls:state.balls.map(b=>({x:b.x,y:b.y,dx:b.dx,dy:b.dy,r:b.r}))});
@@ -436,31 +525,31 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
     drawNet();
 
-    rect(state.p1.x, state.p1.y, state.p1.w, state.p1.h, getCSS("--pong-fg"));
-    rect(state.p2.x, state.p2.y, state.p2.w, state.p2.h, getCSS("--pong-fg"));
+    drawPowerups();
+
+    drawPaddleSprite(state.p1);
+    drawPaddleSprite(state.p2);
 
     if(!state.reduceMotion){
       for(const b of state.balls){
-        state.trail.push({x:b.x,y:b.y,r:b.r,life:0.35});
+        state.trail.push({x:b.x,y:b.y,r:b.r,life:0.35,duration:0.35});
       }
       const t2=[];
       for(const t of state.trail){
         t.life -= state.dt;
         if(t.life>0){
-          state.ctx.globalAlpha = Math.max(0, Math.min(1, t.life*1.8));
-          circle(t.x, t.y, t.r, getCSS("--pong-accent"));
+          const duration = t.duration || 0.35;
+          const fade = Math.max(0, Math.min(1, t.life / duration));
+          drawBallSprite({x:t.x, y:t.y, r:t.r}, fade*0.6);
           t2.push(t);
         }
       }
       state.trail = t2.slice(-120);
-      state.ctx.globalAlpha = 1;
     }
 
-    for(const b of state.balls){ circle(b.x,b.y,b.r, getCSS("--pong-fg")); }
+    for(const b of state.balls){ drawBallSprite(b); }
 
-    if(typeof drawParticles === "function"){
-      drawParticles();
-    }
+    drawEffects();
     endShake();
     ctx.restore();
   }
@@ -651,7 +740,13 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
       state.p1.y=f.p1y; state.p2.y=f.p2y;
       state.balls = f.balls.map(b=>({...b, spin:0, lastHit:null}));
       // draw only
-      ctx.save(); clear(); drawNet(); rect(state.p1.x, state.p1.y, state.p1.w, state.p1.h, getCSS("--pong-fg")); rect(state.p2.x, state.p2.y, state.p2.w, state.p2.h, getCSS("--pong-fg")); for(const b of state.balls){ circle(b.x,b.y,b.r, getCSS("--pong-fg")); } ctx.restore();
+      ctx.save();
+      clear();
+      drawNet();
+      drawPaddleSprite(state.p1);
+      drawPaddleSprite(state.p2);
+      for(const b of state.balls){ drawBallSprite(b); }
+      ctx.restore();
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -812,9 +907,14 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
       if(!retry || typeof retry.clearRect !== "function"){
         throw new Error("Canvas context unavailable");
       }
-      state.ctx = retry; return;
+      retry.imageSmoothingEnabled = false;
+      state.ctx = retry;
+      ensureSprites();
+      return;
     }
+    ctx.imageSmoothingEnabled = false;
     state.ctx = ctx;
+    ensureSprites();
   }
   function onResize(){
     const el = state.canvas;
