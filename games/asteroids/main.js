@@ -29,6 +29,15 @@ const ASTEROID_SPEED = [0, 120, 90, 70];
 const ASTEROID_SCORE = [0, 100, 50, 20];
 const WAVE_ASTEROID_COUNT = [0, 4, 6, 8];
 const FIRE_MODES = ['single', 'burst', 'rapid'];
+const BACKGROUND_THEME = 'space';
+const BACKGROUND_SOURCES = {
+  layer1: `../../assets/backgrounds/parallax/${BACKGROUND_THEME}_layer1.png`,
+  layer2: `../../assets/backgrounds/parallax/${BACKGROUND_THEME}_layer2.png`,
+};
+const BACKGROUND_SCROLL_SPEED = {
+  layer1: 160,
+  layer2: 55,
+};
 const STORAGE_KEYS = {
   best: `${SLUG}:best`,
 };
@@ -588,13 +597,16 @@ class AsteroidsGame {
     };
 
     this.images = {
-      background: loadImage('../../assets/backgrounds/space.png'),
+      background: {
+        layer1: loadImage(BACKGROUND_SOURCES.layer1),
+        layer2: loadImage(BACKGROUND_SOURCES.layer2),
+      },
       bullet: loadImage('../../assets/sprites/bullet.png'),
       enemyBullet: loadImage('../../assets/sprites/laser.png'),
       explosion: loadImage('../../assets/effects/explosion.png'),
       shield: loadImage('../../assets/effects/shield.png'),
     };
-    this.backgroundPattern = null;
+    this.backgroundScroll = { layer1: 0, layer2: 0 };
     this.bulletSprites = {
       player: this.images.bullet,
       remote: null,
@@ -646,10 +658,6 @@ class AsteroidsGame {
 
     this.starfield = this.createStars(120);
 
-    if (this.images.background) {
-      if (this.isSpriteReady(this.images.background)) this.prepareBackgroundPattern();
-      else this.images.background.addEventListener('load', () => this.prepareBackgroundPattern());
-    }
     if (this.images.bullet) {
       if (this.isSpriteReady(this.images.bullet)) this.prepareBulletVariants();
       else this.images.bullet.addEventListener('load', () => this.prepareBulletVariants());
@@ -819,12 +827,6 @@ class AsteroidsGame {
       return sprite.width > 0 && sprite.height > 0;
     }
     return false;
-  }
-
-  prepareBackgroundPattern() {
-    if (!this.ctx || !this.images?.background) return;
-    if (!this.isSpriteReady(this.images.background)) return;
-    this.backgroundPattern = this.ctx.createPattern(this.images.background, 'repeat');
   }
 
   prepareBulletVariants() {
@@ -1392,6 +1394,8 @@ class AsteroidsGame {
   }
 
   draw(dt) {
+    this.backgroundScroll.layer1 += dt * BACKGROUND_SCROLL_SPEED.layer1;
+    this.backgroundScroll.layer2 += dt * BACKGROUND_SCROLL_SPEED.layer2;
     const ctx = this.ctx;
     ctx.save();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -1449,18 +1453,29 @@ class AsteroidsGame {
     ctx.restore();
   }
 
+  drawBackgroundLayer(image, offset) {
+    if (!this.ctx || !this.isSpriteReady(image)) return;
+    const ctx = this.ctx;
+    ctx.imageSmoothingEnabled = false;
+    const height = this.height;
+    const width = this.width;
+    const scale = height / (image.naturalHeight || height);
+    const drawWidth = (image.naturalWidth || width) * scale;
+    if (!drawWidth) return;
+    const wrap = ((offset % drawWidth) + drawWidth) % drawWidth;
+    for (let x = -wrap; x < width; x += drawWidth) {
+      ctx.drawImage(image, x, 0, drawWidth, height);
+    }
+  }
+
   drawBackground() {
     const ctx = this.ctx;
     if (!ctx) return;
-    if (!this.backgroundPattern && this.images?.background && this.isSpriteReady(this.images.background)) {
-      this.prepareBackgroundPattern();
-    }
-    if (this.backgroundPattern) {
-      ctx.fillStyle = this.backgroundPattern;
-    } else {
-      ctx.fillStyle = '#05070f';
-    }
+    ctx.fillStyle = '#05070f';
     ctx.fillRect(0, 0, this.width, this.height);
+    const layers = this.images?.background || {};
+    this.drawBackgroundLayer(layers.layer2, this.backgroundScroll.layer2);
+    this.drawBackgroundLayer(layers.layer1, this.backgroundScroll.layer1);
   }
 
   drawPlayerBullets() {
@@ -1734,6 +1749,8 @@ class AsteroidsGame {
     this.wave = 1;
     this.weaponMode = 'single';
     this.lives = 3;
+    this.backgroundScroll.layer1 = 0;
+    this.backgroundScroll.layer2 = 0;
     this.ship = this.createShip();
     this.asteroids = [];
     this.bullets = [];

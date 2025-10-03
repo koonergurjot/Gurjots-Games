@@ -24,11 +24,13 @@ window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fall
 const GAME_ID='breakout';GG.incPlays();
 preloadFirstFrameAssets(GAME_ID).catch(()=>{});
 
+const BACKGROUND_THEME='arcade';
 const SPRITE_SOURCES={
   paddle:'/assets/sprites/paddle.png',
   brick:'/assets/sprites/brick.png',
   ball:'/assets/sprites/ball.png',
-  background:'/assets/backgrounds/arcade.png'
+  backgroundLayer1:`/assets/backgrounds/parallax/${BACKGROUND_THEME}_layer1.png`,
+  backgroundLayer2:`/assets/backgrounds/parallax/${BACKGROUND_THEME}_layer2.png`
 };
 
 const EFFECT_SOURCES={
@@ -47,6 +49,9 @@ const pendingImages=new Set();
 const spriteImages={};
 const effectImages={};
 const powerupImages={};
+const backgroundScroll={ layer1:0, layer2:0 };
+const BG_SCROLL_NEAR=180;
+const BG_SCROLL_FAR=60;
 
 function requestImage(target,key,src){
   let img=target[key];
@@ -75,6 +80,26 @@ primeImages();
 
 function playSound(name){
   try{playSfx(name);}catch(err){console.warn('[breakout] sfx failed',err);}
+}
+
+function drawBackgroundLayer(ctx,img,offset,width,height){
+  if(!img || !img.complete || !img.naturalWidth || !img.naturalHeight) return;
+  const scale=height/(img.naturalHeight||height);
+  const drawW=(img.naturalWidth||width)*scale;
+  if(drawW<=0) return;
+  const wrap=((offset%drawW)+drawW)%drawW;
+  for(let x=-wrap;x<width;x+=drawW){
+    ctx.drawImage(img,x,0,drawW,height);
+  }
+}
+
+function drawBackground(ctx){
+  ctx.fillStyle='#050516';
+  ctx.fillRect(0,0,c.width,c.height);
+  const far=requestImage(spriteImages,'backgroundLayer2',SPRITE_SOURCES.backgroundLayer2);
+  const near=requestImage(spriteImages,'backgroundLayer1',SPRITE_SOURCES.backgroundLayer1);
+  drawBackgroundLayer(ctx,far,backgroundScroll.layer2,c.width,c.height);
+  drawBackgroundLayer(ctx,near,backgroundScroll.layer1,c.width,c.height);
 }
 const BASE_W=1000;
 const BASE_H=800;
@@ -279,6 +304,8 @@ function drawEffects(){
 
 function step(dt){
   syncScore();
+  backgroundScroll.layer1+=dt*BG_SCROLL_NEAR;
+  backgroundScroll.layer2+=dt*BG_SCROLL_FAR;
   if(paused)return;
   powerEngine.update(dt);
   if(ball.stuck)return;
@@ -369,12 +396,7 @@ function draw(){
     try { window.parent?.postMessage({ type:'GAME_READY', slug:'breakout' }, '*'); } catch {}
   }
   if('imageSmoothingEnabled' in ctx&&ctx.imageSmoothingEnabled)ctx.imageSmoothingEnabled=false;
-  const bg=requestImage(spriteImages,'background',SPRITE_SOURCES.background);
-  if(bg&&bg.complete&&bg.naturalWidth){
-    ctx.drawImage(bg,0,0,c.width,c.height);
-  }else{
-    ctx.fillStyle='#050516';ctx.fillRect(0,0,c.width,c.height);
-  }
+  drawBackground(ctx);
   const brickSprite=requestImage(spriteImages,'brick',SPRITE_SOURCES.brick);
   for(const b of bricks){
     if(b.hp>0){

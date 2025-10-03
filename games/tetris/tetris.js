@@ -1,7 +1,7 @@
 import '../../shared/fx/canvasFx.js';
 import '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
-import { loadImage, drawTiledBackground } from '../../shared/assets.js';
+import { loadImage } from '../../shared/assets.js';
 import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
 import { play as playSfx } from '../../shared/juice/audio.js';
 import { pushEvent } from '../common/diag-adapter.js';
@@ -80,9 +80,13 @@ installErrorReporter();
 
 const GAME_ID='tetris';GG.incPlays();
 preloadFirstFrameAssets(GAME_ID).catch(()=>{});
+const BACKGROUND_THEME='city';
+const BACKGROUND_SOURCES={
+  layer1:`/assets/backgrounds/parallax/${BACKGROUND_THEME}_layer1.png`,
+  layer2:`/assets/backgrounds/parallax/${BACKGROUND_THEME}_layer2.png`,
+};
 const SPRITE_SOURCES={
   block:'/assets/sprites/block.png',
-  background:'/assets/backgrounds/arcade.png',
   effects:{
     spark:'/assets/effects/spark.png',
     explosion:'/assets/effects/explosion.png',
@@ -146,7 +150,10 @@ if(c){
 }
 const ctx=c.getContext('2d');
 if(ctx) ctx.imageSmoothingEnabled=false;
-const spriteStore={ block:null, background:null, effects:{} };
+const spriteStore={ block:null, background:{layer1:null,layer2:null}, effects:{} };
+const backgroundScroll={ layer1:0, layer2:0 };
+const BG_SCROLL_NEAR=150;
+const BG_SCROLL_FAR=55;
 const spriteRequests=new Set();
 const tintCache=new Map();
 const effects=[];
@@ -190,11 +197,14 @@ function ensureSprites(){
       tintCache.clear();
     }).catch(()=>{}).finally(()=>spriteRequests.delete('block'));
   }
-  if(!spriteStore.background && !spriteRequests.has('background')){
-    spriteRequests.add('background');
-    loadImage(SPRITE_SOURCES.background,{slug:GAME_ID}).then(img=>{
-      spriteStore.background=img;
-    }).catch(()=>{}).finally(()=>spriteRequests.delete('background'));
+  for(const [layer,src] of Object.entries(BACKGROUND_SOURCES)){
+    if(spriteStore.background[layer]) continue;
+    const requestKey=`background:${layer}`;
+    if(spriteRequests.has(requestKey)) continue;
+    spriteRequests.add(requestKey);
+    loadImage(src,{slug:GAME_ID}).then(img=>{
+      spriteStore.background[layer]=img;
+    }).catch(()=>{}).finally(()=>spriteRequests.delete(requestKey));
   }
   for(const [key,src] of Object.entries(SPRITE_SOURCES.effects)){
     if(spriteStore.effects[key]) continue;
@@ -209,6 +219,25 @@ function ensureSprites(){
 
 function isImageReady(img){
   return !!img && img.complete && img.naturalWidth>0 && img.naturalHeight>0;
+}
+
+function drawBackgroundLayer(ctx,img,offset,width,height){
+  if(!isImageReady(img)) return;
+  const scale=height/(img.naturalHeight||height);
+  const drawW=(img.naturalWidth||width)*scale;
+  if(drawW<=0) return;
+  const wrap=((offset%drawW)+drawW)%drawW;
+  for(let x=-wrap;x<width;x+=drawW){
+    ctx.drawImage(img,x,0,drawW,height);
+  }
+}
+
+function drawBackground(ctx){
+  ctx.fillStyle='#0f1320';
+  ctx.fillRect(0,0,c.width,c.height);
+  const layers=spriteStore.background||{};
+  drawBackgroundLayer(ctx,layers.layer2,backgroundScroll.layer2,c.width,c.height);
+  drawBackgroundLayer(ctx,layers.layer1,backgroundScroll.layer1,c.width,c.height);
 }
 
 function getTintedBlock(color){
@@ -751,6 +780,8 @@ let clearTimer=0, clearRows=[];
 let rotated=false;
 
 function initGame(){
+  backgroundScroll.layer1=0;
+  backgroundScroll.layer2=0;
   nextM=nextFromBag();
   cur=spawn();
   updateGhost();
@@ -886,13 +917,7 @@ function draw(){
   }
   const cell=getCellSize();
   ensureSprites();
-  const bgImage=spriteStore.background;
-  if(isImageReady(bgImage)){
-    drawTiledBackground(ctx,bgImage,0,0,c.width,c.height);
-  }else{
-    ctx.fillStyle='#0f1320';
-    ctx.fillRect(0,0,c.width,c.height);
-  }
+  drawBackground(ctx);
 
   if(!started){
     ctx.fillStyle='#e6e7ea';
@@ -1086,6 +1111,9 @@ function loop(ts){
   if(!lastFrame) lastFrame=ts;
   const dt=Math.min((ts-lastFrame)/1000,0.05);
   lastFrame=ts;
+
+  backgroundScroll.layer1+=dt*BG_SCROLL_NEAR;
+  backgroundScroll.layer2+=dt*BG_SCROLL_FAR;
 
   if(mode==='replay' && started && !paused && !over){
     const acts=Replay.tick(dt); acts.forEach(a=>applyAction(a));

@@ -32,8 +32,12 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     effects:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
     trail:[], trailMax:20, touches:{}, replay:[], replayMax:5*60, recording:true,
     shellPaused:false,
-    images:{ powerups:{}, effects:{} }
+    images:{ powerups:{}, effects:{}, background:{} },
+    bg:{offset1:0, offset2:0}
   };
+
+  const BG_SCROLL_FAST = 140;
+  const BG_SCROLL_SLOW = 50;
 
   const globalScope = typeof window !== "undefined" ? window : undefined;
   const pongReadyQueue = (() => {
@@ -44,10 +48,12 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     return queue;
   })();
 
+  const BACKGROUND_THEME = "arcade";
   const SPRITE_SOURCES = {
     paddle: "/assets/sprites/paddle.png",
     ball: "/assets/sprites/ball.png",
-    background: "/assets/backgrounds/arcade.png",
+    backgroundLayer1: `/assets/backgrounds/parallax/${BACKGROUND_THEME}_layer1.png`,
+    backgroundLayer2: `/assets/backgrounds/parallax/${BACKGROUND_THEME}_layer2.png`,
     particle: "/assets/effects/particle.png",
     net: "/assets/effects/particle.png",
     spark: "/assets/effects/spark.png",
@@ -74,11 +80,13 @@ import { play as playSfx } from "../../shared/juice/audio.js";
   }
 
   function ensureSprites(){
-    if(!state.images) state.images = { powerups:{}, effects:{} };
+    if(!state.images) state.images = { powerups:{}, effects:{}, background:{} };
     const images = state.images;
     images.paddle = images.paddle || createImage(SPRITE_SOURCES.paddle);
     images.ball = images.ball || createImage(SPRITE_SOURCES.ball);
-    images.background = images.background || createImage(SPRITE_SOURCES.background);
+    if(!images.background) images.background = {};
+    images.background.layer1 = images.background.layer1 || createImage(SPRITE_SOURCES.backgroundLayer1);
+    images.background.layer2 = images.background.layer2 || createImage(SPRITE_SOURCES.backgroundLayer2);
     images.net = images.net || createImage(SPRITE_SOURCES.net);
     if(!images.effects) images.effects = {};
     images.effects.spark = images.effects.spark || createImage(SPRITE_SOURCES.spark);
@@ -101,6 +109,27 @@ import { play as playSfx } from "../../shared/juice/audio.js";
 
   function drawSpriteCentered(img, x, y, w, h, alpha=1){
     drawSprite(img, x - w/2, y - h/2, w, h, alpha);
+  }
+
+  function drawBackgroundLayer(ctx, img, offset){
+    if(!img || !img.complete || !img.naturalWidth || !img.naturalHeight) return;
+    const scale = H / img.naturalHeight;
+    const drawW = img.naturalWidth * scale;
+    if(drawW <= 0) return;
+    const wrap = ((offset % drawW) + drawW) % drawW;
+    for(let x = -wrap; x < W; x += drawW){
+      ctx.drawImage(img, x, 0, drawW, H);
+    }
+  }
+
+  function drawBackgroundLayers(ctx){
+    const layers = state.images?.background;
+    const far = layers?.layer2;
+    const near = layers?.layer1;
+    ctx.fillStyle = "#050516";
+    ctx.fillRect(0, 0, W, H);
+    drawBackgroundLayer(ctx, far, state.bg.offset2);
+    drawBackgroundLayer(ctx, near, state.bg.offset1);
   }
 
   function emitStateChange(field, value){
@@ -137,12 +166,7 @@ import { play as playSfx } from "../../shared/juice/audio.js";
   function clear(){
     ensureSprites();
     const ctx = state.ctx;
-    const bg = state.images?.background;
-    if(bg && bg.complete && bg.naturalWidth){
-      ctx.drawImage(bg, 0, 0, W, H);
-    } else {
-      ctx.clearRect(0,0,W,H);
-    }
+    drawBackgroundLayers(ctx);
   }
   function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#fff"; }
 
@@ -493,6 +517,9 @@ import { play as playSfx } from "../../shared/juice/audio.js";
   // ---------- Frame ----------
   function update(dt){
     state.dt = dt;
+
+    state.bg.offset1 += dt * BG_SCROLL_FAST;
+    state.bg.offset2 += dt * BG_SCROLL_SLOW;
 
     for(const flag of ["p1_ghost","p2_ghost"]){
       if(state[flag] && state[flag] > 0){

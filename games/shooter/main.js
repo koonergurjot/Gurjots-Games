@@ -1,6 +1,6 @@
 // Minimal top-down shooter (canvas id='game')
 import { pushEvent } from '../common/diag-adapter.js';
-import { getCachedAudio, getCachedImage, loadAudio, loadImage, drawTiledBackground } from '../../shared/assets.js';
+import { getCachedAudio, getCachedImage, loadAudio, loadImage } from '../../shared/assets.js';
 import './diagnostics-adapter.js';
 
 export function boot() {
@@ -29,8 +29,10 @@ export function boot() {
   const scoreDisplay = document.getElementById('scoreDisplay');
 
   const SLUG = 'shooter';
+  const BACKGROUND_THEME = 'space';
   const ASSET_PATHS = {
-    background: '../../assets/backgrounds/space.png',
+    backgroundLayer1: `../../assets/backgrounds/parallax/${BACKGROUND_THEME}_layer1.png`,
+    backgroundLayer2: `../../assets/backgrounds/parallax/${BACKGROUND_THEME}_layer2.png`,
     bullet: '../../assets/sprites/bullet.png',
     laser: '../../assets/sprites/laser.png',
     explosion: '../../assets/effects/explosion.png',
@@ -39,11 +41,18 @@ export function boot() {
   };
 
   const sprites = {
-    background: getCachedImage(ASSET_PATHS.background),
+    background: {
+      layer1: getCachedImage(ASSET_PATHS.backgroundLayer1),
+      layer2: getCachedImage(ASSET_PATHS.backgroundLayer2),
+    },
     bullet: getCachedImage(ASSET_PATHS.bullet),
     enemy: getCachedImage(ASSET_PATHS.laser),
     explosion: getCachedImage(ASSET_PATHS.explosion),
   };
+
+  const backgroundScroll = { layer1: 0, layer2: 0 };
+  const BG_SCROLL_NEAR = 3.2;
+  const BG_SCROLL_FAR = 1.2;
 
   const explosionSprite = {
     frameSize: 0,
@@ -51,21 +60,8 @@ export function boot() {
     totalFrames: 0,
   };
 
-  let backgroundPattern = null;
-
   function isImageReady(image) {
     return !!image && (image.complete === undefined || image.complete) && (image.naturalWidth || image.width);
-  }
-
-  function ensureBackgroundPattern() {
-    if (!ctx) return;
-    const image = sprites.background;
-    if (!isImageReady(image)) return;
-    try {
-      backgroundPattern = ctx.createPattern(image, 'repeat');
-    } catch (_) {
-      backgroundPattern = null;
-    }
   }
 
   function prepareExplosionSprite() {
@@ -99,10 +95,12 @@ export function boot() {
   const playShootSound = createSoundPlayer(ASSET_PATHS.shoot, 0.5);
   const playGameOverSound = createSoundPlayer(ASSET_PATHS.gameover, 0.6);
 
-  if (sprites.background) ensureBackgroundPattern();
-  loadImage(ASSET_PATHS.background, { slug: SLUG }).then(img => {
-    sprites.background = img;
-    ensureBackgroundPattern();
+  loadImage(ASSET_PATHS.backgroundLayer1, { slug: SLUG }).then(img => {
+    sprites.background.layer1 = img;
+  }).catch(() => {});
+
+  loadImage(ASSET_PATHS.backgroundLayer2, { slug: SLUG }).then(img => {
+    sprites.background.layer2 = img;
   }).catch(() => {});
 
   loadImage(ASSET_PATHS.bullet, { slug: SLUG }).then(img => {
@@ -146,6 +144,8 @@ export function boot() {
   }
 
   function update(){
+    backgroundScroll.layer1 += BG_SCROLL_NEAR;
+    backgroundScroll.layer2 += BG_SCROLL_FAR;
     // movement
     player.vx = (keys.has('ArrowRight')||keys.has('d')||keys.has('D') ? 1 : 0) - (keys.has('ArrowLeft')||keys.has('a')||keys.has('A') ? 1 : 0);
     player.vy = (keys.has('ArrowDown')||keys.has('s')||keys.has('S') ? 1 : 0) - (keys.has('ArrowUp')||keys.has('w')||keys.has('W') ? 1 : 0);
@@ -203,6 +203,27 @@ export function boot() {
     publishDiagnostics('running');
   }
 
+  function drawBackgroundLayer(img, offset) {
+    if (!isImageReady(img)) return;
+    const height = H;
+    const width = W;
+    const scale = height / (img.naturalHeight || height);
+    const drawW = (img.naturalWidth || width) * scale;
+    if (!drawW) return;
+    const wrap = ((offset % drawW) + drawW) % drawW;
+    for (let x = -wrap; x < width; x += drawW) {
+      ctx.drawImage(img, x, 0, drawW, height);
+    }
+  }
+
+  function drawBackgroundScene() {
+    ctx.fillStyle = '#10151a';
+    ctx.fillRect(0, 0, W, H);
+    const layers = sprites.background || {};
+    drawBackgroundLayer(layers.layer2, backgroundScroll.layer2);
+    drawBackgroundLayer(layers.layer1, backgroundScroll.layer1);
+  }
+
   function draw(){
     if(!postedReady){
       postedReady = true;
@@ -212,16 +233,7 @@ export function boot() {
     if (ctx && 'imageSmoothingEnabled' in ctx) {
       ctx.imageSmoothingEnabled = false;
     }
-    const bgImage = sprites.background;
-    if (backgroundPattern) {
-      ctx.fillStyle = backgroundPattern;
-      ctx.fillRect(0, 0, W, H);
-    } else if (isImageReady(bgImage)) {
-      drawTiledBackground(ctx, bgImage, 0, 0, W, H);
-    } else {
-      ctx.fillStyle = '#10151a';
-      ctx.fillRect(0,0,W,H);
-    }
+    drawBackgroundScene();
     // player
     ctx.fillStyle = '#4ade80';
     ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI*2); ctx.fill();

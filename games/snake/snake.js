@@ -96,8 +96,10 @@ bootLog('init:start', { readyState: document.readyState });
 
 const SLUG = 'snake';
 
+const BACKGROUND_THEME = 'forest';
 const SPRITE_SOURCES = {
-  background: '/assets/backgrounds/arcade.png',
+  backgroundLayer1: `/assets/backgrounds/parallax/${BACKGROUND_THEME}_layer1.png`,
+  backgroundLayer2: `/assets/backgrounds/parallax/${BACKGROUND_THEME}_layer2.png`,
   snakeHead: '/assets/sprites/enemy2.png',
   snakeBody: '/assets/sprites/block.png',
   fruit: '/assets/sprites/coin.png',
@@ -107,6 +109,9 @@ const SPRITE_SOURCES = {
 };
 
 const spriteCache = {};
+const parallaxScroll = { layer1: 0, layer2: 0 };
+const BG_SCROLL_NEAR = 120;
+const BG_SCROLL_FAR = 40;
 
 function ensureSprite(name) {
   if (spriteCache[name]) return spriteCache[name];
@@ -675,6 +680,26 @@ function step() {
   lastTickTime = performance.now();
 }
 
+function drawBackgroundLayer(ctx, img, offset, width, height) {
+  if (!img || !img.complete || !img.naturalWidth || !img.naturalHeight) return;
+  const scale = height / img.naturalHeight;
+  const drawW = img.naturalWidth * scale;
+  if (drawW <= 0) return;
+  const wrap = ((offset % drawW) + drawW) % drawW;
+  for (let x = -wrap; x < width; x += drawW) {
+    ctx.drawImage(img, x, 0, drawW, height);
+  }
+}
+
+function drawBackgroundLayers(ctx, width, height) {
+  const far = ensureSprite('backgroundLayer2');
+  const near = ensureSprite('backgroundLayer1');
+  ctx.fillStyle = boardColors[0];
+  ctx.fillRect(0, 0, width, height);
+  drawBackgroundLayer(ctx, far, parallaxScroll.layer2, width, height);
+  drawBackgroundLayer(ctx, near, parallaxScroll.layer1, width, height);
+}
+
 function draw() {
   if(!postedReady){
     postedReady=true;
@@ -691,23 +716,13 @@ function draw() {
   boardOffsetY = offsetY;
 
   ctx.clearRect(0, 0, c.width, c.height);
-
-  const bg = ensureSprite('background');
-  if (bg && bg.complete && bg.naturalWidth) {
-    ctx.save();
-    ctx.translate(offsetX, offsetY);
-    const pattern = ctx.createPattern(bg, 'repeat');
-    if (pattern) {
-      ctx.fillStyle = pattern;
-      ctx.fillRect(0, 0, side, side);
-    } else {
-      ctx.drawImage(bg, 0, 0, side, side);
-    }
-    ctx.restore();
-  } else {
-    ctx.fillStyle = boardColors[0];
-    ctx.fillRect(offsetX, offsetY, side, side);
-  }
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.beginPath();
+  ctx.rect(0, 0, side, side);
+  ctx.clip();
+  drawBackgroundLayers(ctx, side, side);
+  ctx.restore();
 
   if (scoreNode) {
     scoreNode.textContent = String(score);
@@ -855,6 +870,8 @@ document.addEventListener('keydown', e => {
 
 engine = new GameEngine();
 engine.update = dt => {
+  parallaxScroll.layer1 += dt * BG_SCROLL_NEAR;
+  parallaxScroll.layer2 += dt * BG_SCROLL_FAR;
   if (dead || paused || won) return;
   moveAcc += dt * 1000;
   while (moveAcc >= speedMs) {
