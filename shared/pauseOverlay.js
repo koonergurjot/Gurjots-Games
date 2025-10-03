@@ -100,10 +100,14 @@
     const restartLabel = options.restartLabel || 'Restart';
 
     overlay.innerHTML = `
-      <div class="panel" role="document">
-        <h3 style="margin:0 0 12px 0; font: 700 18px Inter,system-ui">${heading}</h3>
-        <p class="hint" style="margin:0 0 16px 0; font:500 14px/1.4 Inter,system-ui; color:var(--muted,#9aa0a6);">${hint}</p>
-        <div style="display:flex; gap:10px; justify-content:center">
+      <div class="pixel-panel pixel-panel--pause" role="document">
+        <div class="pixel-panel__header">
+          <span class="pixel-panel__icon pixel-panel__icon--star" aria-hidden="true"></span>
+          <h3 class="pixel-panel__title">${heading}</h3>
+          <span class="pixel-panel__icon pixel-panel__icon--shield" aria-hidden="true"></span>
+        </div>
+        <p class="pixel-panel__hint">${hint}</p>
+        <div class="pixel-panel__actions">
           <button type="button" class="btn" data-action="resume">${resumeLabel}</button>
           <button type="button" class="btn" data-action="restart">${restartLabel}</button>
         </div>
@@ -117,7 +121,8 @@
 
     const resumeBtn = overlay.querySelector('[data-action="resume"]');
     const restartBtn = overlay.querySelector('[data-action="restart"]');
-    const hintEl = overlay.querySelector('.hint');
+    const hintEl = overlay.querySelector('.pixel-panel__hint');
+    if (hintEl && !hint) hintEl.hidden = true;
 
     function hide() { overlay.classList.add('hidden'); }
     function show() {
@@ -140,7 +145,10 @@
       hide,
       element: overlay,
       setHint(text) {
-        if (hintEl && typeof text === 'string') hintEl.textContent = text;
+        if (hintEl && typeof text === 'string') {
+          hintEl.textContent = text;
+          hintEl.hidden = !text.trim();
+        }
       }
     };
   }

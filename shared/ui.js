@@ -169,9 +169,13 @@ export function attachPauseOverlay({ onResume, onRestart }) {
   const overlay = document.createElement('div');
   overlay.className = 'pause-overlay hidden';
   overlay.innerHTML = `
-    <div class="panel">
-      <h3 style="margin:0 0 12px 0; font: 700 18px Inter,system-ui">${t('paused')}</h3>
-      <div style="display:flex; gap:10px; justify-content:center">
+    <div class="pixel-panel pixel-panel--pause" role="document">
+      <div class="pixel-panel__header">
+        <span class="pixel-panel__icon pixel-panel__icon--star" aria-hidden="true"></span>
+        <h3 class="pixel-panel__title">${t('paused')}</h3>
+        <span class="pixel-panel__icon pixel-panel__icon--shield" aria-hidden="true"></span>
+      </div>
+      <div class="pixel-panel__actions">
         <button id="resumeBtn" class="btn">${t('resume')}</button>
         <button id="restartBtn" class="btn">${t('restart')}</button>
       </div>
@@ -190,14 +194,21 @@ export function attachHelpOverlay({ gameId, steps = [], objective = '', controls
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.innerHTML = `
-    <div class="panel">
+    <div class="pixel-panel pixel-panel--help" role="document">
       <button class="close-icon" aria-label="${t('close')}">\u00d7</button>
-      <div class="step-content"></div>
-      <div class="footer">
-        <span class="step-indicator"></span>
-        <div class="actions">
-          <button class="btn next-btn">${t('next')}</button>
-          <button class="btn close-btn">${t('close')}</button>
+      <div class="pixel-panel__header">
+        <span class="pixel-panel__icon pixel-panel__icon--star" aria-hidden="true"></span>
+        <h3 class="pixel-panel__title">${t('help')}</h3>
+        <span class="pixel-panel__icon pixel-panel__icon--shield" aria-hidden="true"></span>
+      </div>
+      <div class="pixel-panel__body">
+        <div class="step-content"></div>
+        <div class="footer">
+          <span class="step-indicator"></span>
+          <div class="actions">
+            <button class="btn next-btn">${t('next')}</button>
+            <button class="btn close-btn">${t('close')}</button>
+          </div>
         </div>
       </div>
     </div>`;
