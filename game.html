@@ -311,7 +311,7 @@
 
     <main>
       <section class="game-card" aria-live="polite">
-        <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
+        <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-pointer-lock"></iframe>
         <div class="overlay" id="overlay" aria-hidden="false">
           <div class="status" id="statusPanel" role="status" aria-live="polite" aria-atomic="true">
             <span class="sr-only" id="statusContext">Game status message</span>
@@ -363,6 +363,24 @@
       const btnDiag = document.getElementById("btnDiag");
 
       let isLegacyShell = false;
+      let sandboxTrusted = false;
+
+      const DEFAULT_SANDBOX = "allow-scripts allow-pointer-lock";
+      const TRUSTED_SANDBOX = `${DEFAULT_SANDBOX} allow-same-origin`;
+      const TRUSTED_SAME_ORIGIN_SLUGS = new Set([
+        "asteroids",
+        "breakout",
+        "chess",
+        "chess3d",
+        "g2048",
+        "maze3d",
+        "platformer",
+        "pong",
+        "runner",
+        "shooter",
+        "snake",
+        "tetris",
+      ]);
 
       const diagHandler = () => {
         const payload = [
@@ -399,8 +417,19 @@
         btnDiag.textContent = "Diagnostics";
       }
 
+      function applySandbox(allowTrusted) {
+        sandboxTrusted = Boolean(allowTrusted);
+        const sandboxValue = sandboxTrusted ? TRUSTED_SANDBOX : DEFAULT_SANDBOX;
+        if (frame.getAttribute("sandbox") !== sandboxValue) {
+          frame.setAttribute("sandbox", sandboxValue);
+          write(`sandbox mode set → ${sandboxValue}`);
+        }
+      }
+
       // Normalize 2048 → g2048 (keeps existing links working)
       if (slug === "2048") slug = "g2048";
+
+      const trustedSameOrigin = Boolean(slug && TRUSTED_SAME_ORIGIN_SLUGS.has(slug));
 
       // Fallback title
       gameTitleEl.textContent = title || (slug ? slug.replace(/[-_]/g, " ") : "Unknown Game");
@@ -423,12 +452,24 @@
       // Wire buttons
       btnReload.addEventListener("click", () => {
         write("manual: reload requested");
-        frame.contentWindow?.location.reload();
+        if (sandboxTrusted) {
+          try {
+            frame.contentWindow?.location.reload();
+          } catch (err) {
+            write("reload fallback (trusted sandbox error): " + (err && err.message ? err.message : err));
+            frame.src = frame.src;
+          }
+        } else {
+          write("reload fallback (strict sandbox)");
+          frame.src = frame.src;
+        }
       });
       // Load the game iframe
       pillSlug.textContent = "slug: " + (slug || "—");
 
-      function setFrameSrc(src, note, legacy = false) {
+      function setFrameSrc(src, note, options = {}) {
+        const { legacy = false, trustedSameOrigin: allowSameOrigin = false } = options;
+        applySandbox(!legacy && allowSameOrigin);
         frame.src = src;
         isLegacyShell = legacy;
         if (legacy) {
@@ -440,7 +481,7 @@
       }
 
       if (!slug) {
-        setFrameSrc("./404.html");
+        setFrameSrc("./404.html", "missing slug", { legacy: true });
       } else {
         const modernSrc = `./gameshells/${slug}/index.html`;
         const legacySrc = `./games/${slug}/index.html`;
@@ -450,21 +491,21 @@
         const forceLegacy = qs.has('legacy') || qs.get('shell') === 'legacy';
         const forceModern = qs.has('modern') || qs.get('shell') === 'modern';
         if (forceLegacy) {
-          setFrameSrc(legacySrc, "forced legacy", true);
+          setFrameSrc(legacySrc, "forced legacy", { legacy: true });
         } else if (forceModern) {
-          setFrameSrc(modernSrc, "forced modern", false);
+          setFrameSrc(modernSrc, "forced modern", { trustedSameOrigin });
         } else {
-        fetch(modernSrc, { method: "HEAD" })
-          .then((resp) => {
-            if (resp.ok) {
-              setFrameSrc(modernSrc, "modern wrapper", false);
-            } else {
-              setFrameSrc(legacySrc, `legacy fallback (status ${resp.status})`, true);
-            }
-          })
-          .catch((err) => {
-            setFrameSrc(legacySrc, `legacy fallback (${err && err.message ? err.message : err})`, true);
-          });
+          fetch(modernSrc, { method: "HEAD" })
+            .then((resp) => {
+              if (resp.ok) {
+                setFrameSrc(modernSrc, "modern wrapper", { trustedSameOrigin });
+              } else {
+                setFrameSrc(legacySrc, `legacy fallback (status ${resp.status})`, { legacy: true });
+              }
+            })
+            .catch((err) => {
+              setFrameSrc(legacySrc, `legacy fallback (${err && err.message ? err.message : err})`, { legacy: true });
+            });
         }
       }
 
