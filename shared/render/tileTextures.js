@@ -6,6 +6,11 @@ const textureRegistry = Object.freeze({
   lava: Object.freeze({ src: '/assets/tilesets/stone.png', repeat: 'repeat-x' }),
 });
 
+const gemSprite = Object.freeze({
+  src: '/assets/sprites/collectibles/gem_blue.png',
+  frame: Object.freeze({ sx: 0, sy: 0, sw: 32, sh: 32 }),
+});
+
 const keySprite = Object.freeze({
   src: '/assets/sprites/collectibles/key.png',
   frame: Object.freeze({ sx: 0, sy: 0, sw: 32, sh: 32 }),
@@ -22,7 +27,8 @@ const checkpointSprite = Object.freeze({
 });
 
 const spriteRegistry = Object.freeze({
-  coin: keySprite,
+  gem: gemSprite,
+  coin: gemSprite,
   key: keySprite,
   goal: doorSprite,
   door: doorSprite,
@@ -145,7 +151,9 @@ export function drawTileSprite(ctx, keyOrDef, dx, dy, dw, dh, frameOverride) {
 }
 
 export function getSpriteFrame(key) {
-  return spriteRegistry[key]?.frame ?? null;
+  if (!key) return null;
+  const normalizedKey = key === 'coin' ? 'gem' : key;
+  return spriteRegistry[normalizedKey]?.frame ?? null;
 }
 
 export const tileTextureDefinitions = textureRegistry;
