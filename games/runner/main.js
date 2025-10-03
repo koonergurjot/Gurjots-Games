@@ -2,6 +2,7 @@ import { Controls } from '../../src/runtime/controls.js';
 import { pushEvent } from '../common/diag-adapter.js';
 import { registerRunnerAdapter } from './adapter.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
+import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
 
 const VIRTUAL_WIDTH = 960;
 const VIRTUAL_HEIGHT = 320;
@@ -27,6 +28,8 @@ const DEFAULT_LEVEL = {
 };
 
 const SKY_GRADIENT = ['#1e293b', '#0f172a'];
+
+preloadTileTextures().catch(() => null);
 let postedReady = false;
 
 const globalScope = typeof window !== 'undefined' ? window : null;
@@ -833,82 +836,215 @@ class RunnerGame {
 
   drawBackground(ctx) {
     const ground = this.groundY();
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    const buildingPattern = getTilePattern(ctx, 'brick') || getTilePattern(ctx, 'block');
+    const stripePattern = getTilePattern(ctx, 'lava');
+    const foregroundPattern = getTilePattern(ctx, 'block');
+
     for (const cloud of this.background.clouds) {
-      ctx.beginPath();
-      ctx.ellipse(cloud.x, cloud.y, cloud.w / 2, cloud.h / 2, 0, 0, Math.PI * 2);
-      ctx.fill();
+      const left = cloud.x - cloud.w / 2;
+      const top = cloud.y - cloud.h / 2;
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      const rendered = drawTileSprite(ctx, 'coin', left, top, cloud.w, cloud.h);
+      ctx.restore();
+      if (!rendered) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath();
+        ctx.ellipse(cloud.x, cloud.y, cloud.w / 2, cloud.h / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
-    ctx.fillStyle = '#1f2937';
     for (const building of this.background.buildings) {
       const top = ground - building.h;
+      ctx.save();
+      if (buildingPattern) {
+        ctx.fillStyle = buildingPattern;
+      } else {
+        ctx.fillStyle = '#1f2937';
+      }
       ctx.fillRect(building.x, top, building.w, building.h);
+      ctx.restore();
     }
 
-    ctx.fillStyle = '#0f172a';
+    ctx.save();
     ctx.globalAlpha = 0.35;
-    for (let i = 0; i < 12; i++) {
-      const x = (i / 12) * VIRTUAL_WIDTH;
-      ctx.fillRect(x, 0, 2, VIRTUAL_HEIGHT);
+    if (stripePattern) {
+      ctx.fillStyle = stripePattern;
+      for (let i = 0; i < 12; i++) {
+        const x = (i / 12) * VIRTUAL_WIDTH;
+        ctx.fillRect(x, 0, 10, VIRTUAL_HEIGHT);
+      }
+    } else {
+      ctx.fillStyle = '#0f172a';
+      for (let i = 0; i < 12; i++) {
+        const x = (i / 12) * VIRTUAL_WIDTH;
+        ctx.fillRect(x, 0, 2, VIRTUAL_HEIGHT);
+      }
     }
-    ctx.globalAlpha = 1;
+    ctx.restore();
 
-    ctx.fillStyle = '#172554';
     for (const fg of this.background.foreground) {
       const top = ground - fg.h / 2;
+      ctx.save();
+      if (foregroundPattern) {
+        ctx.fillStyle = foregroundPattern;
+      } else {
+        ctx.fillStyle = '#172554';
+      }
       ctx.fillRect(fg.x, top, fg.w, fg.h / 2);
+      ctx.restore();
     }
   }
 
   drawGround(ctx) {
     const ground = this.groundY();
-    ctx.fillStyle = '#0b1120';
+    const basePattern = getTilePattern(ctx, 'block');
+    const accentPattern = getTilePattern(ctx, 'lava');
+
+    ctx.save();
+    ctx.fillStyle = basePattern || '#0b1120';
     ctx.fillRect(0, ground, VIRTUAL_WIDTH, GROUND_HEIGHT);
-    ctx.fillStyle = '#1e293b';
+    ctx.restore();
+
+    ctx.save();
+    ctx.fillStyle = accentPattern || '#1e293b';
     ctx.fillRect(0, ground, VIRTUAL_WIDTH, 18);
+    ctx.restore();
+
+    ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.12)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(0, ground);
     ctx.lineTo(VIRTUAL_WIDTH, ground);
     ctx.stroke();
+    ctx.restore();
 
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = '#38bdf8';
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    let highlightsDrawn = false;
     for (let i = 0; i < 6; i++) {
       const start = (i / 6) * VIRTUAL_WIDTH;
-      ctx.fillRect(start + (this.distance % 120), ground + 30, 40, 4);
+      const x = start + (this.distance % 120);
+      highlightsDrawn = drawTileSprite(ctx, 'coin', x - 12, ground + 18, 24, 24) || highlightsDrawn;
     }
-    ctx.globalAlpha = 1;
+    if (!highlightsDrawn) {
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#38bdf8';
+      for (let i = 0; i < 6; i++) {
+        const start = (i / 6) * VIRTUAL_WIDTH;
+        ctx.fillRect(start + (this.distance % 120), ground + 30, 40, 4);
+      }
+    }
+    ctx.restore();
   }
 
   drawObstacles(ctx) {
+    const hazardPattern = getTilePattern(ctx, 'lava');
+    const barPattern = getTilePattern(ctx, 'brick') || getTilePattern(ctx, 'block');
     for (const obs of this.obstacles) {
+      ctx.save();
       if (obs.type === 'bar') {
-        ctx.fillStyle = '#facc15';
+        if (barPattern) {
+          ctx.fillStyle = barPattern;
+        } else {
+          ctx.fillStyle = '#facc15';
+        }
         ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-        ctx.fillStyle = 'rgba(250,204,21,0.45)';
-        ctx.fillRect(obs.x, obs.y + obs.h, obs.w, 8);
+
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        const topperRendered = drawTileSprite(ctx, 'goal', obs.x - 4, obs.y - 12, obs.w + 8, 12);
+        ctx.restore();
+        if (!topperRendered) {
+          ctx.fillStyle = 'rgba(250,204,21,0.45)';
+          ctx.fillRect(obs.x, obs.y + obs.h, obs.w, 8);
+        }
       } else {
-        ctx.fillStyle = '#f87171';
+        if (hazardPattern) {
+          ctx.fillStyle = hazardPattern;
+        } else {
+          ctx.fillStyle = '#f87171';
+        }
         ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-        ctx.strokeStyle = 'rgba(248,113,113,0.4)';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        const glowRendered = drawTileSprite(ctx, 'coin', obs.x - 6, obs.y - 18, obs.w + 12, 24);
+        ctx.restore();
+        if (!glowRendered) {
+          ctx.strokeStyle = 'rgba(248,113,113,0.4)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+        }
       }
+      ctx.restore();
     }
   }
 
   drawPlayer(ctx) {
     const p = this.player;
-    ctx.fillStyle = '#22d3ee';
-    ctx.fillRect(p.x, p.y, p.width, p.height);
+    const bodyHeight = Math.max(18, p.height - 12);
+    const bodyTop = p.y + (p.height - bodyHeight);
+
+    ctx.save();
+    const bodyRendered = drawTileSprite(ctx, 'goal', p.x, bodyTop, p.width, bodyHeight);
+    if (!bodyRendered) {
+      ctx.fillStyle = '#22d3ee';
+      ctx.fillRect(p.x, bodyTop, p.width, bodyHeight);
+    }
+    ctx.restore();
+
+    const headSize = Math.min(p.width * 0.9, Math.max(18, bodyHeight * 0.45));
+    const headY = bodyTop - headSize * 0.6;
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    const headRendered = drawTileSprite(
+      ctx,
+      'coin',
+      p.x + (p.width - headSize) / 2,
+      headY,
+      headSize,
+      headSize,
+    );
+    ctx.restore();
+    if (!headRendered) {
+      ctx.save();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(
+        p.x + p.width / 2,
+        headY + headSize / 2,
+        headSize / 2,
+        headSize / 2,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const boosterPattern = getTilePattern(ctx, 'lava');
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    if (boosterPattern) {
+      ctx.fillStyle = boosterPattern;
+      ctx.fillRect(p.x - 6, p.y + p.height - 12, 6, 12);
+    } else {
+      ctx.fillStyle = 'rgba(34,211,238,0.6)';
+      ctx.fillRect(p.x - 8, p.y + p.height * 0.65, 6, 10);
+    }
+    ctx.restore();
+
+    ctx.save();
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(p.x + p.width * 0.65, p.y + p.height * 0.2, 6, 6);
     ctx.fillRect(p.x + p.width * 0.65, p.y + p.height * 0.45, 6, 6);
-    ctx.fillStyle = 'rgba(34,211,238,0.6)';
-    ctx.fillRect(p.x - 8, p.y + p.height * 0.65, 6, 10);
+    ctx.restore();
   }
 
   drawGameOver(ctx) {

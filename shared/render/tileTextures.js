@@ -2,6 +2,7 @@ const globalScope = typeof window !== 'undefined' ? window : typeof globalThis !
 
 const textureRegistry = Object.freeze({
   block: Object.freeze({ src: '/assets/sprites/block.png', repeat: 'repeat' }),
+  brick: Object.freeze({ src: '/assets/sprites/brick.png', repeat: 'repeat' }),
   lava: Object.freeze({ src: '/assets/sprites/lava.png', repeat: 'repeat-x' }),
 });
 
