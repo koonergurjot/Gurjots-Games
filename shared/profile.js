@@ -1,8 +1,6 @@
 import { getAchievements } from './achievements.js';
 import { PROFILE_EVENT } from './profile-events.js';
 
-export { PROFILE_EVENT } from './profile-events.js';
-
 const PROFILE_KEY = 'gg:profile';
 const PROFILE_LIST_KEY = 'gg:profiles';
 const LEGACY_XP_KEY = 'gg:xp';
