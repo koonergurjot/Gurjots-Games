@@ -32,7 +32,8 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     effects:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
     trail:[], trailMax:20, touches:{}, replay:[], replayMax:5*60, recording:true,
     shellPaused:false,
-    images:{ powerups:{}, effects:{} }
+    images:{ powerups:{}, effects:{} },
+    backgroundLayers:null,
   };
 
   const globalScope = typeof window !== "undefined" ? window : undefined;
@@ -47,13 +48,17 @@ import { play as playSfx } from "../../shared/juice/audio.js";
   const SPRITE_SOURCES = {
     paddle: "/assets/sprites/paddle.png",
     ball: "/assets/sprites/ball.png",
-    background: "/assets/backgrounds/arcade.png",
     particle: "/assets/effects/particle.png",
     net: "/assets/effects/particle.png",
     spark: "/assets/effects/spark.png",
     explosion: "/assets/effects/explosion.png",
     shield: "/assets/effects/shield.png",
   };
+
+  const PARALLAX_LAYERS = [
+    { src: "/assets/backgrounds/parallax/arcade_layer1.png", speed: 18, alpha: 0.85 },
+    { src: "/assets/backgrounds/parallax/arcade_layer2.png", speed: 36, alpha: 1 },
+  ];
 
   const POWERUP_SOURCES = {
     grow: SPRITE_SOURCES.shield,
@@ -78,7 +83,6 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     const images = state.images;
     images.paddle = images.paddle || createImage(SPRITE_SOURCES.paddle);
     images.ball = images.ball || createImage(SPRITE_SOURCES.ball);
-    images.background = images.background || createImage(SPRITE_SOURCES.background);
     images.net = images.net || createImage(SPRITE_SOURCES.net);
     if(!images.effects) images.effects = {};
     images.effects.spark = images.effects.spark || createImage(SPRITE_SOURCES.spark);
@@ -88,6 +92,7 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     for(const [kind, src] of Object.entries(POWERUP_SOURCES)){
       if(!images.powerups[kind]) images.powerups[kind] = createImage(src);
     }
+    ensureParallaxLayers();
   }
 
   function drawSprite(img, x, y, w, h, alpha=1){
@@ -134,15 +139,93 @@ import { play as playSfx } from "../../shared/juice/audio.js";
   }
 
   // ---------- Rendering helpers ----------
+  function ensureParallaxLayers(){
+    if(state.backgroundLayers) return;
+    const layers = [];
+    for(const cfg of PARALLAX_LAYERS){
+      const img = createImage(cfg.src);
+      const layer = {
+        image: img,
+        speed: Number.isFinite(cfg.speed) ? cfg.speed : 0,
+        alpha: typeof cfg.alpha === "number" ? Math.max(0, Math.min(1, cfg.alpha)) : 1,
+        offset: 0,
+        width: 0,
+        height: 0,
+      };
+      if(img){
+        img.addEventListener("load", ()=>{
+          layer.width = img.naturalWidth || img.width || 0;
+          layer.height = img.naturalHeight || img.height || 0;
+        });
+        img.addEventListener("error", ()=>{
+          layer.width = 0;
+          layer.height = 0;
+        });
+      }
+      layers.push(layer);
+    }
+    state.backgroundLayers = layers;
+  }
+
+  function getParallaxMetrics(layer){
+    if(!layer || !layer.image) return null;
+    const img = layer.image;
+    const baseW = img.naturalWidth || img.width || layer.width || 0;
+    const baseH = img.naturalHeight || img.height || layer.height || 0;
+    if(!baseW || !baseH) return null;
+    layer.width = baseW;
+    layer.height = baseH;
+    const destHeight = H;
+    const destWidth = destHeight * (baseW / baseH);
+    if(!Number.isFinite(destWidth) || destWidth <= 0) return null;
+    return { width: destWidth, height: destHeight };
+  }
+
+  function updateParallax(delta){
+    ensureParallaxLayers();
+    if(!Array.isArray(state.backgroundLayers)) return;
+    if(state.reduceMotion) return;
+    for(const layer of state.backgroundLayers){
+      const metrics = getParallaxMetrics(layer);
+      if(!metrics) continue;
+      const speed = layer.speed || 0;
+      if(!speed) continue;
+      let offset = (layer.offset || 0) + speed * delta;
+      const span = metrics.width;
+      if(span > 0){
+        offset %= span;
+        if(offset < 0) offset += span;
+      }
+      layer.offset = offset;
+    }
+  }
+
+  function drawParallaxBackground(){
+    const ctx = state.ctx;
+    if(!ctx) return;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = "#050516";
+    ctx.fillRect(0,0,W,H);
+    ensureParallaxLayers();
+    if(!Array.isArray(state.backgroundLayers)) return;
+    for(const layer of state.backgroundLayers){
+      const metrics = getParallaxMetrics(layer);
+      if(!metrics) continue;
+      const alpha = layer.alpha ?? 1;
+      let startX = -(layer.offset || 0);
+      while(startX > 0) startX -= metrics.width;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      for(let x=startX; x < W; x += metrics.width){
+        ctx.drawImage(layer.image, x, 0, metrics.width, metrics.height);
+      }
+      ctx.restore();
+    }
+  }
+
   function clear(){
     ensureSprites();
-    const ctx = state.ctx;
-    const bg = state.images?.background;
-    if(bg && bg.complete && bg.naturalWidth){
-      ctx.drawImage(bg, 0, 0, W, H);
-    } else {
-      ctx.clearRect(0,0,W,H);
-    }
+    drawParallaxBackground();
   }
   function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#fff"; }
 
@@ -254,6 +337,11 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     state.p2 = {x:W-50, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
     spawnBall(Math.random()<0.5? -1 : 1);
     state.over=false; state.paused=false;
+    if(Array.isArray(state.backgroundLayers)){
+      for(const layer of state.backgroundLayers){
+        if(layer) layer.offset = 0;
+      }
+    }
   }
 
   function spawnBall(dir=1, speed=360){
@@ -558,6 +646,8 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     state.loopId = requestAnimationFrame(frame);
     const delta = Math.min(MAX_FRAME_DELTA, (t - (state.last||t)) / 1000); // Fixed-step integration with an accumulator; clamp to avoid spiral of death.
     state.last = t;
+
+    updateParallax(delta);
 
     if(!state.running){
       state.dt = 0;

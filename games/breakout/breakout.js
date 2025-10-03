@@ -27,8 +27,7 @@ preloadFirstFrameAssets(GAME_ID).catch(()=>{});
 const SPRITE_SOURCES={
   paddle:'/assets/sprites/paddle.png',
   brick:'/assets/tilesets/industrial.png',
-  ball:'/assets/sprites/ball.png',
-  background:'/assets/backgrounds/arcade.png'
+  ball:'/assets/sprites/ball.png'
 };
 
 const BRICK_TILESET={
@@ -58,6 +57,22 @@ const spriteImages={};
 const effectImages={};
 const powerupImages={};
 
+const PARALLAX_CONFIG=[
+  {key:'layer1',src:'/assets/backgrounds/parallax/arcade_layer1.png',speed:28,alpha:0.85},
+  {key:'layer2',src:'/assets/backgrounds/parallax/arcade_layer2.png',speed:56,alpha:1}
+];
+const parallaxImages={};
+const parallaxLayers=PARALLAX_CONFIG.map(cfg=>({
+  key:cfg.key,
+  src:cfg.src,
+  speed:cfg.speed,
+  alpha:typeof cfg.alpha==='number'?Math.max(0,Math.min(1,cfg.alpha)):1,
+  offset:0,
+  image:null,
+  width:0,
+  height:0
+}));
+
 function requestImage(target,key,src){
   let img=target[key];
   if(img&&img.naturalWidth) return img;
@@ -75,10 +90,15 @@ function requestImage(target,key,src){
   return target[key]||null;
 }
 
+function isImageReady(img){
+  return !!img && (img.complete||img.readyState==="complete") && (img.naturalWidth||img.width||0) && (img.naturalHeight||img.height||0);
+}
+
 function primeImages(){
   Object.entries(SPRITE_SOURCES).forEach(([key,src])=>{requestImage(spriteImages,key,src);});
   Object.entries(EFFECT_SOURCES).forEach(([key,src])=>{requestImage(effectImages,key,src);});
   Object.entries(POWERUP_SOURCES).forEach(([key,src])=>{requestImage(powerupImages,key,src);});
+  parallaxLayers.forEach(layer=>{ layer.image=requestImage(parallaxImages,layer.key,layer.src)||layer.image; });
 }
 
 primeImages();
@@ -152,6 +172,7 @@ let runStart=performance.now(),endTime=null,submitted=false;
 const powerEngine=new PowerUpEngine();
 let levelRamp=9;
 function loadLevel(){
+  parallaxLayers.forEach(layer=>{ if(layer) layer.offset=0; });
   bricks=[];
   const lvl=LEVELS[(level-1)%LEVELS.length];
   levelRamp=(lvl.speedRamp||0.15)*60;
@@ -288,8 +309,75 @@ function drawEffects(){
   ctx.restore();
 }
 
+function ensureParallaxLayers(){
+  for(const layer of parallaxLayers){
+    const img=requestImage(parallaxImages,layer.key,layer.src);
+    if(img && img!==layer.image){
+      layer.image=img;
+      layer.width=img.naturalWidth||img.width||layer.width||0;
+      layer.height=img.naturalHeight||img.height||layer.height||0;
+    }
+  }
+}
+
+function getParallaxMetrics(layer){
+  if(!layer) return null;
+  const img=layer.image;
+  const baseW=img?.naturalWidth||img?.width||layer.width||0;
+  const baseH=img?.naturalHeight||img?.height||layer.height||0;
+  if(!baseW||!baseH) return null;
+  const destHeight=c.height||BASE_H;
+  const destWidth=destHeight*(baseW/baseH);
+  if(!Number.isFinite(destWidth)||destWidth<=0) return null;
+  layer.width=baseW;
+  layer.height=baseH;
+  layer.renderWidth=destWidth;
+  layer.renderHeight=destHeight;
+  return {width:destWidth,height:destHeight};
+}
+
+function updateParallax(dt){
+  ensureParallaxLayers();
+  if(!Number.isFinite(dt)) dt=0;
+  for(const layer of parallaxLayers){
+    const metrics=getParallaxMetrics(layer);
+    if(!metrics) continue;
+    const speed=Number.isFinite(layer.speed)?layer.speed:0;
+    if(!speed) continue;
+    let offset=(layer.offset||0)+speed*dt;
+    const span=metrics.width;
+    if(span>0){
+      offset%=span;
+      if(offset<0) offset+=span;
+    }
+    layer.offset=offset;
+  }
+}
+
+function drawParallaxBackground(){
+  ctx.save();
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#050516';
+  ctx.fillRect(0,0,c.width,c.height);
+  ensureParallaxLayers();
+  for(const layer of parallaxLayers){
+    const metrics=getParallaxMetrics(layer);
+    if(!metrics || !isImageReady(layer.image)) continue;
+    let startX=-(layer.offset||0);
+    while(startX>0) startX-=metrics.width;
+    ctx.save();
+    ctx.globalAlpha=layer.alpha ?? 1;
+    for(let x=startX; x<c.width; x+=metrics.width){
+      ctx.drawImage(layer.image,x,0,metrics.width,metrics.height);
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function step(dt){
   syncScore();
+  updateParallax(dt);
   if(paused)return;
   powerEngine.update(dt);
   if(ball.stuck)return;
@@ -380,12 +468,7 @@ function draw(){
     try { window.parent?.postMessage({ type:'GAME_READY', slug:'breakout' }, '*'); } catch {}
   }
   if('imageSmoothingEnabled' in ctx&&ctx.imageSmoothingEnabled)ctx.imageSmoothingEnabled=false;
-  const bg=requestImage(spriteImages,'background',SPRITE_SOURCES.background);
-  if(bg&&bg.complete&&bg.naturalWidth){
-    ctx.drawImage(bg,0,0,c.width,c.height);
-  }else{
-    ctx.fillStyle='#050516';ctx.fillRect(0,0,c.width,c.height);
-  }
+  drawParallaxBackground();
   const brickSprite=requestImage(spriteImages,'brick',SPRITE_SOURCES.brick);
   for(const b of bricks){
     if(b.hp>0){
