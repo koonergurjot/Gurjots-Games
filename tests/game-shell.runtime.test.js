@@ -2,8 +2,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const importShell = async (options = {}) => {
-  const { slug = 'pong', preload = '' } = options;
+  const { slug = 'pong', preload = '', moduleScript = false } = options;
   vi.resetModules();
+  document.head.innerHTML = '';
   document.body.className = 'game-shell';
   document.body.innerHTML = `
     <main class="game-shell__main">
@@ -13,16 +14,30 @@ const importShell = async (options = {}) => {
       </div>
     </main>
   `;
-  Object.defineProperty(document, 'currentScript', {
-    value: {
-      dataset: {
-        game: slug,
-        preloadFirst: preload,
-        backHref: '/index.html',
+  if (moduleScript) {
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.src = new URL('../games/common/game-shell.js', import.meta.url).href;
+    script.dataset.game = slug;
+    script.dataset.preloadFirst = preload;
+    script.dataset.backHref = '/index.html';
+    document.head.append(script);
+    Object.defineProperty(document, 'currentScript', {
+      value: null,
+      configurable: true,
+    });
+  } else {
+    Object.defineProperty(document, 'currentScript', {
+      value: {
+        dataset: {
+          game: slug,
+          preloadFirst: preload,
+          backHref: '/index.html',
+        },
       },
-    },
-    configurable: true,
-  });
+      configurable: true,
+    });
+  }
   const postMessage = vi.fn();
   Object.defineProperty(window, 'parent', {
     value: { postMessage },
@@ -71,5 +86,18 @@ describe('game-shell runtime integration', () => {
     dispose();
     window.dispatchEvent(new CustomEvent('ggshell:pause'));
     expect(pause).toHaveBeenCalledTimes(1);
+  });
+
+  it('derives configuration when loaded as a module script', async () => {
+    const { postMessage } = await importShell({ slug: 'tetris', moduleScript: true });
+    expect(document.body.dataset.gameSlug).toBe('tetris');
+    window.dispatchEvent(new Event('load'));
+    await vi.waitFor(() => {
+      const diagScript = document.querySelector('script[data-shell-diag][data-slug="tetris"]');
+      expect(diagScript).toBeTruthy();
+    });
+    postMessage.mockClear();
+    window.GGShellEmitScore(7);
+    expect(postMessage).toHaveBeenLastCalledWith({ type: 'GAME_SCORE', slug: 'tetris', score: 7 }, '*');
   });
 });
