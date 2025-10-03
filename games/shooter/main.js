@@ -1,5 +1,6 @@
 // Minimal top-down shooter (canvas id='game')
 import { pushEvent } from '../common/diag-adapter.js';
+import { getCachedAudio, getCachedImage, loadAudio, loadImage, drawTiledBackground } from '../../shared/assets.js';
 import './diagnostics-adapter.js';
 
 export function boot() {
@@ -9,11 +10,15 @@ export function boot() {
   canvas.width = canvas.width || 960;
   canvas.height = canvas.height || 540;
   const W = canvas.width, H = canvas.height;
+  if (ctx && 'imageSmoothingEnabled' in ctx) {
+    ctx.imageSmoothingEnabled = false;
+  }
   let postedReady = false;
 
   const player = { x: W*0.2, y: H*0.5, r: 12, vx: 0, vy: 0, speed: 5, hp: 3, cd: 0 };
   const bullets = [];
   const enemies = [];
+  const explosions = [];
   let t = 0, score = 0;
   let shooterAPI = null;
   let currentState = 'ready';
@@ -23,9 +28,122 @@ export function boot() {
   const scoreElement = document.getElementById('score');
   const scoreDisplay = document.getElementById('scoreDisplay');
 
+  const SLUG = 'shooter';
+  const ASSET_PATHS = {
+    background: '../../assets/backgrounds/space.png',
+    bullet: '../../assets/sprites/bullet.png',
+    laser: '../../assets/sprites/laser.png',
+    explosion: '../../assets/effects/explosion.png',
+    shoot: '../../assets/audio/laser.wav',
+    gameover: '../../assets/audio/gameover.wav',
+  };
+
+  const sprites = {
+    background: getCachedImage(ASSET_PATHS.background),
+    bullet: getCachedImage(ASSET_PATHS.bullet),
+    enemy: getCachedImage(ASSET_PATHS.laser),
+    explosion: getCachedImage(ASSET_PATHS.explosion),
+  };
+
+  const explosionSprite = {
+    frameSize: 0,
+    framesPerRow: 8,
+    totalFrames: 0,
+  };
+
+  let backgroundPattern = null;
+
+  function isImageReady(image) {
+    return !!image && (image.complete === undefined || image.complete) && (image.naturalWidth || image.width);
+  }
+
+  function ensureBackgroundPattern() {
+    if (!ctx) return;
+    const image = sprites.background;
+    if (!isImageReady(image)) return;
+    try {
+      backgroundPattern = ctx.createPattern(image, 'repeat');
+    } catch (_) {
+      backgroundPattern = null;
+    }
+  }
+
+  function prepareExplosionSprite() {
+    const image = sprites.explosion;
+    if (!isImageReady(image)) return;
+    const framesPerRow = explosionSprite.framesPerRow || 8;
+    const size = Math.floor((image.naturalWidth || image.width || 0) / framesPerRow) || 0;
+    if (!size) return;
+    const rows = Math.max(1, Math.floor((image.naturalHeight || image.height || 0) / size));
+    explosionSprite.frameSize = size;
+    explosionSprite.framesPerRow = framesPerRow;
+    explosionSprite.totalFrames = Math.max(1, framesPerRow * rows);
+  }
+
+  function createSoundPlayer(src, volume = 0.6) {
+    let base = getCachedAudio(src);
+    if (!base) {
+      loadAudio(src, { slug: SLUG }).then(audio => { base = audio; }).catch(() => {});
+    }
+    return () => {
+      const audio = base || getCachedAudio(src);
+      if (!audio) return;
+      try {
+        const instance = audio.cloneNode(true);
+        instance.volume = volume;
+        instance.play().catch(() => {});
+      } catch (_) {}
+    };
+  }
+
+  const playShootSound = createSoundPlayer(ASSET_PATHS.shoot, 0.5);
+  const playGameOverSound = createSoundPlayer(ASSET_PATHS.gameover, 0.6);
+
+  if (sprites.background) ensureBackgroundPattern();
+  loadImage(ASSET_PATHS.background, { slug: SLUG }).then(img => {
+    sprites.background = img;
+    ensureBackgroundPattern();
+  }).catch(() => {});
+
+  loadImage(ASSET_PATHS.bullet, { slug: SLUG }).then(img => {
+    sprites.bullet = img;
+  }).catch(() => {});
+
+  loadImage(ASSET_PATHS.laser, { slug: SLUG }).then(img => {
+    sprites.enemy = img;
+  }).catch(() => {});
+
+  if (sprites.explosion) prepareExplosionSprite();
+  loadImage(ASSET_PATHS.explosion, { slug: SLUG }).then(img => {
+    sprites.explosion = img;
+    prepareExplosionSprite();
+  }).catch(() => {});
+
   const keys = new Set();
   addEventListener('keydown', e => keys.add(e.key));
   addEventListener('keyup', e => keys.delete(e.key));
+
+  function spawnExplosion(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    explosions.push({ x, y, frameIndex: 0, frameDelay: 0 });
+  }
+
+  function updateExplosions() {
+    if (!explosions.length) return;
+    const totalFrames = Math.max(1, explosionSprite.totalFrames || 1);
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      const explosion = explosions[i];
+      explosion.frameDelay = (explosion.frameDelay || 0) + 1;
+      if (explosion.frameDelay >= 3) {
+        explosion.frameDelay = 0;
+        explosion.frameIndex = (explosion.frameIndex || 0) + 1;
+        if (explosion.frameIndex >= totalFrames) {
+          explosions.splice(i, 1);
+          continue;
+        }
+      }
+    }
+  }
 
   function update(){
     // movement
@@ -40,6 +158,7 @@ export function boot() {
     if ((keys.has(' ') || keys.has('Enter')) && player.cd === 0){
       bullets.push({ x: player.x+player.r+2, y: player.y, vx: 10, r: 3 });
       player.cd = 8;
+      playShootSound();
     }
 
     // spawn enemies
@@ -59,6 +178,7 @@ export function boot() {
       // hit player?
       if (Math.hypot(e.x-player.x, e.y-player.y) < e.r + player.r){
         enemies.splice(i,1);
+        spawnExplosion(e.x, e.y);
         player.hp--;
       }
       // bullets hit
@@ -66,6 +186,7 @@ export function boot() {
         const b = bullets[j];
         if (Math.hypot(e.x-b.x, e.y-b.y) < e.r + b.r){
           enemies.splice(i,1); bullets.splice(j,1);
+          spawnExplosion(e.x, e.y);
           score++;
           break;
         }
@@ -77,6 +198,8 @@ export function boot() {
 
     t++;
 
+    updateExplosions();
+
     publishDiagnostics('running');
   }
 
@@ -86,18 +209,48 @@ export function boot() {
       try { window.parent?.postMessage({ type:'GAME_READY', slug:'shooter' }, '*'); } catch {}
     }
     ctx.clearRect(0,0,W,H);
-    // bg
-    ctx.fillStyle = '#10151a';
-    ctx.fillRect(0,0,W,H);
+    if (ctx && 'imageSmoothingEnabled' in ctx) {
+      ctx.imageSmoothingEnabled = false;
+    }
+    const bgImage = sprites.background;
+    if (backgroundPattern) {
+      ctx.fillStyle = backgroundPattern;
+      ctx.fillRect(0, 0, W, H);
+    } else if (isImageReady(bgImage)) {
+      drawTiledBackground(ctx, bgImage, 0, 0, W, H);
+    } else {
+      ctx.fillStyle = '#10151a';
+      ctx.fillRect(0,0,W,H);
+    }
     // player
     ctx.fillStyle = '#4ade80';
     ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI*2); ctx.fill();
     // bullets
-    ctx.fillStyle = '#93c5fd';
-    for (const b of bullets){ ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
+    const bulletSprite = sprites.bullet;
+    if (isImageReady(bulletSprite)) {
+      const bw = bulletSprite.naturalWidth || bulletSprite.width;
+      const bh = bulletSprite.naturalHeight || bulletSprite.height;
+      for (const b of bullets) {
+        ctx.drawImage(bulletSprite, b.x - bw / 2, b.y - bh / 2, bw, bh);
+      }
+    } else {
+      ctx.fillStyle = '#93c5fd';
+      for (const b of bullets){ ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
+    }
     // enemies
-    ctx.fillStyle = '#f87171';
-    for (const e of enemies){ ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill(); }
+    const enemySprite = sprites.enemy;
+    if (isImageReady(enemySprite)) {
+      const ew = enemySprite.naturalWidth || enemySprite.width;
+      const eh = enemySprite.naturalHeight || enemySprite.height;
+      for (const e of enemies){
+        ctx.drawImage(enemySprite, e.x - ew / 2, e.y - eh / 2, ew, eh);
+      }
+    } else {
+      ctx.fillStyle = '#f87171';
+      for (const e of enemies){ ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill(); }
+    }
+
+    drawExplosions();
     // HUD
     ctx.fillStyle = '#fff'; ctx.font = '16px system-ui';
     ctx.fillText(`Score: ${score}`, 16, 26);
@@ -110,6 +263,33 @@ export function boot() {
     }
     if (scoreDisplay) {
       scoreDisplay.textContent = String(score);
+    }
+  }
+
+  function drawExplosions() {
+    if (!explosions.length) return;
+    const sprite = sprites.explosion;
+    const frameSize = explosionSprite.frameSize || 0;
+    const framesPerRow = Math.max(1, explosionSprite.framesPerRow || 1);
+    const totalFrames = Math.max(1, explosionSprite.totalFrames || 1);
+    if (isImageReady(sprite) && frameSize > 0) {
+      for (const explosion of explosions) {
+        const index = Math.min(totalFrames - 1, explosion.frameIndex || 0);
+        const sx = (index % framesPerRow) * frameSize;
+        const sy = Math.floor(index / framesPerRow) * frameSize;
+        const size = frameSize;
+        ctx.drawImage(sprite, sx, sy, frameSize, frameSize, explosion.x - size / 2, explosion.y - size / 2, size, size);
+      }
+    } else {
+      const prevFill = ctx.fillStyle;
+      ctx.fillStyle = 'rgba(248,113,113,0.6)';
+      for (const explosion of explosions) {
+        const radius = Math.max(6, player.r * 1.2);
+        ctx.beginPath();
+        ctx.arc(explosion.x, explosion.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = prevFill;
     }
   }
 
@@ -161,6 +341,7 @@ export function boot() {
     player.cd = 0;
     bullets.length = 0;
     enemies.length = 0;
+    explosions.length = 0;
     t = 0;
     score = 0;
     shellPaused = false;
@@ -192,6 +373,7 @@ export function boot() {
     ctx.fillText('Game Over', W/2, H/2 - 10);
     ctx.font='24px system-ui';
     ctx.fillText(`Score: ${score}`, W/2, H/2 + 26);
+    playGameOverSound();
     publishDiagnostics('gameover', { forceScore: true, forceState: true });
   }
   function syncShooterState(){
