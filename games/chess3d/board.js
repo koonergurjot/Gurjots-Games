@@ -2,12 +2,62 @@
 /**
  * Creates an 8x8 board at y=0. Provides helpers to map algebraic squares to positions.
  */
-import { woodDataUrl } from "./textures/wood.js";
-import { marbleDataUrl } from "./textures/marble.js";
 
 let tiles = [];
 let rim;
 let THREERef;
+let materials = { light: null, dark: null, rim: null };
+let texturesPromise;
+let loadedTextures;
+
+const TEXTURE_PATHS = {
+  wood: {
+    light: new URL("../../assets/sprites/chess3d/wood_light.png", import.meta.url).href,
+    dark: new URL("../../assets/sprites/chess3d/wood_dark.png", import.meta.url).href,
+  },
+  marble: {
+    light: new URL("../../assets/sprites/chess3d/marble_white.png", import.meta.url).href,
+    dark: new URL("../../assets/sprites/chess3d/marble_black.png", import.meta.url).href,
+  }
+};
+
+async function ensureTextures(THREE){
+  if (loadedTextures) return loadedTextures;
+  if (!texturesPromise){
+    const loader = new THREE.TextureLoader();
+    const configureTexture = (texture)=>{
+      if (!texture) return null;
+      try {
+        texture.colorSpace = THREE.SRGBColorSpace;
+      } catch(_){
+        try { texture.encoding = THREE.sRGBEncoding; } catch(__){}
+      }
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(1, 1);
+      return texture;
+    };
+    const loadTexture = async (path)=>{
+      try {
+        const tex = await loader.loadAsync(path);
+        return configureTexture(tex);
+      } catch (err) {
+        console.warn("Failed to load board texture", path, err);
+        return null;
+      }
+    };
+    texturesPromise = Promise.all([
+      loadTexture(TEXTURE_PATHS.wood.light),
+      loadTexture(TEXTURE_PATHS.wood.dark),
+      loadTexture(TEXTURE_PATHS.marble.light),
+      loadTexture(TEXTURE_PATHS.marble.dark),
+    ]).then(([woodLight, woodDark, marbleLight, marbleDark])=>({
+      wood: { light: woodLight, dark: woodDark },
+      marble: { light: marbleLight, dark: marbleDark },
+    }));
+  }
+  loadedTextures = await texturesPromise;
+  return loadedTextures;
+}
 
 export async function createBoard(scene, THREE){
   THREERef = THREE;
@@ -16,30 +66,16 @@ export async function createBoard(scene, THREE){
   const tileSize = 1;
   const half = 4 * tileSize;
 
-  // Load textures from data URLs
-  const loader = new THREE.TextureLoader();
-  let woodTex, marbleTex;
-  try {
-    [woodTex, marbleTex] = await Promise.all([
-      loader.loadAsync(woodDataUrl),
-      loader.loadAsync(marbleDataUrl),
-    ]);
-    try { woodTex.colorSpace = marbleTex.colorSpace = THREE.SRGBColorSpace; }
-    catch(_) { try { woodTex.encoding = marbleTex.encoding = THREE.sRGBEncoding; } catch(_){} }
-  } catch(_) {
-    woodTex = marbleTex = null;
-  }
+  loadedTextures = await ensureTextures(THREE);
 
-  const whiteMat = woodTex ? new THREE.MeshStandardMaterial({ map: woodTex, metalness: 0.15, roughness: 0.45 })
-                           : new THREE.MeshStandardMaterial({ color: 0xb7c0d8, metalness: 0.15, roughness: 0.45 });
-  const blackMat = marbleTex ? new THREE.MeshStandardMaterial({ map: marbleTex, metalness: 0.2, roughness: 0.5 })
-                             : new THREE.MeshStandardMaterial({ color: 0x5a6373, metalness: 0.2, roughness: 0.5 });
+  materials.light = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2, roughness: 0.8 });
+  materials.dark = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2, roughness: 0.8 });
 
   const geom = new THREE.BoxGeometry(tileSize, 0.1, tileSize);
   for (let r=0;r<8;r++){
     for (let f=0;f<8;f++){
       const isLight = (r+f)%2===0;
-      const mesh = new THREE.Mesh(geom, isLight ? whiteMat : blackMat);
+      const mesh = new THREE.Mesh(geom, isLight ? materials.light : materials.dark);
       mesh.receiveShadow = true;
       mesh.position.set(-half + f*tileSize + tileSize/2, 0, -half + r*tileSize + tileSize/2);
       mesh.userData.square = fileRankToSquare(f, r);
@@ -51,8 +87,8 @@ export async function createBoard(scene, THREE){
 
   // simple rim
   const rimGeom = new THREE.BoxGeometry(8*tileSize+0.6, 0.12, 8*tileSize+0.6);
-  const rimMat = new THREE.MeshStandardMaterial({ color: 0x2b3140, metalness: 0.35, roughness: 0.35 });
-  rim = new THREE.Mesh(rimGeom, rimMat);
+  materials.rim = new THREE.MeshStandardMaterial({ color: 0x2b3140, metalness: 0.35, roughness: 0.35 });
+  rim = new THREE.Mesh(rimGeom, materials.rim);
   rim.position.y = -0.07;
   rim.receiveShadow = true;
   group.add(rim);
@@ -61,6 +97,8 @@ export async function createBoard(scene, THREE){
   try{
     group.traverse((ch)=>{ if (ch.isMesh){ ch.castShadow = !!ch.castShadow; ch.receiveShadow = true; }});
   }catch(_){ }
+
+  setBoardTheme("wood");
 
   const helpers = {
     tileSize,
@@ -81,8 +119,7 @@ export async function createBoard(scene, THREE){
 }
 
 export function setBoardTheme(theme){
-  if (!THREERef) return;
-  const T = THREERef;
+  if (!THREERef || !materials.light || !materials.dark) return;
   const themes = {
     wood: {
       light: 0xdab893,
@@ -90,6 +127,8 @@ export function setBoardTheme(theme){
       rim: 0x5a3a22,
       metalness: 0.2,
       roughness: 0.8,
+      lightMap: loadedTextures?.wood?.light,
+      darkMap: loadedTextures?.wood?.dark,
     },
     marble: {
       light: 0xffffff,
@@ -97,6 +136,8 @@ export function setBoardTheme(theme){
       rim: 0x666666,
       metalness: 0.1,
       roughness: 0.5,
+      lightMap: loadedTextures?.marble?.light,
+      darkMap: loadedTextures?.marble?.dark,
     },
     neon: {
       light: 0x00ffcc,
@@ -107,13 +148,29 @@ export function setBoardTheme(theme){
     }
   };
   const cfg = themes[theme] || themes.wood;
-  const lightMat = new T.MeshStandardMaterial({ color: cfg.light, metalness: cfg.metalness, roughness: cfg.roughness });
-  const darkMat = new T.MeshStandardMaterial({ color: cfg.dark, metalness: cfg.metalness, roughness: cfg.roughness });
-  const rimMat = new T.MeshStandardMaterial({ color: cfg.rim, metalness: cfg.metalness, roughness: cfg.roughness });
-  tiles.forEach((tile)=>{
-    tile.material = tile.userData.isLight ? lightMat : darkMat;
-  });
-  if (rim) rim.material = rimMat;
+  const applyMaterialConfig = (material, colorHex, textureMap)=>{
+    material.metalness = cfg.metalness;
+    material.roughness = cfg.roughness;
+    if (textureMap){
+      material.map = textureMap;
+      material.color.set(0xffffff);
+    } else {
+      material.map = null;
+      material.color.setHex(colorHex);
+    }
+    material.needsUpdate = true;
+  };
+
+  applyMaterialConfig(materials.light, cfg.light, cfg.lightMap);
+  applyMaterialConfig(materials.dark, cfg.dark, cfg.darkMap);
+
+  if (materials.rim){
+    materials.rim.metalness = cfg.metalness;
+    materials.rim.roughness = cfg.roughness;
+    materials.rim.map = null;
+    materials.rim.color.setHex(cfg.rim);
+    materials.rim.needsUpdate = true;
+  }
 }
 
 function squareToFileRank(square){
