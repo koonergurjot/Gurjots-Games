@@ -271,12 +271,22 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
     // Paddle collisions
     // P1
-    if(b.x - b.r <= state.p1.x + state.p1.w && b.x > state.p1.x && b.y > state.p1.y && b.y < state.p1.y + state.p1.h && b.dx < 0){
-      collidePaddle(b, state.p1, 1);
+    if(b.dx < 0 && b.x - b.r <= state.p1.x + state.p1.w && b.x >= state.p1.x){
+      if(circleRectOverlap(b, state.p1)){
+        if(!useGhost(state.p1, b, -1)){
+          b.x = state.p1.x + state.p1.w + b.r;
+          collidePaddle(b, state.p1, 1);
+        }
+      }
     }
     // P2
-    if(b.x + b.r >= state.p2.x && b.x < state.p2.x + state.p2.w && b.y > state.p2.y && b.y < state.p2.y + state.p2.h && b.dx > 0){
-      collidePaddle(b, state.p2, -1);
+    if(b.dx > 0 && b.x + b.r >= state.p2.x && b.x <= state.p2.x + state.p2.w){
+      if(circleRectOverlap(b, state.p2)){
+        if(!useGhost(state.p2, b, 1)){
+          b.x = state.p2.x - b.r;
+          collidePaddle(b, state.p2, -1);
+        }
+      }
     }
 
     // Score
@@ -286,9 +296,31 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
 
   function respawn(b, dir){ Object.assign(b, {x:W/2, y:H/2, dx:dir*rand(340,420), dy:rand(-220,220), spin:0, lastHit:null}); }
 
+  function circleRectOverlap(ball, paddle){
+    const px = clamp(ball.x, paddle.x, paddle.x + paddle.w);
+    const py = clamp(ball.y, paddle.y, paddle.y + paddle.h);
+    const dx = ball.x - px;
+    const dy = ball.y - py;
+    return (dx*dx + dy*dy) <= ball.r * ball.r;
+  }
+
+  function useGhost(p, ball, approach){
+    const key = (p===state.p1 ? "p1_ghost" : "p2_ghost");
+    if(state[key] && state[key] > 0){
+      state[key] = 0;
+      if(approach < 0){
+        ball.x = p.x - ball.r - 0.1;
+      } else {
+        ball.x = p.x + p.w + ball.r + 0.1;
+      }
+      return true;
+    }
+    return false;
+  }
+
   function collidePaddle(b, p, dir){
     // hit offset (-1..1)
-    const rel = ((b.y - (p.y + p.h/2)) / (p.h/2));
+    const rel = clamp((b.y - (p.y + p.h/2)) / (p.h/2), -1, 1);
     const speed = Math.hypot(b.dx, b.dy);
     const add = rel * 280;
     b.dx = Math.sign(dir) * Math.max(240, speed*0.92);
@@ -373,6 +405,12 @@ window.drawParticles = window.drawParticles || function(){ /* no-op fallback */ 
   // ---------- Frame ----------
   function update(dt){
     state.dt = dt;
+
+    for(const flag of ["p1_ghost","p2_ghost"]){
+      if(state[flag] && state[flag] > 0){
+        state[flag] = Math.max(0, state[flag] - dt);
+      }
+    }
 
     updatePaddle(state.p1, dt);
     updatePaddle(state.p2, dt);
