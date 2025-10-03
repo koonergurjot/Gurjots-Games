@@ -104,6 +104,50 @@
     } catch (_err) {}
   };
 
+  const resolveBase = () => {
+    const getSrc = () => {
+      try {
+        const current = doc.currentScript;
+        if (current && current.src) return current.src;
+      } catch (_err) {}
+      try {
+        const byId = doc.querySelector ? doc.querySelector('#gg-diag-autowire') : null;
+        if (byId && byId.src) return byId.src;
+      } catch (_err) {}
+      try {
+        const scripts = doc.getElementsByTagName ? doc.getElementsByTagName('script') : [];
+        for (let i = 0; scripts && i < scripts.length; i += 1) {
+          const script = scripts[i];
+          if (!script || !script.src) continue;
+          if (script.src.indexOf('diag-autowire') !== -1) return script.src;
+        }
+      } catch (_err) {}
+      return null;
+    };
+
+    const src = getSrc();
+    if (src) {
+      try {
+        return new URL('.', src).href;
+      } catch (_err) {}
+    }
+    try {
+      const baseURI = doc.baseURI || (win.location && win.location.href) || '';
+      if (baseURI) return new URL('./', baseURI).href;
+    } catch (_err) {}
+    return '';
+  };
+
+  const baseUrl = resolveBase();
+
+  const buildUrl = (path) => {
+    if (!path || !baseUrl) return null;
+    try {
+      return new URL(path, baseUrl).toString();
+    } catch (_err) {}
+    return null;
+  };
+
   onReady(() => {
     if (alreadyInitialized()) return;
 
@@ -111,8 +155,8 @@
 
     win.__GG_DIAG_OPTS = { suppressButton: true };
 
-    ensureScript('../common/diagnostics/report-store.js', 'data-gg-diag-report');
-    ensureScript('../common/diag-core.js', 'data-gg-diag-core');
-    ensureScript('../common/diag-capture.js', 'data-gg-diag-capture');
+    ensureScript(buildUrl('diagnostics/report-store.js'), 'data-gg-diag-report');
+    ensureScript(buildUrl('diag-core.js'), 'data-gg-diag-core');
+    ensureScript(buildUrl('diag-capture.js'), 'data-gg-diag-capture');
   });
 })();
