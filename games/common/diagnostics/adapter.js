@@ -1,99 +1,132 @@
 /* Gurjot's Games — diagnostics/adapter.js
    Registry for per-game diagnostics adapters that integrate with diag-core.
 */
-(function(globalFactoryScope, factory){
-  const scope = globalFactoryScope || (typeof globalThis !== "undefined" ? globalThis : undefined);
-  const api = factory();
-  if (typeof module === "object" && module && typeof module.exports === "object") {
-    module.exports = api;
-  }
-  if (scope) {
-    const existing = scope.GGDiagAdapters && typeof scope.GGDiagAdapters === "object"
-      ? scope.GGDiagAdapters
-      : {};
-    scope.GGDiagAdapters = Object.assign({}, existing, api);
-  }
-})(typeof window !== "undefined" ? window : (typeof self !== "undefined" ? self : undefined), function(){
-  const HOOK_KEYS = ["onReady", "onError", "onStateChange", "onScoreChange"];
-  const API_KEYS = ["start", "pause", "resume", "reset", "getScore", "setDifficulty", "getEntities"];
 
-  const registry = new Map();
-  const listeners = new Set();
+const HOOK_KEYS = Object.freeze([
+  "onReady",
+  "onError",
+  "onStateChange",
+  "onScoreChange",
+]);
 
-  function registerGameDiagnostics(slug, adapter){
-    const normalizedSlug = normalizeSlug(slug);
-    const hooks = normalizeHooks(adapter);
-    const api = normalizeApi(adapter);
-    const record = Object.freeze({
-      slug: normalizedSlug,
-      hooks: Object.freeze(hooks),
-      api: Object.freeze(api),
-    });
-    registry.set(normalizedSlug, record);
-    notifyListeners(normalizedSlug, record);
-    return record;
+const API_KEYS = Object.freeze([
+  "start",
+  "pause",
+  "resume",
+  "reset",
+  "getScore",
+  "setDifficulty",
+  "getEntities",
+]);
+
+const registry = new Map();
+const listeners = new Set();
+
+function registerGameDiagnostics(slug, adapter) {
+  const normalizedSlug = normalizeSlug(slug);
+  const hooks = normalizeHooks(adapter);
+  const api = normalizeApi(adapter);
+  const record = Object.freeze({
+    slug: normalizedSlug,
+    hooks: Object.freeze(hooks),
+    api: Object.freeze(api),
+  });
+  registry.set(normalizedSlug, record);
+  notifyListeners(normalizedSlug, record);
+  return record;
+}
+
+function getGameDiagnostics(slug) {
+  if (typeof slug !== "string" || !slug.trim()) return null;
+  return registry.get(slug.trim()) || null;
+}
+
+function subscribe(listener) {
+  if (typeof listener !== "function") return () => {};
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function normalizeSlug(value) {
+  if (typeof value !== "string") {
+    throw new TypeError("registerGameDiagnostics requires a slug string");
   }
-
-  function getGameDiagnostics(slug){
-    if (typeof slug !== "string" || !slug.trim()) return null;
-    return registry.get(slug.trim()) || null;
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new TypeError("registerGameDiagnostics requires a non-empty slug");
   }
+  return trimmed;
+}
 
-  function subscribe(listener){
-    if (typeof listener !== "function") return () => {};
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-  }
-
-  function normalizeSlug(value){
-    if (typeof value !== "string") {
-      throw new TypeError("registerGameDiagnostics requires a slug string");
+function normalizeHooks(adapter) {
+  const hooks = {};
+  const source = adapter && typeof adapter === "object" ? adapter.hooks || {} : {};
+  for (const key of HOOK_KEYS) {
+    if (typeof source[key] === "function") {
+      hooks[key] = source[key];
     }
-    const trimmed = value.trim();
-    if (!trimmed) {
-      throw new TypeError("registerGameDiagnostics requires a non-empty slug");
+  }
+  return hooks;
+}
+
+function normalizeApi(adapter) {
+  const api = {};
+  const source = adapter && typeof adapter === "object" ? adapter.api || adapter.apis || {} : {};
+  for (const key of API_KEYS) {
+    if (typeof source[key] === "function") {
+      api[key] = source[key];
     }
-    return trimmed;
   }
+  return api;
+}
 
-  function normalizeHooks(adapter){
-    const hooks = {};
-    const source = adapter && typeof adapter === "object" ? adapter.hooks || {} : {};
-    for (const key of HOOK_KEYS){
-      if (typeof source[key] === "function") {
-        hooks[key] = source[key];
-      }
+function notifyListeners(slug, record) {
+  if (!listeners.size) return;
+  listeners.forEach((listener) => {
+    try {
+      listener(slug, record);
+    } catch (err) {
+      console.warn("[gg-diag] adapter listener failed", err);
     }
-    return hooks;
-  }
+  });
+}
 
-  function normalizeApi(adapter){
-    const api = {};
-    const source = adapter && typeof adapter === "object" ? (adapter.api || adapter.apis || {}) : {};
-    for (const key of API_KEYS){
-      if (typeof source[key] === "function") {
-        api[key] = source[key];
-      }
-    }
-    return api;
-  }
+const api = {
+  registerGameDiagnostics,
+  getGameDiagnostics,
+  subscribe,
+  get HOOK_KEYS() {
+    return HOOK_KEYS.slice();
+  },
+  get API_KEYS() {
+    return API_KEYS.slice();
+  },
+};
 
-  function notifyListeners(slug, record){
-    if (!listeners.size) return;
-    listeners.forEach((listener) => {
-      try {
-        listener(slug, record);
-      } catch (err) {
-        console.warn("[gg-diag] adapter listener failed", err);
-      }
-    });
-  }
+const globalScope = typeof window !== "undefined"
+  ? window
+  : typeof self !== "undefined"
+    ? self
+    : typeof globalThis !== "undefined"
+      ? globalThis
+      : undefined;
 
-  return {
-    registerGameDiagnostics,
-    getGameDiagnostics,
-    subscribe,
-    HOOK_KEYS: HOOK_KEYS.slice(),
-    API_KEYS: API_KEYS.slice(),
-  };
-});
+if (typeof module === "object" && module && typeof module.exports === "object") {
+  module.exports = api;
+}
+
+if (globalScope) {
+  const existing = globalScope.GGDiagAdapters && typeof globalScope.GGDiagAdapters === "object"
+    ? globalScope.GGDiagAdapters
+    : {};
+  globalScope.GGDiagAdapters = Object.assign({}, existing, api);
+}
+
+export {
+  registerGameDiagnostics,
+  getGameDiagnostics,
+  subscribe,
+  HOOK_KEYS,
+  API_KEYS,
+};
+
