@@ -37,6 +37,7 @@ const globalScope = typeof window !== 'undefined' ? window : undefined;
 
 let activeGame = null;
 let bootInProgress = false;
+let bootErrorUi = null;
 
 function getActiveGame() {
   return activeGame;
@@ -98,6 +99,129 @@ Object.defineProperty(asteroidsPublicApi, '__instance', {
 
 if (globalScope) {
   globalScope.Asteroids = asteroidsPublicApi;
+}
+
+function clearBootError() {
+  if (bootErrorUi?.root?.parentNode) {
+    bootErrorUi.root.remove();
+  }
+  bootErrorUi = null;
+}
+
+function renderBootError(message, details) {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const host = document.querySelector('.game-shell__surface') || document.body;
+  if (!host) {
+    return;
+  }
+
+  if (!bootErrorUi) {
+    const overlay = document.createElement('div');
+    overlay.className = 'asteroids-boot-error';
+    overlay.setAttribute('role', 'presentation');
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.zIndex = '2147483646';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.padding = '24px';
+    overlay.style.background = 'rgba(0, 0, 0, 0.6)';
+    overlay.style.pointerEvents = 'none';
+
+    const panel = document.createElement('div');
+    panel.className = 'asteroids-boot-error__panel';
+    panel.setAttribute('role', 'alertdialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.style.pointerEvents = 'auto';
+    panel.style.maxWidth = '420px';
+    panel.style.width = '100%';
+    panel.style.background = '#111';
+    panel.style.color = '#fff';
+    panel.style.borderRadius = '12px';
+    panel.style.boxShadow = '0 20px 60px rgba(0, 0, 0, 0.45)';
+    panel.style.padding = '24px';
+    panel.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+    const title = document.createElement('h2');
+    title.id = 'asteroids-boot-error-title';
+    title.textContent = 'Unable to start Asteroids';
+    title.style.margin = '0 0 12px';
+
+    const messageEl = document.createElement('p');
+    messageEl.id = 'asteroids-boot-error-message';
+    messageEl.style.margin = '0 0 16px';
+
+    const detailsEl = document.createElement('pre');
+    detailsEl.id = 'asteroids-boot-error-details';
+    detailsEl.style.margin = '0 0 16px';
+    detailsEl.style.whiteSpace = 'pre-wrap';
+    detailsEl.style.wordBreak = 'break-word';
+    detailsEl.style.fontFamily = 'monospace';
+    detailsEl.style.fontSize = '13px';
+
+    const retryButton = document.createElement('button');
+    retryButton.type = 'button';
+    retryButton.textContent = 'Try again';
+    retryButton.style.background = '#fff';
+    retryButton.style.color = '#111';
+    retryButton.style.border = '0';
+    retryButton.style.borderRadius = '999px';
+    retryButton.style.padding = '10px 22px';
+    retryButton.style.fontSize = '16px';
+    retryButton.style.fontWeight = '600';
+    retryButton.style.cursor = 'pointer';
+
+    retryButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      retryButton.disabled = true;
+      setTimeout(() => {
+        retryButton.disabled = false;
+      }, 5000);
+      clearBootError();
+      invokeBootSafely();
+    });
+
+    panel.setAttribute('aria-labelledby', title.id);
+    panel.setAttribute('aria-describedby', `${messageEl.id} ${detailsEl.id}`);
+
+    panel.append(title, messageEl, detailsEl, retryButton);
+    overlay.append(panel);
+    host.append(overlay);
+
+    bootErrorUi = { root: overlay, panel, messageEl, detailsEl, retryButton };
+  }
+
+  const resolvedMessage = typeof message === 'string' && message.trim() ? message : 'Something went wrong while starting the game.';
+  bootErrorUi.messageEl.textContent = resolvedMessage;
+
+  let detailText = '';
+  if (details && typeof details === 'object') {
+    try {
+      detailText = JSON.stringify(details, null, 2);
+    } catch (_) {
+      detailText = String(details);
+    }
+  } else if (details) {
+    detailText = String(details);
+  }
+
+  bootErrorUi.detailsEl.textContent = detailText;
+  bootErrorUi.detailsEl.style.display = detailText ? 'block' : 'none';
+  bootErrorUi.retryButton.disabled = false;
+
+  if (!bootErrorUi.root.isConnected) {
+    host.append(bootErrorUi.root);
+  }
+
+  try {
+    bootErrorUi.retryButton.focus({ preventScroll: true });
+  } catch (_) {
+    /* noop */
+  }
 }
 
 function sanitizeForLog(value, depth = 0, seen = new WeakSet()) {
@@ -1448,6 +1572,7 @@ export function boot(context = {}) {
   }
 
   bootInProgress = true;
+  clearBootError();
   let canvas = null;
   let selector = null;
   if (typeof document !== 'undefined') {
@@ -1488,8 +1613,28 @@ export function boot(context = {}) {
       message: '[asteroids] boot threw',
       details,
     });
+    const errorMessage =
+      typeof details === 'string'
+        ? details
+        : details?.message || details?.name || String(error?.message || error || 'Unknown error');
+    renderBootError(errorMessage, details);
+    if (typeof window !== 'undefined') {
+      try {
+        window.parent?.postMessage?.(
+          {
+            type: 'GAME_ERROR',
+            slug: SLUG,
+            error: String(errorMessage).slice(0, 500),
+            message: String(errorMessage).slice(0, 500),
+          },
+          '*',
+        );
+      } catch (_) {
+        /* noop */
+      }
+    }
     bootInProgress = false;
-    throw error;
+    return undefined;
   }
 
   activeGame = game;
@@ -1526,10 +1671,31 @@ function invokeBootSafely(context) {
   try {
     boot(context);
   } catch (error) {
+    const details = sanitizeForLog(error);
+    const errorMessage =
+      typeof details === 'string'
+        ? details
+        : details?.message || details?.name || String(error?.message || error || 'Unknown error');
+    renderBootError(errorMessage, details);
+    if (typeof window !== 'undefined') {
+      try {
+        window.parent?.postMessage?.(
+          {
+            type: 'GAME_ERROR',
+            slug: SLUG,
+            error: String(errorMessage).slice(0, 500),
+            message: String(errorMessage).slice(0, 500),
+          },
+          '*',
+        );
+      } catch (_) {
+        /* noop */
+      }
+    }
     pushEvent('boot', {
       level: 'error',
       message: '[asteroids] auto boot failed',
-      details: sanitizeForLog(error),
+      details,
     });
   }
 }
