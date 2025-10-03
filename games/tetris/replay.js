@@ -65,7 +65,18 @@
 
   async function load(url){
     const res=await fetch(url);
-    const d=await res.json();
+    if(!res.ok){
+      throw new Error(`Replay.load: request failed with status ${res.status} ${res.statusText||''}`.trim());
+    }
+    let d;
+    try{
+      d=await res.json();
+    }catch(err){
+      const message=err&&typeof err.message==='string'?err.message:String(err);
+      const parseError=new Error(`Replay.load: failed to parse replay JSON: ${message}`);
+      parseError.cause=err;
+      throw parseError;
+    }
     player=new Player(d);
     return player;
   }
