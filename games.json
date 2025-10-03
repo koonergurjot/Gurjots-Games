@@ -46,7 +46,7 @@
     ],
     "difficulty": "easy",
     "released": "2025-08-25",
-    "playUrl": "/games/snake/index.html",
+    "playUrl": "/games/snake/",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -82,7 +82,7 @@
     ],
     "difficulty": "medium",
     "released": "2025-08-26",
-    "playUrl": "/games/tetris/play.html",
+    "playUrl": "/games/tetris/",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/block.png",
