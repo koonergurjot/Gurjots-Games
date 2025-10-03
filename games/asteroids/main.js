@@ -293,18 +293,48 @@ function captureCanvasSnapshot(stage, canvas, extras = {}) {
   return snapshot;
 }
 
+function resolveGameCanvas() {
+  if (typeof document === 'undefined') return null;
+
+  const modernCanvas = document.getElementById('game-canvas');
+  if (modernCanvas instanceof HTMLCanvasElement) {
+    return modernCanvas;
+  }
+  if (modernCanvas) {
+    recordCanvasWarning('unexpected-element', {
+      stage: 'resolve',
+      selector: '#game-canvas',
+      tagName: modernCanvas.tagName?.toLowerCase?.(),
+    });
+  }
+
+  const legacyCanvas = document.getElementById('game');
+  if (legacyCanvas instanceof HTMLCanvasElement) {
+    return legacyCanvas;
+  }
+  if (legacyCanvas) {
+    recordCanvasWarning('unexpected-element', {
+      stage: 'resolve',
+      selector: '#game',
+      tagName: legacyCanvas.tagName?.toLowerCase?.(),
+    });
+  }
+
+  return null;
+}
+
 if (typeof document !== 'undefined') {
   updateReadyState(document.readyState);
   recordMilestone('module:evaluated', { readyState: document.readyState });
   document.addEventListener(
-    'DOMContentLoaded',
-    () => {
-      updateReadyState(document.readyState);
-      recordMilestone('document:domcontentloaded', { readyState: document.readyState });
-      captureCanvasSnapshot('domcontentloaded', document.getElementById('game'));
-    },
-    { once: true }
-  );
+      'DOMContentLoaded',
+      () => {
+        updateReadyState(document.readyState);
+        recordMilestone('document:domcontentloaded', { readyState: document.readyState });
+        captureCanvasSnapshot('domcontentloaded', resolveGameCanvas());
+      },
+      { once: true }
+    );
   document.addEventListener(
     'readystatechange',
     () => {
@@ -321,7 +351,7 @@ if (typeof document !== 'undefined') {
       () => {
         updateReadyState(document.readyState);
         recordMilestone('window:load', { readyState: document.readyState });
-        captureCanvasSnapshot('load', document.getElementById('game'));
+        captureCanvasSnapshot('load', resolveGameCanvas());
       },
       { once: true }
     );
@@ -1419,23 +1449,33 @@ export function boot(context = {}) {
 
   bootInProgress = true;
   let canvas = null;
+  let selector = null;
   if (typeof document !== 'undefined') {
-    canvas = document.getElementById('game');
+    const resolvedCanvas = resolveGameCanvas();
+    if (resolvedCanvas instanceof HTMLCanvasElement) {
+      canvas = resolvedCanvas;
+      selector = resolvedCanvas.id ? `#${resolvedCanvas.id}` : undefined;
+    }
   }
   if (!(canvas instanceof HTMLCanvasElement)) {
     recordMilestone('boot:error', { reason: 'missing-canvas', readyState });
-    recordCanvasWarning('missing-canvas', { stage: 'boot', selector: '#game', readyState });
+    recordCanvasWarning('missing-canvas', {
+      stage: 'boot',
+      selector: selector || '#game-canvas',
+      readyState,
+      attemptedSelectors: ['#game-canvas', '#game'],
+    });
     pushEvent('boot', {
       level: 'error',
-      message: '[asteroids] missing #game canvas',
-      details: { readyState },
+      message: '[asteroids] missing game canvas',
+      details: { readyState, attemptedSelectors: ['#game-canvas', '#game'] },
     });
     bootInProgress = false;
-    console.error('[asteroids] missing #game canvas');
+    console.error('[asteroids] missing game canvas');
     return undefined;
   }
 
-  captureCanvasSnapshot('boot:before-instance', canvas, { readyState });
+  captureCanvasSnapshot('boot:before-instance', canvas, { readyState, selector });
 
   let game;
   try {
@@ -1460,6 +1500,7 @@ export function boot(context = {}) {
     readyState: typeof document !== 'undefined' ? document.readyState : readyState,
     canvasWidth: canvas.width,
     canvasHeight: canvas.height,
+    selector,
   });
 
   try {
