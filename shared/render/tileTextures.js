@@ -1,20 +1,32 @@
 const globalScope = typeof window !== 'undefined' ? window : typeof globalThis !== 'undefined' ? globalThis : null;
 
 const textureRegistry = Object.freeze({
-  block: Object.freeze({ src: '/assets/sprites/block.png', repeat: 'repeat' }),
-  brick: Object.freeze({ src: '/assets/sprites/brick.png', repeat: 'repeat' }),
-  lava: Object.freeze({ src: '/assets/sprites/lava.png', repeat: 'repeat-x' }),
+  block: Object.freeze({ src: '/assets/tilesets/grass.png', repeat: 'repeat' }),
+  brick: Object.freeze({ src: '/assets/tilesets/dirt.png', repeat: 'repeat' }),
+  lava: Object.freeze({ src: '/assets/tilesets/stone.png', repeat: 'repeat-x' }),
+});
+
+const keySprite = Object.freeze({
+  src: '/assets/sprites/collectibles/key.png',
+  frame: Object.freeze({ sx: 0, sy: 0, sw: 32, sh: 32 }),
+});
+
+const doorSprite = Object.freeze({
+  src: '/assets/sprites/collectibles/door.png',
+  frame: Object.freeze({ sx: 0, sy: 0, sw: 32, sh: 48 }),
+});
+
+const checkpointSprite = Object.freeze({
+  src: '/assets/sprites/collectibles/checkpoint_flag.png',
+  frame: Object.freeze({ sx: 0, sy: 0, sw: 32, sh: 48 }),
 });
 
 const spriteRegistry = Object.freeze({
-  coin: Object.freeze({
-    src: '/assets/sprites/coin.png',
-    frame: Object.freeze({ sx: 0, sy: 0, sw: 48, sh: 48 }),
-  }),
-  goal: Object.freeze({
-    src: '/assets/sprites/block.png',
-    frame: Object.freeze({ sx: 0, sy: 0, sw: 32, sh: 32 }),
-  }),
+  coin: keySprite,
+  key: keySprite,
+  goal: doorSprite,
+  door: doorSprite,
+  checkpoint: checkpointSprite,
 });
 
 const imageCache = new Map();
