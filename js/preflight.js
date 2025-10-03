@@ -3,6 +3,48 @@
  * Safe to run multiple times.
  */
 (function(){
+  var DIAG_SCRIPT_ID = 'gg-diag-autowire';
+  var diagRequested = false;
+
+  function findExistingDiagAnchor(){
+    try {
+      return document.querySelector('script[data-shell-diag], [data-shell-diag]');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function computeDiagSrc(){
+    try {
+      var path = String(location.pathname || '');
+      var markers = ['/gameshells/', '/games/'];
+      for (var i = 0; i < markers.length; i += 1) {
+        var idx = path.indexOf(markers[i]);
+        if (idx !== -1) {
+          return path.slice(0, idx) + '/games/common/diag-autowire.js';
+        }
+      }
+    } catch (_) {}
+    return '/games/common/diag-autowire.js';
+  }
+
+  function ensureDiag(requestedSrc){
+    if (diagRequested) return;
+    if (findExistingDiagAnchor()) {
+      diagRequested = true;
+      return;
+    }
+    diagRequested = true;
+    try {
+      var script = document.createElement('script');
+      script.id = DIAG_SCRIPT_ID;
+      script.defer = true;
+      script.dataset.shellDiag = 'true';
+      script.src = requestedSrc || computeDiagSrc();
+      (document.head || document.documentElement || document.body || document).appendChild(script);
+    } catch (_) {}
+  }
+
   function need(id, tag, attrs){
     tag = tag || 'div';
     attrs = attrs || {};
@@ -23,6 +65,18 @@
     window.addEventListener('message', function(e){
       if (!e || !e.data || typeof e.data !== 'object') return;
       if (e.data.type === 'GAME_READY' || e.data.type === 'GAME_ERROR') pinged = true;
+      if (e.data.type === 'GG_ENABLE_DIAG') {
+        if (typeof e.data.src === 'string') ensureDiag(e.data.src);
+        else ensureDiag();
+        if (e.data.slug) {
+          try {
+            window.GG = window.GG || {};
+            if (window.GG && !window.GG.slug) {
+              window.GG.slug = e.data.slug;
+            }
+          } catch(_){}
+        }
+      }
     });
   } catch(e){}
   setTimeout(function(){

@@ -4,6 +4,31 @@
   const doc = win && win.document ? win.document : null;
   if (!win || !doc) return;
 
+  const currentScript = (() => {
+    try { return doc.currentScript || (function(){
+      const scripts = doc.getElementsByTagName ? doc.getElementsByTagName('script') : [];
+      return scripts && scripts.length ? scripts[scripts.length - 1] : null;
+    })(); } catch (_err) { return null; }
+  })();
+
+  const scriptBase = (() => {
+    try {
+      if (currentScript && currentScript.src) {
+        return new URL(currentScript.src, doc.baseURI).href;
+      }
+    } catch (_err) {}
+    try {
+      return new URL('./diag-autowire.js', doc.baseURI).href;
+    } catch (_err) {}
+    return null;
+  })();
+
+  const resolveUrl = (value) => {
+    if (!value) return value;
+    if (!scriptBase) return value;
+    try { return new URL(value, scriptBase).href; } catch (_err) { return value; }
+  };
+
   const alreadyInitialized = () => {
     const g = win.__GG_DIAG;
     if (g && (g.initialized || g.ready || g.core || g.loaded)) return true;
@@ -96,7 +121,7 @@
     try {
       const script = doc.createElement('script');
       script.defer = true;
-      script.src = src;
+      script.src = resolveUrl(src);
       if (script.setAttribute) script.setAttribute(marker, '');
       const parent = doc.head || doc.documentElement || doc.body;
       if (!parent || typeof parent.appendChild !== 'function') return;

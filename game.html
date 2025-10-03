@@ -311,7 +311,7 @@
 
     <main>
       <section class="game-card" aria-live="polite">
-        <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
+        <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-pointer-lock"></iframe>
         <div class="overlay" id="overlay" aria-hidden="false">
           <div class="status" id="statusPanel" role="status" aria-live="polite" aria-atomic="true">
             <span class="sr-only" id="statusContext">Game status message</span>
@@ -351,6 +351,7 @@
       const title = qs.get("title") || "";
       const gameTitleEl = document.getElementById("gameTitle");
       const frame = document.getElementById("game-frame");
+      let baseFrameSrc = "";
       const overlay = document.getElementById("overlay");
       const statusTitle = document.getElementById("statusTitle");
       const statusText = document.getElementById("statusText");
@@ -423,12 +424,22 @@
       // Wire buttons
       btnReload.addEventListener("click", () => {
         write("manual: reload requested");
-        frame.contentWindow?.location.reload();
+        const targetSrc = baseFrameSrc || frame.getAttribute("src") || frame.src;
+        if (!targetSrc) return;
+        try {
+          const url = new URL(targetSrc, window.location.href);
+          url.searchParams.set("_gg_reload", Date.now().toString(36));
+          frame.src = url.toString();
+        } catch (_) {
+          const suffix = targetSrc.includes("?") ? "&" : "?";
+          frame.src = `${targetSrc}${suffix}_gg_reload=${Date.now().toString(36)}`;
+        }
       });
       // Load the game iframe
       pillSlug.textContent = "slug: " + (slug || "—");
 
       function setFrameSrc(src, note, legacy = false) {
+        baseFrameSrc = src;
         frame.src = src;
         isLegacyShell = legacy;
         if (legacy) {

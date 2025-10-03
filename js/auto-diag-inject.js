@@ -1,29 +1,30 @@
 // js/auto-diag-inject.js
-// Auto-injects /games/common/diag-autowire.js into the game iframe on game.html
-// so you can just upload files (no per-game edits). Requires same-origin.
+// Requests that the child frame load /games/common/diag-autowire.js via postMessage.
 (function(){
-  function injectIntoFrame(frame){
-    try{
-      const doc = frame.contentDocument || frame.contentWindow?.document;
-      if(!doc) return;
-      if(doc.getElementById('gg-diag-autowire')) return; // already injected
-      // Legacy shells already handle diagnostics when data-shell-diag markers exist.
-      if(doc.querySelector('script[data-shell-diag], [data-shell-diag]')) return;
-      const s = doc.createElement('script');
-      s.id = 'gg-diag-autowire';
-      // Use absolute path from loader to avoid relative path issues
-      const base = location.pathname.replace(/\/[^/]*$/, '');
-      s.src = base + '/games/common/diag-autowire.js';
-      s.defer = true;
-      (doc.body || doc.documentElement).appendChild(s);
-    }catch(_){}
+  const MESSAGE_TYPE = 'GG_ENABLE_DIAG';
+
+  function diagSrc(){
+    const base = location.pathname.replace(/\/[^/]*$/, '');
+    return base + '/games/common/diag-autowire.js';
   }
+
+  function requestDiag(frame){
+    try {
+      const target = frame.contentWindow;
+      if (!target) return;
+      target.postMessage({ type: MESSAGE_TYPE, src: diagSrc() }, '*');
+    } catch (_) {}
+  }
+
   function boot(){
     const frame = document.querySelector('iframe, #game-frame, .game-frame');
     if(!frame) return;
-    if(frame.contentDocument?.readyState === 'complete') injectIntoFrame(frame);
-    frame.addEventListener('load', ()=> injectIntoFrame(frame), {passive:true});
+    const send = () => requestDiag(frame);
+    frame.addEventListener('load', send, { passive: true });
+    // Attempt immediately in case the frame is already ready.
+    send();
   }
+
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, {once:true});
   else boot();
 })();
