@@ -69,9 +69,14 @@ scene.background = new THREE.Color(0x0e0f12);
 scene.fog = new THREE.Fog(0x0e0f12, 10, 60);
 
 const texLoader = new THREE.TextureLoader();
-const wallTexture = texLoader.load('https://threejs.org/examples/textures/brick_diffuse.jpg');
+const wallTexture = texLoader.load('../../assets/sprites/maze3d/wall.png');
 wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
 wallTexture.repeat.set(1, 1);
+
+const floorTexture = texLoader.load('../../assets/sprites/maze3d/floor.png');
+floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+floorTexture.center.set(0.5, 0.5);
+floorTexture.rotation = Math.PI / 2;
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -932,6 +937,10 @@ function buildMaze(seed) {
   mazeCols = grid[0].length;
   const rows = mazeRows;
   const cols = mazeCols;
+  const wallTilesX = Math.max(1, Math.round(cellSize / BASE_CELL_SIZE));
+  const wallTilesY = Math.max(1, Math.round(wallHeight / cellSize));
+  wallTexture.repeat.set(wallTilesX, wallTilesY);
+  wallTexture.needsUpdate = true;
   const wallGeo = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
   const wallMat = new THREE.MeshStandardMaterial({ map: wallTexture });
   for (let y = 0; y < rows; y++) {
@@ -948,8 +957,10 @@ function buildMaze(seed) {
       }
     }
   }
+  floorTexture.repeat.set(cols, rows);
+  floorTexture.needsUpdate = true;
   const floorGeo = new THREE.PlaneGeometry(cols * cellSize, rows * cellSize);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x2a2f3a });
+  const floorMat = new THREE.MeshStandardMaterial({ map: floorTexture });
   floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
