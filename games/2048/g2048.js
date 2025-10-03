@@ -1,6 +1,7 @@
 
 import { GameEngine } from '../../shared/gameEngine.js';
 import { copyGrid, computeMove, pushState, undo as undoState, getHint as engineHint, canMove } from './engine.js';
+import { pushEvent } from '../common/diag-adapter.js';
 
 // Feature Configuration (all feature-flagged)
 const FEATURES = {
@@ -45,6 +46,15 @@ diffSel?.addEventListener('change',()=>{
 });
 const hud=HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset(false,'hud-restart')});
 let postedReady=false;
+let initializationFailed=false;
+
+function announceGameReady(){
+  if(postedReady) return;
+  postedReady=true;
+  try {
+    window.parent?.postMessage({ type:'GAME_READY', slug:'g2048' }, '*');
+  } catch {}
+}
 
 // UI update functions
 function updateUI() {
@@ -445,12 +455,27 @@ function hideGameOverModal(){
   if(gameOverOverlay){
     gameOverOverlay.classList.add('hidden');
     gameOverOverlay.setAttribute('aria-hidden','true');
-    
+
     // Remove focus trap
     removeModalFocusTrap();
   }
   gameOverShown=false;
-  
+
+  if(initializationFailed){
+    initializationFailed=false;
+    if(overlayRestartBtn){
+      overlayRestartBtn.textContent='Restart';
+      overlayRestartBtn.setAttribute('aria-label','Start a new game');
+      overlayRestartBtn.removeAttribute('data-init-error-action');
+    }
+    if(overlayBackBtn){
+      overlayBackBtn.classList.remove('hidden');
+      overlayBackBtn.removeAttribute('aria-hidden');
+      overlayBackBtn.removeAttribute('tabindex');
+    }
+    gameOverMessage?.removeAttribute('tabindex');
+  }
+
   // Return focus to the game canvas
   const gameCanvas = document.getElementById('board');
   gameCanvas?.focus();
@@ -550,10 +575,7 @@ c.addEventListener('touchend',e=>{
 });
 
 function draw(anim){
-  if(!postedReady){
-    postedReady=true;
-    try { window.parent?.postMessage({ type:'GAME_READY', slug:'g2048' }, '*'); } catch {}
-  }
+  announceGameReady();
   // Frame rate optimization - skip frames when performance is poor
   const now = performance.now();
   if (renderCache.skipFrames > 0) {
@@ -880,7 +902,22 @@ document.getElementById('undoBtn')?.addEventListener('click',()=>{
   if(undoLeft > 0) undoMove();
 });
 
-overlayRestartBtn?.addEventListener('click',()=>{ hideGameOverModal(); reset(false,'overlay-restart'); });
+overlayRestartBtn?.addEventListener('click',()=>{
+  if(initializationFailed){
+    const action=overlayRestartBtn?.dataset?.initErrorAction;
+    if(action==='back' && window.history.length>1){
+      window.history.back();
+      return;
+    }
+    if(action==='reload'){
+      window.location.reload();
+      return;
+    }
+    window.location.href='../../';
+    return;
+  }
+  hideGameOverModal(); reset(false,'overlay-restart');
+});
 overlayBackBtn?.addEventListener('click',()=>{
   hideGameOverModal();
   if(window.history.length>1) window.history.back();
@@ -1009,15 +1046,61 @@ if (themeToggle) {
   });
 }
 
-// Initialize the game
-updateCanvas();
-applyTheme();
-reset(true);
-gameLoop.start();
-net?.send('move',{grid,score});
-window.DIAG?.ready?.();
+function showInitializationErrorOverlay(){
+  initializationFailed=true;
+  const hasHistory=window.history.length>1;
+  const actionLabel=hasHistory?'Back':'Reload';
+  const actionAria=hasHistory?'Return to the previous page':'Reload the game';
+  if(overlayBackBtn){
+    overlayBackBtn.classList.add('hidden');
+    overlayBackBtn.setAttribute('aria-hidden','true');
+    overlayBackBtn.setAttribute('tabindex','-1');
+  }
+  if(overlayRestartBtn){
+    overlayRestartBtn.textContent=actionLabel;
+    overlayRestartBtn.setAttribute('aria-label',actionAria);
+    overlayRestartBtn.dataset.initErrorAction=hasHistory?'back':'reload';
+  }
+  showGameOverModal('Something went wrong','Something went wrong. Use the button below to continue.');
+  if(gameOverMessage){
+    gameOverMessage.setAttribute('tabindex','-1');
+    gameOverMessage.focus();
+  }
+}
 
-// Initial accessibility announcement
-announceToScreenReader('2048 game loaded. Press Tab to navigate controls or focus the game board to start playing.');
+function initializeGame(){
+  try{
+    updateCanvas();
+    applyTheme();
+    reset(true);
+    gameLoop.start();
+    net?.send('move',{grid,score});
+    window.DIAG?.ready?.();
+    announceGameReady();
+    announceToScreenReader('2048 game loaded. Press Tab to navigate controls or focus the game board to start playing.');
+  }catch(error){
+    try{
+      pushEvent('game',{
+        level:'error',
+        message:'[2048] init failed',
+        details:{
+          error:error?.message || 'unknown',
+          stack:error?.stack || null
+        }
+      });
+    }catch{}
+    try{
+      recordReadyEvent('init-error',{ reason: error?.message || 'unknown' });
+    }catch{}
+    gameLoop.stop?.();
+    window.DIAG?.error?.(error);
+    try{
+      window.parent?.postMessage({ type:'GAME_ERROR', slug:'g2048', message:error?.message, error:error?.message }, '*');
+    }catch{}
+    showInitializationErrorOverlay();
+  }
+}
+
+initializeGame();
 
 import('./diag-adapter.js');
