@@ -100,6 +100,10 @@ const statusEl = document.getElementById('status');
 const coordsEl = document.getElementById('coords');
 const thinkingEl = document.getElementById('thinking');
 const difficultyEl = document.getElementById('difficulty');
+const victorySound = typeof Audio !== 'undefined'
+  ? new Audio('../../assets/audio/victory.wav')
+  : null;
+if (victorySound) victorySound.preload = 'auto';
 stage.style.position = 'relative';
 stage.appendChild(coordsEl);
 coordsEl.style.position = 'absolute';
@@ -123,6 +127,7 @@ let stopRenderLoopImpl = () => {};
 let currentState = 'menu';
 const stateListeners = new Set();
 const globalScope = typeof window !== 'undefined' ? window : undefined;
+let victoryPlayed = false;
 
 const now = () => (typeof performance !== 'undefined' && typeof performance.now === 'function'
   ? performance.now()
@@ -361,6 +366,13 @@ function flipCamera() {
 
 mountHUD({
   onNew: () => {
+    victoryPlayed = false;
+    if (victorySound) {
+      try {
+        victorySound.pause();
+        victorySound.currentTime = 0;
+      } catch (_) {}
+    }
     rules.loadFEN(null);
     placeInitialPosition();
     updateStatus();
@@ -604,7 +616,21 @@ function endGame(text){
   cancel();
   searchToken++;
   thinkingEl.hidden = true;
-  if (text) statusEl.textContent = text;
+  if (text) {
+    statusEl.textContent = text;
+    if (!victoryPlayed && /white wins/i.test(text)) {
+      victoryPlayed = true;
+      if (victorySound) {
+        try {
+          victorySound.currentTime = 0;
+          const playback = victorySound.play();
+          if (playback?.catch) playback.catch(() => {});
+        } catch (err) {
+          warn('chess3d', '[Chess3D] failed to play victory sound', err);
+        }
+      }
+    }
+  }
   notifyStateChange('gameover', { reason: 'game-over', message: text || '' });
 }
 
@@ -678,6 +704,13 @@ import('./ui/hud.js').then(({ addGameButtons }) => {
       clocks?.reset();
       moveList?.refresh();
       moveList?.setIndex(rules.historySAN().length);
+      victoryPlayed = false;
+      if (victorySound) {
+        try {
+          victorySound.pause();
+          victorySound.currentTime = 0;
+        } catch (_) {}
+      }
     });
   }
 });

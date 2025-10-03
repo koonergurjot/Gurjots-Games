@@ -8,23 +8,171 @@
   <link rel="stylesheet" href="../common/game-shell.css" />
   <link rel="stylesheet" href="../../css/styles.css" />
   <style>
+    :root {
+      color-scheme: dark;
+    }
     body {
       margin: 0;
-      background: #060b16;
-      color: #e6e7ea;
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(circle at top, #101830 0%, #060b16 60%);
+      color: #f8f8fb;
+      font-family: "Press Start 2P", "PressStart2P", system-ui, -apple-system, Segoe UI, sans-serif;
+      letter-spacing: 0.02em;
+    }
+    .chess3d-layout {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 24px;
+      padding: 24px 24px 96px;
+    }
+    .chess3d-layout__stage {
+      flex: 1 1 520px;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      min-width: min(100%, 320px);
     }
     #stage {
-      width: 100%;
-      height: 70vh;
+      position: relative;
+      width: min(100%, 720px);
+      min-height: 420px;
+      height: clamp(360px, 70vh, 720px);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 0 0 4px rgba(10, 16, 34, 0.6), 0 16px 40px rgba(4, 8, 18, 0.45);
+      background: rgba(5, 9, 20, 0.75);
     }
     #stage canvas {
       display: block;
     }
-    .chess3d-panel {
-      display: grid;
-      gap: 12px;
-      padding-bottom: 48px;
+    .chess3d-hud {
+      flex: 0 1 320px;
+      display: flex;
+      justify-content: center;
+    }
+    .pixel-panel {
+      position: relative;
+      min-width: 260px;
+      max-width: 320px;
+      padding: 36px 28px 44px;
+      color: #fcefe8;
+    }
+    .pixel-panel__frame {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      image-rendering: pixelated;
+      pointer-events: none;
+    }
+    .pixel-panel__star {
+      position: absolute;
+      width: 64px;
+      height: 64px;
+      image-rendering: pixelated;
+      pointer-events: none;
+    }
+    .pixel-panel__star--top {
+      top: -18px;
+      right: 28px;
+    }
+    .pixel-panel__star--bottom {
+      bottom: -12px;
+      left: 24px;
+    }
+    .pixel-panel__body {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      z-index: 1;
+      text-shadow: 0 2px 0 rgba(10, 16, 34, 0.8);
+    }
+    .pixel-panel__title {
+      margin: 0;
+      font-size: 1.1rem;
+      color: #ffe082;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .pixel-panel__copy {
+      margin: 0;
+      font-size: 0.75rem;
+      line-height: 1.8;
+      color: #fefefe;
+    }
+    .pixel-panel__field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .pixel-panel__field select {
+      background: rgba(8, 16, 34, 0.85);
+      border: 1px solid #2f3b5f;
+      border-radius: 8px;
+      color: inherit;
+      padding: 10px 12px;
+      font-size: 0.7rem;
+      text-transform: none;
+    }
+    .pixel-panel__hud {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #hud button,
+    #hud select {
+      font-family: inherit;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    #hud button {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(53, 70, 115, 0.9);
+      background: rgba(16, 28, 54, 0.85);
+      color: inherit;
+      cursor: pointer;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    #hud button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(8, 14, 32, 0.35);
+    }
+    #hud button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .pixel-panel__hint {
+      font-size: 0.68rem;
+      opacity: 0.82;
+      letter-spacing: 0.08em;
+    }
+    .pixel-panel__status {
+      min-height: 52px;
+      padding: 14px 16px;
+      border-radius: 10px;
+      background: rgba(12, 20, 40, 0.85);
+      border: 1px solid rgba(56, 72, 112, 0.85);
+      font-size: 0.72rem;
+      line-height: 1.6;
+    }
+    @media (max-width: 768px) {
+      body {
+        font-size: 13px;
+      }
+      .pixel-panel {
+        padding: 32px 24px 40px;
+      }
+      #stage {
+        height: clamp(320px, 56vh, 640px);
+      }
     }
   </style>
 
@@ -38,20 +186,32 @@
 <body class="game-shell">
   <main class="game-shell__main">
     <div class="game-shell__surface game-shell__surface--plain">
-      <div class="chess3d-panel">
-        <div id="stage" aria-label="3D chess board"></div>
-        <div id="hud"></div>
-        <div id="coords" hidden></div>
-        <div id="thinking" hidden>Engine thinking…</div>
-        <div>
-          <label for="difficulty">Difficulty:</label>
-          <select id="difficulty">
-            <option value="1">Easy</option>
-            <option value="2" selected>Medium</option>
-            <option value="3">Hard</option>
-          </select>
-        </div>
-        <div id="status"></div>
+      <div class="chess3d-layout">
+        <section class="chess3d-layout__stage" aria-label="3D chess board">
+          <div id="stage"></div>
+          <div id="coords" hidden></div>
+        </section>
+        <aside class="chess3d-hud" aria-labelledby="chess3d-title">
+          <div class="pixel-panel">
+            <img src="../../assets/ui/panel.png" alt="" class="pixel-panel__frame" aria-hidden="true" />
+            <img src="../../assets/ui/star.png" alt="" class="pixel-panel__star pixel-panel__star--top" aria-hidden="true" />
+            <img src="../../assets/ui/star.png" alt="" class="pixel-panel__star pixel-panel__star--bottom" aria-hidden="true" />
+            <div class="pixel-panel__body">
+              <h3 id="chess3d-title" class="pixel-panel__title">Chess 3D</h3>
+              <p class="pixel-panel__copy">Spin the board, challenge the AI, and use the controls below to manage your match.</p>
+              <label class="pixel-panel__field">Difficulty
+                <select id="difficulty">
+                  <option value="1">Easy</option>
+                  <option value="2" selected>Medium</option>
+                  <option value="3">Hard</option>
+                </select>
+              </label>
+              <div id="hud" class="pixel-panel__hud"></div>
+              <div id="thinking" class="pixel-panel__hint" hidden>Engine thinking…</div>
+              <div id="status" class="pixel-panel__status" role="status" aria-live="polite"></div>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   </main>
