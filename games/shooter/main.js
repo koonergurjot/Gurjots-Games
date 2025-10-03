@@ -18,6 +18,7 @@ export function boot() {
   const player = { x: W*0.2, y: H*0.5, r: 12, vx: 0, vy: 0, speed: 5, hp: 3, cd: 0 };
   const bullets = [];
   const enemies = [];
+  const portalEffects = [];
   const explosions = [];
   let t = 0, score = 0;
   let shooterAPI = null;
@@ -32,8 +33,12 @@ export function boot() {
   const ASSET_PATHS = {
     background: '../../assets/backgrounds/space.png',
     bullet: '../../assets/sprites/bullet.png',
-    laser: '../../assets/sprites/laser.png',
+    enemies: [
+      '../../assets/sprites/enemy1.png',
+      '../../assets/sprites/enemy2.png',
+    ],
     explosion: '../../assets/effects/explosion.png',
+    portal: '../../assets/effects/portal.png',
     shoot: '../../assets/audio/laser.wav',
     gameover: '../../assets/audio/gameover.wav',
   };
@@ -41,14 +46,21 @@ export function boot() {
   const sprites = {
     background: getCachedImage(ASSET_PATHS.background),
     bullet: getCachedImage(ASSET_PATHS.bullet),
-    enemy: getCachedImage(ASSET_PATHS.laser),
+    enemies: ASSET_PATHS.enemies.map(path => getCachedImage(path)),
     explosion: getCachedImage(ASSET_PATHS.explosion),
+    portal: getCachedImage(ASSET_PATHS.portal),
   };
 
   const explosionSprite = {
     frameSize: 0,
     framesPerRow: 8,
     totalFrames: 0,
+  };
+
+  const portalSprite = {
+    frameWidth: 0,
+    frameHeight: 0,
+    totalFrames: 4,
   };
 
   let backgroundPattern = null;
@@ -80,6 +92,18 @@ export function boot() {
     explosionSprite.totalFrames = Math.max(1, framesPerRow * rows);
   }
 
+  function preparePortalSprite() {
+    const image = sprites.portal;
+    if (!isImageReady(image)) return;
+    const totalFrames = Math.max(1, portalSprite.totalFrames || 1);
+    const width = Math.floor((image.naturalWidth || image.width || 0) / totalFrames) || 0;
+    const height = image.naturalHeight || image.height || 0;
+    if (!width || !height) return;
+    portalSprite.frameWidth = width;
+    portalSprite.frameHeight = height;
+    portalSprite.totalFrames = totalFrames;
+  }
+
   function createSoundPlayer(src, volume = 0.6) {
     let base = getCachedAudio(src);
     if (!base) {
@@ -109,14 +133,22 @@ export function boot() {
     sprites.bullet = img;
   }).catch(() => {});
 
-  loadImage(ASSET_PATHS.laser, { slug: SLUG }).then(img => {
-    sprites.enemy = img;
-  }).catch(() => {});
+  ASSET_PATHS.enemies.forEach((path, index) => {
+    loadImage(path, { slug: SLUG }).then(img => {
+      sprites.enemies[index] = img;
+    }).catch(() => {});
+  });
 
   if (sprites.explosion) prepareExplosionSprite();
   loadImage(ASSET_PATHS.explosion, { slug: SLUG }).then(img => {
     sprites.explosion = img;
     prepareExplosionSprite();
+  }).catch(() => {});
+
+  if (sprites.portal) preparePortalSprite();
+  loadImage(ASSET_PATHS.portal, { slug: SLUG }).then(img => {
+    sprites.portal = img;
+    preparePortalSprite();
   }).catch(() => {});
 
   const keys = new Set();
@@ -164,16 +196,20 @@ export function boot() {
     // spawn enemies
     if (t % 45 === 0){
       const y = 20 + Math.random()*(H-40);
-      enemies.push({ x: W+20, y, vx: - (2 + Math.random()*2), r: 10 });
+      const spriteIndex = Math.floor(Math.random() * ASSET_PATHS.enemies.length) || 0;
+      const enemy = { x: W+20, y, vx: - (2 + Math.random()*2), r: 10, spriteIndex, active: false };
+      enemies.push(enemy);
+      portalEffects.push({ x: enemy.x, y: enemy.y, frameIndex: 0, frameDelay: 0, enemy });
     }
 
     // move bullets & enemies
     for (const b of bullets){ b.x += b.vx; }
-    for (const e of enemies){ e.x += e.vx; }
+    for (const e of enemies){ if (e.active) { e.x += e.vx; } }
 
     // collisions & culling
     for (let i=enemies.length-1;i>=0;i--){
       const e = enemies[i];
+      if (!e.active) continue;
       if (e.x < -30) { enemies.splice(i,1); continue; }
       // hit player?
       if (Math.hypot(e.x-player.x, e.y-player.y) < e.r + player.r){
@@ -198,6 +234,7 @@ export function boot() {
 
     t++;
 
+    updatePortalEffects();
     updateExplosions();
 
     publishDiagnostics('running');
@@ -237,17 +274,30 @@ export function boot() {
       ctx.fillStyle = '#93c5fd';
       for (const b of bullets){ ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill(); }
     }
+    drawPortalEffects();
     // enemies
-    const enemySprite = sprites.enemy;
-    if (isImageReady(enemySprite)) {
-      const ew = enemySprite.naturalWidth || enemySprite.width;
-      const eh = enemySprite.naturalHeight || enemySprite.height;
+    const enemySprites = sprites.enemies || [];
+    if (enemySprites.some(sprite => isImageReady(sprite))) {
       for (const e of enemies){
-        ctx.drawImage(enemySprite, e.x - ew / 2, e.y - eh / 2, ew, eh);
+        if (!e.active) continue;
+        const sprite = enemySprites[e.spriteIndex] || null;
+        if (sprite && isImageReady(sprite)) {
+          const ew = sprite.naturalWidth || sprite.width;
+          const eh = sprite.naturalHeight || sprite.height;
+          ctx.drawImage(sprite, e.x - ew / 2, e.y - eh / 2, ew, eh);
+        } else {
+          ctx.fillStyle = '#f87171';
+          ctx.beginPath();
+          ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+          ctx.fill();
+        }
       }
     } else {
       ctx.fillStyle = '#f87171';
-      for (const e of enemies){ ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill(); }
+      for (const e of enemies){
+        if (!e.active) continue;
+        ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill();
+      }
     }
 
     drawExplosions();
@@ -287,6 +337,53 @@ export function boot() {
         const radius = Math.max(6, player.r * 1.2);
         ctx.beginPath();
         ctx.arc(explosion.x, explosion.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = prevFill;
+    }
+  }
+
+  function updatePortalEffects() {
+    if (!portalEffects.length) return;
+    const totalFrames = Math.max(1, portalSprite.totalFrames || 1);
+    for (let i = portalEffects.length - 1; i >= 0; i--) {
+      const effect = portalEffects[i];
+      effect.frameDelay = (effect.frameDelay || 0) + 1;
+      if (effect.frameDelay >= 4) {
+        effect.frameDelay = 0;
+        effect.frameIndex = (effect.frameIndex || 0) + 1;
+        if (effect.frameIndex >= totalFrames) {
+          if (effect.enemy) effect.enemy.active = true;
+          portalEffects.splice(i, 1);
+        }
+      }
+    }
+    if (!portalEffects.length) {
+      for (const enemy of enemies) {
+        if (!enemy.active) enemy.active = true;
+      }
+    }
+  }
+
+  function drawPortalEffects() {
+    if (!portalEffects.length) return;
+    const sprite = sprites.portal;
+    const frameWidth = portalSprite.frameWidth || 0;
+    const frameHeight = portalSprite.frameHeight || 0;
+    const totalFrames = Math.max(1, portalSprite.totalFrames || 1);
+    if (isImageReady(sprite) && frameWidth > 0 && frameHeight > 0) {
+      for (const effect of portalEffects) {
+        const index = Math.min(totalFrames - 1, effect.frameIndex || 0);
+        const sx = index * frameWidth;
+        const sy = 0;
+        ctx.drawImage(sprite, sx, sy, frameWidth, frameHeight, effect.x - frameWidth / 2, effect.y - frameHeight / 2, frameWidth, frameHeight);
+      }
+    } else {
+      const prevFill = ctx.fillStyle;
+      ctx.fillStyle = 'rgba(59,130,246,0.65)';
+      for (const effect of portalEffects) {
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, Math.max(12, player.r * 1.5), 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.fillStyle = prevFill;
