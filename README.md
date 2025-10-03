@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://via.placeholder.com/900x200/0077FF/FFFFFF?text=Welcome+to+Gurjot's+Games!" alt="Gurjot's Games Banner">
+  <img src="https://github.com/koonergurjot/Gurjots-Games/raw/main/assets/gurjots-games-banner.png" alt="Gurjot's Games Banner" width="900" height="200">
 </p>
 
 <h1 align="center">🎉 Gurjot's Games 🎮</h1>
@@ -102,7 +102,7 @@
 
 ```bash
 git clone https://github.com/koonergurjot/Gurjots-Games.git
-cd Gurjots-Games
+dcd Gurjots-Games
 npm install
 npx serve .
 ```
