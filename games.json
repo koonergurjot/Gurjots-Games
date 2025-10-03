@@ -32,7 +32,7 @@
     ],
     "difficulty": "easy",
     "released": "2025-08-25",
-    "playUrl": "/games/snake/",
+    "playUrl": "/games/snake/index.html",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
