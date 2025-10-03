@@ -1,6 +1,7 @@
 import { Controls } from '../../src/runtime/controls.js';
 import { pushEvent } from '../common/diag-adapter.js';
 import { registerRunnerAdapter } from './adapter.js';
+import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
 
 const VIRTUAL_WIDTH = 960;
 const VIRTUAL_HEIGHT = 320;
@@ -189,6 +190,7 @@ class RunnerGame {
     this.onShellResume = this.handleShellResume.bind(this);
     this.onShellMessage = this.handleShellMessage.bind(this);
 
+    setAudioPaused(false);
     this.attachEvents();
     this.readPreferences(context);
     this.resize();
@@ -444,6 +446,7 @@ class RunnerGame {
   pause() {
     if (this.gameOver) return;
     this.paused = true;
+    setAudioPaused(true);
     if (this.hud.pauseBtn) this.hud.pauseBtn.textContent = '▶️';
     this.updateMission();
     emitStateEvent(this, 'paused');
@@ -452,6 +455,7 @@ class RunnerGame {
   resume() {
     this.paused = false;
     this.lastTime = performance.now();
+    setAudioPaused(false);
     if (this.hud.pauseBtn) this.hud.pauseBtn.textContent = '⏸️';
     this.updateMission();
     emitStateEvent(this, 'running');
@@ -615,6 +619,7 @@ class RunnerGame {
     }
 
     if (this.input.jumpQueued && (p.grounded || p.coyote > 0)) {
+      playSfx('jump');
       p.vy = -this.jumpImpulse;
       p.grounded = false;
       p.coyote = 0;
@@ -690,8 +695,11 @@ class RunnerGame {
   }
 
   triggerGameOver() {
+    if (this.gameOver) return;
+    playSfx('powerdown', { allowWhilePaused: true });
     this.gameOver = true;
     this.paused = false;
+    setAudioPaused(true);
     if (this.hud.shareBtn) this.hud.shareBtn.hidden = false;
     if (this.score > this.bestScore) {
       this.bestScore = this.score;
