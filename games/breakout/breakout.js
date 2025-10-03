@@ -3,7 +3,9 @@ import { LEVELS } from './levels.js';
 import { PowerUpEngine } from './powerups.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { showToast, showModal, clearHud } from '../../shared/ui/hud.js';
-import { createParticleSystem } from '../../shared/fx/canvasFx.js';
+import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
+import { loadImage, getCachedImage } from '../../shared/assets.js';
+import { play as playSfx } from '../../shared/juice/audio.js';
 
 const globalScope = typeof window !== 'undefined'
   ? window
@@ -20,6 +22,60 @@ const breakoutReadyQueue = (() => {
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
 const GAME_ID='breakout';GG.incPlays();
+preloadFirstFrameAssets(GAME_ID).catch(()=>{});
+
+const SPRITE_SOURCES={
+  paddle:'/assets/sprites/paddle.png',
+  brick:'/assets/sprites/brick.png',
+  ball:'/assets/sprites/ball.png',
+  background:'/assets/backgrounds/arcade.png'
+};
+
+const EFFECT_SOURCES={
+  spark:'/assets/effects/spark.png',
+  explosion:'/assets/effects/explosion.png'
+};
+
+const POWERUP_SOURCES={
+  EXPAND:'/assets/powerups/shield.png',
+  SLOW:'/assets/powerups/slow.png',
+  MULTI:'/assets/powerups/multi.png',
+  LASER:'/assets/powerups/lightning.png'
+};
+
+const pendingImages=new Set();
+const spriteImages={};
+const effectImages={};
+const powerupImages={};
+
+function requestImage(target,key,src){
+  let img=target[key];
+  if(img&&img.naturalWidth) return img;
+  const cached=getCachedImage(src);
+  if(cached){
+    target[key]=cached;
+    return cached;
+  }
+  if(!pendingImages.has(src)){
+    pendingImages.add(src);
+    loadImage(src,{slug:GAME_ID}).then(loaded=>{
+      target[key]=loaded;
+    }).catch(()=>{}).finally(()=>{pendingImages.delete(src);});
+  }
+  return target[key]||null;
+}
+
+function primeImages(){
+  Object.entries(SPRITE_SOURCES).forEach(([key,src])=>{requestImage(spriteImages,key,src);});
+  Object.entries(EFFECT_SOURCES).forEach(([key,src])=>{requestImage(effectImages,key,src);});
+  Object.entries(POWERUP_SOURCES).forEach(([key,src])=>{requestImage(powerupImages,key,src);});
+}
+
+primeImages();
+
+function playSound(name){
+  try{playSfx(name);}catch(err){console.warn('[breakout] sfx failed',err);}
+}
 const BASE_W=1000;
 const BASE_H=800;
 
@@ -55,6 +111,7 @@ c.width=BASE_W;
 c.height=BASE_H;
 fitCanvasToParent(c,BASE_W,BASE_H,24);addEventListener('resize',()=>fitCanvasToParent(c,BASE_W,BASE_H,24));
 const ctx=c.getContext('2d');
+if(ctx&&'imageSmoothingEnabled' in ctx){ctx.imageSmoothingEnabled=false;}
 installErrorReporter();
 let postedReady=false;
 
@@ -133,6 +190,7 @@ function resetMatch(){
   loadLevel();resetBall();
   runStart=performance.now();endTime=null;submitted=false;
   clearHud();gameOverShown=false;
+  effects=[];
 }
 
 addEventListener('keydown',e=>{
@@ -168,7 +226,8 @@ function applyPU(p){
   }else if(p.type==='LASER'){
     powerEngine.activate('LASER',5,()=>{laserActive++;},()=>{laserActive--;});
   }
-  SFX.seq([[900,0.05],[1200,0.06]]);
+  spawnEffect('spark',paddle.x+paddle.w/2,paddle.y,{scale:1.1,duration:0.4});
+  playSound('power');
 }
 
 function updatePU(dt){
@@ -180,21 +239,42 @@ function updatePU(dt){
   powerups=powerups.filter(p=>!p.dead);
 }
 
-const particleSystem=createParticleSystem(ctx);let bgT=0;
-function spawnParticles(x,y){
-  for(let i=0;i<12;i++){
-    particleSystem.add(x,y,{
-      vx:(Math.random()*4-2),
-      vy:(Math.random()*4-2),
-      life:20,
-      size:2,
-      color:'#a78bfa',
-      decay:0.92
-    });
-  }
+let effects=[];
+function spawnEffect(type,x,y,opts={}){
+  const duration=opts.duration||0.4;
+  const scale=opts.scale||1;
+  effects.push({type,x,y,duration,life:duration,scale});
 }
-function updateParticles(){
-  particleSystem.update();
+function updateEffects(dt){
+  if(!effects.length)return;
+  const next=[];
+  for(const fx of effects){
+    fx.life-=dt;
+    if(fx.life>0){next.push(fx);}
+  }
+  effects=next;
+}
+
+function drawEffects(){
+  if(!effects.length)return;
+  ctx.save();
+  ctx.imageSmoothingEnabled=false;
+  for(const fx of effects){
+    const src=EFFECT_SOURCES[fx.type];
+    if(!src)continue;
+    const sprite=requestImage(effectImages,fx.type,src);
+    if(!sprite||!(sprite.naturalWidth||sprite.width))continue;
+    const duration=fx.duration||0.4;
+    const progress=Math.max(0,Math.min(1,fx.life/duration));
+    const alpha=Math.pow(progress,0.6);
+    const baseW=sprite.naturalWidth||sprite.width;
+    const baseH=sprite.naturalHeight||sprite.height;
+    const w=baseW*(fx.scale||1);
+    const h=baseH*(fx.scale||1);
+    ctx.globalAlpha=alpha;
+    ctx.drawImage(sprite,fx.x-w/2,fx.y-h/2,w,h);
+  }
+  ctx.restore();
 }
 
 function step(dt){
@@ -216,16 +296,20 @@ function step(dt){
     ball.vx=Math.cos(ang)*sp;
     ball.vy=Math.sin(ang)*sp;
     ball.speed=Math.min(840,ball.speed+levelRamp);
-    SFX.beep({freq:520});
+    spawnEffect('spark',ball.x,paddle.y,{scale:0.8,duration:0.3});
+    playSound('hit');
   }
   for(const b of bricks){
     if(b.hp<=0)continue;
       if(ball.x>b.x&&ball.x<b.x+b.w&&ball.y>b.y&&ball.y<b.y+b.h){
-      b.hp=0;score+=10;syncScore();GG.addXP(1);ball.vy*=-1;spawnParticles(b.x+b.w/2,b.y+b.h/2);if(b.pu)spawnPU(ball.x,ball.y,b.pu);SFX.beep({freq:700});
+      b.hp=0;score+=10;syncScore();GG.addXP(1);ball.vy*=-1;const fxScale=Math.max(0.6,Math.min(1.2,b.w/80));
+      spawnEffect('explosion',b.x+b.w/2,b.y+b.h/2,{scale:fxScale,duration:0.45});
+      if(b.pu)spawnPU(ball.x,ball.y,b.pu);
+      playSound('hit');
       }
   }
   if(ball.y>c.height+20){
-    lives--;SFX.seq([[260,0.06],[200,0.08]]);resetBall();
+    lives--;playSound('explode');resetBall();
     if(lives<=0){GG.addAch(GAME_ID,'Game Over');if(!submitted&&window.LB){LB.submitScore(GAME_ID,score);submitted=true;}if(!endTime)endTime=performance.now();}
   }
   if(bricks.every(b=>b.hp<=0)){
@@ -233,7 +317,7 @@ function step(dt){
     loadLevel();resetBall();
   }
   updatePU(dt);
-  updateParticles();
+  updateEffects(dt);
   if(laserActive>0){
     laserTimer-=dt;
     if(laserTimer<=0){
@@ -246,7 +330,10 @@ function step(dt){
   lasers=lasers.filter(L=>L.y>-20);
   for(const L of lasers){
     for(const b of bricks){
-      if(b.hp>0&&L.x>b.x&&L.x<b.x+b.w&&L.y<b.y+b.h&&L.y>b.y){b.hp=0;score+=10;spawnParticles(b.x+b.w/2,b.y+b.h/2);syncScore();}
+      if(b.hp>0&&L.x>b.x&&L.x<b.x+b.w&&L.y<b.y+b.h&&L.y>b.y){b.hp=0;score+=10;syncScore();const fxScale=Math.max(0.55,Math.min(1.1,b.w/90));
+        spawnEffect('spark',b.x+b.w/2,b.y+b.h/2,{scale:fxScale,duration:0.35});
+        playSound('hit');
+      }
     }
   }
   for(const m of multiBalls){
@@ -262,10 +349,15 @@ function step(dt){
       const ang=(Math.PI*1.5)+rel*(Math.PI*0.75*0.25);
       m.vx=Math.cos(ang)*spm;
       m.vy=Math.sin(ang)*spm;
+      spawnEffect('spark',m.x,paddle.y,{scale:0.7,duration:0.3});
+      playSound('hit');
     }
     for(const b of bricks){
       if(b.hp<=0)continue;
-      if(m.x>b.x&&m.x<b.x+b.w&&m.y>b.y&&m.y<b.y+b.h){b.hp=0;score+=10;syncScore();m.vy*=-1;spawnParticles(b.x+b.w/2,b.y+b.h/2);}
+      if(m.x>b.x&&m.x<b.x+b.w&&m.y>b.y&&m.y<b.y+b.h){b.hp=0;score+=10;syncScore();m.vy*=-1;const fxScale=Math.max(0.6,Math.min(1.2,b.w/80));
+        spawnEffect('explosion',b.x+b.w/2,b.y+b.h/2,{scale:fxScale,duration:0.45});
+        playSound('hit');
+      }
     }
   }
   multiBalls=multiBalls.filter(m=>m.y<=c.height+20);
@@ -276,32 +368,58 @@ function draw(){
     postedReady=true;
     try { window.parent?.postMessage({ type:'GAME_READY', slug:'breakout' }, '*'); } catch {}
   }
-  ctx.shadowColor='rgba(0,200,255,0.6)';ctx.shadowBlur=12;
-  bgT+=0.3;const bg=ctx.createLinearGradient(0,0,0,c.height);
-  bg.addColorStop(0,`hsl(${bgT%360},40%,10%)`);
-  bg.addColorStop(1,`hsl(${(bgT+60)%360},40%,5%)`);
-  ctx.fillStyle=bg;ctx.fillRect(0,0,c.width,c.height);
+  if('imageSmoothingEnabled' in ctx&&ctx.imageSmoothingEnabled)ctx.imageSmoothingEnabled=false;
+  const bg=requestImage(spriteImages,'background',SPRITE_SOURCES.background);
+  if(bg&&bg.complete&&bg.naturalWidth){
+    ctx.drawImage(bg,0,0,c.width,c.height);
+  }else{
+    ctx.fillStyle='#050516';ctx.fillRect(0,0,c.width,c.height);
+  }
+  const brickSprite=requestImage(spriteImages,'brick',SPRITE_SOURCES.brick);
   for(const b of bricks){
     if(b.hp>0){
-      const g=ctx.createLinearGradient(b.x,b.y,b.x,b.y+b.h);
-      g.addColorStop(0,'#a78bfa');g.addColorStop(1,'#6d28d9');
-      ctx.fillStyle=g;ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,4);ctx.fill();
+      if(brickSprite&&brickSprite.complete&&brickSprite.naturalWidth){
+        ctx.drawImage(brickSprite,b.x,b.y,b.w,b.h);
+      }else{
+        ctx.fillStyle='#a78bfa';ctx.fillRect(b.x,b.y,b.w,b.h);
+      }
     }
   }
-  ctx.save();ctx.shadowBlur=0;
-  particleSystem.draw();
-  ctx.restore();
-  ctx.fillStyle='#e6e7ea';ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
-  ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();
+  const paddleSprite=requestImage(spriteImages,'paddle',SPRITE_SOURCES.paddle);
+  if(paddleSprite&&paddleSprite.complete&&paddleSprite.naturalWidth){
+    ctx.drawImage(paddleSprite,paddle.x,paddle.y,paddle.w,paddle.h);
+  }else{
+    ctx.fillStyle='#e6e7ea';ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
+  }
+  const ballSprite=requestImage(spriteImages,'ball',SPRITE_SOURCES.ball);
+  const ballSize=ball.r*2;
+  if(ballSprite&&ballSprite.complete&&ballSprite.naturalWidth){
+    ctx.drawImage(ballSprite,ball.x-ballSize/2,ball.y-ballSize/2,ballSize,ballSize);
+  }else{
+    ctx.fillStyle='#e6e7ea';ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();
+  }
+  powerups.forEach(p=>{
+    const src=POWERUP_SOURCES[p.type];
+    const img=src?requestImage(powerupImages,p.type,src):null;
+    if(img&&img.complete&&img.naturalWidth){
+      ctx.drawImage(img,p.x-12,p.y-12,24,24);
+    }else{
+      ctx.fillStyle='#e6e7ea';ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fill();
+    }
+  });
+  ctx.fillStyle='#ef4444';for(const L of lasers){ctx.fillRect(L.x-2,L.y-10,4,10);}
+  for(const m of multiBalls){
+    if(ballSprite&&ballSprite.complete&&ballSprite.naturalWidth){
+      const size=m.r*2;
+      ctx.drawImage(ballSprite,m.x-size/2,m.y-size/2,size,size);
+    }else{
+      ctx.fillStyle='#e6e7ea';ctx.beginPath();ctx.arc(m.x,m.y,m.r,0,Math.PI*2);ctx.fill();
+    }
+  }
+  drawEffects();
   ctx.fillStyle='#e6e7ea';ctx.font='bold 18px Inter';
   const rt=((endTime||performance.now())-runStart)/1000;
   ctx.fillText(`Score ${score} • Lives ${lives} • Lv ${level} • Time ${rt.toFixed(1)}s`,10,24);
-  powerups.forEach(p=>{
-    ctx.fillStyle=p.type==='EXPAND'?'#10b981':p.type==='SLOW'?'#38bdf8':p.type==='MULTI'?'#eab308':'#ef4444';
-    ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);ctx.fill();
-  });
-  ctx.fillStyle='#ef4444';for(const L of lasers){ctx.fillRect(L.x-2,L.y-10,4,10);}
-  ctx.fillStyle='#e6e7ea';for(const m of multiBalls){ctx.beginPath();ctx.arc(m.x,m.y,m.r,0,Math.PI*2);ctx.fill();}
   const best=parseInt(localStorage.getItem('gg:best:breakout')||'0');
   if(score>best)localStorage.setItem('gg:best:breakout',score);
   GG.setMeta(GAME_ID,'Best score: '+Math.max(best,score)+' • Best level: '+bestLevel);
