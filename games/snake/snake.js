@@ -281,6 +281,8 @@ let snakeColorHead = '#8b5cf6';
 let snakeColorRGB = { r: 139, g: 92, b: 246 };
 let fruitColor = '#22d3ee';
 let obstacles = [];
+let won = false;
+let winHandled = false;
 const SPECIAL_FOOD = [
   { icon: '⭐', color: '#fbbf24', points: 5, chance: 0.1 },
   { icon: '💎', color: '#60a5fa', points: 10, chance: 0.03 }
@@ -320,6 +322,8 @@ function populateSkinSelects() {
 }
 let paused = false;
 let level = 1;
+
+let engine = null;
 
 let rand = Math.random;
 if (DAILY_MODE) {
@@ -365,6 +369,8 @@ function resetGame(reason = 'manual') {
   turnBuffer = [];
   snake = [{ x: 5, y: 16 }, { x: 4, y: 16 }, { x: 3, y: 16 }];
   lastSnake = snake.map(s => ({ ...s }));
+  won = false;
+  winHandled = false;
   food = spawnFood();
   fruitSpawnTime = performance.now();
   speedMs = 120;
@@ -379,6 +385,7 @@ function resetGame(reason = 'manual') {
   saveProgress();
   populateSkinSelects();
   bootLog('game:reset', { reason });
+  if (engine && !engine.running) engine.start();
 }
 
 document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') togglePause('keyboard'); });
@@ -411,11 +418,29 @@ function spawnFood() {
   if (!type) {
     type = { icon: FRUITS[Math.floor(rand() * FRUITS.length)], color: fruitColor, points: 1 };
   }
-  while (true) {
-    const f = { x: (rand() * N) | 0, y: (rand() * N) | 0 };
-    if (!snake.some(s => s.x === f.x && s.y === f.y) &&
-        !obstacles.some(o => o.x === f.x && o.y === f.y)) return { ...f, ...type };
+  const occupied = new Set();
+  for (const segment of snake) occupied.add(`${segment.x},${segment.y}`);
+  for (const obstacle of obstacles) occupied.add(`${obstacle.x},${obstacle.y}`);
+  const freeCells = [];
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const key = `${x},${y}`;
+      if (!occupied.has(key)) freeCells.push({ x, y });
+    }
   }
+  if (!freeCells.length) {
+    if (!won) {
+      won = true;
+      winHandled = false;
+      bootLog('game:won', { score, length: snake.length, obstacles: obstacles.length });
+      if (engine && typeof engine.stop === 'function') {
+        try { engine.stop(); } catch (err) { bootLog('game:win-stop-error', { message: err?.message || String(err) }); }
+      }
+    }
+    return null;
+  }
+  const f = freeCells[(rand() * freeCells.length) | 0];
+  return { ...f, ...type };
 }
 
 function addObstacleRow() {
@@ -463,7 +488,7 @@ function step() {
     dead = true;
     deadHandled = false;
   }
-  if (dead) return;
+  if (dead || won) return;
   snake.unshift(head);
   if (head.x === food.x && head.y === food.y) {
     score += food.points;
@@ -517,19 +542,21 @@ function draw() {
   fx.draw();
 
   // fruit with spawn animation
-  const ft = Math.min((time - fruitSpawnTime) / 300, 1);
-  ctx.save();
-  ctx.translate((food.x + 0.5) * CELL, (food.y + 0.5) * CELL);
-  ctx.scale(ft, ft);
-  ctx.globalAlpha = ft;
-  ctx.fillStyle = food.color;
-  ctx.fillRect(-CELL / 2, -CELL / 2, CELL, CELL);
-  ctx.font = '24px serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(food.icon, 0, 4);
-  ctx.restore();
-  ctx.globalAlpha = 1;
+  if (food) {
+    const ft = Math.min((time - fruitSpawnTime) / 300, 1);
+    ctx.save();
+    ctx.translate((food.x + 0.5) * CELL, (food.y + 0.5) * CELL);
+    ctx.scale(ft, ft);
+    ctx.globalAlpha = ft;
+    ctx.fillStyle = food.color;
+    ctx.fillRect(-CELL / 2, -CELL / 2, CELL, CELL);
+    ctx.font = '24px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(food.icon, 0, 4);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
 
   // snake interpolation
   const t = Math.min((time - lastTickTime) / speedMs, 1);
@@ -565,6 +592,19 @@ function draw() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('Paused — P to resume', c.width / 2, c.height / 2);
+  } else if (won) {
+    if (!winHandled) {
+      SFX.seq([[440, 0.12, 0.3], [660, 0.12, 0.3], [880, 0.18, 0.3]]);
+      saveScore(score);
+      winHandled = true;
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = '#e6e7ea';
+    ctx.font = 'bold 42px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('You win! Press R', c.width / 2, c.height / 2);
   } else if (dead) {
     if (!deadHandled) {
       SFX.seq([[200, 0.08, 0.25], [140, 0.1, 0.25]]);
@@ -625,9 +665,9 @@ document.addEventListener('keydown', e => {
   }
 });
 
-const engine = new GameEngine();
+engine = new GameEngine();
 engine.update = dt => {
-  if (dead || paused) return;
+  if (dead || paused || won) return;
   moveAcc += dt * 1000;
   while (moveAcc >= speedMs) {
     moveAcc -= speedMs;
@@ -695,12 +735,13 @@ if (typeof registerGameDiagnostics === 'function') {
         getScore: () => score,
         getEntities: () => ({
           snake: snake.map(segment => ({ ...segment })),
-          food: { ...food },
+          food: food ? { ...food } : null,
           obstacles: obstacles.map(obstacle => ({ ...obstacle })),
           level,
           speedMs,
           dead,
           paused,
+          won,
           score
         })
       }
