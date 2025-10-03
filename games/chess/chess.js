@@ -1,5 +1,5 @@
 import { drawGlow } from '../../shared/fx/canvasFx.js';
-import { showToast } from '../../shared/ui/hud.js';
+import { showToast, showModal } from '../../shared/ui/hud.js';
 import getThemeTokens from '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { pushEvent } from '../common/diag-adapter.js';
@@ -27,6 +27,8 @@ function require2dContext(canvas){
 }
 
 (function(){
+let statusEl;
+try{
 const c=requireCanvas('board'), ctx=require2dContext(c);
 const fx=requireCanvas('fx'), fxCtx=require2dContext(fx);
 const COLS=8, ROWS=8;
@@ -42,7 +44,7 @@ fx.width=pixelSize; fx.height=pixelSize;
 ctx.setTransform(dpr,0,0,dpr,0,0);
 fxCtx.setTransform(dpr,0,0,dpr,0,0);
 const S=cssSize/COLS;
-const statusEl=requireElementById('status');
+statusEl=requireElementById('status');
 const depthEl=/** @type {HTMLSelectElement} */ (requireElementById('difficulty'));
 const puzzleSelect=/** @type {HTMLSelectElement} */ (requireElementById('puzzle-select'));
 const lobbyStatusEl=requireElementById('lobby-status');
@@ -1048,4 +1050,40 @@ Object.assign(ChessNamespace, {
 });
 reset({ reason:'initial-load' });
 if (typeof reportReady === 'function') reportReady('chess');
+}catch(err){
+  try{ pushEvent('error',{ level:'error', message:'Chess failed to boot', details:{ error:String(err) } }); }catch(_){ }
+  console.error('Chess failed to boot', err);
+  const detail=err==null?'':String(err);
+  const statusMessage='Chess failed to start. Please refresh the page.';
+  try{
+    if(!statusEl && typeof document!=='undefined') statusEl=document.getElementById('status');
+    if(statusEl) statusEl.textContent=statusMessage;
+  }catch(_){ }
+  let hudShown=false;
+  if(typeof document!=='undefined'){
+    try{
+      if(typeof showModal==='function'){
+        const content=document.createElement('div');
+        const heading=document.createElement('h2'); heading.textContent='Chess failed to start'; content.appendChild(heading);
+        const body=document.createElement('p'); body.textContent='Please refresh the page or try again later.'; content.appendChild(body);
+        if(detail){ const detailEl=document.createElement('pre'); detailEl.textContent=detail; detailEl.className='error-detail'; content.appendChild(detailEl); }
+        showModal(content,{ closeButton:true });
+        hudShown=true;
+      }
+    }catch(_){ }
+  }
+  if(!hudShown && typeof showToast==='function'){
+    try{ showToast(detail?`${statusMessage} (${detail})`:statusMessage,{ duration:10000 }); hudShown=true; }catch(_){ }
+  }
+  if(typeof window!=='undefined'){
+    try{
+      if(!window.__GG_CHESS_GAME_ERROR__){
+        window.__GG_CHESS_GAME_ERROR__=true;
+        const payload={ type:'GAME_ERROR', slug:'chess', error:detail, message:statusMessage };
+        try{ window.postMessage(payload,'*'); }catch(_){ }
+        try{ if(window.parent && typeof window.parent.postMessage==='function') window.parent.postMessage(payload,'*'); }catch(_){ }
+      }
+    }catch(_){ }
+  }
+}
 })();
