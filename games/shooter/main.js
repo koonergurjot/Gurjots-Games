@@ -1,6 +1,6 @@
 // Minimal top-down shooter (canvas id='game')
 import { pushEvent } from '/games/common/diag-adapter.js';
-import { getCachedAudio, getCachedImage, loadAudio, loadImage } from '../../shared/assets.js';
+import { getCachedAudio, getCachedImage, loadAudio, loadImage, loadStrip } from '../../shared/assets.js';
 import './diagnostics-adapter.js';
 
 export function boot() {
@@ -164,25 +164,34 @@ export function boot() {
   function prepareExplosionSprite() {
     const image = sprites.explosion;
     if (!isImageReady(image)) return;
-    const framesPerRow = explosionSprite.framesPerRow || 8;
-    const size = Math.floor((image.naturalWidth || image.width || 0) / framesPerRow) || 0;
-    if (!size) return;
-    const rows = Math.max(1, Math.floor((image.naturalHeight || image.height || 0) / size));
-    explosionSprite.frameSize = size;
-    explosionSprite.framesPerRow = framesPerRow;
-    explosionSprite.totalFrames = Math.max(1, framesPerRow * rows);
+    const framesPerRow = Math.max(1, explosionSprite.framesPerRow || 8);
+    loadStrip(ASSET_PATHS.explosion, explosionSprite.frameSize, explosionSprite.frameSize, {
+      slug: SLUG,
+      image,
+      framesPerRow,
+    }).then(strip => {
+      sprites.explosion = strip.image;
+      explosionSprite.frameSize = strip.frameWidth;
+      explosionSprite.framesPerRow = strip.framesPerRow;
+      explosionSprite.totalFrames = Math.max(1, strip.frameCount);
+    }).catch(() => {});
   }
 
   function preparePortalSprite() {
     const image = sprites.portal;
     if (!isImageReady(image)) return;
     const totalFrames = Math.max(1, portalSprite.totalFrames || 1);
-    const width = Math.floor((image.naturalWidth || image.width || 0) / totalFrames) || 0;
-    const height = image.naturalHeight || image.height || 0;
-    if (!width || !height) return;
-    portalSprite.frameWidth = width;
-    portalSprite.frameHeight = height;
-    portalSprite.totalFrames = totalFrames;
+    loadStrip(ASSET_PATHS.portal, portalSprite.frameWidth, portalSprite.frameHeight, {
+      slug: SLUG,
+      image,
+      framesPerRow: totalFrames,
+      totalFrames,
+    }).then(strip => {
+      sprites.portal = strip.image;
+      portalSprite.frameWidth = strip.frameWidth;
+      portalSprite.frameHeight = strip.frameHeight;
+      portalSprite.totalFrames = Math.max(1, strip.frameCount);
+    }).catch(() => {});
   }
 
   function createSoundPlayer(src, volume = 0.6) {

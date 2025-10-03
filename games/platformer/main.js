@@ -1,6 +1,7 @@
 import * as net from './net.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { drawTileSprite, getTilePattern, getSpriteFrame, preloadTileTextures } from '../../shared/render/tileTextures.js';
+import { loadStrip } from '../../shared/assets.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
 import { tiles } from './tiles.js';
 
@@ -511,7 +512,7 @@ export function boot() {
     image: null,
   }));
   const playerSprites = Object.entries(PLAYER_SPRITE_SPECS).reduce((acc, [key, spec]) => {
-    acc[key] = { ...spec, image: null };
+    acc[key] = { ...spec, image: null, strip: null };
     return acc;
   }, {});
   const playerRunState = {
@@ -566,13 +567,25 @@ export function boot() {
     );
   }
 
+  function ensureStripForSpec(spec) {
+    if (!spec) return Promise.resolve(null);
+    if (spec.strip) return Promise.resolve(spec.strip);
+    return loadStrip(spec.src, spec.frameWidth, spec.frameHeight, { slug: GAME_ID })
+      .then((strip) => {
+        spec.strip = strip;
+        spec.image = strip.image;
+        if (typeof spec.frames !== 'number' || spec.frames <= 0) {
+          spec.frames = strip.frameCount;
+        }
+        assetCache.set(spec.src, { image: strip.image });
+        return strip;
+      });
+  }
+
   function preloadPlayerSprites() {
     return Promise.all(
       Object.values(playerSprites).map((spec) =>
-        loadImageAsset(spec.src).then((img) => {
-          spec.image = img;
-          return img;
-        }),
+        ensureStripForSpec(spec).catch(() => null),
       ),
     );
   }
@@ -709,19 +722,23 @@ export function boot() {
 
   function imageForSpec(spec) {
     if (!spec) return null;
+    if (!spec.strip) {
+      ensureStripForSpec(spec).catch(() => {});
+    }
     return spec.image || cachedImage(spec.src) || null;
   }
 
   function advanceRunAnimation(trackKey, now, spec, moving) {
     const state = playerRunState[trackKey];
     if (!state) return 0;
-    if (!moving || !spec?.frames) {
+    const totalFrames = Math.max(1, spec?.frames || spec?.strip?.frameCount || 1);
+    if (!moving || totalFrames <= 1) {
       state.frame = 0;
       state.lastAdvance = now;
       return 0;
     }
     if (now - state.lastAdvance >= PLAYER_RUN_FRAME_DURATION) {
-      state.frame = (state.frame + 1) % spec.frames;
+      state.frame = (state.frame + 1) % totalFrames;
       state.lastAdvance = now;
     }
     return state.frame;
@@ -738,8 +755,9 @@ export function boot() {
     }
     const spec = playerSprites[spriteKey];
     const image = imageForSpec(spec);
-    const frameWidth = spec?.frameWidth ?? player.w;
-    const frameHeight = spec?.frameHeight ?? player.h;
+    const strip = spec?.strip;
+    const frameWidth = strip?.frameWidth ?? spec?.frameWidth ?? player.w;
+    const frameHeight = strip?.frameHeight ?? spec?.frameHeight ?? player.h;
     let sx = 0;
     if (spriteKey === 'run') {
       const frameIndex = advanceRunAnimation(trackKey, now, spec, moving);

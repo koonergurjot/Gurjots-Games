@@ -23,10 +23,12 @@ function createError(message) {
 
 const imageCache = new Map();
 const audioCache = new Map();
+const stripCache = new Map();
 const imagePromises = new Map();
 const audioPromises = new Map();
+const stripPromises = new Map();
 
-export { imageCache, audioCache };
+export { imageCache, audioCache, stripCache };
 
 export function getCachedImage(src) {
   return imageCache.get(src) || null;
@@ -148,6 +150,156 @@ export function loadAudio(src, opts = {}) {
     audioPromises.delete(src);
   });
   return promise;
+}
+
+/**
+ * Load a sprite strip (sprite sheet) and return metadata describing its layout.
+ * Cached metadata ensures repeated calls are cheap and leverage the image cache.
+ */
+export function loadStrip(src, frameWidth, frameHeight, opts = {}) {
+  const {
+    slug,
+    framesPerRow: requestedRows = 0,
+    framesPerColumn: requestedColumns = 0,
+    totalFrames: requestedTotal = 0,
+    image: providedImage = null,
+  } = opts;
+
+  if (!src) {
+    const err = createError('strip src required');
+    reportAssetError(slug, src, err);
+    return Promise.reject(err);
+  }
+
+  const cacheKey = [
+    src,
+    Number.isFinite(frameWidth) ? Number(frameWidth) : 0,
+    Number.isFinite(frameHeight) ? Number(frameHeight) : 0,
+    Number.isFinite(requestedRows) ? Number(requestedRows) : 0,
+    Number.isFinite(requestedColumns) ? Number(requestedColumns) : 0,
+    Number.isFinite(requestedTotal) ? Number(requestedTotal) : 0,
+  ].join('|');
+
+  if (stripCache.has(cacheKey)) {
+    return Promise.resolve(stripCache.get(cacheKey));
+  }
+  if (stripPromises.has(cacheKey)) {
+    return stripPromises.get(cacheKey);
+  }
+
+  const loadPromise = (providedImage
+    ? Promise.resolve(providedImage)
+    : loadImage(src, opts)
+  ).then((image) => {
+    if (!image) {
+      throw createError('strip image unavailable');
+    }
+
+    const width = image.naturalWidth || image.width || 0;
+    const height = image.naturalHeight || image.height || 0;
+
+    let frameW = Number.isFinite(frameWidth) ? Number(frameWidth) : 0;
+    let frameH = Number.isFinite(frameHeight) ? Number(frameHeight) : 0;
+    const reqRows = Number.isFinite(requestedRows) ? Number(requestedRows) : 0;
+    const reqCols = Number.isFinite(requestedColumns) ? Number(requestedColumns) : 0;
+    const reqTotal = Number.isFinite(requestedTotal) ? Number(requestedTotal) : 0;
+
+    const safeDiv = (value, divisor) => {
+      if (!divisor) return 0;
+      return Math.floor(value / divisor);
+    };
+
+    if (reqRows > 0 && frameW <= 0 && width > 0) {
+      frameW = safeDiv(width, reqRows) || 0;
+    }
+    if (reqCols > 0 && frameH <= 0 && height > 0) {
+      frameH = safeDiv(height, reqCols) || 0;
+    }
+
+    if (frameW <= 0 && frameH > 0) {
+      frameW = frameH;
+    }
+    if (frameH <= 0 && frameW > 0) {
+      frameH = frameW;
+    }
+
+    if ((frameW <= 0 || frameH <= 0) && width > 0 && height > 0) {
+      const square = Math.min(width, height);
+      if (frameW <= 0) frameW = square || width;
+      if (frameH <= 0) frameH = square || height;
+    }
+
+    if (frameW <= 0 && width > 0) frameW = width;
+    if (frameH <= 0 && height > 0) frameH = height;
+    if (frameW <= 0) frameW = 1;
+    if (frameH <= 0) frameH = 1;
+
+    let framesPerRow = Math.max(1, safeDiv(width, frameW) || 1);
+    let framesPerColumn = Math.max(1, safeDiv(height, frameH) || 1);
+
+    if (reqRows > 0) {
+      framesPerRow = Math.max(1, reqRows);
+      if (frameW <= 0 && width > 0) {
+        frameW = safeDiv(width, framesPerRow) || frameW;
+      }
+    }
+    if (reqCols > 0) {
+      framesPerColumn = Math.max(1, reqCols);
+      if (frameH <= 0 && height > 0) {
+        frameH = safeDiv(height, framesPerColumn) || frameH;
+      }
+    }
+
+    let frameCount = framesPerRow * framesPerColumn;
+    if (reqTotal > 0) {
+      const total = Math.max(1, reqTotal);
+      frameCount = Math.min(total, frameCount);
+      if (reqRows > 0 && reqCols <= 0) {
+        framesPerColumn = Math.max(1, Math.ceil(frameCount / framesPerRow));
+        if (height > 0) {
+          frameH = safeDiv(height, framesPerColumn) || frameH;
+        }
+      } else if (reqCols > 0 && reqRows <= 0) {
+        framesPerRow = Math.max(1, Math.ceil(frameCount / framesPerColumn));
+        if (width > 0) {
+          frameW = safeDiv(width, framesPerRow) || frameW;
+        }
+      } else if (reqRows <= 0 && reqCols <= 0) {
+        framesPerRow = Math.max(1, Math.min(frameCount, framesPerRow));
+        framesPerColumn = Math.max(1, Math.ceil(frameCount / framesPerRow));
+        if (width > 0) {
+          frameW = safeDiv(width, framesPerRow) || frameW;
+        }
+        if (height > 0) {
+          frameH = safeDiv(height, framesPerColumn) || frameH;
+        }
+      }
+    }
+
+    if (frameW <= 0) frameW = 1;
+    if (frameH <= 0) frameH = 1;
+
+    const metadata = {
+      image,
+      width,
+      height,
+      frameWidth: frameW,
+      frameHeight: frameH,
+      framesPerRow,
+      framesPerColumn,
+      frameCount,
+    };
+
+    stripCache.set(cacheKey, metadata);
+    stripPromises.delete(cacheKey);
+    return metadata;
+  });
+
+  stripPromises.set(cacheKey, loadPromise);
+  loadPromise.catch(() => {
+    stripPromises.delete(cacheKey);
+  });
+  return loadPromise;
 }
 
 export function drawTiledBackground(ctx, image, x, y, width, height) {

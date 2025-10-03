@@ -1,4 +1,5 @@
 import { Controls } from '../../src/runtime/controls.js';
+import { loadStrip } from '../../shared/assets.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { emitEvent } from '../../shared/achievements.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
@@ -915,18 +916,16 @@ class AsteroidsGame {
     if (!image) return;
     if (!this.isSpriteReady(image)) return;
 
-    const width = image.naturalWidth || image.width || 0;
-    const height = image.naturalHeight || image.height || 0;
-    if (!width || !height) return;
-
-    const frameSize = Math.min(width, height);
-    const framesPerRow = Math.max(1, Math.floor(width / frameSize));
-    const framesPerColumn = Math.max(1, Math.floor(height / frameSize));
-
-    this.portalSprite.frameWidth = frameSize;
-    this.portalSprite.frameHeight = frameSize;
-    this.portalSprite.framesPerRow = framesPerRow;
-    this.portalSprite.totalFrames = framesPerRow * framesPerColumn;
+    loadStrip('../../assets/effects/portal.png', this.portalSprite.frameWidth, this.portalSprite.frameHeight, {
+      slug: SLUG,
+      image,
+    }).then((strip) => {
+      this.images.portal = strip.image;
+      this.portalSprite.frameWidth = strip.frameWidth;
+      this.portalSprite.frameHeight = strip.frameHeight;
+      this.portalSprite.framesPerRow = strip.framesPerRow;
+      this.portalSprite.totalFrames = strip.frameCount;
+    }).catch(() => {});
   }
 
   prepareBulletVariants() {
@@ -941,15 +940,17 @@ class AsteroidsGame {
     if (!this.images?.explosion) return;
     if (!this.isSpriteReady(this.images.explosion)) return;
     const image = this.images.explosion;
-    const framesPerRow = 8;
-    const frameSize = Math.floor((image.naturalWidth || image.width) / framesPerRow) || 1;
-    const framesPerColumn = Math.max(
-      1,
-      Math.floor((image.naturalHeight || image.height) / frameSize),
-    );
-    this.explosionSprite.frameSize = frameSize;
-    this.explosionSprite.framesPerRow = framesPerRow;
-    this.explosionSprite.totalFrames = framesPerRow * framesPerColumn;
+    const framesPerRow = Math.max(1, this.explosionSprite.framesPerRow || 8);
+    loadStrip('../../assets/effects/explosion.png', this.explosionSprite.frameSize, this.explosionSprite.frameSize, {
+      slug: SLUG,
+      image,
+      framesPerRow,
+    }).then((strip) => {
+      this.images.explosion = strip.image;
+      this.explosionSprite.frameSize = strip.frameWidth;
+      this.explosionSprite.framesPerRow = strip.framesPerRow;
+      this.explosionSprite.totalFrames = strip.frameCount;
+    }).catch(() => {});
   }
 
   createShip() {
