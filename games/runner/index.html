@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Runner Pro</title>
   <link rel="preload" href="../../assets/sprites/coin.png" as="image" />
+  <link rel="preload" href="../../assets/powerups/lightning.png" as="image" />
+  <link rel="preload" href="../../assets/powerups/multi.png" as="image" />
   <link rel="preload" href="../../assets/audio/hit.wav" as="audio" />
   <link rel="preload" href="../../assets/audio/powerup.wav" as="audio" />
   <link rel="preload" href="../../assets/audio/click.wav" as="audio" />
@@ -36,10 +38,38 @@
       background: rgba(0, 0, 0, 0.35);
       border-radius: 12px;
       align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
       z-index: 5;
     }
     .hud span {
+      font-weight: 600;
+    }
+    .hud .hud-section {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .hud .hud-stat {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
       font-weight: 700;
+    }
+    .hud .hud-unit {
+      font-size: 0.85em;
+      opacity: 0.75;
+    }
+    .hud .hud-icon {
+      width: clamp(18px, 3vw, 26px);
+      height: auto;
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+    }
+    .hud #mission {
+      font-weight: 500;
     }
     .hud select,
     .hud button {
@@ -116,8 +146,17 @@
 <body class="game-shell">
   <canvas id="game" role="img" aria-label="City Runner gameplay area"></canvas>
   <div class="hud">
-    <span id="score">0</span> m
-    <span id="mission"></span>
+    <div class="hud-section hud-score">
+      <img class="hud-icon" src="../../assets/powerups/lightning.png" alt="" />
+      <div class="hud-stat">
+        <span id="score">0</span>
+        <span class="hud-unit">m</span>
+      </div>
+    </div>
+    <div class="hud-section hud-mission">
+      <img class="hud-icon" src="../../assets/powerups/multi.png" alt="" />
+      <span id="mission"></span>
+    </div>
     <button id="pauseBtn">⏸️</button>
     <button id="restartBtn">⟲</button>
     <button id="shareBtn" hidden>🔗</button>
