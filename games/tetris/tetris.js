@@ -146,15 +146,16 @@ if(c){
 }
 const ctx=c.getContext('2d');
 if(ctx) ctx.imageSmoothingEnabled=false;
+const spriteStore={ block:null, background:null, effects:{} };
+const spriteRequests=new Set();
+const tintCache=new Map();
+const effects=[];
+
 ensureSprites();
 let postedReady=false;
 const COLS=10, ROWS=20;
 const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
 const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L:[[0,0,7],[7,7,7]]};
-const spriteStore={ block:null, background:null, effects:{} };
-const spriteRequests=new Set();
-const tintCache=new Map();
-const effects=[];
 const CLEAR_EFFECT_DURATION=0.6;
 const LINES_PER_LEVEL=10;
 
