@@ -1,6 +1,6 @@
 import * as net from './net.js';
 import { pushEvent } from '../common/diag-adapter.js';
-import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
+import { drawTileSprite, getTilePattern, getSpriteFrame, preloadTileTextures } from '../../shared/render/tileTextures.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
 import { tiles } from './tiles.js';
 
@@ -375,9 +375,36 @@ const STATE_INTERVAL = 90; // ms
 const KEY_LEFT = ['arrowleft', 'a'];
 const KEY_RIGHT = ['arrowright', 'd'];
 const KEY_JUMP = ['space', 'spacebar', 'arrowup', 'w'];
+const PLAYER_RUN_FRAME_DURATION = 100; // ms between run frames
+const PLAYER_MOVE_EPSILON = 0.05;
+
+const PARALLAX_LAYER_CONFIG = [
+  { src: '/assets/backgrounds/parallax/forest_layer1.png', factor: 0.1 },
+  { src: '/assets/backgrounds/parallax/forest_layer2.png', factor: 0.25 },
+];
+
+const PLAYER_SPRITE_SPECS = {
+  idle: { src: '/assets/sprites/player/platformer_idle.png', frameWidth: 16, frameHeight: 16, frames: 1 },
+  run: { src: '/assets/sprites/player/platformer_run.png', frameWidth: 16, frameHeight: 16, frames: 8 },
+  jump: { src: '/assets/sprites/player/platformer_jump.png', frameWidth: 16, frameHeight: 16, frames: 1 },
+};
 
 const COIN_SPRITE = tiles['2']?.sprite ?? null;
 const GOAL_SPRITE = tiles['3']?.sprite ?? null;
+const COIN_FRAME = COIN_SPRITE?.frame ?? getSpriteFrame('coin');
+const GOAL_FRAME = GOAL_SPRITE?.frame ?? getSpriteFrame('goal');
+const CHECKPOINT_FRAME = getSpriteFrame('checkpoint');
+const CHECKPOINT_SPRITE = CHECKPOINT_FRAME
+  ? { key: 'checkpoint', frame: CHECKPOINT_FRAME }
+  : null;
+
+const LEGACY_COIN_SIZE = 18;
+const COIN_LAYOUT = [
+  { id: 'coin-0', cx: 259, centerOffset: 163 },
+  { id: 'coin-1', cx: 579, centerOffset: 223 },
+  { id: 'coin-2', cx: 649, centerOffset: 53 },
+  { id: 'coin-3', cx: 799, centerOffset: 113 },
+];
 
 function normKey(key) {
   if (key === ' ') return 'space';
@@ -400,18 +427,48 @@ function createPlatforms(width, groundY) {
 }
 
 function createCoins(groundY) {
-  return [
-    { id: 'coin-0', x: 250, y: groundY - 172, w: 18, h: 18, collected: false, sprite: COIN_SPRITE },
-    { id: 'coin-1', x: 570, y: groundY - 232, w: 18, h: 18, collected: false, sprite: COIN_SPRITE },
-    { id: 'coin-2', x: 640, y: groundY - 62, w: 18, h: 18, collected: false, sprite: COIN_SPRITE },
-    { id: 'coin-3', x: 790, y: groundY - 122, w: 18, h: 18, collected: false, sprite: COIN_SPRITE }
-  ];
+  const width = COIN_FRAME?.sw ?? LEGACY_COIN_SIZE;
+  const height = COIN_FRAME?.sh ?? LEGACY_COIN_SIZE;
+  return COIN_LAYOUT.map(({ id, cx, centerOffset }) => {
+    const centerY = groundY - centerOffset;
+    return {
+      id,
+      x: cx - width / 2,
+      y: centerY - height / 2,
+      w: width,
+      h: height,
+      collected: false,
+      sprite: COIN_SPRITE,
+    };
+  });
 }
 
 function createGoal(groundY, width) {
-  const goal = { x: width - 90, y: groundY - 120, w: 50, h: 120 };
+  const goalWidth = GOAL_FRAME?.sw ?? 50;
+  const goalHeight = GOAL_FRAME?.sh ?? 120;
+  const goalCenterX = width - 65;
+  const goal = {
+    x: goalCenterX - goalWidth / 2,
+    y: groundY - goalHeight,
+    w: goalWidth,
+    h: goalHeight,
+  };
   if (GOAL_SPRITE) goal.sprite = GOAL_SPRITE;
   return goal;
+}
+
+function createCheckpoint(groundY) {
+  if (!CHECKPOINT_SPRITE) return null;
+  const width = CHECKPOINT_FRAME?.sw ?? 32;
+  const height = CHECKPOINT_FRAME?.sh ?? 48;
+  const centerX = 140;
+  return {
+    x: centerX - width / 2,
+    y: groundY - height,
+    w: width,
+    h: height,
+    sprite: CHECKPOINT_SPRITE,
+  };
 }
 
 function clamp(v, min, max) {
@@ -447,6 +504,79 @@ export function boot() {
     markPhase('boot:error', { reason: 'no-2d-context' });
     return;
   }
+  const assetCache = new Map();
+  const parallaxLayers = PARALLAX_LAYER_CONFIG.map(({ src, factor }) => ({
+    src,
+    factor,
+    image: null,
+  }));
+  const playerSprites = Object.entries(PLAYER_SPRITE_SPECS).reduce((acc, [key, spec]) => {
+    acc[key] = { ...spec, image: null };
+    return acc;
+  }, {});
+  const playerRunState = {
+    local: { frame: 0, lastAdvance: 0 },
+    remote: { frame: 0, lastAdvance: 0 },
+  };
+
+  function loadImageAsset(src) {
+    const existing = assetCache.get(src);
+    if (existing) {
+      if (existing.image) return Promise.resolve(existing.image);
+      return existing.promise;
+    }
+    if (!globalScope?.Image) return Promise.resolve(null);
+    const img = new globalScope.Image();
+    try {
+      img.decoding = 'async';
+    } catch (_) {
+      /* noop */
+    }
+    if ('loading' in img) {
+      img.loading = 'eager';
+    }
+    const promise = new Promise((resolve) => {
+      img.onload = () => {
+        assetCache.set(src, { image: img });
+        resolve(img);
+      };
+      img.onerror = () => {
+        assetCache.delete(src);
+        resolve(null);
+      };
+    });
+    assetCache.set(src, { promise });
+    img.src = src;
+    return promise;
+  }
+
+  function cachedImage(src) {
+    const entry = assetCache.get(src);
+    return entry?.image ?? null;
+  }
+
+  function preloadParallaxLayers() {
+    return Promise.all(
+      parallaxLayers.map((layer) =>
+        loadImageAsset(layer.src).then((img) => {
+          layer.image = img;
+          return img;
+        }),
+      ),
+    );
+  }
+
+  function preloadPlayerSprites() {
+    return Promise.all(
+      Object.values(playerSprites).map((spec) =>
+        loadImageAsset(spec.src).then((img) => {
+          spec.image = img;
+          return img;
+        }),
+      ),
+    );
+  }
+
   let blockPattern = null;
   let lavaPattern = null;
   const hydratePatterns = () => {
@@ -462,6 +592,8 @@ export function boot() {
   preloadTileTextures().then(() => {
     hydratePatterns();
   }).catch(() => {});
+  preloadParallaxLayers().catch(() => {});
+  preloadPlayerSprites().catch(() => {});
   const VIRTUAL_WIDTH = 960;
   const VIRTUAL_HEIGHT = 540;
   let cssWidth = VIRTUAL_WIDTH;
@@ -546,6 +678,7 @@ export function boot() {
   const platforms = createPlatforms(W, groundY);
   let coins = createCoins(groundY);
   const goal = createGoal(groundY, W);
+  const checkpoint = createCheckpoint(groundY);
 
   const localPlayer = {
     x: 100,
@@ -566,16 +699,98 @@ export function boot() {
     h: 40,
     facing: 1,
     onGround: false,
+    vx: 0,
+    vy: 0,
     coins: 0,
     lastSeen: 0,
     active: false,
     gameOver: false,
   };
 
+  function imageForSpec(spec) {
+    if (!spec) return null;
+    return spec.image || cachedImage(spec.src) || null;
+  }
+
+  function advanceRunAnimation(trackKey, now, spec, moving) {
+    const state = playerRunState[trackKey];
+    if (!state) return 0;
+    if (!moving || !spec?.frames) {
+      state.frame = 0;
+      state.lastAdvance = now;
+      return 0;
+    }
+    if (now - state.lastAdvance >= PLAYER_RUN_FRAME_DURATION) {
+      state.frame = (state.frame + 1) % spec.frames;
+      state.lastAdvance = now;
+    }
+    return state.frame;
+  }
+
+  function drawPlayerCharacter(player, trackKey, now, fallbackColor) {
+    const moving = Math.abs(player.vx ?? 0) > PLAYER_MOVE_EPSILON;
+    const airborne = !player.onGround;
+    let spriteKey = 'idle';
+    if (airborne) {
+      spriteKey = 'jump';
+    } else if (moving) {
+      spriteKey = 'run';
+    }
+    const spec = playerSprites[spriteKey];
+    const image = imageForSpec(spec);
+    const frameWidth = spec?.frameWidth ?? player.w;
+    const frameHeight = spec?.frameHeight ?? player.h;
+    let sx = 0;
+    if (spriteKey === 'run') {
+      const frameIndex = advanceRunAnimation(trackKey, now, spec, moving);
+      sx = frameIndex * frameWidth;
+    } else {
+      advanceRunAnimation(trackKey, now, spec, false);
+    }
+    if (!image) {
+      ctx.fillStyle = fallbackColor || '#1c1c1c';
+      ctx.fillRect(player.x, player.y, player.w, player.h);
+      return false;
+    }
+    ctx.save();
+    if (player.facing === -1) {
+      ctx.translate(player.x + player.w, player.y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(image, sx, 0, frameWidth, frameHeight, 0, 0, player.w, player.h);
+    } else {
+      ctx.drawImage(image, sx, 0, frameWidth, frameHeight, player.x, player.y, player.w, player.h);
+    }
+    ctx.restore();
+    return true;
+  }
+
+  function drawParallaxBackground() {
+    for (const layer of parallaxLayers) {
+      const image = layer.image || cachedImage(layer.src);
+      if (!image) continue;
+      const sourceWidth = image.naturalWidth || image.width || 0;
+      const sourceHeight = image.naturalHeight || image.height || 0;
+      if (!sourceWidth || !sourceHeight) continue;
+      const scale = H / sourceHeight;
+      const drawWidth = sourceWidth * scale;
+      const drawHeight = sourceHeight * scale;
+      if (!drawWidth || !drawHeight) continue;
+      let offset = (localPlayer.x * layer.factor) % drawWidth;
+      if (offset < 0) offset += drawWidth;
+      let drawX = -offset;
+      const drawY = H - drawHeight;
+      while (drawX < W) {
+        ctx.drawImage(image, 0, 0, sourceWidth, sourceHeight, drawX, drawY, drawWidth, drawHeight);
+        drawX += drawWidth;
+      }
+    }
+  }
+
   if (platformerApi) {
     platformerApi.localPlayer = localPlayer;
     platformerApi.coins = coins;
     platformerApi.goal = goal;
+    platformerApi.checkpoint = checkpoint;
   }
 
   let paused = false;
@@ -603,6 +818,11 @@ export function boot() {
     if (platformerApi) {
       platformerApi.coins = coins;
     }
+    const now = performance.now();
+    playerRunState.local.frame = 0;
+    playerRunState.local.lastAdvance = now;
+    playerRunState.remote.frame = 0;
+    playerRunState.remote.lastAdvance = now;
     gameOver = false;
     paused = false;
     setAudioPaused(false);
@@ -821,12 +1041,12 @@ export function boot() {
 
   function handleRemoteState(data) {
     if (!data) return;
-    remotePlayer.x = typeof data.x === 'number' ? data.x : remotePlayer.x;
-    remotePlayer.y = typeof data.y === 'number' ? data.y : remotePlayer.y;
+    if (Number.isFinite(data.x)) remotePlayer.x = data.x;
+    if (Number.isFinite(data.y)) remotePlayer.y = data.y;
     remotePlayer.facing = data.facing === -1 ? -1 : 1;
     remotePlayer.onGround = !!data.onGround;
-    remotePlayer.vx = data.vx || 0;
-    remotePlayer.vy = data.vy || 0;
+    remotePlayer.vx = Number.isFinite(data.vx) ? data.vx : 0;
+    remotePlayer.vy = Number.isFinite(data.vy) ? data.vy : 0;
     remotePlayer.coins = Array.isArray(data.collected) ? data.collected.length : remotePlayer.coins;
     remotePlayer.gameOver = !!data.gameOver;
     remotePlayer.lastSeen = performance.now();
@@ -993,7 +1213,7 @@ export function boot() {
     }
   }
 
-  function drawScene() {
+  function drawScene(now) {
     if(!postedReady){
       postedReady = true;
       markPhase('boot:ready-signal');
@@ -1011,6 +1231,8 @@ export function boot() {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, W, H);
 
+    drawParallaxBackground();
+
     hydratePatterns();
 
     const lavaFill = lavaPattern ?? '#223757';
@@ -1023,6 +1245,24 @@ export function boot() {
       ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
     }
 
+    if (checkpoint) {
+      const spriteKey = checkpoint.sprite?.key ?? 'checkpoint';
+      const spriteFrame = checkpoint.sprite?.frame;
+      const checkpointDrawn = drawTileSprite(ctx, spriteKey, checkpoint.x, checkpoint.y, checkpoint.w, checkpoint.h, spriteFrame);
+      if (!checkpointDrawn) {
+        const poleX = checkpoint.x + checkpoint.w * 0.45;
+        ctx.fillStyle = '#f25f5c';
+        ctx.fillRect(poleX, checkpoint.y, Math.max(3, checkpoint.w * 0.12), checkpoint.h);
+        ctx.fillStyle = '#ffe066';
+        ctx.beginPath();
+        ctx.moveTo(poleX + checkpoint.w * 0.12, checkpoint.y + checkpoint.h * 0.15);
+        ctx.lineTo(checkpoint.x + checkpoint.w - checkpoint.w * 0.15, checkpoint.y + checkpoint.h * 0.35);
+        ctx.lineTo(poleX + checkpoint.w * 0.12, checkpoint.y + checkpoint.h * 0.55);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
     for (const coin of coins) {
       if (coin.collected) continue;
       const spriteKey = coin.sprite?.key ?? 'coin';
@@ -1032,30 +1272,41 @@ export function boot() {
         const cx = coin.x + coin.w / 2;
         const cy = coin.y + coin.h / 2;
         ctx.fillStyle = '#ffe066';
+        const ringRadius = coin.w * 0.28;
         ctx.beginPath();
-        ctx.arc(cx, cy, coin.w / 2, 0, Math.PI * 2);
+        ctx.arc(cx - coin.w * 0.18, cy, ringRadius, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#d4a514';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.fillRect(cx - coin.w * 0.05, cy - coin.h * 0.18, coin.w * 0.42, coin.h * 0.36);
+        ctx.fillRect(cx + coin.w * 0.2, cy - coin.h * 0.08, coin.w * 0.18, coin.h * 0.16);
+        ctx.fillStyle = '#d4a514';
+        ctx.fillRect(cx + coin.w * 0.05, cy - coin.h * 0.02, coin.w * 0.14, coin.h * 0.04);
       }
     }
 
-    ctx.fillStyle = '#98c1ff';
-    ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
-    ctx.fillStyle = '#0e1422';
-    ctx.fillRect(goal.x + 8, goal.y + 12, goal.w - 16, goal.h - 20);
+    const goalSpriteKey = goal.sprite?.key ?? 'goal';
+    const goalFrame = goal.sprite?.frame;
+    const goalDrawn = drawTileSprite(ctx, goalSpriteKey, goal.x, goal.y, goal.w, goal.h, goalFrame);
+    if (!goalDrawn) {
+      ctx.fillStyle = '#98c1ff';
+      ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+      ctx.fillStyle = '#0e1422';
+      const doorInsetX = goal.w * 0.25;
+      const doorInsetY = goal.h * 0.2;
+      ctx.fillRect(goal.x + doorInsetX, goal.y + doorInsetY, goal.w - doorInsetX * 2, goal.h - doorInsetY - goal.h * 0.1);
+      ctx.fillStyle = '#f5f7ff';
+      ctx.beginPath();
+      ctx.arc(goal.x + goal.w * 0.65, goal.y + goal.h * 0.6, Math.min(goal.w, goal.h) * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-    if (remotePlayer.active && performance.now() - remotePlayer.lastSeen < 1200) {
-      ctx.fillStyle = '#ff9f1c';
-      ctx.fillRect(remotePlayer.x, remotePlayer.y, remotePlayer.w, remotePlayer.h);
+    if (remotePlayer.active && now - remotePlayer.lastSeen < 1200) {
+      drawPlayerCharacter(remotePlayer, 'remote', now, '#ff9f1c');
       ctx.fillStyle = '#ffd37a';
       ctx.font = '12px system-ui';
       ctx.fillText('Partner', remotePlayer.x - 6, remotePlayer.y - 8);
     }
 
-    ctx.fillStyle = '#1c1c1c';
-    ctx.fillRect(localPlayer.x, localPlayer.y, localPlayer.w, localPlayer.h);
+    drawPlayerCharacter(localPlayer, 'local', now, '#1c1c1c');
 
     ctx.fillStyle = '#f5f7ff';
     ctx.font = '14px system-ui';
@@ -1113,7 +1364,7 @@ export function boot() {
       }
     }
 
-    drawScene();
+    drawScene(now);
     rafId = requestAnimationFrame(frame);
   }
 
