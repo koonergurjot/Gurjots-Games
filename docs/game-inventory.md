@@ -12,7 +12,7 @@
 | asteroids | Asteroids | games/asteroids/index.html | main.js, net.js | shared/game-boot.js | keyboard | No touch controls | Add virtual buttons for rotate/thrust/fire |
 | maze3d | Maze 3D | games/maze3d/index.html | main.js, net.js | shared/ui.js, shared/achievements.js | keyboard | Keyboard only; pointer-lock UX rough | Add touch/gyro movement and clearer start prompt |
 | platformer | Pixel Platformer | games/platformer/index.html | main.js, net.js | shared/ui.js, shared/achievements.js | keyboard, pointer | Pause via **P** only | Integrate shared pause overlay |
-| runner | City Runner | games/runner/index.html | main.js, editor.js | shared/controls.js, shared/ui.js, shared/metrics.js, shared/achievements.js, shared/missions.js | keyboard, touch | No baseline smoke test | Add smoke test and minor loop cleanup |
+| runner | City Runner | games/runner/index.html | main.js, editor.js | shared/controls.js, shared/ui.js, shared/metrics.js, shared/achievements.js, shared/missions.js | keyboard, touch | Baseline smoke test covers boot/score/collision but mission progress + Runner.onScore hooks remain unverified | Extend coverage to assert mission rotation and score bridge events |
 | shooter | Alien Shooter | games/shooter/index.html | main.js, net.js | shared/ui.js, shared/achievements.js | keyboard | No touch controls | Add tap/virtual joystick and ESC pause |
 
 *Most games also include `sfx.js` for audio and `resizeCanvas.global.js`, `canvasLoop.global.js`, or `shared/ui.js` for layout helpers.*
