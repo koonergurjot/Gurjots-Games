@@ -12,7 +12,8 @@ async function loadCatalog() {
     try {
       const res = await fetch(url, { cache: 'no-store' });
       if (!res?.ok) throw new Error(`bad status ${res?.status}`);
-      return await res.json();
+      const payload = await res.json();
+      return Array.isArray(payload?.games) ? payload.games : (Array.isArray(payload) ? payload : []);
     } catch (err) {
       lastError = err;
     }
@@ -27,7 +28,39 @@ try {
   console.warn('maze3d: catalog fetch failed, using empty list', err);
 }
 
-const help = games.find(g => g.id === 'maze3d')?.help || {};
+function toTrimmedString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toTrimmedList(value) {
+  if (Array.isArray(value)) {
+    return value.map(item => toTrimmedString(item)).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  return [];
+}
+
+function sanitizeHelp(source) {
+  const base = source && typeof source === 'object' ? source : {};
+  const fallbackSteps = toTrimmedList(window.helpSteps);
+  const help = {
+    objective: toTrimmedString(base.objective),
+    controls: toTrimmedString(base.controls),
+    tips: toTrimmedList(base.tips),
+    steps: toTrimmedList(base.steps)
+  };
+  if (!help.steps.length && fallbackSteps.length) {
+    help.steps = fallbackSteps;
+  }
+  return help;
+}
+
+const helpEntry = games.find(g => g?.id === 'maze3d' || g?.slug === 'maze3d');
+const help = sanitizeHelp(helpEntry?.help || window.helpData || {});
+window.helpData = help;
 injectHelpButton({ gameId: 'maze3d', ...help });
 recordLastPlayed('maze3d');
 
