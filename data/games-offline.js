@@ -21,6 +21,20 @@ export const games = [
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
       ]
+    },
+    "help": {
+      "objective": "Win rallies until you reach 11 points before your opponent.",
+      "controls": "Player 1: W/S to move. Player 2 (local) uses ↑/↓. Press Space to pause or resume.",
+      "tips": [
+        "Angle the paddle to change the ball's direction and catch opponents off guard.",
+        "Stay near the center between shots so you can react to either corner.",
+        "Use quick taps instead of holding a direction to avoid overshooting the ball."
+      ],
+      "steps": [
+        "Watch the opening serve and get your paddle in position immediately.",
+        "Return the ball past the opposite paddle to score a point.",
+        "Reach 11 points first to win the match."
+      ]
     }
   },
   {
@@ -42,6 +56,20 @@ export const games = [
         "/assets/audio/hit.wav",
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
+      ]
+    },
+    "help": {
+      "objective": "Grow the snake by eating fruit without crashing into walls or your tail.",
+      "controls": "Use Arrow keys or WASD to steer. Press P to pause and R to restart.",
+      "tips": [
+        "Plan turns a few squares ahead to keep open lanes for future moves.",
+        "Sweep the perimeter to straighten the snake before going for tight snacks.",
+        "Avoid reversing direction directly—turn in an arc to stay safe."
+      ],
+      "steps": [
+        "Press an arrow key to start moving.",
+        "Guide the snake to each glowing pellet to grow and score.",
+        "Keep moving without colliding with obstacles or yourself to continue the run."
       ]
     }
   },
@@ -68,6 +96,20 @@ export const games = [
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
       ]
+    },
+    "help": {
+      "objective": "Clear horizontal lines by stacking falling tetrominoes without topping out.",
+      "controls": "←/→ move, ↑ rotate, ↓ soft drop, Space hard drop, P pause.",
+      "tips": [
+        "Leave a clean lane on one side so I pieces can score Tetrises.",
+        "Soft drop to adjust a piece before committing to a hard drop.",
+        "Rotate pieces before they reach the stack to avoid last-second scrambles."
+      ],
+      "steps": [
+        "Start the game and study the upcoming queue.",
+        "Slide and rotate each piece into the best fit as it falls.",
+        "Clear lines to speed up and push for high scores."
+      ]
     }
   },
   {
@@ -92,6 +134,20 @@ export const games = [
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
       ]
+    },
+    "help": {
+      "objective": "Break every brick on the stage while protecting your remaining lives.",
+      "controls": "Move the paddle with the mouse or ←/→ keys. Click/tap to launch. P pauses, R restarts after a loss.",
+      "tips": [
+        "Catch falling power-ups to widen the paddle or add extra balls.",
+        "Hit the ball off-center to steer shots into hard-to-reach bricks.",
+        "Stay beneath clusters of bricks so ricochets keep clearing rows."
+      ],
+      "steps": [
+        "Line up the paddle and launch the opening serve.",
+        "Deflect the ball back into the brick wall to clear tiles and score.",
+        "Finish each layout before running out of lives to advance."
+      ]
     }
   },
   {
@@ -108,6 +164,20 @@ export const games = [
     "firstFrame": {
       "audio": [
         "/assets/audio/click.wav"
+      ]
+    },
+    "help": {
+      "objective": "Checkmate the opposing king using standard chess rules.",
+      "controls": "Click or tap a piece, then select a highlighted square to move. Use on-screen options for puzzles, difficulty, and remapping.",
+      "tips": [
+        "Control the center early so your pieces have maximum reach.",
+        "Castle before your king comes under pressure.",
+        "Look for tactics after every move—forks, pins, and discovered attacks."
+      ],
+      "steps": [
+        "Choose a difficulty or puzzle, then make the first move.",
+        "Develop pieces, protect your king, and coordinate attacks.",
+        "Deliver checkmate or win by opponent resignation to finish the game."
       ]
     }
   },
@@ -126,10 +196,24 @@ export const games = [
       "audio": [
         "/assets/audio/click.wav"
       ]
+    },
+    "help": {
+      "objective": "Outmaneuver the AI in a fully rotatable 3D chessboard and deliver checkmate.",
+      "controls": "Drag to orbit the camera, scroll or pinch to zoom, and right-drag to pan. Click a piece then a target square to move.",
+      "tips": [
+        "Rotate the board to confirm piece alignment before committing to a move.",
+        "Use the HUD buttons to flip sides, toggle coordinates, or enable auto-rotate.",
+        "Watch the thinking indicator so you know when the engine is analysing."
+      ],
+      "steps": [
+        "Pick a difficulty level and start the match.",
+        "Adjust the camera for a clear view, then select and move your pieces.",
+        "Play until you checkmate the opponent or decide to start a new game."
+      ]
     }
   },
   {
-    "id": "g2048",
+    "id": "2048",
     "title": "2048",
     "short": "Slide numbers to reach 2048.",
     "tags": [
@@ -142,6 +226,20 @@ export const games = [
     "firstFrame": {
       "audio": [
         "/assets/audio/click.wav"
+      ]
+    },
+    "help": {
+      "objective": "Slide numbered tiles together to reach the 2048 tile (and beyond).",
+      "controls": "Use Arrow keys to slide tiles. R restarts, U undoes, H shows a hint.",
+      "tips": [
+        "Keep your highest tile anchored in a corner to stay organized.",
+        "Avoid swiping in a direction that breaks your corner chain unless necessary.",
+        "Use undo sparingly to correct mis-swipes or risky moves."
+      ],
+      "steps": [
+        "Swipe or press an arrow key to slide every tile in that direction.",
+        "Merge matching numbers to create larger tiles and increase your score.",
+        "Plan ahead to continue until you reach your target tile or run out of moves."
       ]
     }
   },
@@ -165,6 +263,20 @@ export const games = [
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
       ]
+    },
+    "help": {
+      "objective": "Pilot your ship through space, blasting asteroids and enemies to survive each wave.",
+      "controls": "A/D or ←/→ rotate, W or ↑ thrust, Space/Enter fire, Shift/K hyperspace, P pause, R restart.",
+      "tips": [
+        "Fire in bursts so you can maneuver while shots travel.",
+        "Use hyperspace when surrounded, but beware of random exits.",
+        "Clear smaller rocks quickly to prevent the screen from filling up."
+      ],
+      "steps": [
+        "Thrust forward and rotate to line up shots on incoming asteroids.",
+        "Blast rocks into smaller chunks while dodging debris and enemy ships.",
+        "Survive each wave to push for a new high score."
+      ]
     }
   },
   {
@@ -180,6 +292,20 @@ export const games = [
     "firstFrame": {
       "audio": [
         "/assets/audio/powerup.wav"
+      ]
+    },
+    "help": {
+      "objective": "Find the exit of the randomly generated labyrinth before your opponent does.",
+      "controls": "WASD or Arrow keys move, mouse looks. Press P to pause, R to restart, Esc releases pointer lock.",
+      "tips": [
+        "Use the minimap overlay to keep track of explored corridors and dead ends.",
+        "Follow the breadcrumb trail it draws so you don't double back unnecessarily.",
+        "Pause with P if you need to reorient, then resume to regain pointer lock when ready."
+      ],
+      "steps": [
+        "Click Start to lock the pointer and begin exploring.",
+        "Work through the maze using the minimap and trail as guides.",
+        "Reach the glowing exit to finish the run or beat any connected opponents."
       ]
     }
   },
@@ -200,6 +326,20 @@ export const games = [
       "audio": [
         "/assets/audio/hit.wav",
         "/assets/audio/powerup.wav"
+      ]
+    },
+    "help": {
+      "objective": "Run, jump, and collect coins across the stage while staying ahead of hazards.",
+      "controls": "←/→ move, Space or ↑ jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
+      "tips": [
+        "Collect every coin you see—the goal only opens once the set is complete.",
+        "Time jumps off moving platforms and slopes to keep momentum going.",
+        "Start co-op from the HUD if you want a partner to help sweep the map."
+      ],
+      "steps": [
+        "Press Start or tap to drop into the level.",
+        "Run toward the goal, gathering coins and avoiding pits or enemies.",
+        "Grab the last coin then reach the goal to clear the stage."
       ]
     }
   },
@@ -222,6 +362,20 @@ export const games = [
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
       ]
+    },
+    "help": {
+      "objective": "Sprint through the city streets, dodging obstacles to keep your run alive.",
+      "controls": "Space or ↑ jumps, ↓ slides. On mobile, tap right to jump and left to slide.",
+      "tips": [
+        "Stay near the middle lane so you can quickly jump or slide as obstacles appear.",
+        "Slide under low signs instead of jumping to recover faster afterward.",
+        "Watch the pattern of upcoming hazards to keep your rhythm as speed increases."
+      ],
+      "steps": [
+        "Tap or press jump to hop the first barrier and start the run.",
+        "React to upcoming obstacles with timely jumps and slides.",
+        "Maintain the streak as speed increases to chase new records."
+      ]
     }
   },
   {
@@ -241,6 +395,20 @@ export const games = [
       "audio": [
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
+      ]
+    },
+    "help": {
+      "objective": "Hold off waves of aliens by dodging fire and blasting every intruder.",
+      "controls": "WASD or Arrow keys move, Space/Enter shoot. Keep moving to avoid hits.",
+      "tips": [
+        "Strafe horizontally to herd enemies into your bullet stream.",
+        "Watch your firing cadence—the blaster has a short cooldown.",
+        "Keep distance from enemy clusters to buy time for dodges."
+      ],
+      "steps": [
+        "Move into open space as the first wave approaches.",
+        "Fire continuously while weaving around enemy shots.",
+        "Survive as long as possible to post a high score."
       ]
     }
   }
