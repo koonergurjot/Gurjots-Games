@@ -26,9 +26,19 @@ preloadFirstFrameAssets(GAME_ID).catch(()=>{});
 
 const SPRITE_SOURCES={
   paddle:'/assets/sprites/paddle.png',
-  brick:'/assets/sprites/brick.png',
+  brick:'/assets/tilesets/industrial.png',
   ball:'/assets/sprites/ball.png',
   background:'/assets/backgrounds/arcade.png'
+};
+
+const BRICK_TILESET={
+  size:16,
+  variants:[
+    {row:4,col:0},
+    {row:4,col:4},
+    {row:4,col:8},
+    {row:4,col:12}
+  ]
 };
 
 const EFFECT_SOURCES={
@@ -162,7 +172,8 @@ function loadLevel(){
         acc+=prob;
         if(rand<acc){pu=t;break;}
       }
-      bricks.push({x:pad+i*(bw+8),y:top+r*26,w:bw,h:20,hp,pu});
+      const variantIndex=BRICK_TILESET.variants.length?((r+i)%BRICK_TILESET.variants.length):0;
+      bricks.push({x:pad+i*(bw+8),y:top+r*26,w:bw,h:20,hp,pu,variant:variantIndex});
     }
   }
 }
@@ -379,7 +390,17 @@ function draw(){
   for(const b of bricks){
     if(b.hp>0){
       if(brickSprite&&brickSprite.complete&&brickSprite.naturalWidth){
-        ctx.drawImage(brickSprite,b.x,b.y,b.w,b.h);
+        const tileSize=BRICK_TILESET.size;
+        const variants=BRICK_TILESET.variants;
+        const variantIndex=typeof b.variant==='number'?b.variant:0;
+        const variant=variants.length?variants[variantIndex%variants.length]:null;
+        if(variant){
+          const sx=variant.col*tileSize;
+          const sy=variant.row*tileSize;
+          ctx.drawImage(brickSprite,sx,sy,tileSize,tileSize,b.x,b.y,b.w,b.h);
+        }else{
+          ctx.drawImage(brickSprite,b.x,b.y,b.w,b.h);
+        }
       }else{
         ctx.fillStyle='#a78bfa';ctx.fillRect(b.x,b.y,b.w,b.h);
       }
