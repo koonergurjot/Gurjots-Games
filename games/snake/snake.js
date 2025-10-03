@@ -1,5 +1,6 @@
 import { GameEngine } from '../../shared/gameEngine.js';
-import { createParticleSystem } from '../../shared/fx/canvasFx.js';
+import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
+import { play as playSfx } from '../../shared/juice/audio.js';
 import getThemeTokens from '../../shared/skins/index.js';
 import '../../shared/ui/hud.js';
 import { pushEvent } from '../common/diag-adapter.js';
@@ -92,6 +93,33 @@ const bootStatus = (() => {
 
 const bootLog = bootStatus.log || function(){};
 bootLog('init:start', { readyState: document.readyState });
+
+const SLUG = 'snake';
+
+const SPRITE_SOURCES = {
+  background: '/assets/backgrounds/arcade.png',
+  snakeHead: '/assets/sprites/enemy2.png',
+  snakeBody: '/assets/sprites/block.png',
+  fruit: '/assets/sprites/coin.png',
+  obstacle: '/assets/sprites/brick.png',
+  spark: '/assets/effects/spark.png',
+  explosion: '/assets/effects/explosion.png'
+};
+
+const spriteCache = {};
+
+function ensureSprite(name) {
+  if (spriteCache[name]) return spriteCache[name];
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = SPRITE_SOURCES[name];
+  spriteCache[name] = img;
+  return img;
+}
+
+Object.keys(SPRITE_SOURCES).forEach(ensureSprite);
+
+preloadFirstFrameAssets(SLUG).catch(() => {});
 
 function ensureGameCanvas(){
   let canvas = document.getElementById('game');
@@ -292,6 +320,12 @@ if (typeof fitCanvasToParent === 'function') {
   bootLog('canvas:fit-helper-missing');
 }
 const ctx = c.getContext('2d');
+if (ctx) {
+  ctx.imageSmoothingEnabled = false;
+  if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
+  if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
+  if ('msImageSmoothingEnabled' in ctx) ctx.msImageSmoothingEnabled = false;
+}
 // The playfield is always rendered as a square grid inside the canvas.
 let CELL = Math.min(c.width, c.height) / N;
 // Track the rendered square's offset for pointer-to-grid conversions.
@@ -369,6 +403,47 @@ let fruitColor = '#22d3ee';
 let obstacles = [];
 let won = false;
 let winHandled = false;
+const spriteEffects = [];
+
+function spawnSpriteEffect(type, gridX, gridY, options = {}) {
+  spriteEffects.push({
+    type,
+    x: gridX,
+    y: gridY,
+    offsetX: options.offsetX ?? 0.5,
+    offsetY: options.offsetY ?? 0.5,
+    duration: options.duration ?? 400,
+    scale: options.scale ?? 1,
+    start: performance.now()
+  });
+}
+
+function drawSpriteEffects(ctx, time) {
+  for (let i = spriteEffects.length - 1; i >= 0; i--) {
+    const fx = spriteEffects[i];
+    const progress = (time - fx.start) / fx.duration;
+    if (progress >= 1) {
+      spriteEffects.splice(i, 1);
+      continue;
+    }
+    const img = ensureSprite(fx.type);
+    if (!img || !img.complete || !img.naturalWidth) continue;
+    const alpha = 1 - Math.min(1, Math.max(0, progress));
+    const size = CELL * (fx.scale || 1);
+    const drawX = (fx.x + (fx.offsetX ?? 0.5)) * CELL - size / 2;
+    const drawY = (fx.y + (fx.offsetY ?? 0.5)) * CELL - size / 2;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(img, drawX, drawY, size, size);
+    ctx.restore();
+  }
+}
+
+function triggerDeathEffect(head) {
+  const clampedX = Math.min(Math.max(head.x, 0), N - 1);
+  const clampedY = Math.min(Math.max(head.y, 0), N - 1);
+  spawnSpriteEffect('explosion', clampedX, clampedY, { duration: 600, scale: 1.6 });
+}
 const SPECIAL_FOOD = [
   { icon: '⭐', color: '#fbbf24', points: 5, chance: 0.1 },
   { icon: '💎', color: '#60a5fa', points: 10, chance: 0.03 }
@@ -473,6 +548,7 @@ function resetGame(reason = 'manual') {
   level = 1;
   moveAcc = 0;
   paused = false;
+  spriteEffects.length = 0;
   lastTickTime = performance.now();
   progress.plays++;
   saveProgress();
@@ -535,7 +611,9 @@ function spawnFood() {
     return null;
   }
   const f = freeCells[(rand() * freeCells.length) | 0];
-  return { ...f, ...type };
+  const fruit = { ...f, ...type };
+  playSfx('click');
+  return fruit;
 }
 
 function addObstacleRow() {
@@ -551,15 +629,8 @@ function maybeLevelUp() {
   GG.setMeta(GAME_ID, 'Best: ' + best + ' • Lv ' + level);
 }
 
-const fx = createParticleSystem(ctx);
 let lastTickTime = performance.now();
 let moveAcc = 0;
-
-function spawnFruitBurst(x, y, color) {
-  for (let i = 0; i < 20; i++) {
-    fx.add(x, y, { speed: rand() * 2 + 1, direction: rand() * Math.PI * 2, color, life: 20 });
-  }
-}
 
 function step() {
   if (turnBuffer.length) {
@@ -578,20 +649,22 @@ function step() {
     if (head.x < 0 || head.x >= N || head.y < 0 || head.y >= N) {
       dead = true;
       deadHandled = false;
+      triggerDeathEffect(head);
     }
   }
   if (!dead && (obstacles.some(o => o.x === head.x && o.y === head.y) ||
       snake.some((s, i) => i > 0 && s.x === head.x && s.y === head.y))) {
     dead = true;
     deadHandled = false;
+    triggerDeathEffect(head);
   }
   if (dead || won) return;
   snake.unshift(head);
   if (head.x === food.x && head.y === food.y) {
     score += food.points;
     GG.addXP(food.points);
-    SFX.beep({ freq: 660, dur: 0.05 });
-    spawnFruitBurst((food.x + 0.5) * CELL, (food.y + 0.5) * CELL, food.color);
+    playSfx('power');
+    spawnSpriteEffect('spark', food.x, food.y, { duration: 500, scale: 1.25 });
     speedMs = Math.max(60, speedMs - food.points * 2);
     food = spawnFood();
     fruitSpawnTime = performance.now();
@@ -619,6 +692,23 @@ function draw() {
 
   ctx.clearRect(0, 0, c.width, c.height);
 
+  const bg = ensureSprite('background');
+  if (bg && bg.complete && bg.naturalWidth) {
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    const pattern = ctx.createPattern(bg, 'repeat');
+    if (pattern) {
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, side, side);
+    } else {
+      ctx.drawImage(bg, 0, 0, side, side);
+    }
+    ctx.restore();
+  } else {
+    ctx.fillStyle = boardColors[0];
+    ctx.fillRect(offsetX, offsetY, side, side);
+  }
+
   if (scoreNode) {
     scoreNode.textContent = String(score);
     scoreNode.dataset.gameScore = String(score);
@@ -627,32 +717,22 @@ function draw() {
   ctx.save();
   ctx.translate(offsetX, offsetY);
 
-  // background with alternating tints inside the square grid
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      ctx.fillStyle = (x + y) % 2 ? boardColors[0] : boardColors[1];
-      ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
-    }
-  }
-
-  fx.update();
-  fx.draw();
-
   // fruit with spawn animation
   if (food) {
     const ft = Math.min((time - fruitSpawnTime) / 300, 1);
+    const fruitImg = ensureSprite('fruit');
+    const size = CELL * (0.6 + 0.4 * ft);
+    const drawX = (food.x + 0.5) * CELL - size / 2;
+    const drawY = (food.y + 0.5) * CELL - size / 2;
     ctx.save();
-    ctx.translate((food.x + 0.5) * CELL, (food.y + 0.5) * CELL);
-    ctx.scale(ft, ft);
     ctx.globalAlpha = ft;
-    ctx.fillStyle = food.color;
-    ctx.fillRect(-CELL / 2, -CELL / 2, CELL, CELL);
-    ctx.font = '24px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(food.icon, 0, 4);
+    if (fruitImg && fruitImg.complete && fruitImg.naturalWidth) {
+      ctx.drawImage(fruitImg, drawX, drawY, size, size);
+    } else {
+      ctx.fillStyle = food.color;
+      ctx.fillRect(drawX, drawY, size, size);
+    }
     ctx.restore();
-    ctx.globalAlpha = 1;
   }
 
   // snake interpolation
@@ -661,14 +741,26 @@ function draw() {
     const prev = lastSnake[idx] || lastSnake[lastSnake.length - 1];
     const x = (prev.x + (s.x - prev.x) * t) * CELL;
     const y = (prev.y + (s.y - prev.y) * t) * CELL;
-    const fade = 0.8 - (idx / snake.length) * 0.5;
-    ctx.fillStyle = idx === 0 ? snakeColorHead : `rgba(${snakeColorRGB.r},${snakeColorRGB.g},${snakeColorRGB.b},${fade})`;
-    ctx.fillRect(x, y, CELL, CELL);
+    const sprite = idx === 0 ? ensureSprite('snakeHead') : ensureSprite('snakeBody');
+    if (sprite && sprite.complete && sprite.naturalWidth) {
+      ctx.drawImage(sprite, x, y, CELL, CELL);
+    } else {
+      const fade = 0.8 - (idx / snake.length) * 0.5;
+      ctx.fillStyle = idx === 0 ? snakeColorHead : `rgba(${snakeColorRGB.r},${snakeColorRGB.g},${snakeColorRGB.b},${fade})`;
+      ctx.fillRect(x, y, CELL, CELL);
+    }
   });
 
   // obstacles
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  obstacles.forEach(o => ctx.fillRect(o.x * CELL, o.y * CELL, CELL, CELL));
+  const obstacleSprite = ensureSprite('obstacle');
+  if (obstacleSprite && obstacleSprite.complete && obstacleSprite.naturalWidth) {
+    obstacles.forEach(o => ctx.drawImage(obstacleSprite, o.x * CELL, o.y * CELL, CELL, CELL));
+  } else {
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    obstacles.forEach(o => ctx.fillRect(o.x * CELL, o.y * CELL, CELL, CELL));
+  }
+
+  drawSpriteEffects(ctx, time);
 
   ctx.restore();
 
@@ -691,7 +783,10 @@ function draw() {
     ctx.fillText('Paused — P to resume', c.width / 2, c.height / 2);
   } else if (won) {
     if (!winHandled) {
-      SFX.seq([[440, 0.12, 0.3], [660, 0.12, 0.3], [880, 0.18, 0.3]]);
+      playSfx('power');
+      if (snake[0]) {
+        spawnSpriteEffect('spark', snake[0].x, snake[0].y, { duration: 600, scale: 1.6 });
+      }
       saveScore(score);
       winHandled = true;
     }
@@ -704,7 +799,7 @@ function draw() {
     ctx.fillText('You win! Press R', c.width / 2, c.height / 2);
   } else if (dead) {
     if (!deadHandled) {
-      SFX.seq([[200, 0.08, 0.25], [140, 0.1, 0.25]]);
+      playSfx('hit');
       saveScore(score);
       deadHandled = true;
     }
