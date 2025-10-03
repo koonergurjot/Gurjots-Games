@@ -53,6 +53,43 @@ mapRenderer.domElement.style.position='fixed'; mapRenderer.domElement.style.righ
 document.body.appendChild(mapRenderer.domElement);
 let mapVisible = true;
 mapRenderer.domElement.style.display = 'block';
+const minimapOverlay = document.createElement('canvas');
+minimapOverlay.width = mapRenderer.domElement.width;
+minimapOverlay.height = mapRenderer.domElement.height;
+minimapOverlay.style.position = 'fixed';
+minimapOverlay.style.right = mapRenderer.domElement.style.right;
+minimapOverlay.style.bottom = mapRenderer.domElement.style.bottom;
+minimapOverlay.style.width = `${mapRenderer.domElement.width}px`;
+minimapOverlay.style.height = `${mapRenderer.domElement.height}px`;
+minimapOverlay.style.pointerEvents = 'none';
+minimapOverlay.style.borderRadius = mapRenderer.domElement.style.borderRadius;
+minimapOverlay.style.zIndex = '10';
+document.body.appendChild(minimapOverlay);
+const minimapCtx = minimapOverlay.getContext('2d');
+minimapOverlay.style.display = 'block';
+
+function renderMinimapOverlay() {
+  if (!minimapCtx) return;
+  minimapCtx.clearRect(0, 0, minimapOverlay.width, minimapOverlay.height);
+  minimapCtx.save();
+  minimapCtx.globalAlpha = 0.9;
+  minimapCtx.fillStyle = 'rgba(255,255,255,0.15)';
+  minimapCtx.fillRect(0, 0, minimapOverlay.width, minimapOverlay.height);
+  minimapCtx.restore();
+  if (trail.length) {
+    minimapCtx.fillStyle = '#38bdf8';
+    for (const p of trail) {
+      const u = (p.x / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
+      const v = (p.z / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
+      minimapCtx.fillRect(u - 1, v - 1, 2, 2);
+    }
+  }
+  const playerPos = controls.getObject().position;
+  const u = (playerPos.x / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
+  const v = (playerPos.z / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
+  minimapCtx.fillStyle = '#eab308';
+  minimapCtx.fillRect(u - 2, v - 2, 4, 4);
+}
 
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
 scene.add(hemi);
@@ -1031,6 +1068,7 @@ function togglePause() {
 function toggleMap() {
   mapVisible = !mapVisible;
   mapRenderer.domElement.style.display = mapVisible ? 'block' : 'none';
+  minimapOverlay.style.display = mapVisible ? 'block' : 'none';
 }
 
 function finish(time) {
@@ -1133,26 +1171,7 @@ function loop() {
     scene.fog = null;
     mapRenderer.render(scene, miniCam);
     scene.fog = oldFog;
-    const ctx2 = mapRenderer.domElement.getContext('2d');
-    ctx2.save();
-    ctx2.globalAlpha = 0.9;
-    ctx2.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx2.fillRect(0,0,200,200);
-    ctx2.restore();
-    // trail dots
-    if (trail.length) {
-      ctx2.fillStyle = '#38bdf8';
-      for (const p of trail) {
-        const u = (p.x/(cellSize*MAZE_CELLS*1.2))*100+100;
-        const v = (p.z/(cellSize*MAZE_CELLS*1.2))*100+100;
-        ctx2.fillRect(u-1, v-1, 2, 2);
-      }
-    }
-    const p = controls.getObject().position;
-    const u = (p.x/(cellSize*MAZE_CELLS*1.2))*100+100;
-    const v = (p.z/(cellSize*MAZE_CELLS*1.2))*100+100;
-    ctx2.fillStyle = '#eab308';
-    ctx2.fillRect(u-2, v-2, 4, 4);
+    renderMinimapOverlay();
   }
   if (!shellRenderPaused) {
     loopRaf = requestAnimationFrame(loop);
