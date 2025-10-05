@@ -15,12 +15,18 @@ export function boot() {
   }
   let postedReady = false;
 
-  const player = { x: W*0.2, y: H*0.5, r: 12, vx: 0, vy: 0, speed: 5, hp: 3, cd: 0 };
+  const player = { x: W*0.2, y: H*0.5, r: 12, vx: 0, vy: 0, speed: 300, hp: 3, cd: 0 };
   const bullets = [];
   const enemies = [];
   const portalEffects = [];
   const explosions = [];
-  let t = 0, score = 0;
+  let score = 0;
+  let enemySpawnTimer = 0;
+  const SHOOT_COOLDOWN = 8 / 60;
+  const BULLET_SPEED = 600;
+  const ENEMY_MIN_SPEED = 120;
+  const ENEMY_SPEED_VARIANCE = 120;
+  const ENEMY_SPAWN_INTERVAL = 45 / 60;
   let shooterAPI = null;
   let currentState = 'ready';
   let lastPostedScore = null;
@@ -263,34 +269,40 @@ export function boot() {
     }
   }
 
-  function update(){
+  function update(delta){
+    if (!Number.isFinite(delta)) delta = 0;
+    delta = Math.max(0, delta);
     // movement
     player.vx = (keys.has('ArrowRight')||keys.has('d')||keys.has('D') ? 1 : 0) - (keys.has('ArrowLeft')||keys.has('a')||keys.has('A') ? 1 : 0);
     player.vy = (keys.has('ArrowDown')||keys.has('s')||keys.has('S') ? 1 : 0) - (keys.has('ArrowUp')||keys.has('w')||keys.has('W') ? 1 : 0);
     const len = Math.hypot(player.vx, player.vy) || 1;
-    player.x = Math.max(player.r, Math.min(W - player.r, player.x + (player.vx/len)*player.speed));
-    player.y = Math.max(player.r, Math.min(H - player.r, player.y + (player.vy/len)*player.speed));
+    const moveDistance = player.speed * delta;
+    player.x = Math.max(player.r, Math.min(W - player.r, player.x + (player.vx/len) * moveDistance));
+    player.y = Math.max(player.r, Math.min(H - player.r, player.y + (player.vy/len) * moveDistance));
 
     // shooting
-    player.cd = Math.max(0, player.cd-1);
-    if ((keys.has(' ') || keys.has('Enter')) && player.cd === 0){
-      bullets.push({ x: player.x+player.r+2, y: player.y, vx: 10, r: 3 });
-      player.cd = 8;
+    player.cd = Math.max(0, player.cd - delta);
+    if ((keys.has(' ') || keys.has('Enter')) && player.cd <= 0){
+      bullets.push({ x: player.x+player.r+2, y: player.y, vx: BULLET_SPEED, r: 3 });
+      player.cd = SHOOT_COOLDOWN;
       playShootSound();
     }
 
     // spawn enemies
-    if (t % 45 === 0){
+    enemySpawnTimer += delta;
+    while (enemySpawnTimer >= ENEMY_SPAWN_INTERVAL){
+      enemySpawnTimer -= ENEMY_SPAWN_INTERVAL;
       const y = 20 + Math.random()*(H-40);
       const spriteIndex = Math.floor(Math.random() * ASSET_PATHS.enemies.length) || 0;
-      const enemy = { x: W+20, y, vx: - (2 + Math.random()*2), r: 10, spriteIndex, active: false };
+      const speed = ENEMY_MIN_SPEED + Math.random() * ENEMY_SPEED_VARIANCE;
+      const enemy = { x: W+20, y, vx: -speed, r: 10, spriteIndex, active: false };
       enemies.push(enemy);
       portalEffects.push({ x: enemy.x, y: enemy.y, frameIndex: 0, frameDelay: 0, enemy });
     }
 
     // move bullets & enemies
-    for (const b of bullets){ b.x += b.vx; }
-    for (const e of enemies){ if (e.active) { e.x += e.vx; } }
+    for (const b of bullets){ b.x += b.vx * delta; }
+    for (const e of enemies){ if (e.active) { e.x += e.vx * delta; } }
 
     // collisions & culling
     for (let i=enemies.length-1;i>=0;i--){
@@ -317,8 +329,6 @@ export function boot() {
     for (let i=bullets.length-1;i>=0;i--){
       if (bullets[i].x > W+30) bullets.splice(i,1);
     }
-
-    t++;
 
     updatePortalEffects();
     updateExplosions();
@@ -481,7 +491,7 @@ export function boot() {
     delta = Math.max(0, Math.min(0.1, delta));
     lastParallaxTime = now;
     updateParallax(delta);
-    update();
+    update(delta);
     draw();
     if (player.hp>0) {
       raf=requestAnimationFrame(frame);
@@ -530,7 +540,7 @@ export function boot() {
     enemies.length = 0;
     explosions.length = 0;
     portalEffects.length = 0;
-    t = 0;
+    enemySpawnTimer = 0;
     resetParallax();
     score = 0;
     shellPaused = false;
