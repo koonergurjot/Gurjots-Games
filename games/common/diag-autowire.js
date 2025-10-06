@@ -163,7 +163,12 @@
 
     removeLegacyElements();
 
-    win.__GG_DIAG_OPTS = { suppressButton: true };
+    const existingOpts = (() => {
+      const opts = win.__GG_DIAG_OPTS;
+      if (!opts || typeof opts !== 'object') return {};
+      return opts;
+    })();
+    win.__GG_DIAG_OPTS = Object.assign({ suppressButton: true }, existingOpts);
 
     ensureScript(buildRootUrl('/games/common/diagnostics/report-store.js'), 'data-gg-diag-report');
     ensureScript(buildRootUrl('/games/common/diag-core.js'), 'data-gg-diag-core');
