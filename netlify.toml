@@ -9,6 +9,12 @@
 
 [[headers]]
   for = "/*"
-  [headers.values]
+[headers.values]
     Access-Control-Allow-Origin = "*"
     Access-Control-Allow-Headers = "*"
+
+[[redirects]]
+  from = "/game/*"
+  to = "/404.html"
+  status = 200
+  force = true
