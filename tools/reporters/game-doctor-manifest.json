@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "notes": "Paths and glob patterns are relative to the folder containing the playable shell (index.html).",
+  "requirements": {
+    "pong": {
+      "paths": [
+        "manifest.json",
+        "pong.css"
+      ],
+      "globs": [
+        "*.js"
+      ]
+    },
+    "platformer": {
+      "paths": [
+        "levels",
+        "tiles.js"
+      ],
+      "globs": [
+        "levels/*.json"
+      ]
+    }
+  }
+}

@@ -1,9 +1,13 @@
 {
-  "generatedAt": "2025-10-06T22:41:37.883Z",
+  "generatedAt": "2025-10-06T22:49:41.382Z",
   "summary": {
     "total": 12,
     "passing": 12,
     "failing": 0
+  },
+  "manifest": {
+    "version": 1,
+    "source": "tools/reporters/game-doctor-manifest.json"
   },
   "games": [
     {
@@ -28,6 +32,47 @@
       },
       "thumbnail": {
         "found": "games/pong/thumb.png"
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "manifest.json",
+            "found": true,
+            "resolved": "games/pong/manifest.json"
+          },
+          {
+            "requirement": "pong.css",
+            "found": true,
+            "resolved": "games/pong/pong.css"
+          }
+        ],
+        "globs": [
+          {
+            "pattern": "*.js",
+            "matches": [
+              {
+                "relativeToShell": "adapter.js",
+                "relativeToRoot": "games/pong/adapter.js"
+              },
+              {
+                "relativeToShell": "career.js",
+                "relativeToRoot": "games/pong/career.js"
+              },
+              {
+                "relativeToShell": "main.js",
+                "relativeToRoot": "games/pong/main.js"
+              },
+              {
+                "relativeToShell": "pauseOverlay.js",
+                "relativeToRoot": "games/pong/pauseOverlay.js"
+              },
+              {
+                "relativeToShell": "pong.js",
+                "relativeToRoot": "games/pong/pong.js"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -223,6 +268,35 @@
       },
       "thumbnail": {
         "found": "games/platformer/thumb.png"
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "levels",
+            "found": true,
+            "resolved": "games/platformer/levels"
+          },
+          {
+            "requirement": "tiles.js",
+            "found": true,
+            "resolved": "games/platformer/tiles.js"
+          }
+        ],
+        "globs": [
+          {
+            "pattern": "levels/*.json",
+            "matches": [
+              {
+                "relativeToShell": "levels/level1.json",
+                "relativeToRoot": "games/platformer/levels/level1.json"
+              },
+              {
+                "relativeToShell": "levels/level2.json",
+                "relativeToRoot": "games/platformer/levels/level2.json"
+              }
+            ]
+          }
+        ]
       }
     },
     {

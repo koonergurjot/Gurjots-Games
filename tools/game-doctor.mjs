@@ -10,6 +10,7 @@ const REPORT_JSON = path.join(HEALTH_DIR, 'report.json');
 const REPORT_MD = path.join(HEALTH_DIR, 'report.md');
 const DEFAULT_BASELINE = path.join(HEALTH_DIR, 'baseline.json');
 const PLACEHOLDER_THUMB = 'assets/placeholder-thumb.png';
+const MANIFEST_PATH = path.join(ROOT, 'tools', 'reporters', 'game-doctor-manifest.json');
 
 const gamesPath = path.join(ROOT, 'games.json');
 
@@ -61,6 +62,322 @@ function relativeFromRoot(filePath) {
   return path.relative(ROOT, filePath).replace(/\\/g, '/');
 }
 
+async function loadManifest() {
+  try {
+    const manifestRaw = await fs.readFile(MANIFEST_PATH, 'utf8');
+    const manifest = JSON.parse(manifestRaw);
+    if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+      throw new Error(
+        `Manifest at ${relativeFromRoot(MANIFEST_PATH)} must be a JSON object with a requirements map.`,
+      );
+    }
+    if (manifest.requirements == null) {
+      manifest.requirements = {};
+    }
+    if (typeof manifest.requirements !== 'object' || Array.isArray(manifest.requirements)) {
+      throw new Error(
+        `Manifest at ${relativeFromRoot(MANIFEST_PATH)} must expose a requirements object keyed by slug.`,
+      );
+    }
+    return manifest;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return { version: 1, requirements: {} };
+    }
+    if (error instanceof SyntaxError) {
+      throw new Error(
+        `Unable to parse manifest at ${relativeFromRoot(MANIFEST_PATH)}: ${error.message}`,
+      );
+    }
+    throw error;
+  }
+}
+
+function normalizeGlobPattern(pattern) {
+  let normalized = pattern.replace(/\\/g, '/');
+  if (normalized.startsWith('./')) {
+    normalized = normalized.slice(2);
+  }
+  normalized = normalized.replace(/\/{2,}/g, '/');
+  if (normalized !== '/' && normalized.endsWith('/')) {
+    normalized = normalized.replace(/\/+$/, '');
+  }
+  return normalized;
+}
+
+function globToRegExp(pattern) {
+  let regex = '^';
+  for (let i = 0; i < pattern.length; i += 1) {
+    const char = pattern[i];
+    if (char === '*') {
+      let starCount = 1;
+      while (pattern[i + starCount] === '*') {
+        starCount += 1;
+      }
+      if (starCount > 1) {
+        regex += '.*';
+      } else {
+        regex += '[^/]*';
+      }
+      i += starCount - 1;
+      continue;
+    }
+    if (char === '?') {
+      regex += '[^/]';
+      continue;
+    }
+    if ('\\.[]{}()+^$|'.includes(char)) {
+      regex += `\\${char}`;
+      continue;
+    }
+    regex += char;
+  }
+  regex += '$';
+  return new RegExp(regex);
+}
+
+async function collectShellEntries(baseDir) {
+  const collected = [];
+
+  async function walk(currentDir) {
+    let dirEntries;
+    try {
+      dirEntries = await fs.readdir(currentDir, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return;
+      }
+      throw error;
+    }
+
+    for (const entry of dirEntries) {
+      const absolutePath = path.join(currentDir, entry.name);
+      const relativePath = path
+        .relative(baseDir, absolutePath)
+        .replace(/\\/g, '/');
+      collected.push({ absolute: absolutePath, relative: relativePath });
+      if (entry.isDirectory()) {
+        // eslint-disable-next-line no-await-in-loop
+        await walk(absolutePath);
+      }
+    }
+  }
+
+  await walk(baseDir);
+  return collected;
+}
+
+function matchGlobEntries(entries, pattern) {
+  const normalized = normalizeGlobPattern(pattern);
+  const matcher = globToRegExp(normalized);
+  return entries.filter((entry) => matcher.test(entry.relative));
+}
+
+async function evaluateManifestRequirements(slug, shellAbsolutePath, manifestRequirements, issues) {
+  const manifestResult = { paths: [], globs: [] };
+
+  if (!slug) {
+    return manifestResult;
+  }
+
+  const entry = manifestRequirements?.[slug];
+  if (!entry) {
+    return manifestResult;
+  }
+
+  if (typeof entry !== 'object' || Array.isArray(entry)) {
+    issues.push(
+      formatIssue('Manifest requirements entry must be an object', {
+        slug,
+        received: entry,
+      }),
+    );
+    return manifestResult;
+  }
+
+  if (!shellAbsolutePath) {
+    issues.push(
+      formatIssue('Manifest requirements configured but playable shell not found', {
+        slug,
+      }),
+    );
+    return manifestResult;
+  }
+
+  const shellDir = path.dirname(shellAbsolutePath);
+
+  if (entry.paths != null && !Array.isArray(entry.paths)) {
+    issues.push(
+      formatIssue('Manifest paths entry must be an array of strings', {
+        slug,
+        received: entry.paths,
+      }),
+    );
+  } else if (Array.isArray(entry.paths)) {
+    for (const rawRequirement of entry.paths) {
+      const requirementEntry = { requirement: rawRequirement };
+
+      if (typeof rawRequirement !== 'string') {
+        requirementEntry.error = 'not-a-string';
+        manifestResult.paths.push(requirementEntry);
+        issues.push(
+          formatIssue('Manifest path requirement is not a string', {
+            slug,
+            requirement: rawRequirement,
+          }),
+        );
+        continue;
+      }
+
+      const requirement = rawRequirement.trim();
+      requirementEntry.requirement = requirement;
+
+      if (!requirement) {
+        requirementEntry.error = 'empty';
+        manifestResult.paths.push(requirementEntry);
+        issues.push(
+          formatIssue('Manifest path requirement is empty', {
+            slug,
+          }),
+        );
+        continue;
+      }
+
+      if (path.isAbsolute(requirement)) {
+        requirementEntry.error = 'absolute-path';
+        manifestResult.paths.push(requirementEntry);
+        issues.push(
+          formatIssue('Manifest path requirement must be relative to the shell directory', {
+            slug,
+            requirement,
+          }),
+        );
+        continue;
+      }
+
+      const segments = requirement.split(/[\\/]+/).filter(Boolean);
+      if (segments.includes('..')) {
+        requirementEntry.error = 'parent-segment';
+        manifestResult.paths.push(requirementEntry);
+        issues.push(
+          formatIssue('Manifest path requirement must not traverse above the shell directory', {
+            slug,
+            requirement,
+          }),
+        );
+        continue;
+      }
+
+      const candidate = path.join(shellDir, requirement);
+      // eslint-disable-next-line no-await-in-loop
+      const exists = await pathExists(candidate);
+      requirementEntry.found = exists;
+      requirementEntry.resolved = relativeFromRoot(candidate);
+      manifestResult.paths.push(requirementEntry);
+
+      if (!exists) {
+        issues.push(
+          formatIssue('Manifest required asset missing', {
+            slug,
+            requirement,
+            expected: requirementEntry.resolved,
+          }),
+        );
+      }
+    }
+  }
+
+  let cachedShellEntries = null;
+
+  if (entry.globs != null && !Array.isArray(entry.globs)) {
+    issues.push(
+      formatIssue('Manifest globs entry must be an array of strings', {
+        slug,
+        received: entry.globs,
+      }),
+    );
+  } else if (Array.isArray(entry.globs)) {
+    for (const rawPattern of entry.globs) {
+      const globEntry = { pattern: rawPattern };
+
+      if (typeof rawPattern !== 'string') {
+        globEntry.error = 'not-a-string';
+        manifestResult.globs.push(globEntry);
+        issues.push(
+          formatIssue('Manifest glob requirement is not a string', {
+            slug,
+            pattern: rawPattern,
+          }),
+        );
+        continue;
+      }
+
+      const pattern = rawPattern.trim();
+      globEntry.pattern = pattern;
+
+      if (!pattern) {
+        globEntry.error = 'empty';
+        manifestResult.globs.push(globEntry);
+        issues.push(
+          formatIssue('Manifest glob requirement is empty', {
+            slug,
+          }),
+        );
+        continue;
+      }
+
+      if (path.isAbsolute(pattern)) {
+        globEntry.error = 'absolute-pattern';
+        manifestResult.globs.push(globEntry);
+        issues.push(
+          formatIssue('Manifest glob requirement must be relative to the shell directory', {
+            slug,
+            pattern,
+          }),
+        );
+        continue;
+      }
+
+      const segments = pattern.split(/[\\/]+/).filter(Boolean);
+      if (segments.includes('..')) {
+        globEntry.error = 'parent-segment';
+        manifestResult.globs.push(globEntry);
+        issues.push(
+          formatIssue('Manifest glob requirement must not traverse above the shell directory', {
+            slug,
+            pattern,
+          }),
+        );
+        continue;
+      }
+
+      if (!cachedShellEntries) {
+        // eslint-disable-next-line no-await-in-loop
+        cachedShellEntries = await collectShellEntries(shellDir);
+      }
+
+      const matches = matchGlobEntries(cachedShellEntries, pattern);
+
+      globEntry.matches = matches.map((match) => ({
+        relativeToShell: match.relative,
+        relativeToRoot: relativeFromRoot(match.absolute),
+      }));
+      manifestResult.globs.push(globEntry);
+
+      if (matches.length === 0) {
+        issues.push(
+          formatIssue('Manifest glob matched no files', {
+            slug,
+            pattern,
+          }),
+        );
+      }
+    }
+  }
+
+  return manifestResult;
+}
+
 function buildMarkdownReport(report) {
   const lines = [];
   lines.push('# Game Doctor Report');
@@ -70,6 +387,10 @@ function buildMarkdownReport(report) {
   lines.push(`- Total games: ${report.summary.total}`);
   lines.push(`- Passing: ${report.summary.passing}`);
   lines.push(`- Failing: ${report.summary.failing}`);
+  if (report.manifest) {
+    lines.push(`- Manifest version: ${report.manifest.version ?? 'unknown'}`);
+    lines.push(`- Manifest source: ${report.manifest.source ?? relativeFromRoot(MANIFEST_PATH)}`);
+  }
   lines.push('');
   for (const game of report.games) {
     lines.push(`## ${game.title ?? game.slug ?? 'Unknown Game'}`);
@@ -87,6 +408,39 @@ function buildMarkdownReport(report) {
     }
     if (game.assets?.audio?.length) {
       lines.push(`- Audio checked: ${game.assets.audio.length}`);
+    }
+    if (game.requirements?.paths?.length) {
+      const pathProblems = game.requirements.paths.filter(
+        (entry) => entry.error || entry.found === false,
+      );
+      if (pathProblems.length === 0) {
+        lines.push('- Manifest paths: all required paths found');
+      } else {
+        lines.push('- Manifest paths missing or invalid:');
+        for (const issue of pathProblems) {
+          const label = issue.resolved ?? issue.requirement ?? '[invalid requirement]';
+          lines.push(`  - ${label}`);
+        }
+      }
+    }
+    if (game.requirements?.globs?.length) {
+      const globProblems = game.requirements.globs.filter((entry) => {
+        if (entry.error) {
+          return true;
+        }
+        if (!Array.isArray(entry.matches)) {
+          return true;
+        }
+        return entry.matches.length === 0;
+      });
+      if (globProblems.length === 0) {
+        lines.push('- Manifest globs: all patterns matched files');
+      } else {
+        lines.push('- Manifest globs with no matches or invalid patterns:');
+        for (const globEntry of globProblems) {
+          lines.push(`  - ${globEntry.pattern ?? '[invalid pattern]'}`);
+        }
+      }
     }
     if (game.issues.length === 0) {
       lines.push('- Issues: none');
@@ -184,6 +538,16 @@ async function main() {
     return;
   }
 
+  let manifest;
+  try {
+    manifest = await loadManifest();
+  } catch (error) {
+    console.error(error.message ?? error);
+    process.exitCode = 1;
+    return;
+  }
+
+  const manifestRequirements = manifest.requirements ?? {};
   const results = [];
 
   for (const [index, game] of games.entries()) {
@@ -197,6 +561,7 @@ async function main() {
     const title = typeof game.title === 'string' ? game.title : `Game #${index + 1}`;
 
     let foundShell = null;
+    let foundShellAbsolute = null;
     if (slug) {
       const shellCandidates = [
         path.join(ROOT, 'games', slug, 'index.html'),
@@ -206,6 +571,7 @@ async function main() {
       for (const candidate of shellCandidates) {
         // eslint-disable-next-line no-await-in-loop
         if (await pathExists(candidate)) {
+          foundShellAbsolute = candidate;
           foundShell = relativeFromRoot(candidate);
           break;
         }
@@ -285,6 +651,16 @@ async function main() {
       }
     }
 
+    const manifestCheck = await evaluateManifestRequirements(
+      slug,
+      foundShellAbsolute,
+      manifestRequirements,
+      issues,
+    );
+
+    const includeManifestDetails =
+      manifestCheck.paths.length > 0 || manifestCheck.globs.length > 0;
+
     const result = {
       index,
       title,
@@ -299,6 +675,10 @@ async function main() {
       thumbnail: { found: thumbnailFound },
     };
 
+    if (includeManifestDetails) {
+      result.requirements = manifestCheck;
+    }
+
     results.push(result);
   }
 
@@ -311,6 +691,10 @@ async function main() {
   const report = {
     generatedAt: new Date().toISOString(),
     summary,
+    manifest: {
+      version: manifest.version ?? null,
+      source: relativeFromRoot(MANIFEST_PATH),
+    },
     games: results,
   };
 

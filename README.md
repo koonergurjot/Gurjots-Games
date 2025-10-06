@@ -137,6 +137,35 @@ Visit [localhost:3000](http://localhost:3000) to play!
 - [Contributing Guide](CONTRIBUTING.md)
 - [FAQ](#-faq)
 
+### 🩺 Game Doctor Manifest
+
+The automated health check looks for extra assets defined in
+`tools/reporters/game-doctor-manifest.json`. Each game slug can list
+required files (via the `paths` array) and file patterns (via the `globs`
+array). All values are resolved relative to the folder that contains the
+playable shell (`index.html`).
+
+```json
+{
+  "requirements": {
+    "pong": {
+      "paths": ["manifest.json", "pong.css"],
+      "globs": ["*.js"]
+    }
+  }
+}
+```
+
+To add new asset requirements:
+
+1. Identify the slug and shell folder for the game you are updating.
+2. Add (or update) the corresponding entry in the manifest with the files
+   or glob patterns that must exist beside the shell.
+3. Keep requirements in arrays of strings—invalid entries will be treated
+   as manifest errors during the health check.
+4. Run `node tools/game-doctor.mjs` (or `npm run doctor`) to confirm the
+   manifest changes pass.
+
 ---
 
 ## ❓ FAQ

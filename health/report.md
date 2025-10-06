@@ -1,10 +1,12 @@
 # Game Doctor Report
 
-Generated: 2025-10-06T22:41:37.883Z
+Generated: 2025-10-06T22:49:41.382Z
 
 - Total games: 12
 - Passing: 12
 - Failing: 0
+- Manifest version: 1
+- Manifest source: tools/reporters/game-doctor-manifest.json
 
 ## Pong Classic
 
@@ -14,6 +16,8 @@ Generated: 2025-10-06T22:41:37.883Z
 - Thumbnail: games/pong/thumb.png
 - Sprites checked: 2
 - Audio checked: 3
+- Manifest paths: all required paths found
+- Manifest globs: all patterns matched files
 - Issues: none
 
 ## Snake
@@ -100,6 +104,8 @@ Generated: 2025-10-06T22:41:37.883Z
 - Thumbnail: games/platformer/thumb.png
 - Sprites checked: 1
 - Audio checked: 2
+- Manifest paths: all required paths found
+- Manifest globs: all patterns matched files
 - Issues: none
 
 ## City Runner
