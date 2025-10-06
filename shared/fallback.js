@@ -1,4 +1,4 @@
-const REPO_SLUG = 'USER/Game';
+const REPO_SLUG = 'koonergurjot/Gurjots-Games';
 const ISSUE_BASE_URL = `https://github.com/${REPO_SLUG}/issues/new`;
 
 export function renderFallbackPanel(error, gameName) {
