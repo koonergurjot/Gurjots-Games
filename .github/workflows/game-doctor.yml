@@ -1,0 +1,36 @@
+name: Game Doctor
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    name: Run Game Doctor
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Game Doctor
+        run: node tools/game-doctor.mjs
+
+      - name: Upload Game Doctor report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-doctor-report
+          if-no-files-found: ignore
+          path: |
+            health/report.json
+            health/report.md
