@@ -4,7 +4,7 @@ export interface Env {
   };
 }
 
-const SPA_FALLBACK_PATH = "/index.html";
+const SPA_FALLBACK_PATH = "/404.html";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
