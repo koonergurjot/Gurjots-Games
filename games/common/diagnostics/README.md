@@ -5,6 +5,11 @@ Per-game diagnostics adapters allow a title to integrate with the shared
 overlay can react to what the game is doing) and optional control APIs (so
 QA can poke at the running game directly from diagnostics tools).
 
+Hosts can customise the overlay bootstrap through `window.__GG_DIAG_OPTS`.
+Setting `suppressButton: true` prevents the floating diagnostics button
+from being injected so an embedding shell can expose its own trigger while
+still opening the modal via `window.__GG_DIAG.open()`.
+
 ## Registering an adapter
 
 Use `registerGameDiagnostics(slug, adapter)` from

@@ -9,7 +9,7 @@
   }
 
   const existingQueue = Array.isArray(global.__GG_DIAG_QUEUE) ? global.__GG_DIAG_QUEUE.splice(0) : [];
-  global.__GG_DIAG_OPTS = Object.assign({}, { suppressButton: true }, global.__GG_DIAG_OPTS || {});
+  global.__GG_DIAG_OPTS = Object.assign({}, { suppressButton: false }, global.__GG_DIAG_OPTS || {});
 
   const reportStoreModule = ensureReportStoreModule();
   const reportStore = reportStoreModule.createReportStore({
@@ -483,14 +483,19 @@
     root.dataset.ggDiagRoot = "modern";
     root.className = "diag-overlay";
 
-    const fab = doc.createElement("button");
-    fab.type = "button";
-    fab.className = "gg-diag-fab";
-    fab.setAttribute("aria-label", "Open diagnostics console");
-    fab.setAttribute("aria-haspopup", "dialog");
-    fab.setAttribute("aria-expanded", "false");
-    fab.innerHTML = "&#9881;";
-    fab.addEventListener("click", () => open());
+    const suppressButton = !!global.__GG_DIAG_OPTS?.suppressButton;
+
+    let fab = null;
+    if (!suppressButton) {
+      fab = doc.createElement("button");
+      fab.type = "button";
+      fab.className = "gg-diag-fab";
+      fab.setAttribute("aria-label", "Open diagnostics console");
+      fab.setAttribute("aria-haspopup", "dialog");
+      fab.setAttribute("aria-expanded", "false");
+      fab.innerHTML = "&#9881;";
+      fab.addEventListener("click", () => open());
+    }
 
     const backdrop = doc.createElement("div");
     backdrop.className = "gg-diag-backdrop";
@@ -616,7 +621,11 @@
     modal.append(header, body, actions);
     backdrop.append(modal);
     root.append(backdrop);
-    doc.body.append(root, fab);
+    if (fab) {
+      doc.body.append(root, fab);
+    } else {
+      doc.body.append(root);
+    }
 
     state.root = root;
     state.fab = fab;
