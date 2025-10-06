@@ -136,6 +136,13 @@
       color:var(--panel-fg, #f3f7ff);
     }
     .status .logbox { pointer-events:auto; }
+    .status .actions {
+      pointer-events:auto;
+      display:flex;
+      justify-content:flex-end;
+      margin-top:8px;
+    }
+    .status .actions .btn { min-width: 0; }
     .status h2 { margin:0 0 6px; font-size:16px; }
     .status p { margin:6px 0 0; color: var(--muted); }
     .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
@@ -322,6 +329,9 @@
               <span class="pill" id="pillTimer">t+0.0s</span>
               <span class="pill" id="pillSignal">signal: —</span>
             </div>
+            <div class="actions" id="logActions">
+              <button type="button" class="btn btn-ghost" id="btnCopyLogs">Copy logs</button>
+            </div>
             <div class="logbox" id="logbox" role="log" aria-live="polite"></div>
           </div>
         </div>
@@ -361,6 +371,7 @@
       const logbox = document.getElementById("logbox");
       const btnReload = document.getElementById("btnReload");
       const btnDiag = document.getElementById("btnDiag");
+      const btnCopyLogs = document.getElementById("btnCopyLogs");
 
       let isLegacyShell = false;
       let sandboxTrusted = false;
@@ -394,6 +405,40 @@
       };
 
       let diagWired = false;
+      let copyWired = false;
+      let copyResetHandle = null;
+      const defaultCopyLabel = "Copy logs";
+
+      function resetCopyButton() {
+        if (!btnCopyLogs) return;
+        btnCopyLogs.disabled = false;
+        btnCopyLogs.textContent = defaultCopyLabel;
+      }
+
+      function handleCopyLogs() {
+        if (!btnCopyLogs) return;
+        const text = Array.from(logbox.children).map(div => div.textContent || "").join("\n");
+        if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+          btnCopyLogs.textContent = "Copy unavailable";
+          clearTimeout(copyResetHandle);
+          copyResetHandle = setTimeout(resetCopyButton, 1500);
+          return;
+        }
+        btnCopyLogs.disabled = true;
+        btnCopyLogs.textContent = "Copying…";
+        navigator.clipboard.writeText(text)
+          .then(() => {
+            btnCopyLogs.textContent = "Copied!";
+          })
+          .catch(() => {
+            btnCopyLogs.textContent = "Copy failed";
+          })
+          .finally(() => {
+            clearTimeout(copyResetHandle);
+            copyResetHandle = setTimeout(resetCopyButton, 1500);
+          });
+      }
+
       function wireDiagButton() {
         if (!btnDiag) return;
         if (!diagWired) {
@@ -403,6 +448,16 @@
         btnDiag.classList.remove("hidden");
         btnDiag.removeAttribute("aria-hidden");
         btnDiag.removeAttribute("tabindex");
+        if (btnCopyLogs) {
+          if (!copyWired) {
+            btnCopyLogs.addEventListener("click", handleCopyLogs);
+            copyWired = true;
+          }
+          btnCopyLogs.classList.remove("hidden");
+          btnCopyLogs.removeAttribute("aria-hidden");
+          btnCopyLogs.removeAttribute("tabindex");
+          resetCopyButton();
+        }
       }
 
       function unwireDiagButton() {
@@ -415,6 +470,18 @@
         btnDiag.setAttribute("aria-hidden", "true");
         btnDiag.setAttribute("tabindex", "-1");
         btnDiag.textContent = "Diagnostics";
+        if (btnCopyLogs) {
+          if (copyWired) {
+            btnCopyLogs.removeEventListener("click", handleCopyLogs);
+            copyWired = false;
+          }
+          btnCopyLogs.classList.add("hidden");
+          btnCopyLogs.setAttribute("aria-hidden", "true");
+          btnCopyLogs.setAttribute("tabindex", "-1");
+          clearTimeout(copyResetHandle);
+          copyResetHandle = null;
+          resetCopyButton();
+        }
       }
 
       function applySandbox(allowTrusted) {
