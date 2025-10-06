@@ -611,22 +611,24 @@
           .then((html) => {
             const assets = collectAssetUrls(html, baseUrl);
             if (!assets.length) {
-              setHealthPill("health: 0/0 OK", "good");
-              write("preflight: 0/0 assets OK");
+              setHealthPill("health: 0/0 OK", "bad");
+              write("preflight: no assets discovered");
               return;
             }
 
             let okCount = 0;
-            let failCount = 0;
             let completed = 0;
             const failures = [];
 
             const updatePill = (final = false) => {
               const text = `health: ${okCount}/${assets.length} OK`;
               const state = final
-                ? (failCount === 0
-                  ? "good"
-                  : (failCount <= Math.max(1, Math.floor(assets.length * 0.3)) ? "warn" : "bad"))
+                ? (() => {
+                    const ratio = okCount / assets.length;
+                    if (ratio >= 0.9) return "good";
+                    if (ratio >= 0.6) return "warn";
+                    return "bad";
+                  })()
                 : "pending";
               setHealthPill(text, state);
             };
@@ -640,7 +642,6 @@
                 if (ok) {
                   okCount += 1;
                 } else {
-                  failCount += 1;
                   failures.push(url);
                 }
                 updatePill(completed === assets.length);
