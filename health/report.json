@@ -1,0 +1,274 @@
+{
+  "generatedAt": "2025-10-06T22:32:21.773Z",
+  "summary": {
+    "total": 12,
+    "passing": 12,
+    "failing": 0
+  },
+  "games": [
+    {
+      "index": 0,
+      "title": "Pong Classic",
+      "slug": "pong",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/pong/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/paddle.png",
+          "assets/sprites/ball.png"
+        ],
+        "audio": [
+          "assets/audio/hit.wav",
+          "assets/audio/powerup.wav",
+          "assets/audio/click.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "games/pong/thumb.png"
+      }
+    },
+    {
+      "index": 1,
+      "title": "Snake",
+      "slug": "snake",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/snake/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/coin.png"
+        ],
+        "audio": [
+          "assets/audio/hit.wav",
+          "assets/audio/powerup.wav",
+          "assets/audio/click.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "assets/placeholder-thumb.png"
+      }
+    },
+    {
+      "index": 2,
+      "title": "Tetris",
+      "slug": "tetris",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/tetris/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/block.png",
+          "assets/backgrounds/arcade.png",
+          "assets/effects/spark.png",
+          "assets/effects/explosion.png"
+        ],
+        "audio": [
+          "assets/audio/hit.wav",
+          "assets/audio/powerup.wav",
+          "assets/audio/click.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "assets/placeholder-thumb.png"
+      }
+    },
+    {
+      "index": 3,
+      "title": "Breakout",
+      "slug": "breakout",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/breakout/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/paddle.png",
+          "assets/sprites/brick.png",
+          "assets/sprites/ball.png"
+        ],
+        "audio": [
+          "assets/audio/hit.wav",
+          "assets/audio/powerup.wav",
+          "assets/audio/click.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "assets/placeholder-thumb.png"
+      }
+    },
+    {
+      "index": 4,
+      "title": "Chess (2D)",
+      "slug": "chess",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/chess/index.html"
+      },
+      "assets": {
+        "sprites": [],
+        "audio": [
+          "assets/audio/click.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "assets/placeholder-thumb.png"
+      }
+    },
+    {
+      "index": 5,
+      "title": "Chess 3D (Local)",
+      "slug": "chess3d",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/chess3d/index.html"
+      },
+      "assets": {
+        "sprites": [],
+        "audio": [
+          "assets/audio/click.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "assets/placeholder-thumb.png"
+      }
+    },
+    {
+      "index": 6,
+      "title": "2048",
+      "slug": "2048",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/2048/index.html"
+      },
+      "assets": {
+        "sprites": [],
+        "audio": [
+          "assets/audio/click.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "assets/placeholder-thumb.png"
+      }
+    },
+    {
+      "index": 7,
+      "title": "Asteroids",
+      "slug": "asteroids",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/asteroids/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/ship.png"
+        ],
+        "audio": [
+          "assets/audio/hit.wav",
+          "assets/audio/explode.wav",
+          "assets/audio/powerup.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "games/asteroids/thumb.png"
+      }
+    },
+    {
+      "index": 8,
+      "title": "Maze 3D",
+      "slug": "maze3d",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/maze3d/index.html"
+      },
+      "assets": {
+        "sprites": [],
+        "audio": [
+          "assets/audio/powerup.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "games/maze3d/thumb.png"
+      }
+    },
+    {
+      "index": 9,
+      "title": "Pixel Platformer",
+      "slug": "platformer",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/platformer/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/coin.png"
+        ],
+        "audio": [
+          "assets/audio/hit.wav",
+          "assets/audio/powerup.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "games/platformer/thumb.png"
+      }
+    },
+    {
+      "index": 10,
+      "title": "City Runner",
+      "slug": "runner",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/runner/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/coin.png"
+        ],
+        "audio": [
+          "assets/audio/hit.wav",
+          "assets/audio/powerup.wav",
+          "assets/audio/click.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "games/runner/thumb.png"
+      }
+    },
+    {
+      "index": 11,
+      "title": "Alien Shooter",
+      "slug": "shooter",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/shooter/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/ship.png"
+        ],
+        "audio": [
+          "assets/audio/explode.wav",
+          "assets/audio/powerup.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "games/shooter/thumb.png"
+      }
+    }
+  ]
+}
