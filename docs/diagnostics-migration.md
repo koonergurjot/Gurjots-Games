@@ -65,3 +65,8 @@ shared queue until the shim takes over.
   custom panes.
 - `shared/diagnostics.js` will keep emitting a warning event until the module
   reference is removed.
+- Games that need to disable console/error/network hooks can set
+  `window.__DIAG_NO_MONKEYPATCH__ = true` **before** loading
+  `games/common/diag-capture.js`. The shim still reports basic environment
+  snapshots but skips monkey-patching `console`, `fetch`, `XMLHttpRequest` and
+  related listeners.
