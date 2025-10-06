@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Health Dashboard — Gurjot's Games</title>
+  <link rel="stylesheet" href="../css/styles.css"/>
+  <style>
+    body{padding:18px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+    .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:16px 0 24px}
+    .summary-card{background:var(--bg-soft);border:1px solid var(--card-border);border-radius:14px;padding:14px;box-shadow:var(--shadow)}
+    .summary-card h3{margin:0;font-size:1rem;color:var(--muted)}
+    .summary-card .value{display:block;margin-top:6px;font-size:1.8rem;font-weight:700}
+    .summary-card .hint{margin-top:4px;font-size:.85rem;color:var(--muted)}
+    table{width:100%;border-collapse:collapse}
+    th,td{border:1px solid var(--card-border);padding:10px;text-align:left;vertical-align:top}
+    tbody tr:nth-child(even){background-color:rgba(255,255,255,.02)}
+    tbody tr.failing{background:rgba(239,68,68,.09)}
+    tbody tr.failing td{border-color:rgba(239,68,68,.35)}
+    .chip.pass{background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:#34d399}
+    .chip.fail{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#fca5a5}
+    .issues{margin:0;padding-left:18px}
+    .issues li{margin-bottom:4px}
+    .muted{color:var(--muted)}
+    .hidden{display:none}
+    @media (max-width:640px){
+      table{display:block;overflow-x:auto}
+    }
+  </style>
+</head>
+<body>
+  <h2>Game Health Dashboard</h2>
+  <div class="status info">Latest automated checks from <code>health/report.json</code>.</div>
+  <div id="error" class="status error hidden">Unable to load health report. Please try again later.</div>
+  <p id="generated" class="muted">Generated: <span id="generatedAt">—</span></p>
+  <div class="actions">
+    <a class="btn" href="../health/report.json" download>Download JSON</a>
+    <a class="btn" href="../health/report.md" download>Download Markdown</a>
+    <a class="btn" href="../health/index.html" target="_blank">Full Health Tools</a>
+  </div>
+  <div class="summary-grid">
+    <div class="summary-card">
+      <h3>Total Games</h3>
+      <span id="total" class="value">—</span>
+    </div>
+    <div class="summary-card">
+      <h3>Passing</h3>
+      <span id="passing" class="value">—</span>
+      <div class="hint">Healthy catalog entries</div>
+    </div>
+    <div class="summary-card">
+      <h3>Failing</h3>
+      <span id="failing" class="value">—</span>
+      <div class="hint">Needs attention</div>
+    </div>
+  </div>
+  <table aria-describedby="generated">
+    <thead>
+      <tr>
+        <th scope="col">Game</th>
+        <th scope="col">Status</th>
+        <th scope="col">Issues</th>
+      </tr>
+    </thead>
+    <tbody id="games"></tbody>
+  </table>
+  <script>
+  (async function(){
+    const errorBox=document.getElementById('error');
+    const tbody=document.getElementById('games');
+    try{
+      const res=await fetch('../health/report.json',{cache:'no-store'});
+      if(!res.ok) throw new Error('Bad response');
+      const data=await res.json();
+      const summary=data.summary||{};
+      document.getElementById('total').textContent=summary.total ?? '0';
+      document.getElementById('passing').textContent=summary.passing ?? '0';
+      document.getElementById('failing').textContent=summary.failing ?? '0';
+      const generated=data.generatedAt?new Date(data.generatedAt):null;
+      document.getElementById('generatedAt').textContent=generated?generated.toLocaleString():"Not provided";
+      const games=Array.isArray(data.games)?data.games:[];
+      if(!games.length){
+        const empty=document.createElement('tr');
+        empty.innerHTML='<td colspan="3">No games were included in the latest report.</td>';
+        tbody.appendChild(empty);
+        return;
+      }
+      games.forEach(game=>{
+        const tr=document.createElement('tr');
+        if(game.ok===false) tr.classList.add('failing');
+        const statusLabel=game.ok===false?'Fail':'Pass';
+        const statusClass=game.ok===false?'fail':'pass';
+        const issues=Array.isArray(game.issues)?game.issues:[];
+        tr.innerHTML=`
+          <td>
+            <strong>${game.title||game.slug||'Untitled'}</strong><br/>
+            <small>Slug: ${game.slug||game.id||'n/a'}</small>
+          </td>
+          <td><span class="chip ${statusClass}">${statusLabel}</span></td>
+          <td>${issues.length?`<ul class="issues">${issues.map(it=>`<li>${typeof it==='string'?it:it.message||JSON.stringify(it)}</li>`).join('')}</ul>`:'<span class="muted">No issues reported</span>'}</td>`;
+        tbody.appendChild(tr);
+      });
+      const failingRows=[...tbody.querySelectorAll('tr.failing')];
+      if(!failingRows.length){
+        const info=document.createElement('tr');
+        info.innerHTML='<td colspan="3" class="status info">All games passed the latest checks 🎉</td>';
+        tbody.appendChild(info);
+      }else{
+        tbody.prepend(...failingRows);
+      }
+    }catch(err){
+      console.error(err);
+      errorBox.classList.remove('hidden');
+    }
+  })();
+  </script>
+</body>
+</html>
