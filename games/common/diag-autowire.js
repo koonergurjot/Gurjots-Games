@@ -7,6 +7,8 @@
   const alreadyInitialized = () => {
     const g = win.__GG_DIAG;
     if (g && (g.initialized || g.ready || g.core || g.loaded)) return true;
+    if (g && typeof g.log === 'function') return true;
+    if (win.__DIAG_CAPTURE_READY) return true;
     try {
       if (doc.querySelector('script[data-gg-diag-core],script[data-gg-diag-capture],script[src*="diag-core"],script[src*="diag-capture"]')) {
         return true;
@@ -172,6 +174,9 @@
 
     ensureScript(buildRootUrl('/games/common/diagnostics/report-store.js'), 'data-gg-diag-report');
     ensureScript(buildRootUrl('/games/common/diag-core.js'), 'data-gg-diag-core');
-    ensureScript(buildRootUrl('/games/common/diag-capture.js'), 'data-gg-diag-capture');
+    const captureActive = !!(win.__DIAG_CAPTURE_READY || (win.__GG_DIAG && typeof win.__GG_DIAG.log === 'function'));
+    if (!captureActive) {
+      ensureScript(buildRootUrl('/games/common/diag-capture.js'), 'data-gg-diag-capture');
+    }
   });
 })();
