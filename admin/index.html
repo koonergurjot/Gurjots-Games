@@ -3,7 +3,7 @@
 <title>Admin — Gurjot's Games</title>
 <link rel="stylesheet" href="../css/styles.css"/>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<style>body{padding:18px}.row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}textarea{width:100%;height:46vh;border-radius:12px;background:var(--bg-soft);color:var(--text);border:1px solid var(--card-border);padding:12px;font-family:ui-monospace,menlo,consolas}.drop{padding:18px;border:2px dashed var(--card-border);border-radius:12px;text-align:center;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:10px 0}.mini{background:var(--bg-soft);border:1px solid var(--card-border);border-radius:12px;padding:10px}.mini h4{margin:4px 0 6px}.pill{font-size:.8rem;padding:4px 8px;border-radius:999px;border:1px solid var(--card-border);background:var(--chip);color:var(--text)}.hide{display:none}</style>
+<style>body{padding:18px}.row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}textarea{width:100%;height:46vh;border-radius:12px;background:var(--bg-soft);color:var(--text);border:1px solid var(--card-border);padding:12px;font-family:ui-monospace,menlo,consolas}.drop{padding:18px;border:2px dashed var(--card-border);border-radius:12px;text-align:center;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:10px 0}.mini{background:var(--bg-soft);border:1px solid var(--card-border);border-radius:12px;padding:10px}.mini h4{margin:4px 0 6px}.pill{font-size:.8rem;padding:4px 8px;border-radius:999px;border:1px solid var(--card-border);background:var(--chip);color:var(--text)}.hide{display:none}.editor-shell{display:flex;flex-wrap:wrap;gap:18px;margin-top:16px}.editor-shell aside,.editor-shell section,.editor-shell .json-pane{flex:1 1 280px;min-width:260px}.editor-shell aside{max-width:320px;background:var(--bg-soft);border:1px solid var(--card-border);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:12px}.editor-shell aside header{display:flex;justify-content:space-between;align-items:center;gap:8px}.editor-shell aside h3{margin:0;font-size:1rem}.editor-shell aside .list{display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:46vh;padding-right:4px}.game-row{border:1px solid var(--card-border);border-radius:10px;padding:10px;cursor:pointer;background:var(--bg-soft);display:flex;flex-direction:column;gap:8px;transition:border-color .15s,background .15s}.game-row:hover{border-color:var(--primary)}.game-row.selected{border-color:var(--primary);background:rgba(132,90,223,0.12)}.game-row .meta{display:flex;flex-wrap:wrap;gap:6px;font-size:.75rem}.badge{padding:2px 8px;border-radius:999px;background:var(--chip);border:1px solid var(--card-border);text-transform:uppercase;letter-spacing:.05em}.editor-shell section{border:1px solid var(--card-border);border-radius:12px;padding:16px;background:var(--bg-soft);min-height:46vh}.editor-shell section h3{margin-top:0}.editor-shell section form{display:flex;flex-direction:column;gap:12px}.editor-shell section label{font-weight:600;display:block;margin-bottom:6px}.editor-shell section input[type="text"],.editor-shell section textarea{width:100%;padding:10px;border-radius:8px;border:1px solid var(--card-border);background:var(--bg);color:var(--text);font-family:inherit}.editor-shell section textarea{min-height:120px;font-family:inherit}.flag-grid{display:flex;flex-wrap:wrap;gap:10px}.flag-grid label{font-weight:400;display:flex;align-items:center;gap:6px}.json-pane label{font-weight:600;display:block;margin-bottom:8px}.json-pane textarea{height:46vh}</style>
 </head>
 <body>
 <h2>Admin / CMS</h2>
@@ -15,19 +15,156 @@
   <button class="btn primary" id="saveJson">Download updated games.json</button>
   <button class="btn" id="exportPatch">Download patch ZIP</button>
 </div>
-<label for="editor" class="sr-only">JSON Editor</label>
-<textarea id="editor" name="editor" spellcheck="false" placeholder="Click 'Load games.json' or paste JSON here"></textarea>
+<div class="editor-shell">
+  <aside id="gameList" aria-label="Game list"></aside>
+  <section id="gameEditor" aria-live="polite"></section>
+  <div class="json-pane">
+    <label for="editor">Raw JSON</label>
+    <textarea id="editor" name="editor" spellcheck="false" placeholder="Click 'Load games.json' or paste JSON here"></textarea>
+  </div>
+</div>
 <div class="drop" id="drop"><strong>Drag & drop a game ZIP here</strong><br/>Must contain an <code>index.html</code>. Optional: <code>thumb.png</code>/<code>thumbnail.png</code>.</div>
 <div class="grid" id="imports"></div>
 <script>
-const ed=document.getElementById('editor');const imports=document.getElementById('imports');let pendingAdds=[];
-document.getElementById('load').onclick=async()=>{const res=await fetch('../games.json',{cache:'no-store'});ed.value=JSON.stringify(await res.json(),null,2);alert('Loaded games.json')};
-document.getElementById('validate').onclick=()=>{try{const arr=JSON.parse(ed.value);if(!Array.isArray(arr))throw new Error('Root must be an array');const ids=new Set();const probs=[];arr.forEach((g,i)=>{['id','title','path','description'].forEach(k=>{if(!g[k])probs.push(`Game[${i}] missing ${k}`)});if(ids.has(g.id))probs.push('Duplicate id '+g.id);ids.add(g.id);if(!/^games\//.test(g.path))probs.push('Bad path '+g.path);if(g.thumb && !/^assets\//.test(g.thumb))probs.push('Thumb should be under assets/: '+g.thumb);});alert(probs.length?('Issues:\n'+probs.join('\n')):'Looks good ✅')}catch(e){alert('Invalid JSON: '+e.message)}};
+const ed=document.getElementById('editor');const imports=document.getElementById('imports');const gameList=document.getElementById('gameList');const editorPanel=document.getElementById('gameEditor');let pendingAdds=[];let games=[];let selectedIndex=null;let syncingTextarea=false;const flagFields=['new','beta','featured','hidden','unlisted'];
+const escapeHTML=str=>String(str??'').replace(/[&<>"']/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[s]));
+function syncTextarea(){syncingTextarea=true;ed.value=JSON.stringify(games,null,2);syncingTextarea=false}
+function renderList(){gameList.innerHTML='';const header=document.createElement('header');const title=document.createElement('h3');title.textContent='Games';header.appendChild(title);const btnWrap=document.createElement('div');btnWrap.className='row';btnWrap.style.margin='0';btnWrap.style.gap='8px';const addBtn=document.createElement('button');addBtn.id='addGame';addBtn.className='btn';addBtn.type='button';addBtn.textContent='Add game';addBtn.onclick=()=>{const stamp=Date.now();let baseId='new-game-'+stamp;let inc=1;while(games.some(g=>g.id===baseId)){baseId='new-game-'+(stamp+inc++);}const newGame={id:baseId,title:'New Game',path:`games/${baseId}/index.html`,description:'',tags:[],emoji:'🎮',new:true,addedAt:new Date().toISOString().slice(0,10)};games=[...games,newGame];selectedIndex=games.length-1;renderList();renderEditor();syncTextarea();};const dupBtn=document.createElement('button');dupBtn.id='duplicateGame';dupBtn.className='btn';dupBtn.type='button';dupBtn.textContent='Duplicate game';dupBtn.onclick=()=>{if(selectedIndex===null){alert('Select a game to duplicate first.');return}const base=games[selectedIndex];const clone=JSON.parse(JSON.stringify(base));let baseId=base.id+'-copy';let inc=1;while(games.some(g=>g.id===baseId)){baseId=base.id+'-copy'+inc++;}clone.id=baseId;clone.path=base.path.replace(base.id,clone.id);clone.addedAt=new Date().toISOString().slice(0,10);games=[...games,clone];selectedIndex=games.length-1;renderList();renderEditor();syncTextarea();};btnWrap.appendChild(addBtn);btnWrap.appendChild(dupBtn);header.appendChild(btnWrap);gameList.appendChild(header);const list=document.createElement('div');list.className='list';if(!games.length){const empty=document.createElement('p');empty.textContent='Load a JSON file to see games.';empty.style.margin='12px 0 0';empty.style.opacity='0.8';gameList.appendChild(empty)}games.forEach((game,idx)=>{const row=document.createElement('div');row.className='game-row'+(idx===selectedIndex?' selected':'');row.dataset.index=idx;const nameLine=document.createElement('div');nameLine.style.display='flex';nameLine.style.justifyContent='space-between';nameLine.style.alignItems='center';const name=document.createElement('strong');name.textContent=`${game.emoji||''} ${game.title||game.id}`.trim();nameLine.appendChild(name);const idLabel=document.createElement('span');idLabel.className='pill';idLabel.textContent=game.id;nameLine.appendChild(idLabel);row.appendChild(nameLine);const meta=document.createElement('div');meta.className='meta';const statuses=[];if(Array.isArray(game.tags)){game.tags.filter(Boolean).forEach(tag=>statuses.push(tag))}flagFields.forEach(flag=>{if(game[flag])statuses.push(flag)});if(statuses.length){statuses.forEach(st=>{const badge=document.createElement('span');badge.className='badge';badge.textContent=st;meta.appendChild(badge)})}if(meta.childElementCount)row.appendChild(meta);row.onclick=()=>{selectedIndex=idx;renderList();renderEditor();};list.appendChild(row)});gameList.appendChild(list)}
+function renderEditor(){
+  if(selectedIndex===null||!games[selectedIndex]){
+    editorPanel.innerHTML='<p>Select a game to edit its details.</p>';
+    return;
+  }
+  const game=games[selectedIndex];
+  editorPanel.innerHTML='';
+  const heading=document.createElement('h3');
+  heading.textContent=`Editing: ${game.title||game.id}`;
+  editorPanel.appendChild(heading);
+  const form=document.createElement('form');
+  const createField=(id,labelText,type='input')=>{
+    const wrap=document.createElement('div');
+    const label=document.createElement('label');
+    label.setAttribute('for',id);
+    label.textContent=labelText;
+    wrap.appendChild(label);
+    const control=document.createElement(type==='textarea'?'textarea':'input');
+    control.id=id;
+    if(type!=='textarea'){control.type='text';}
+    wrap.appendChild(control);
+    return {wrap,control};
+  };
+  const {wrap:titleWrap,control:titleInput}=createField('gameTitle','Title');
+  titleInput.value=game.title||'';
+  const {wrap:descWrap,control:descTextarea}=createField('gameDescription','Description','textarea');
+  descTextarea.value=game.description||'';
+  const {wrap:emojiWrap,control:emojiInput}=createField('gameEmoji','Emoji');
+  emojiInput.maxLength=4;
+  emojiInput.value=game.emoji||'';
+  const {wrap:tagsWrap,control:tagsInput}=createField('gameTags','Tags (comma separated)');
+  tagsInput.value=Array.isArray(game.tags)?game.tags.join(', '):'';
+  form.appendChild(titleWrap);
+  form.appendChild(descWrap);
+  form.appendChild(emojiWrap);
+  form.appendChild(tagsWrap);
+  const flagHeading=document.createElement('p');
+  flagHeading.textContent='Flags';
+  flagHeading.style.width='100%';
+  flagHeading.style.fontWeight='600';
+  flagHeading.style.margin='0';
+  const flagWrap=document.createElement('div');
+  flagWrap.className='flag-grid';
+  flagWrap.setAttribute('role','group');
+  flagWrap.setAttribute('aria-label','Flags');
+  form.appendChild(flagHeading);
+  form.appendChild(flagWrap);
+  flagFields.forEach(flag=>{
+    const wrap=document.createElement('label');
+    const box=document.createElement('input');
+    box.type='checkbox';
+    box.checked=Boolean(game[flag]);
+    box.addEventListener('change',()=>{
+      game[flag]=box.checked;
+      renderList();
+      syncTextarea();
+    });
+    wrap.appendChild(box);
+    wrap.append(flag.charAt(0).toUpperCase()+flag.slice(1));
+    flagWrap.appendChild(wrap);
+  });
+  const idInfo=document.createElement('div');
+  idInfo.innerHTML=`<strong>ID:</strong> ${escapeHTML(game.id)}`;
+  const pathInfo=document.createElement('div');
+  pathInfo.innerHTML=`<strong>Path:</strong> ${escapeHTML(game.path||'')}`;
+  form.appendChild(idInfo);
+  form.appendChild(pathInfo);
+  editorPanel.appendChild(form);
+  titleInput.addEventListener('input',()=>{
+    game.title=titleInput.value;
+    renderList();
+    syncTextarea();
+  });
+  descTextarea.addEventListener('input',()=>{
+    game.description=descTextarea.value;
+    syncTextarea();
+  });
+  emojiInput.addEventListener('input',()=>{
+    game.emoji=emojiInput.value;
+    renderList();
+    syncTextarea();
+  });
+  tagsInput.addEventListener('input',()=>{
+    game.tags=tagsInput.value.split(',').map(t=>t.trim()).filter(Boolean);
+    renderList();
+    syncTextarea();
+  });
+}
+function loadGamesFromTextarea(){try{const arr=JSON.parse(ed.value);if(Array.isArray(arr)){const prevId=selectedIndex!==null&&games[selectedIndex]?games[selectedIndex].id:null;games=arr;selectedIndex=prevId?arr.findIndex(g=>g.id===prevId):-1;if(selectedIndex<0)selectedIndex=arr.length?0:null;renderList();renderEditor();}}catch(e){}}
+ed.addEventListener('input',()=>{if(syncingTextarea)return;loadGamesFromTextarea();});
+document.getElementById('load').onclick=async()=>{const res=await fetch('../games.json',{cache:'no-store'});games=await res.json();selectedIndex=games.length?0:null;renderList();renderEditor();syncTextarea();alert('Loaded games.json')};
+document.getElementById('validate').onclick=()=>{try{const arr=JSON.parse(ed.value);if(!Array.isArray(arr))throw new Error('Root must be an array');const ids=new Set();const probs=[];arr.forEach((g,i)=>{['id','title','path','description'].forEach(k=>{if(!g[k])probs.push(`Game[${i}] missing ${k}`)});if(ids.has(g.id))probs.push('Duplicate id '+g.id);ids.add(g.id);if(!/^games\//.test(g.path))probs.push('Bad path '+g.path);if(g.thumb && !/^assets\//.test(g.thumb))probs.push('Thumb should be under assets/: '+g.thumb);});games=arr;renderList();renderEditor();alert(probs.length?('Issues:\n'+probs.join('\n')):'Looks good ✅');syncTextarea()}catch(e){alert('Invalid JSON: '+e.message)}};
 function dl(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-document.getElementById('backup').onclick=()=>dl('games.backup.json',new Blob([ed.value||'[]'],{type:'application/json'}));
-document.getElementById('saveJson').onclick=()=>{try{JSON.parse(ed.value)}catch(e){alert('Invalid JSON');return}dl('games.json',new Blob([ed.value],{type:'application/json'}))};
+document.getElementById('backup').onclick=()=>{syncTextarea();dl('games.backup.json',new Blob([ed.value||'[]'],{type:'application/json'}));};
+document.getElementById('saveJson').onclick=()=>{syncTextarea();dl('games.json',new Blob([ed.value],{type:'application/json'}));};
 const drop=document.getElementById('drop');['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.background='rgba(255,255,255,0.06)'}));['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.style.background='transparent'}));
-drop.addEventListener('drop',async e=>{const file=e.dataTransfer.files[0];if(!file)return;const zip=await JSZip.loadAsync(file);let prefix='';const folders=new Set();zip.forEach((p,f)=>{const seg=p.split('/');if(seg.length>1)folders.add(seg[0])});if(folders.size===1)prefix=[...folders][0]+'/';const idx=zip.file(prefix+'index.html')||zip.file('index.html');if(!idx){alert('No index.html found');return}const name=file.name.replace(/\.zip$/i,'');const id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-');const title=name;const tf=zip.file(prefix+'thumb.png')||zip.file(prefix+'thumbnail.png')||zip.file('thumb.png')||zip.file('thumbnail.png');let thumbPath='';if(tf)thumbPath='assets/thumbs/'+id+'.png';let data=[];try{data=JSON.parse(ed.value);if(!Array.isArray(data))throw 0}catch{data=[]}if(data.some(g=>g.id===id)){if(!confirm('Game id exists. Overwrite entry?'))return;data=data.filter(g=>g.id!==id)}data.push({id,title,path:`games/${id}/index.html`,description:'New uploaded game — update me!',tags:['new'],new:true,emoji:'🎮',thumb:thumbPath||undefined,addedAt:new Date().toISOString().slice(0,10)});ed.value=JSON.stringify(data,null,2);pendingAdds.push({id,zip,prefix,tf});const card=document.createElement('div');card.className='mini';card.innerHTML=`<h4>${title}</h4><div class="row"><span class="pill">id: ${id}</span><span class="pill">path: games/${id}/index.html</span>${tf?'<span class="pill">thumb ✓</span>':''}</div><div class="row"><small>Files ready for export.</small></div>`;imports.prepend(card)});
-document.getElementById('exportPatch').onclick=async()=>{try{JSON.parse(ed.value)}catch(e){alert('Invalid JSON');return}const out=new JSZip();out.file('games.json',ed.value);for(const it of pendingAdds){const base='games/'+it.id+'/';const entries=[];it.zip.forEach((p,f)=>{if(!f.dir)entries.push([p,f])});for(const [p,f] of entries){let rel=p.startsWith(it.prefix)?p.slice(it.prefix.length):p;if(!rel)continue;out.file(base+rel,await f.async('blob'))}if(it.tf)out.file('assets/thumbs/'+it.id+'.png',await it.tf.async('blob'))}const blob=await out.generateAsync({type:'blob'});dl('gurjots-games-patch.zip',blob)};
+drop.addEventListener('drop',async e=>{
+  const file=e.dataTransfer.files[0];
+  if(!file)return;
+  const zip=await JSZip.loadAsync(file);
+  let prefix='';
+  const folders=new Set();
+  zip.forEach((p,f)=>{const seg=p.split('/');if(seg.length>1)folders.add(seg[0]);});
+  if(folders.size===1)prefix=[...folders][0]+'/';
+  const idx=zip.file(prefix+'index.html')||zip.file('index.html');
+  if(!idx){alert('No index.html found');return}
+  const name=file.name.replace(/\.zip$/i,'');
+  const id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  const title=name;
+  const tf=zip.file(prefix+'thumb.png')||zip.file(prefix+'thumbnail.png')||zip.file('thumb.png')||zip.file('thumbnail.png');
+  let thumbPath='';
+  if(tf)thumbPath='assets/thumbs/'+id+'.png';
+  const existingIndex=games.findIndex(g=>g.id===id);
+  if(existingIndex>=0){
+    if(!confirm('Game id exists. Overwrite entry?'))return;
+    games=games.filter(g=>g.id!==id);
+    pendingAdds=pendingAdds.filter(it=>it.id!==id);
+    imports.querySelectorAll(`[data-id="${id}"]`).forEach(el=>el.remove());
+  }
+  const newEntry={id,title,path:`games/${id}/index.html`,description:'New uploaded game — update me!',tags:['new'],new:true,emoji:'🎮',addedAt:new Date().toISOString().slice(0,10)};
+  if(thumbPath)newEntry.thumb=thumbPath;
+  games=[...games,newEntry];
+  pendingAdds.push({id,zip,prefix,tf});
+  selectedIndex=games.findIndex(g=>g.id===id);
+  renderList();
+  renderEditor();
+  syncTextarea();
+  const card=document.createElement('div');
+  card.className='mini';
+  card.dataset.id=id;
+  card.innerHTML=`<h4>${title}</h4><div class="row"><span class="pill">id: ${id}</span><span class="pill">path: games/${id}/index.html</span>${tf?'<span class="pill">thumb ✓</span>':''}</div><div class="row"><small>Files ready for export.</small></div>`;
+  imports.prepend(card);
+});
+document.getElementById('exportPatch').onclick=async()=>{syncTextarea();const out=new JSZip();out.file('games.json',ed.value);for(const it of pendingAdds){const base='games/'+it.id+'/';const entries=[];it.zip.forEach((p,f)=>{if(!f.dir)entries.push([p,f])});for(const [p,f] of entries){let rel=p.startsWith(it.prefix)?p.slice(it.prefix.length):p;if(!rel)continue;out.file(base+rel,await f.async('blob'))}if(it.tf)out.file('assets/thumbs/'+it.id+'.png',await it.tf.async('blob'))}const blob=await out.generateAsync({type:'blob'});dl('gurjots-games-patch.zip',blob)};
+renderList();
+renderEditor();
 const qp=new URLSearchParams(location.search);if(qp.get('key')!=='letmein'){document.querySelectorAll('button, textarea, .drop').forEach(el=>el.classList.add('hide'));const warn=document.createElement('div');warn.className='status error';warn.textContent='Access denied. Append ?key=letmein to use this page.';document.body.prepend(warn)}
 </script></body></html>
