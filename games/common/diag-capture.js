@@ -134,6 +134,7 @@
   }
 
   function installErrorHooks(){
+    if (typeof global.addEventListener !== "function") return;
     global.addEventListener("error", (event) => {
       if (event.target && event.target !== global && !(event.error instanceof Error)) {
         const target = event.target;
@@ -387,15 +388,16 @@
 
   function heartbeat(){
     const origin = Date.now();
+    const perf = global.performance;
     emit({
       category: "heartbeat",
       level: "debug",
       message: "diagnostics heartbeat",
       details: {
         ts: origin,
-        uptime: Math.round(performance.now()),
-        memory: safeSerialize(performance.memory || null),
-        visibilityState: document.visibilityState,
+        uptime: typeof perf?.now === "function" ? Math.round(perf.now()) : null,
+        memory: safeSerialize(perf?.memory || null),
+        visibilityState: global.document?.visibilityState,
       },
       timestamp: origin,
     });
@@ -403,21 +405,25 @@
 
   function installHeartbeat(){
     heartbeat();
-    setInterval(heartbeat, 5000);
+    if (typeof global.setInterval === "function") {
+      global.setInterval(heartbeat, 5000);
+    }
   }
 
   function installNetworkListeners(){
+    if (typeof global.addEventListener !== "function") return;
     global.addEventListener("online", () => emit({ category: "network", level: "info", message: "navigator.online = true", timestamp: Date.now() }));
     global.addEventListener("offline", () => emit({ category: "network", level: "warn", message: "navigator.online = false", timestamp: Date.now() }));
   }
 
+  installErrorHooks();
+  installHeartbeat();
+  installNetworkListeners();
+
   if (!skipMonkeyPatch) {
     installConsoleHooks();
-    installErrorHooks();
     wrapFetch();
     wrapXHR();
-    installHeartbeat();
-    installNetworkListeners();
   }
 
   reportCapabilities();
