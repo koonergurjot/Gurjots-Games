@@ -23,7 +23,7 @@ jobs:
         run: npm ci
 
       - name: Run Game Doctor
-        run: node tools/game-doctor.mjs
+        run: node tools/game-doctor.mjs --strict --baseline=health/baseline.json
 
       - name: Upload Game Doctor report
         if: always()

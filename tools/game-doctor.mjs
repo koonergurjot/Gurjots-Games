@@ -8,6 +8,7 @@ const ROOT = path.resolve(__dirname, '..');
 const HEALTH_DIR = path.join(ROOT, 'health');
 const REPORT_JSON = path.join(HEALTH_DIR, 'report.json');
 const REPORT_MD = path.join(HEALTH_DIR, 'report.md');
+const DEFAULT_BASELINE = path.join(HEALTH_DIR, 'baseline.json');
 const PLACEHOLDER_THUMB = 'assets/placeholder-thumb.png';
 
 const gamesPath = path.join(ROOT, 'games.json');
@@ -106,7 +107,61 @@ function buildMarkdownReport(report) {
   return lines.join('\n');
 }
 
+function parseCliArgs() {
+  const args = process.argv.slice(2);
+  let strictMode = false;
+  let baselinePath = DEFAULT_BASELINE;
+
+  for (const arg of args) {
+    if (arg === '--strict') {
+      strictMode = true;
+    } else if (arg.startsWith('--baseline=')) {
+      const value = arg.slice('--baseline='.length);
+      if (value.trim()) {
+        baselinePath = path.isAbsolute(value) ? value : path.join(ROOT, value);
+      }
+    }
+  }
+
+  return { strictMode, baselinePath };
+}
+
+function mapBaselineGames(baseline) {
+  const bySlug = new Map();
+  const byIndex = new Map();
+
+  if (!baseline || typeof baseline !== 'object' || !Array.isArray(baseline.games)) {
+    return { bySlug, byIndex };
+  }
+
+  for (const entry of baseline.games) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    if (typeof entry.slug === 'string' && entry.slug.trim()) {
+      bySlug.set(entry.slug.trim(), entry);
+    }
+    if (typeof entry.index === 'number') {
+      byIndex.set(entry.index, entry);
+    }
+  }
+
+  return { bySlug, byIndex };
+}
+
+function selectBaselineEntry(game, maps) {
+  if (game.slug && maps.bySlug.has(game.slug)) {
+    return maps.bySlug.get(game.slug);
+  }
+  if (maps.byIndex.has(game.index)) {
+    return maps.byIndex.get(game.index);
+  }
+  return null;
+}
+
 async function main() {
+  const { strictMode, baselinePath } = parseCliArgs();
+
   if (!(await pathExists(gamesPath))) {
     console.error(`Unable to locate games catalog at ${relativeFromRoot(gamesPath)}.`);
     process.exitCode = 1;
@@ -259,11 +314,72 @@ async function main() {
     games: results,
   };
 
+  let baseline = null;
+  let baselineMaps = { bySlug: new Map(), byIndex: new Map() };
+  if (strictMode) {
+    if (!(await pathExists(baselinePath))) {
+      console.error(
+        `Strict mode requested but no baseline found at ${relativeFromRoot(baselinePath)}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    try {
+      const baselineRaw = await fs.readFile(baselinePath, 'utf8');
+      baseline = JSON.parse(baselineRaw);
+      baselineMaps = mapBaselineGames(baseline);
+    } catch (error) {
+      console.error('Unable to read or parse Game Doctor baseline:', error);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   await fs.mkdir(HEALTH_DIR, { recursive: true });
   await fs.writeFile(REPORT_JSON, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   await fs.writeFile(REPORT_MD, `${buildMarkdownReport(report)}\n`, 'utf8');
 
-  if (summary.failing > 0) {
+  if (strictMode) {
+    const regressions = [];
+    const knownIssues = [];
+
+    for (const game of results) {
+      if (game.ok) {
+        continue;
+      }
+      const baselineEntry = selectBaselineEntry(game, baselineMaps);
+      if (!baselineEntry || baselineEntry.ok !== false) {
+        regressions.push(game);
+      } else {
+        knownIssues.push(game);
+      }
+    }
+
+    if (regressions.length > 0) {
+      const list = regressions
+        .map((game) => game.slug ?? game.title ?? `Game #${game.index + 1}`)
+        .join(', ');
+      console.error(
+        `Game doctor strict mode detected ${regressions.length} regression(s): ${list}. See ${relativeFromRoot(
+          REPORT_JSON,
+        )} for details.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    if (summary.failing > 0) {
+      const list = knownIssues
+        .map((game) => game.slug ?? game.title ?? `Game #${game.index + 1}`)
+        .join(', ');
+      console.warn(
+        `Game doctor strict mode: ${summary.failing} game(s) still failing but acknowledged in baseline (${list}).`,
+      );
+    } else {
+      console.log(`Game doctor strict mode: all ${summary.total} game(s) look healthy!`);
+    }
+  } else if (summary.failing > 0) {
     console.error(
       `Game doctor found ${summary.failing} of ${summary.total} game(s) with issues. See ${relativeFromRoot(
         REPORT_JSON,
