@@ -189,6 +189,12 @@ export function attachPauseOverlay({ onResume, onRestart }) {
 }
 
 export function attachHelpOverlay({ gameId, steps = [], objective = '', controls = '', tips = [] }) {
+  const hasContent = Boolean(
+    objective ||
+    controls ||
+    (tips && tips.length) ||
+    (steps && steps.length)
+  );
   const overlay = document.createElement('div');
   overlay.className = 'help-overlay hidden';
   overlay.setAttribute('role', 'dialog');
@@ -263,7 +269,7 @@ export function attachHelpOverlay({ gameId, steps = [], objective = '', controls
     const obj = raw ? JSON.parse(raw) : {};
     seen = !!obj[gameId];
   } catch {}
-  if (!seen) show();
+  if (!seen && hasContent) show();
 
   return { show, hide };
 }
