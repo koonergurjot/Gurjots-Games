@@ -572,6 +572,37 @@
               }
             }
           });
+
+          const importMapScripts = doc.querySelectorAll('script[type="importmap"]');
+          importMapScripts.forEach((script) => {
+            const text = script.textContent;
+            if (!text) return;
+            try {
+              const map = JSON.parse(text);
+              if (!map || typeof map !== "object") {
+                return;
+              }
+
+              const processImports = (imports) => {
+                if (!imports || typeof imports !== "object") return;
+                Object.values(imports).forEach((value) => {
+                  if (typeof value === "string") {
+                    tryAddUrl(value);
+                  }
+                });
+              };
+
+              processImports(map.imports);
+
+              if (map.scopes && typeof map.scopes === "object") {
+                Object.values(map.scopes).forEach((scopeImports) => {
+                  processImports(scopeImports);
+                });
+              }
+            } catch (error) {
+              write("preflight importmap parse error: " + (error && error.message ? error.message : error));
+            }
+          });
           return Array.from(urls);
         } catch (err) {
           write("preflight parse error: " + (err && err.message ? err.message : err));
