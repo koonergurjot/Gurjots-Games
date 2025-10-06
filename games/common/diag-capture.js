@@ -5,6 +5,8 @@
   const global = typeof window !== "undefined" ? window : globalThis;
   if (!global) return;
 
+  const skipMonkeyPatch = !!(global.__DIAG_NO_MONKEYPATCH__ || global.__GG_DIAG_NO_MONKEYPATCH__);
+
   const queue = global.__GG_DIAG_QUEUE || (global.__GG_DIAG_QUEUE = []);
 
   function emit(entry){
@@ -409,15 +411,18 @@
     global.addEventListener("offline", () => emit({ category: "network", level: "warn", message: "navigator.online = false", timestamp: Date.now() }));
   }
 
-  installConsoleHooks();
-  installErrorHooks();
-  wrapFetch();
-  wrapXHR();
+  if (!skipMonkeyPatch) {
+    installConsoleHooks();
+    installErrorHooks();
+    wrapFetch();
+    wrapXHR();
+    installHeartbeat();
+    installNetworkListeners();
+  }
+
   reportCapabilities();
   reportPerformance();
   reportServiceWorker();
-  installHeartbeat();
-  installNetworkListeners();
 
   if (global) {
     global.__GG_DIAG_PUSH_EVENT__ = pushEvent;
