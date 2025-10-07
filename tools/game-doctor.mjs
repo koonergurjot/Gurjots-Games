@@ -1,8 +1,10 @@
 import { promises as fs } from 'fs';
+import { execFile } from 'child_process';
 import path from 'path';
 import process from 'process';
 import { fileURLToPath } from 'url';
 import Ajv from 'ajv';
+import { promisify } from 'util';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -11,10 +13,17 @@ const REPORT_JSON = path.join(HEALTH_DIR, 'report.json');
 const REPORT_MD = path.join(HEALTH_DIR, 'report.md');
 const DEFAULT_BASELINE = path.join(HEALTH_DIR, 'baseline.json');
 const PLACEHOLDER_THUMB = 'assets/placeholder-thumb.png';
+
+const SEVERITY = {
+  ERROR: 'error',
+  WARNING: 'warning',
+};
 const MANIFEST_PATH = path.join(ROOT, 'tools', 'reporters', 'game-doctor-manifest.json');
 const GAMES_SCHEMA_PATH = path.join(ROOT, 'tools', 'schemas', 'games.schema.json');
 
 const gamesPath = path.join(ROOT, 'games.json');
+const execFileAsync = promisify(execFile);
+const GIT_DIFF_BASE_CANDIDATES = ['origin/main', 'main'];
 
 async function pathExists(candidate) {
   try {
@@ -42,11 +51,20 @@ function deriveSlug(game) {
   return null;
 }
 
-function formatIssue(message, context = {}) {
+function formatIssue(message, context = {}, severity = SEVERITY.ERROR) {
   return {
     message,
     context,
+    severity,
   };
+}
+
+function issueIsError(issue) {
+  return (issue?.severity ?? SEVERITY.ERROR) === SEVERITY.ERROR;
+}
+
+function issueIsWarning(issue) {
+  return (issue?.severity ?? SEVERITY.ERROR) === SEVERITY.WARNING;
 }
 
 function decodePointerSegment(segment) {
@@ -136,6 +154,204 @@ function ensureArray(value, label, issues) {
 
 function relativeFromRoot(filePath) {
   return path.relative(ROOT, filePath).replace(/\\/g, '/');
+}
+
+function parseSlugList(value) {
+  return value
+    .split(',')
+    .map((slug) => slug.trim())
+    .filter(Boolean);
+}
+
+function addSlugSource(slugSources, slug, source) {
+  if (!slug) {
+    return;
+  }
+  if (!slugSources.has(slug)) {
+    slugSources.set(slug, new Set());
+  }
+  slugSources.get(slug).add(source);
+}
+
+function normalizeRepoRelativePath(candidate) {
+  if (typeof candidate !== 'string') {
+    return null;
+  }
+  let normalized = candidate.trim();
+  if (!normalized) {
+    return null;
+  }
+  normalized = normalized.replace(/\\+/g, '/');
+  normalized = normalized.replace(/^\.\/+/, '');
+  normalized = normalized.replace(/^\/+/, '');
+  return normalized;
+}
+
+function recordAssetReference(assetCatalog, slug, assetPath) {
+  const normalized = normalizeRepoRelativePath(assetPath);
+  if (!normalized || !normalized.startsWith('assets/')) {
+    return;
+  }
+  if (!assetCatalog.has(normalized)) {
+    assetCatalog.set(normalized, new Set());
+  }
+  assetCatalog.get(normalized).add(slug);
+}
+
+function buildAssetCatalog(games) {
+  const catalog = new Map();
+
+  for (const game of games) {
+    const slug = deriveSlug(game);
+    if (!slug) {
+      continue;
+    }
+
+    const firstFrame = game && typeof game === 'object' ? game.firstFrame : null;
+    if (!firstFrame || typeof firstFrame !== 'object') {
+      continue;
+    }
+
+    if (Array.isArray(firstFrame.sprites)) {
+      for (const sprite of firstFrame.sprites) {
+        if (typeof sprite === 'string') {
+          recordAssetReference(catalog, slug, sprite);
+        }
+      }
+    }
+
+    if (Array.isArray(firstFrame.audio)) {
+      for (const audio of firstFrame.audio) {
+        if (typeof audio === 'string') {
+          recordAssetReference(catalog, slug, audio);
+        }
+      }
+    }
+  }
+
+  return catalog;
+}
+
+function detectSlugFromAssetPath(segments, knownSlugs) {
+  if (!Array.isArray(segments) || segments.length < 3) {
+    return null;
+  }
+
+  if (segments[0] !== 'assets') {
+    return null;
+  }
+
+  for (let index = segments.length - 1; index >= 1; index -= 1) {
+    const segment = segments[index];
+    if (!segment) {
+      continue;
+    }
+
+    const trimmed = segment.trim();
+    if (trimmed && knownSlugs.has(trimmed)) {
+      return trimmed;
+    }
+
+    if (index === segments.length - 1) {
+      const withoutExtension = trimmed.replace(path.extname(trimmed), '').trim();
+      if (withoutExtension && knownSlugs.has(withoutExtension)) {
+        return withoutExtension;
+      }
+    }
+  }
+
+  return null;
+}
+
+function analyzeChangedFiles(files, knownSlugs = new Set(), assetCatalog = new Map()) {
+  const slugs = new Set();
+
+  for (const file of files) {
+    const normalized = normalizeRepoRelativePath(file);
+    if (!normalized) {
+      continue;
+    }
+    if (normalized === 'games.json' || normalized.startsWith('games.json/')) {
+      return { slugs: null, reason: 'games.json changed' };
+    }
+    if (normalized === 'tools/reporters/game-doctor-manifest.json') {
+      return { slugs: null, reason: 'game doctor manifest changed' };
+    }
+
+    const segments = normalized.split('/').filter(Boolean);
+    if (segments[0] === 'games' && segments[1]) {
+      slugs.add(segments[1]);
+      continue;
+    }
+    if (segments[0] === 'gameshells' && segments[1]) {
+      slugs.add(segments[1]);
+      continue;
+    }
+    if (segments[0] === 'assets' && segments[1] === 'thumbs' && segments.length >= 3) {
+      const filename = segments[segments.length - 1];
+      const slug = filename.replace(path.extname(filename), '').trim();
+      if (slug) {
+        slugs.add(slug);
+      }
+      continue;
+    }
+
+    if (segments[0] === 'assets') {
+      const slugFromAsset = detectSlugFromAssetPath(segments, knownSlugs);
+      if (slugFromAsset) {
+        slugs.add(slugFromAsset);
+      }
+
+      const catalogEntry = assetCatalog.get(normalized);
+      if (catalogEntry && catalogEntry.size > 0) {
+        for (const slug of catalogEntry) {
+          slugs.add(slug);
+        }
+        continue;
+      }
+
+      if (!slugFromAsset) {
+        return { slugs: null, reason: `asset change not mapped to a game (${normalized})` };
+      }
+
+      continue;
+    }
+
+    const catalogEntry = assetCatalog.get(normalized);
+    if (catalogEntry && catalogEntry.size > 0) {
+      for (const slug of catalogEntry) {
+        slugs.add(slug);
+      }
+      continue;
+    }
+  }
+
+  return { slugs, reason: null };
+}
+
+async function detectChangedSlugs(knownSlugs = new Set(), assetCatalog = new Map()) {
+  let lastError = null;
+
+  for (const base of GIT_DIFF_BASE_CANDIDATES) {
+    try {
+      const { stdout } = await execFileAsync('git', ['diff', '--name-only', `${base}...HEAD`], {
+        cwd: ROOT,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      const files = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const analysis = analyzeChangedFiles(files, knownSlugs, assetCatalog);
+      return { base, files, ...analysis };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const fallbackReason = lastError?.message ?? 'git diff failed';
+  const firstLine = fallbackReason.split(/\r?\n/, 1)[0];
+  return { base: null, files: null, slugs: null, reason: firstLine };
 }
 
 async function loadManifest() {
@@ -463,6 +679,9 @@ function buildMarkdownReport(report) {
   lines.push(`- Total games: ${report.summary.total}`);
   lines.push(`- Passing: ${report.summary.passing}`);
   lines.push(`- Failing: ${report.summary.failing}`);
+  if (typeof report.summary.withWarnings === 'number') {
+    lines.push(`- With warnings: ${report.summary.withWarnings}`);
+  }
   if (report.manifest) {
     lines.push(`- Manifest version: ${report.manifest.version ?? 'unknown'}`);
     lines.push(`- Manifest source: ${report.manifest.source ?? relativeFromRoot(MANIFEST_PATH)}`);
@@ -472,13 +691,23 @@ function buildMarkdownReport(report) {
     lines.push(`## ${game.title ?? game.slug ?? 'Unknown Game'}`);
     lines.push('');
     lines.push(`- Slug: ${game.slug ?? 'N/A'}`);
-    lines.push(`- Status: ${game.ok ? '✅ Healthy' : '❌ Needs attention'}`);
+    const statusIcon = game.status?.errors
+      ? '❌ Needs attention'
+      : game.status?.warnings
+        ? '⚠️ Review warnings'
+        : '✅ Healthy';
+    lines.push(`- Status: ${statusIcon}`);
     if (game.shell?.found) {
       lines.push(`- Shell: ${game.shell.found}`);
     } else {
       lines.push(`- Shell: missing`);
     }
-    lines.push(`- Thumbnail: ${game.thumbnail?.found ?? 'missing'}`);
+    if (game.thumbnail?.found) {
+      const note = game.thumbnail.placeholder ? ' (⚠️ placeholder)' : '';
+      lines.push(`- Thumbnail: ${game.thumbnail.found}${note}`);
+    } else {
+      lines.push(`- Thumbnail: missing`);
+    }
     if (game.assets?.sprites?.length) {
       lines.push(`- Sprites checked: ${game.assets.sprites.length}`);
     }
@@ -523,7 +752,8 @@ function buildMarkdownReport(report) {
     } else {
       lines.push('- Issues:');
       for (const issue of game.issues) {
-        lines.push(`  - ${issue.message}`);
+        const prefix = issueIsWarning(issue) ? '⚠️ Warning' : '❌ Error';
+        lines.push(`  - ${prefix}: ${issue.message}`);
         const entries = Object.entries(issue.context ?? {});
         if (entries.length) {
           for (const [key, value] of entries) {
@@ -581,6 +811,7 @@ function buildBaselinePayload(report) {
       shell: game.shell,
       assets: game.assets,
       thumbnail: game.thumbnail,
+      status: game.status,
     };
     if (game.requirements) {
       entry.requirements = game.requirements;
@@ -670,6 +901,44 @@ async function main() {
     return;
   }
 
+  const knownSlugs = new Set();
+  for (const game of games) {
+    const slug = deriveSlug(game);
+    if (slug) {
+      knownSlugs.add(slug);
+    }
+  }
+
+  const assetCatalog = buildAssetCatalog(games);
+
+  if (changedRequested) {
+    const detection = await detectChangedSlugs(knownSlugs, assetCatalog);
+    if (detection.slugs == null) {
+      const reasonSuffix = detection.reason ? ` (${detection.reason})` : '';
+      console.log(
+        `Game doctor: unable to determine changed slugs${reasonSuffix}. Running full validation instead.`,
+      );
+      changedRequested = false;
+    } else {
+      if (detection.slugs.size > 0) {
+        for (const slug of detection.slugs) {
+          addSlugSource(slugSources, slug, 'changed');
+        }
+        const baseLabel = detection.base ?? 'git history';
+        console.log(
+          `Game doctor: targeting ${detection.slugs.size} changed game slug(s) based on git diff against ${baseLabel}.`,
+        );
+      } else if (slugSources.size === 0) {
+        forceEmptyFilter = true;
+        console.log('Game doctor: --changed detected no modified game slugs.');
+      }
+    }
+  }
+
+  const filterActive = slugSources.size > 0 || forceEmptyFilter;
+  const slugFilter = filterActive ? new Set(slugSources.keys()) : null;
+  const matchedSlugs = new Set();
+
   if (!validateGames(games)) {
     console.error('games.json failed schema validation:');
     for (const error of validateGames.errors ?? []) {
@@ -697,6 +966,15 @@ async function main() {
     const slug = deriveSlug(game);
     if (!slug) {
       issues.push(formatIssue('Unable to determine slug for game entry', { index }));
+    }
+
+    if (slugFilter) {
+      if (!slug || !slugFilter.has(slug)) {
+        continue;
+      }
+      if (slug) {
+        matchedSlugs.add(slug);
+      }
     }
 
     const title = typeof game.title === 'string' ? game.title : `Game #${index + 1}`;
@@ -770,6 +1048,7 @@ async function main() {
     }
 
     let thumbnailFound = null;
+    let thumbnailIsPlaceholder = false;
     if (slug) {
       const thumbCandidates = [
         path.join(ROOT, 'assets', 'thumbs', `${slug}.png`),
@@ -780,6 +1059,9 @@ async function main() {
         // eslint-disable-next-line no-await-in-loop
         if (await pathExists(candidate)) {
           thumbnailFound = relativeFromRoot(candidate);
+          if (thumbnailFound === PLACEHOLDER_THUMB) {
+            thumbnailIsPlaceholder = true;
+          }
           break;
         }
       }
@@ -788,6 +1070,17 @@ async function main() {
           formatIssue('Thumbnail missing', {
             tried: thumbCandidates.map(relativeFromRoot),
           }),
+        );
+      } else if (thumbnailIsPlaceholder) {
+        issues.push(
+          formatIssue(
+            'Thumbnail uses placeholder art',
+            {
+              thumbnail: thumbnailFound,
+              recommendation: 'Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png',
+            },
+            SEVERITY.WARNING,
+          ),
         );
       }
     }
@@ -802,18 +1095,25 @@ async function main() {
     const includeManifestDetails =
       manifestCheck.paths.length > 0 || manifestCheck.globs.length > 0;
 
+    const hasErrors = issues.some(issueIsError);
+    const hasWarnings = issues.some(issueIsWarning);
+
     const result = {
       index,
       title,
       slug,
-      ok: issues.length === 0,
+      ok: !hasErrors,
       issues,
       shell: { found: foundShell },
       assets: {
         sprites: checkedSprites,
         audio: checkedAudio,
       },
-      thumbnail: { found: thumbnailFound },
+      thumbnail: { found: thumbnailFound, placeholder: thumbnailIsPlaceholder },
+      status: {
+        errors: hasErrors,
+        warnings: hasWarnings,
+      },
     };
 
     if (includeManifestDetails) {
@@ -827,7 +1127,39 @@ async function main() {
     total: results.length,
     passing: results.filter((game) => game.ok).length,
     failing: results.filter((game) => !game.ok).length,
+    withWarnings: results.filter((game) => game.issues.some(issueIsWarning)).length,
   };
+
+  if (slugFilter) {
+    const missingCliSlugs = [];
+    const missingChangedSlugs = [];
+
+    for (const [slug, sources] of slugSources.entries()) {
+      if (matchedSlugs.has(slug)) {
+        continue;
+      }
+      if (sources.has('cli')) {
+        missingCliSlugs.push(slug);
+      }
+      if (sources.has('changed')) {
+        missingChangedSlugs.push(slug);
+      }
+    }
+
+    if (missingCliSlugs.length > 0) {
+      console.error(
+        `Game doctor: requested slug(s) not found in games.json: ${missingCliSlugs.join(', ')}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    if (missingChangedSlugs.length > 0) {
+      console.warn(
+        `Game doctor: detected changed slug(s) not present in games.json: ${missingChangedSlugs.join(', ')}.`,
+      );
+    }
+  }
 
   const report = {
     generatedAt: new Date().toISOString(),
@@ -912,7 +1244,13 @@ async function main() {
         `Game doctor strict mode: ${summary.failing} game(s) still failing but acknowledged in baseline (${list}).`,
       );
     } else {
-      console.log(`Game doctor strict mode: all ${summary.total} game(s) look healthy!`);
+      if (summary.withWarnings > 0) {
+        console.log(
+          `Game doctor strict mode: ${summary.total} game(s) passing with ${summary.withWarnings} warning(s).`,
+        );
+      } else {
+        console.log(`Game doctor strict mode: all ${summary.total} game(s) look healthy!`);
+      }
     }
   } else if (summary.failing > 0) {
     console.error(
@@ -922,7 +1260,13 @@ async function main() {
     );
     process.exitCode = 1;
   } else {
-    console.log(`Game doctor: all ${summary.total} game(s) look healthy!`);
+    if (summary.withWarnings > 0) {
+      console.log(
+        `Game doctor: ${summary.total} game(s) passing with ${summary.withWarnings} warning(s).`,
+      );
+    } else {
+      console.log(`Game doctor: all ${summary.total} game(s) look healthy!`);
+    }
   }
 }
 

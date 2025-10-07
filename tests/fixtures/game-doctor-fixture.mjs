@@ -1,11 +1,13 @@
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawn } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+import { promisify } from 'util';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
+const execFileAsync = promisify(execFile);
 
 class GameDoctorFixture {
   constructor(root) {
@@ -65,6 +67,24 @@ class GameDoctorFixture {
     });
   }
 
+  async runGit(args) {
+    try {
+      return await execFileAsync('git', args, { cwd: this.root });
+    } catch (error) {
+      error.message = `git ${args.join(' ')} failed: ${error.message}`;
+      throw error;
+    }
+  }
+
+  async initGitRepo() {
+    await this.runGit(['init']);
+    await this.runGit(['config', 'user.email', 'fixture@example.com']);
+    await this.runGit(['config', 'user.name', 'Game Doctor Fixture']);
+    await this.runGit(['add', '.']);
+    await this.runGit(['commit', '-m', 'Initial commit']);
+    await this.runGit(['branch', '-M', 'main']);
+  }
+
   async cleanup() {
     await fs.rm(this.root, { recursive: true, force: true });
   }
@@ -75,84 +95,12 @@ async function copyFileIfExists(source, destination) {
   await fs.copyFile(source, destination);
 }
 
-async function copyDependencyModule(dependency, targetRoot) {
-  const source = path.join(REPO_ROOT, 'node_modules', dependency);
-  const destination = path.join(targetRoot, 'node_modules', dependency);
-
-  await fs.mkdir(path.dirname(destination), { recursive: true });
-  await fs.cp(source, destination, { recursive: true });
-}
-
-async function ensureNodeModulesSymlink(targetRoot) {
-  const source = path.join(REPO_ROOT, 'node_modules');
-  const destination = path.join(targetRoot, 'node_modules');
-
-  try {
-    await fs.access(source);
-  } catch {
-    return;
-  }
-
-  try {
-    await fs.symlink(source, destination, 'dir');
-    return;
-  } catch (error) {
-    if (error.code === 'EEXIST') {
-      const stats = await fs.lstat(destination);
-      if (stats.isSymbolicLink() || stats.isDirectory()) {
-        return;
-      }
-    }
-
-    if (error.code === 'EPERM' || error.code === 'EEXIST') {
-      await copyDependencyModule('ajv', targetRoot);
-      return;
-    }
-
-    throw error;
-  }
-}
-
-async function writeFixtureSchema(fixture) {
-  const schema = {
-    $schema: 'http://json-schema.org/draft-07/schema#',
-    title: 'Test games catalog schema',
-    type: 'array',
-    items: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['slug', 'title', 'firstFrame'],
-      properties: {
-        slug: { type: 'string', minLength: 1 },
-        title: { type: 'string', minLength: 1 },
-        firstFrame: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['sprites'],
-          properties: {
-            sprites: {
-              type: 'array',
-              minItems: 1,
-              items: { type: 'string', minLength: 1 },
-            },
-            audio: {
-              type: 'array',
-              items: { type: 'string', minLength: 1 },
-            },
-          },
-        },
-      },
-    },
-  };
-
-  await fixture.writeJson('tools/schemas/games.schema.json', schema);
-}
-
 export async function createGameDoctorFixture(name = 'fixture') {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), `game-doctor-${name}-`));
   const fixture = new GameDoctorFixture(tmpRoot);
 
   await fs.mkdir(fixture.path('tools/reporters'), { recursive: true });
+  await fs.mkdir(fixture.path('tools/schemas'), { recursive: true });
   await fs.mkdir(fixture.path('assets'), { recursive: true });
   await fs.mkdir(fixture.path('games'), { recursive: true });
   await fs.mkdir(fixture.path('gameshells'), { recursive: true });
@@ -164,12 +112,21 @@ export async function createGameDoctorFixture(name = 'fixture') {
     fixture.path('tools/reporters/game-doctor-manifest.json'),
   );
   await copyFileIfExists(
+    path.join(REPO_ROOT, 'tools', 'schemas', 'games.schema.json'),
+    fixture.path('tools/schemas/games.schema.json'),
+  );
+  await copyFileIfExists(
     path.join(REPO_ROOT, 'assets', 'placeholder-thumb.png'),
     fixture.path('assets/placeholder-thumb.png'),
   );
-  await writeFixtureSchema(fixture);
 
-  await ensureNodeModulesSymlink(fixture.root);
+  try {
+    await fs.symlink(path.join(REPO_ROOT, 'node_modules'), fixture.path('node_modules'), 'dir');
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      throw error;
+    }
+  }
 
   return fixture;
 }

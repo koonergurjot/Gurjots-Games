@@ -37,7 +37,9 @@ async function readSummaryLine() {
     const total = summary.total ?? 0;
     const passing = summary.passing ?? 0;
     const failing = summary.failing ?? 0;
-    return `**Summary:** ${passing}/${total} passing · ${failing} failing.`;
+    const warnings = summary.withWarnings ?? 0;
+    const warningSegment = warnings > 0 ? ` · ${warnings} with warnings` : '';
+    return `**Summary:** ${passing}/${total} passing · ${failing} failing${warningSegment}.`;
   } catch (error) {
     warn(`Unable to read summary from ${path.relative(ROOT, REPORT_JSON_PATH)}: ${error.message}`);
     return null;

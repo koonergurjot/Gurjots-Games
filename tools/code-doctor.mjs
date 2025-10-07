@@ -49,30 +49,6 @@ async function ensureHealthDir() {
   await fs.mkdir(HEALTH_DIR, { recursive: true });
 }
 
-async function pathExists(targetPath) {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function hasLocalBinary(binaryName) {
-  const binDir = path.join(ROOT, 'node_modules', '.bin');
-  const candidates = [
-    path.join(binDir, binaryName),
-    path.join(binDir, `${binaryName}.cmd`),
-    path.join(binDir, `${binaryName}.ps1`),
-  ];
-  for (const candidate of candidates) {
-    if (await pathExists(candidate)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 async function readPackageJson() {
   try {
     const raw = await fs.readFile(path.join(ROOT, 'package.json'), 'utf8');
@@ -179,8 +155,6 @@ async function runCommand(command, args, options = {}) {
   });
 }
 
-const MAX_SYNTAX_CONCURRENCY = 8;
-
 async function runSyntaxCheck(files, result) {
   if (files.length === 0) {
     result.status = 'passed';
@@ -190,28 +164,16 @@ async function runSyntaxCheck(files, result) {
   }
   result.ran = true;
   const issues = [];
-  const queue = files.slice();
-  const workers = Array.from(
-    { length: Math.min(MAX_SYNTAX_CONCURRENCY, queue.length) },
-    () =>
-      (async () => {
-        while (queue.length > 0) {
-          const filePath = queue.pop();
-          if (!filePath) {
-            break;
-          }
-          const checkResult = await runCommand('node', ['--check', filePath]);
-          if (checkResult.code !== 0) {
-            issues.push({
-              file: relativePath(filePath),
-              output: (checkResult.stderr || checkResult.stdout || '').trim() ||
-                'Unknown syntax error.',
-            });
-          }
-        }
-      })(),
-  );
-  await Promise.all(workers);
+  for (const filePath of files) {
+    const checkResult = await runCommand('node', ['--check', filePath]);
+    if (checkResult.code !== 0) {
+      issues.push({
+        file: relativePath(filePath),
+        output: (checkResult.stderr || checkResult.stdout || '').trim() ||
+          'Unknown syntax error.',
+      });
+    }
+  }
   if (issues.length === 0) {
     result.status = 'passed';
     result.summary = `Checked ${files.length} file${files.length === 1 ? '' : 's'}.`;
@@ -225,20 +187,12 @@ async function runSyntaxCheck(files, result) {
 async function runOptionalTools(pkgJson, resultMap) {
   for (const config of OPTIONAL_TOOL_CONFIG) {
     const result = resultMap[config.key];
-    const dependencyDeclared = hasDependency(pkgJson, config.packageName);
-    if (!dependencyDeclared) {
+    if (!hasDependency(pkgJson, config.packageName)) {
       result.status = 'skipped';
       result.summary = `${config.label} not installed.`;
       continue;
     }
-    const binaryName = config.command[0];
-    const binaryAvailable = await hasLocalBinary(binaryName);
-    if (!binaryAvailable) {
-      result.status = 'skipped';
-      result.summary = `${config.label} dependency missing from node_modules.`;
-      continue;
-    }
-    const commandResult = await runCommand('npx', ['--no-install', ...config.command]);
+    const commandResult = await runCommand('npx', config.command);
     result.ran = true;
     result.exitCode = commandResult.code ?? 1;
     result.output = (commandResult.stdout + commandResult.stderr).trim();
