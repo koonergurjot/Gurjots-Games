@@ -61,6 +61,11 @@ export class Controls {
     return map;
   }
 
+  private ensurePlayer(player: number): void {
+    if (!this.maps[player]) this.maps[player] = {};
+    this.ensureHandlerMap(player);
+  }
+
   /** Register callback for an action. Returns unsubscribe function. */
   on(action: string, cb: () => void, player = 0): () => void {
     const handlers = this.ensureHandlerMap(player);
@@ -80,10 +85,7 @@ export class Controls {
 
   /** Change mapping for an action at runtime */
   setMapping(action: string, key: string | string[], player = 0): void {
-    if (!this.maps[player]) {
-      this.maps[player] = {};
-      if (!this.handlers[player]) this.handlers[player] = new Map();
-    }
+    this.ensurePlayer(player);
     this.maps[player][action] = key;
     if (player === 0) {
       const binding = this.touchBindings.get(action);
@@ -134,7 +136,7 @@ export class Controls {
 
   private fireByCode(code: string): void {
     for (let p = 0; p < this.maps.length; p++) {
-      this.ensureHandlerMap(p);
+      this.ensurePlayer(p);
       for (const action in this.maps[p]) {
         if (this.match(action, code, p)) this.fire(action, p);
       }
