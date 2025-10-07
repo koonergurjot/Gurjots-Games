@@ -186,9 +186,11 @@
 
   function wrapFetch(){
     if (typeof global.fetch !== "function") return;
+    const perf = global.performance;
+    const now = typeof perf?.now === "function" ? () => perf.now() : () => Date.now();
     const original = global.fetch;
     global.fetch = function(input, init){
-      const start = performance.now();
+      const start = now();
       return original.apply(this, arguments).then((response) => {
         emit({
           category: "network",
@@ -198,7 +200,7 @@
             statusText: response.statusText,
             url: response.url,
             ok: response.ok,
-            duration: Math.round(performance.now() - start),
+            duration: Math.round(now() - start),
           },
           timestamp: Date.now(),
         });
@@ -209,7 +211,7 @@
           level: "error",
           message: `fetch ${serializeRequestInfo(input)} failed`,
           details: {
-            duration: Math.round(performance.now() - start),
+            duration: Math.round(now() - start),
             error: safeSerialize(error),
           },
           timestamp: Date.now(),
@@ -221,6 +223,8 @@
 
   function wrapXHR(){
     if (!global.XMLHttpRequest) return;
+    const perf = global.performance;
+    const now = typeof perf?.now === "function" ? () => perf.now() : () => Date.now();
     const proto = global.XMLHttpRequest.prototype;
     const open = proto.open;
     const send = proto.send;
@@ -229,7 +233,7 @@
       return open.apply(this, arguments);
     };
     proto.send = function(){
-      const started = performance.now();
+      const started = now();
       const context = this.__ggDiag || { method: "GET", url: this.responseURL };
       const done = (status, statusText, level, extra) => {
         emit({
@@ -239,7 +243,7 @@
           details: Object.assign({
             status,
             statusText,
-            duration: Math.round(performance.now() - started),
+            duration: Math.round(now() - started),
           }, extra || {}),
           timestamp: Date.now(),
         });
@@ -255,7 +259,8 @@
   function serializeRequestInfo(input){
     try {
       if (typeof input === "string") return input;
-      if (input instanceof Request) return input.url;
+      const RequestCtor = global.Request;
+      if (typeof RequestCtor === "function" && input instanceof RequestCtor) return input.url;
       if (input && typeof input === "object" && "url" in input) return String(input.url);
       return JSON.stringify(safeSerialize(input));
     } catch (_) {
@@ -264,18 +269,39 @@
   }
 
   function reportCapabilities(){
+    const nav = global.navigator;
+    if (!nav){
+      emit({
+        category: "environment",
+        level: "info",
+        message: "Environment snapshot (navigator unavailable)",
+        details: {
+          userAgent: null,
+          language: null,
+          platform: null,
+          hardwareConcurrency: null,
+          deviceMemory: null,
+          colorScheme: matchMediaSafe("(prefers-color-scheme: dark)") ? "dark" : "light",
+          onLine: null,
+          viewport: { width: global.innerWidth, height: global.innerHeight },
+          timezone: tryResolveTimeZone(),
+        },
+        timestamp: Date.now(),
+      });
+      return;
+    }
     emit({
       category: "environment",
       level: "info",
       message: "Environment snapshot",
       details: {
-        userAgent: navigator.userAgent,
-        language: navigator.language,
-        platform: navigator.platform,
-        hardwareConcurrency: navigator.hardwareConcurrency,
-        deviceMemory: navigator.deviceMemory,
+        userAgent: nav.userAgent,
+        language: nav.language,
+        platform: nav.platform,
+        hardwareConcurrency: nav.hardwareConcurrency,
+        deviceMemory: nav.deviceMemory,
         colorScheme: matchMediaSafe("(prefers-color-scheme: dark)") ? "dark" : "light",
-        onLine: navigator.onLine,
+        onLine: nav.onLine,
         viewport: { width: global.innerWidth, height: global.innerHeight },
         timezone: tryResolveTimeZone(),
       },
@@ -284,11 +310,22 @@
   }
 
   function reportPerformance(){
+    const perf = global.performance;
+    if (!perf){
+      emit({
+        category: "performance",
+        level: "info",
+        message: "Performance snapshot unavailable",
+        details: null,
+        timestamp: Date.now(),
+      });
+      return;
+    }
     try {
-      const navEntries = performance.getEntriesByType?.("navigation") || [];
+      const navEntries = typeof perf.getEntriesByType === "function" ? perf.getEntriesByType("navigation") : [];
       const nav = navEntries[0];
-      const timing = performance.timing || {};
-      const memory = performance.memory || null;
+      const timing = perf.timing || {};
+      const memory = perf.memory || null;
       emit({
         category: "performance",
         level: "info",
@@ -319,11 +356,16 @@
   }
 
   function reportServiceWorker(){
-    if (!navigator.serviceWorker) {
+    const nav = global.navigator;
+    if (!nav){
+      emit({ category: "service-worker", level: "info", message: "Navigator unavailable; skipping service worker diagnostics", timestamp: Date.now() });
+      return;
+    }
+    if (!nav.serviceWorker) {
       emit({ category: "service-worker", level: "warn", message: "Service workers unsupported", timestamp: Date.now() });
       return;
     }
-    navigator.serviceWorker.ready.then((registration) => {
+    nav.serviceWorker.ready.then((registration) => {
       emit({
         category: "service-worker",
         level: "info",
@@ -338,7 +380,7 @@
       emit({ category: "service-worker", level: "warn", message: "Service worker ready() rejected", details: safeSerialize(err), timestamp: Date.now() });
     });
 
-    navigator.serviceWorker.getRegistrations?.().then((regs) => {
+    nav.serviceWorker.getRegistrations?.().then((regs) => {
       emit({
         category: "service-worker",
         level: "info",
@@ -350,12 +392,12 @@
       emit({ category: "service-worker", level: "warn", message: "Unable to enumerate service workers", details: safeSerialize(err), timestamp: Date.now() });
     });
 
-    if (navigator.serviceWorker.controller) {
+    if (nav.serviceWorker.controller) {
       emit({
         category: "service-worker",
         level: "info",
         message: "Service worker controller detected",
-        details: { state: navigator.serviceWorker.controller.state },
+        details: { state: nav.serviceWorker.controller.state },
         timestamp: Date.now(),
       });
     }
