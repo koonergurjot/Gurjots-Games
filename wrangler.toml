@@ -1,4 +1,4 @@
-name = "game-library"
+name = "gurjots-games"
 main = "cloudflare/worker.ts"
 compatibility_date = "2024-06-20"
 
