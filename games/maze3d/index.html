@@ -61,14 +61,11 @@
     }
   </style>
 
-            <style id="gg-viewport-shim">
-              html,body{height:100%}
-              body{margin:0}
-              canvas,#app,.game-root{max-width:100vw;max-height:100vh}
-            </style>
-            
-</head>
+  </head>
 <body class="game-shell">
+  <main class="game-shell__main">
+    <div class="game-shell__surface game-shell__surface--plain"></div>
+  </main>
   <div id="hud">Time: <span id="time">0.00</span> • Opp: <span id="oppTime">--</span> • Best: <span id="best">--</span></div>
   <div id="overlay">
     <div class="panel">
@@ -108,7 +105,6 @@
   <script type="module" src="./main.js"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="maze3d"></script>
   <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="maze3d" data-apply-theme="false"></script>
-  <script src="/games/common/diag-autowire.js" defer></script>
 
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
   <script>
@@ -138,6 +134,5 @@
     else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
   })();
   </script>
-  <link rel="stylesheet" href="/games/common/diag-modal.css">
 </body>
 </html>

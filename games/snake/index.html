@@ -98,13 +98,9 @@
     }
   </style>
 
-            <style id="gg-viewport-shim">
-              html,body{height:100%}
-              body{margin:0}
-              canvas,#app,.game-root{max-width:100vw;max-height:100vh}
-            </style>
-            
-</head>
+  </style>
+
+  </head>
 <body class="game-shell">
   <main class="game-shell__main">
     <div class="game-shell__surface">
@@ -128,10 +124,7 @@
   <script src="../../js/sfx.js"></script>
   <script type="module" src="./snake.js"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="snake"></script>
-  <script defer src="../common/game-shell.js" data-back-href="../../index.html" data-game="snake" data-diag-src="/games/common/diag-capture.js"></script>
-  <link rel="stylesheet" href="/games/common/diag-modal.css">
-  <script src="/games/common/diagnostics/report-store.js" defer></script>
-  <script src="/games/common/diag-core.js" defer></script>
+  <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="snake"></script>
 
   <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
   <script>

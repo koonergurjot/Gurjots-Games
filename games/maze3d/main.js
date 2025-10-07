@@ -5,6 +5,8 @@ import { emitEvent } from '../../shared/achievements.js';
 import { connect } from './net.js';
 import { generateMaze, seedRandom } from './generator.js';
 
+const shellSurface = document.querySelector('.game-shell__surface') || document.body;
+
 async function loadCatalog() {
   const urls = ['/games.json', '/public/games.json'];
   let lastError = null;
@@ -83,12 +85,12 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
+shellSurface.appendChild(renderer.domElement);
 // minimap
 const mapRenderer = new THREE.WebGLRenderer({ antialias: false });
 mapRenderer.setSize(200, 200);
 mapRenderer.domElement.style.position='fixed'; mapRenderer.domElement.style.right='12px'; mapRenderer.domElement.style.bottom='12px'; mapRenderer.domElement.style.border='1px solid rgba(255,255,255,0.2)'; mapRenderer.domElement.style.borderRadius='6px';
-document.body.appendChild(mapRenderer.domElement);
+shellSurface.appendChild(mapRenderer.domElement);
 let mapVisible = true;
 mapRenderer.domElement.style.display = 'block';
 const minimapOverlay = document.createElement('canvas');
@@ -102,7 +104,7 @@ minimapOverlay.style.height = `${mapRenderer.domElement.height}px`;
 minimapOverlay.style.pointerEvents = 'none';
 minimapOverlay.style.borderRadius = mapRenderer.domElement.style.borderRadius;
 minimapOverlay.style.zIndex = '10';
-document.body.appendChild(minimapOverlay);
+shellSurface.appendChild(minimapOverlay);
 const minimapCtx = minimapOverlay.getContext('2d');
 minimapOverlay.style.display = 'block';
 

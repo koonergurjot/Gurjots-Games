@@ -174,13 +174,9 @@
     }
   </style>
 
-            <style id="gg-viewport-shim">
-              html,body{height:100%}
-              body{margin:0}
-              canvas,#app,.game-root{max-width:100vw;max-height:100vh}
-            </style>
-            
-</head>
+  </style>
+
+  </head>
 <body class="game-shell">
   <canvas id="game" role="img" aria-label="City Runner gameplay area"></canvas>
   <div class="hud">
@@ -254,9 +250,5 @@
     else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
   })();
   </script>
-  <link rel="stylesheet" href="/games/common/diag-modal.css">
-  <script src="/games/common/diagnostics/report-store.js" defer></script>
-  <script src="/games/common/diag-core.js" defer></script>
-  <script src="/games/common/diag-capture.js" defer></script>
 </body>
 </html>
