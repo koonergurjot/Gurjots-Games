@@ -8,6 +8,7 @@ on:
 
 jobs:
   code-doctor:
+    name: Code Doctor
     permissions:
       contents: read
       pull-requests: write
