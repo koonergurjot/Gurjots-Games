@@ -30,6 +30,7 @@ const SKIP_DIRECTORIES = new Set([
   '.next',
   '.turbo',
 ]);
+const UNUSED_ANALYSIS_EXCLUSIONS = [path.join('games', 'chess3d', 'ai', 'stockfish.js')];
 const DEFAULT_CONCURRENCY = (() => {
   const cpuCount = Array.isArray(os.cpus()) ? os.cpus().length : 0;
   if (!cpuCount || Number.isNaN(cpuCount)) {
@@ -294,6 +295,9 @@ function isTypeOnlyImport(binding) {
 }
 
 function shouldSkipUnusedAnalysis(filePath) {
+  if (UNUSED_ANALYSIS_EXCLUSIONS.some((relativePath) => filePath.endsWith(relativePath))) {
+    return true;
+  }
   return filePath.endsWith('.d.ts');
 }
 
