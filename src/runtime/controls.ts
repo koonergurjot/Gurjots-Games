@@ -55,8 +55,14 @@ export class Controls {
     if (opts.touch !== false) this.buildTouch();
   }
 
+  private ensurePlayer(player: number): void {
+    if (!this.maps[player]) this.maps[player] = {};
+    if (!this.handlers[player]) this.handlers[player] = new Map();
+  }
+
   /** Register callback for an action. Returns unsubscribe function. */
   on(action: string, cb: () => void, player = 0): () => void {
+    this.ensurePlayer(player);
     let set = this.handlers[player].get(action);
     if (!set) this.handlers[player].set(action, (set = new Set()));
     set.add(cb);
@@ -73,7 +79,7 @@ export class Controls {
 
   /** Change mapping for an action at runtime */
   setMapping(action: string, key: string | string[], player = 0): void {
-    if (!this.maps[player]) this.maps[player] = {};
+    this.ensurePlayer(player);
     this.maps[player][action] = key;
     if (player === 0) {
       const binding = this.touchBindings.get(action);

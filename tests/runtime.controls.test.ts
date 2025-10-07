@@ -11,6 +11,16 @@ test('touchstart listeners are non-passive', () => {
   spy.mockRestore();
 });
 
+test('adding mappings for a second player does not crash on keydown', () => {
+  const c = new Controls();
+  c.setMapping('a', 'KeyX', 1);
+  const handler = vi.fn();
+  expect(() => c.on('a', handler, 1)).not.toThrow();
+  expect(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyX' }))).not.toThrow();
+  expect(handler).toHaveBeenCalledTimes(1);
+  c.dispose();
+});
+
 test('dispose removes listeners', () => {
   const addSpy = vi.spyOn(window, 'addEventListener');
   const removeSpy = vi.spyOn(window, 'removeEventListener');
