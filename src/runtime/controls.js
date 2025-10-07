@@ -34,13 +34,18 @@ export class Controls {
     if (opts.touch !== false) this.buildTouch();
   }
 
+  ensureHandlerMap(player) {
+    if (!this.handlers[player]) this.handlers[player] = new Map();
+    return this.handlers[player];
+  }
+
   /** Register callback for an action. Returns unsubscribe function. */
   on(action, cb, player = 0) {
-    if (!this.handlers[player]) this.handlers[player] = new Map();
-    let set = this.handlers[player].get(action);
+    const handlers = this.ensureHandlerMap(player);
+    let set = handlers.get(action);
     if (!set) {
       set = new Set();
-      this.handlers[player].set(action, set);
+      handlers.set(action, set);
     }
     set.add(cb);
     return () => set.delete(cb);
@@ -114,8 +119,8 @@ export class Controls {
 
   fireByCode(code) {
     for (let p = 0; p < this.maps.length; p++) {
+      this.ensureHandlerMap(p);
       const map = this.maps[p];
-      if (!this.handlers[p]) this.handlers[p] = new Map();
       for (const action in map) {
         if (this.match(action, code, p)) this.fire(action, p);
       }

@@ -55,10 +55,17 @@ export class Controls {
     if (opts.touch !== false) this.buildTouch();
   }
 
+  private ensureHandlerMap(player: number): Map<string, Set<() => void>> {
+    let map = this.handlers[player];
+    if (!map) this.handlers[player] = map = new Map();
+    return map;
+  }
+
   /** Register callback for an action. Returns unsubscribe function. */
   on(action: string, cb: () => void, player = 0): () => void {
-    let set = this.handlers[player].get(action);
-    if (!set) this.handlers[player].set(action, (set = new Set()));
+    const handlers = this.ensureHandlerMap(player);
+    let set = handlers.get(action);
+    if (!set) handlers.set(action, (set = new Set()));
     set.add(cb);
     return () => set!.delete(cb);
   }
@@ -121,12 +128,13 @@ export class Controls {
   }
 
   private fire(action: string, player: number): void {
-    const set = this.handlers[player].get(action);
+    const set = this.handlers[player]?.get(action);
     if (set) for (const fn of Array.from(set)) fn();
   }
 
   private fireByCode(code: string): void {
     for (let p = 0; p < this.maps.length; p++) {
+      this.ensureHandlerMap(p);
       for (const action in this.maps[p]) {
         if (this.match(action, code, p)) this.fire(action, p);
       }
