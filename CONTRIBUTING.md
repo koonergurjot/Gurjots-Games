@@ -5,6 +5,7 @@ Thank you for considering a contribution.
 1. Fork the repository and create your branch.
 2. Run `npm test` to ensure the test suite passes.
 3. Submit a pull request using the template.
+   - Use a descriptive pull request title that summarizes your change. Avoid placeholder titles such as "Update name in Wrangler configuration file to match deployed Worker."
 
 By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
