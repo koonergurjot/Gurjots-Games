@@ -185,6 +185,40 @@ function summarizeSeverityCounts(issues) {
   return counts;
 }
 
+function summarizeIssueTotals(games) {
+  const bySeverity = Object.fromEntries(ISSUE_SEVERITY_ORDER.map((level) => [level, 0]));
+  const categoryCounts = new Map();
+
+  let total = 0;
+
+  for (const game of games) {
+    const issues = Array.isArray(game.issues) ? game.issues : [];
+    for (const issue of issues) {
+      total += 1;
+
+      const level = resolveIssueSeverityLevel(issue);
+      if (bySeverity[level] == null) {
+        bySeverity[level] = 0;
+      }
+      bySeverity[level] += 1;
+
+      const category = issue.category ?? DEFAULT_ISSUE_CATEGORY;
+      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+    }
+  }
+
+  const byCategory = Object.fromEntries(
+    Array.from(categoryCounts.entries()).sort((a, b) => {
+      if (b[1] !== a[1]) {
+        return b[1] - a[1];
+      }
+      return a[0].localeCompare(b[0]);
+    }),
+  );
+
+  return { total, bySeverity, byCategory };
+}
+
 const MANIFEST_PATH = path.join(ROOT, 'tools', 'reporters', 'game-doctor-manifest.json');
 const GAMES_SCHEMA_PATH = path.join(ROOT, 'tools', 'schemas', 'games.schema.json');
 
@@ -854,6 +888,27 @@ function buildMarkdownReport(report) {
   if (typeof report.summary.withWarnings === 'number') {
     lines.push(`- With warnings: ${report.summary.withWarnings}`);
   }
+  const issueTotals = report.summary?.issueCounts;
+  if (issueTotals) {
+    lines.push(`- Issues found: ${issueTotals.total}`);
+    const severitySummary = [];
+    for (const level of ISSUE_SEVERITY_ORDER) {
+      const count = issueTotals.bySeverity?.[level];
+      if (count > 0) {
+        severitySummary.push(`${ISSUE_SEVERITY_LABELS[level] ?? level}: ${count}`);
+      }
+    }
+    if (severitySummary.length > 0) {
+      lines.push(`- Issues by severity: ${severitySummary.join(', ')}`);
+    }
+    const categoryEntries = Object.entries(issueTotals.byCategory ?? {});
+    if (categoryEntries.length > 0) {
+      const categorySummary = categoryEntries
+        .map(([category, count]) => `${category}: ${count}`)
+        .join(', ');
+      lines.push(`- Issues by category: ${categorySummary}`);
+    }
+  }
   if (report.manifest) {
     lines.push(`- Manifest version: ${report.manifest.version ?? 'unknown'}`);
     lines.push(`- Manifest source: ${report.manifest.source ?? relativeFromRoot(MANIFEST_PATH)}`);
@@ -1396,6 +1451,7 @@ async function main() {
     failing: results.filter((game) => !game.ok).length,
     withWarnings: results.filter((game) => game.issues.some(issueIsWarning)).length,
   };
+  summary.issueCounts = summarizeIssueTotals(results);
 
   if (slugFilter) {
     const missingCliSlugs = [];

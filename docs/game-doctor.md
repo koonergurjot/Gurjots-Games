@@ -35,3 +35,7 @@ games.json failed schema validation:
 Interpret the path using `›` separators. For example, `[3]` refers to the fourth game entry. Fix the offending values in `games.json` until validation passes, then re-run the doctor.
 
 Once the schema passes, the tool continues with asset availability checks, manifest enforcement, and regression comparisons.
+
+## Scaling reports with aggregate metrics
+
+Large catalogs can surface hundreds of findings across many titles. To make the report easier to triage at scale, the JSON and Markdown outputs now expose aggregate counts by severity and issue category under the `summary.issueCounts` field. These totals highlight how many blockers, major defects, and warnings are active, along with the taxonomy buckets (for example `missing-asset` or `manifest-misconfig`) contributing to the failure rate. Use these metrics to spot systemic problems quickly or to track progress as teams burn down the backlog.
