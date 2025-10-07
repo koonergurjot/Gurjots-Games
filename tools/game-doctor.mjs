@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import process from 'process';
 import { fileURLToPath } from 'url';
+import Ajv from 'ajv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -11,6 +12,7 @@ const REPORT_MD = path.join(HEALTH_DIR, 'report.md');
 const DEFAULT_BASELINE = path.join(HEALTH_DIR, 'baseline.json');
 const PLACEHOLDER_THUMB = 'assets/placeholder-thumb.png';
 const MANIFEST_PATH = path.join(ROOT, 'tools', 'reporters', 'game-doctor-manifest.json');
+const GAMES_SCHEMA_PATH = path.join(ROOT, 'tools', 'schemas', 'games.schema.json');
 
 const gamesPath = path.join(ROOT, 'games.json');
 
@@ -45,6 +47,80 @@ function formatIssue(message, context = {}) {
     message,
     context,
   };
+}
+
+function decodePointerSegment(segment) {
+  return segment.replace(/~1/g, '/').replace(/~0/g, '~');
+}
+
+function describeInstancePath(instancePath) {
+  if (!instancePath) {
+    return '(root)';
+  }
+
+  const segments = instancePath
+    .split('/')
+    .slice(1)
+    .map(decodePointerSegment);
+
+  if (segments.length === 0) {
+    return '(root)';
+  }
+
+  return segments
+    .map((segment) => (Number.isInteger(Number(segment)) ? `[${segment}]` : segment))
+    .join(' › ');
+}
+
+function formatSchemaError(error) {
+  const location = describeInstancePath(error.instancePath ?? '');
+
+  if (error.keyword === 'required') {
+    return `${location}: missing required property "${error.params.missingProperty}"`;
+  }
+
+  if (error.keyword === 'additionalProperties') {
+    return `${location}: unexpected property "${error.params.additionalProperty}"`;
+  }
+
+  if (error.keyword === 'pattern') {
+    return `${location}: value does not match required pattern ${JSON.stringify(error.params.pattern)}`;
+  }
+
+  return `${location}: ${error.message}`;
+}
+
+async function loadGamesValidator() {
+  let schemaRaw;
+  try {
+    schemaRaw = await fs.readFile(GAMES_SCHEMA_PATH, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(
+        `Unable to find games schema at ${relativeFromRoot(GAMES_SCHEMA_PATH)}.`,
+      );
+    }
+    throw error;
+  }
+
+  let schema;
+  try {
+    schema = JSON.parse(schemaRaw);
+  } catch (error) {
+    throw new Error(
+      `Unable to parse games schema at ${relativeFromRoot(GAMES_SCHEMA_PATH)}: ${error.message}`,
+    );
+  }
+
+  try {
+    const ajv = new Ajv({ allErrors: true, strict: false });
+    const validator = ajv.compile(schema);
+    return validator;
+  } catch (error) {
+    throw new Error(
+      `Unable to compile games schema at ${relativeFromRoot(GAMES_SCHEMA_PATH)}: ${error.message}`,
+    );
+  }
 }
 
 function ensureArray(value, label, issues) {
@@ -516,6 +592,15 @@ function selectBaselineEntry(game, maps) {
 async function main() {
   const { strictMode, baselinePath } = parseCliArgs();
 
+  let validateGames;
+  try {
+    validateGames = await loadGamesValidator();
+  } catch (error) {
+    console.error(error.message ?? error);
+    process.exitCode = 1;
+    return;
+  }
+
   if (!(await pathExists(gamesPath))) {
     console.error(`Unable to locate games catalog at ${relativeFromRoot(gamesPath)}.`);
     process.exitCode = 1;
@@ -534,6 +619,15 @@ async function main() {
 
   if (!Array.isArray(games)) {
     console.error('Expected games.json to contain an array of games.');
+    process.exitCode = 1;
+    return;
+  }
+
+  if (!validateGames(games)) {
+    console.error('games.json failed schema validation:');
+    for (const error of validateGames.errors ?? []) {
+      console.error(` - ${formatSchemaError(error)}`);
+    }
     process.exitCode = 1;
     return;
   }

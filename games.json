@@ -1,6 +1,7 @@
 [
   {
     "id": "pong",
+    "slug": "pong",
     "title": "Pong Classic",
     "short": "A snappy canvas remake of the arcade legend.",
     "tags": [
@@ -23,7 +24,7 @@
     },
     "help": {
       "objective": "Win rallies until you reach 11 points before your opponent.",
-      "controls": "Player 1: W/S to move. Player 2 (local) uses \u2191/\u2193. Press Space to pause or resume.",
+      "controls": "Player 1: W/S to move. Player 2 (local) uses ↑/↓. Press Space to pause or resume.",
       "tips": [
         "Angle the paddle to change the ball's direction and catch opponents off guard.",
         "Stay near the center between shots so you can react to either corner.",
@@ -38,6 +39,7 @@
   },
   {
     "id": "snake",
+    "slug": "snake",
     "title": "Snake",
     "short": "Eat, grow, don't bonk into yourself.",
     "tags": [
@@ -63,7 +65,7 @@
       "tips": [
         "Plan turns a few squares ahead to keep open lanes for future moves.",
         "Sweep the perimeter to straighten the snake before going for tight snacks.",
-        "Avoid reversing direction directly\u2014turn in an arc to stay safe."
+        "Avoid reversing direction directly—turn in an arc to stay safe."
       ],
       "steps": [
         "Press an arrow key to start moving.",
@@ -74,6 +76,7 @@
   },
   {
     "id": "tetris",
+    "slug": "tetris",
     "title": "Tetris",
     "short": "Classic falling blocks. Clear lines, level up.",
     "tags": [
@@ -98,7 +101,7 @@
     },
     "help": {
       "objective": "Clear horizontal lines by stacking falling tetrominoes without topping out.",
-      "controls": "\u2190/\u2192 move, \u2191 rotate, \u2193 soft drop, Space hard drop, P pause.",
+      "controls": "←/→ move, ↑ rotate, ↓ soft drop, Space hard drop, P pause.",
       "tips": [
         "Leave a clean lane on one side so I pieces can score Tetrises.",
         "Soft drop to adjust a piece before committing to a hard drop.",
@@ -113,6 +116,7 @@
   },
   {
     "id": "breakout",
+    "slug": "breakout",
     "title": "Breakout",
     "short": "Smash bricks, power-ups, chase the score.",
     "tags": [
@@ -136,7 +140,7 @@
     },
     "help": {
       "objective": "Break every brick on the stage while protecting your remaining lives.",
-      "controls": "Move the paddle with the mouse or \u2190/\u2192 keys. Click/tap to launch. P pauses, R restarts after a loss.",
+      "controls": "Move the paddle with the mouse or ←/→ keys. Click/tap to launch. P pauses, R restarts after a loss.",
       "tips": [
         "Catch falling power-ups to widen the paddle or add extra balls.",
         "Hit the ball off-center to steer shots into hard-to-reach bricks.",
@@ -151,6 +155,7 @@
   },
   {
     "id": "chess",
+    "slug": "chess",
     "title": "Chess (2D)",
     "short": "Traditional chess for two players.",
     "tags": [
@@ -161,6 +166,10 @@
     "released": "2025-08-20",
     "playUrl": "/games/chess/",
     "firstFrame": {
+      "sprites": [
+        "/assets/ui/panel.png",
+        "/assets/ui/star.png"
+      ],
       "audio": [
         "/assets/audio/click.wav"
       ]
@@ -171,7 +180,7 @@
       "tips": [
         "Control the center early so your pieces have maximum reach.",
         "Castle before your king comes under pressure.",
-        "Look for tactics after every move\u2014forks, pins, and discovered attacks."
+        "Look for tactics after every move—forks, pins, and discovered attacks."
       ],
       "steps": [
         "Choose a difficulty or puzzle, then make the first move.",
@@ -182,6 +191,7 @@
   },
   {
     "id": "chess3d",
+    "slug": "chess3d",
     "title": "Chess 3D (Local)",
     "short": "A three-dimensional chess experiment.",
     "tags": [
@@ -192,6 +202,10 @@
     "released": "2025-08-27",
     "playUrl": "/games/chess3d/",
     "firstFrame": {
+      "sprites": [
+        "/assets/sprites/chess3d/wood_light.png",
+        "/assets/sprites/chess3d/wood_dark.png"
+      ],
       "audio": [
         "/assets/audio/click.wav"
       ]
@@ -213,6 +227,7 @@
   },
   {
     "id": "2048",
+    "slug": "2048",
     "title": "2048",
     "short": "Slide numbers to reach 2048.",
     "tags": [
@@ -223,6 +238,9 @@
     "released": "2025-08-20",
     "playUrl": "/games/2048/",
     "firstFrame": {
+      "sprites": [
+        "/assets/sprites/block.png"
+      ],
       "audio": [
         "/assets/audio/click.wav"
       ]
@@ -244,6 +262,7 @@
   },
   {
     "id": "asteroids",
+    "slug": "asteroids",
     "title": "Asteroids",
     "short": "Pilot your ship and blast space rocks.",
     "tags": [
@@ -265,7 +284,7 @@
     },
     "help": {
       "objective": "Pilot your ship through space, blasting asteroids and enemies to survive each wave.",
-      "controls": "A/D or \u2190/\u2192 rotate, W or \u2191 thrust, Space/Enter fire, Shift/K hyperspace, P pause, R restart.",
+      "controls": "A/D or ←/→ rotate, W or ↑ thrust, Space/Enter fire, Shift/K hyperspace, P pause, R restart.",
       "tips": [
         "Fire in bursts so you can maneuver while shots travel.",
         "Use hyperspace when surrounded, but beware of random exits.",
@@ -280,6 +299,7 @@
   },
   {
     "id": "maze3d",
+    "slug": "maze3d",
     "title": "Maze 3D",
     "short": "Wander a first-person labyrinth to find the exit.",
     "tags": [
@@ -289,6 +309,10 @@
     "released": "2025-08-27",
     "playUrl": "/games/maze3d/",
     "firstFrame": {
+      "sprites": [
+        "/assets/sprites/maze3d/wall.png",
+        "/assets/sprites/maze3d/floor.png"
+      ],
       "audio": [
         "/assets/audio/powerup.wav"
       ]
@@ -310,6 +334,7 @@
   },
   {
     "id": "platformer",
+    "slug": "platformer",
     "title": "Pixel Platformer",
     "short": "Run and jump across platforms to reach the goal.",
     "tags": [
@@ -329,9 +354,9 @@
     },
     "help": {
       "objective": "Run, jump, and collect coins across the stage while staying ahead of hazards.",
-      "controls": "\u2190/\u2192 move, Space or \u2191 jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
+      "controls": "←/→ move, Space or ↑ jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
       "tips": [
-        "Collect every coin you see\u2014the goal only opens once the set is complete.",
+        "Collect every coin you see—the goal only opens once the set is complete.",
         "Time jumps off moving platforms and slopes to keep momentum going.",
         "Start co-op from the HUD if you want a partner to help sweep the map."
       ],
@@ -344,6 +369,7 @@
   },
   {
     "id": "runner",
+    "slug": "runner",
     "title": "City Runner",
     "short": "Dash through the city and avoid obstacles.",
     "tags": [
@@ -364,7 +390,7 @@
     },
     "help": {
       "objective": "Sprint through the city streets, dodging obstacles to keep your run alive.",
-      "controls": "Space or \u2191 jumps, \u2193 slides. On mobile, tap right to jump and left to slide.",
+      "controls": "Space or ↑ jumps, ↓ slides. On mobile, tap right to jump and left to slide.",
       "tips": [
         "Stay near the middle lane so you can quickly jump or slide as obstacles appear.",
         "Slide under low signs instead of jumping to recover faster afterward.",
@@ -379,6 +405,7 @@
   },
   {
     "id": "shooter",
+    "slug": "shooter",
     "title": "Alien Shooter",
     "short": "Blast waves of invaders and survive.",
     "tags": [
@@ -401,7 +428,7 @@
       "controls": "WASD or Arrow keys move, Space/Enter shoot. Keep moving to avoid hits.",
       "tips": [
         "Strafe horizontally to herd enemies into your bullet stream.",
-        "Watch your firing cadence\u2014the blaster has a short cooldown.",
+        "Watch your firing cadence—the blaster has a short cooldown.",
         "Keep distance from enemy clusters to buy time for dodges."
       ],
       "steps": [
