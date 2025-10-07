@@ -19,6 +19,8 @@
     "code:doctor": "node tools/code-doctor.mjs"
   },
   "devDependencies": {
+    "@babel/parser": "^7.28.4",
+    "@babel/traverse": "^7.28.4",
     "acorn": "^8.15.0",
     "ajv": "^8.17.1",
     "axe-core": "^4.10.3",
