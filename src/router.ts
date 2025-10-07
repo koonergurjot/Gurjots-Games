@@ -124,7 +124,7 @@ export class Router {
   }
 
   private async renderNotFound(mode: ResolveMode, path: string) {
-    const mod = await import('./pages/not-found.js');
+    const mod = await import('../scripts/pages/not-found.js');
     this.outlet.innerHTML = '';
     mod.default(this.outlet);
     this.commitHistory(path, mode);
