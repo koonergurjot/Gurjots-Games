@@ -18,6 +18,7 @@ const REPORT_JSON = path.join(HEALTH_DIR, 'code-report.json');
 const SYNTAX_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx']);
 const IMPORT_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx']);
 const UNUSED_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx']);
+const RELATIVE_IMPORT_RESOLVE_EXTENSIONS = ['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx'];
 const SKIP_DIRECTORIES = new Set([
   'node_modules',
   'dist',
@@ -467,6 +468,86 @@ function normalizeImportSpecifier(specifier) {
   return cleaned;
 }
 
+function isRelativeImportSpecifier(specifier) {
+  return specifier.startsWith('./') || specifier.startsWith('../');
+}
+
+function findImportSpecifiers(content) {
+  const fromRegex = /from\s+['"]([^'"]+)['"]/g;
+  const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  const importCallRegex = /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  const specifiers = [];
+  let match;
+  while ((match = fromRegex.exec(content)) != null) {
+    specifiers.push(match[1]);
+  }
+  while ((match = requireRegex.exec(content)) != null) {
+    specifiers.push(match[1]);
+  }
+  while ((match = importCallRegex.exec(content)) != null) {
+    specifiers.push(match[1]);
+  }
+  return specifiers;
+}
+
+async function resolveRelativeImport(filePath, specifier, existenceCache, extensions) {
+  if (!isRelativeImportSpecifier(specifier)) {
+    return null;
+  }
+
+  const normalized = normalizeImportSpecifier(specifier);
+  const baseDir = path.dirname(filePath);
+  const targetBase = path.resolve(baseDir, normalized);
+  const candidates = [];
+  const seen = new Set();
+  const extensionCandidates = extensions && extensions.length > 0 ? extensions : RELATIVE_IMPORT_RESOLVE_EXTENSIONS;
+
+  const addCandidate = (candidate) => {
+    if (!seen.has(candidate)) {
+      seen.add(candidate);
+      candidates.push(candidate);
+    }
+  };
+
+  addCandidate(targetBase);
+  if (!path.extname(targetBase)) {
+    for (const ext of extensionCandidates) {
+      addCandidate(`${targetBase}${ext}`);
+    }
+  }
+  for (const ext of extensionCandidates) {
+    addCandidate(path.join(targetBase, `index${ext}`));
+  }
+
+  const getExists = async (candidate) => {
+    if (existenceCache && existenceCache.has(candidate)) {
+      return existenceCache.get(candidate);
+    }
+    try {
+      const stat = await fs.stat(candidate);
+      const exists = stat.isFile();
+      if (existenceCache) {
+        existenceCache.set(candidate, exists);
+      }
+      return exists;
+    } catch {
+      if (existenceCache) {
+        existenceCache.set(candidate, false);
+      }
+      return false;
+    }
+  };
+
+  for (const candidate of candidates) {
+    // eslint-disable-next-line no-await-in-loop
+    if (await getExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 async function checkImportTargets(files, result) {
   if (files.length === 0) {
     result.status = 'passed';
@@ -475,24 +556,9 @@ async function checkImportTargets(files, result) {
     return;
   }
   result.ran = true;
-  const extensionCandidates = ['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx'];
   const existenceCache = new Map();
 
   const missing = [];
-
-  const checkCandidateExists = async (candidate) => {
-    if (existenceCache.has(candidate)) {
-      return existenceCache.get(candidate);
-    }
-    try {
-      await fs.access(candidate);
-      existenceCache.set(candidate, true);
-      return true;
-    } catch {
-      existenceCache.set(candidate, false);
-      return false;
-    }
-  };
 
   await runWithConcurrency(files, async (filePath) => {
     let content;
@@ -501,48 +567,19 @@ async function checkImportTargets(files, result) {
     } catch (error) {
       return;
     }
-    const fromRegex = /from\s+['"]([^'"]+)['"]/g;
-    const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-    const importCallRegex = /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-    const specs = [];
-    let match;
-    while ((match = fromRegex.exec(content)) != null) {
-      specs.push(match[1]);
-    }
-    while ((match = requireRegex.exec(content)) != null) {
-      specs.push(match[1]);
-    }
-    while ((match = importCallRegex.exec(content)) != null) {
-      specs.push(match[1]);
-    }
+    const specs = findImportSpecifiers(content);
 
     for (const specifier of specs) {
-      if (!specifier.startsWith('./') && !specifier.startsWith('../')) {
+      if (!isRelativeImportSpecifier(specifier)) {
         continue;
       }
-      const normalized = normalizeImportSpecifier(specifier);
-      const baseDir = path.dirname(filePath);
-      const targetBase = path.resolve(baseDir, normalized);
-      const candidates = new Set();
-      candidates.add(targetBase);
-      if (!path.extname(targetBase)) {
-        for (const ext of extensionCandidates) {
-          candidates.add(`${targetBase}${ext}`);
-        }
-      }
-      for (const ext of extensionCandidates) {
-        candidates.add(path.join(targetBase, `index${ext}`));
-      }
-
-      let exists = false;
-      for (const candidate of candidates) {
-        // eslint-disable-next-line no-await-in-loop
-        if (await checkCandidateExists(candidate)) {
-          exists = true;
-          break;
-        }
-      }
-      if (!exists) {
+      const resolved = await resolveRelativeImport(
+        filePath,
+        specifier,
+        existenceCache,
+        RELATIVE_IMPORT_RESOLVE_EXTENSIONS,
+      );
+      if (!resolved) {
         missing.push({
           file: relativePath(filePath),
           specifier,
@@ -558,6 +595,189 @@ async function checkImportTargets(files, result) {
     result.summary = `${missing.length} missing relative import${missing.length === 1 ? '' : 's'}.`;
     result.issues = missing;
   }
+}
+
+function canonicalizeCycle(nodes) {
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    return { key: '', path: [] };
+  }
+
+  const withoutTerminal = nodes[nodes.length - 1] === nodes[0] ? nodes.slice(0, -1) : nodes.slice();
+  if (withoutTerminal.length === 0) {
+    const single = relativePath(nodes[0]);
+    return { key: single, path: [single, single] };
+  }
+
+  const relativeNodes = withoutTerminal.map((node) => relativePath(node));
+  let bestIndex = 0;
+  for (let i = 1; i < relativeNodes.length; i += 1) {
+    if (relativeNodes[i].localeCompare(relativeNodes[bestIndex]) < 0) {
+      bestIndex = i;
+    }
+  }
+
+  const ordered = [];
+  for (let i = 0; i < relativeNodes.length; i += 1) {
+    ordered.push(relativeNodes[(bestIndex + i) % relativeNodes.length]);
+  }
+  ordered.push(ordered[0]);
+
+  return { key: ordered.join(' -> '), path: ordered };
+}
+
+async function checkCircularDependencies(files, result) {
+  const candidates = files.filter((filePath) =>
+    IMPORT_EXTENSIONS.has(path.extname(filePath)),
+  );
+
+  if (candidates.length === 0) {
+    result.status = 'passed';
+    result.summary = 'No modules to scan for circular dependencies.';
+    result.ran = false;
+    return;
+  }
+
+  result.ran = true;
+  const existenceCache = new Map();
+  const graph = new Map();
+  const analysisIssues = [];
+
+  const dependencyResults = await runWithConcurrency(candidates, async (filePath) => {
+    let content;
+    try {
+      content = await fs.readFile(filePath, 'utf8');
+    } catch (error) {
+      return {
+        filePath,
+        error: error instanceof Error ? error.message : String(error),
+        dependencies: [],
+      };
+    }
+
+    const specifiers = findImportSpecifiers(content);
+    const dependencies = [];
+    for (const specifier of specifiers) {
+      if (!isRelativeImportSpecifier(specifier)) {
+        continue;
+      }
+      // eslint-disable-next-line no-await-in-loop
+      const resolved = await resolveRelativeImport(
+        filePath,
+        specifier,
+        existenceCache,
+        RELATIVE_IMPORT_RESOLVE_EXTENSIONS,
+      );
+      if (resolved) {
+        dependencies.push(path.resolve(resolved));
+      }
+    }
+
+    return { filePath, dependencies };
+  });
+
+  for (const entry of dependencyResults) {
+    if (!entry) {
+      continue;
+    }
+    const absolutePath = path.resolve(entry.filePath);
+    if (entry.error) {
+      analysisIssues.push({
+        type: 'read-error',
+        file: relativePath(entry.filePath),
+        message: entry.error,
+      });
+      graph.set(absolutePath, new Set());
+      continue;
+    }
+    graph.set(absolutePath, new Set(entry.dependencies));
+  }
+
+  for (const deps of graph.values()) {
+    for (const dep of deps) {
+      if (!graph.has(dep)) {
+        graph.set(dep, new Set());
+      }
+    }
+  }
+
+  const visiting = new Set();
+  const visited = new Set();
+  const stack = [];
+  const cycles = [];
+  const seenCycles = new Set();
+
+  const dfs = (node) => {
+    if (visiting.has(node)) {
+      const cycleStart = stack.indexOf(node);
+      if (cycleStart !== -1) {
+        const cycleNodes = stack.slice(cycleStart).concat(node);
+        const canonical = canonicalizeCycle(cycleNodes);
+        if (canonical.key && !seenCycles.has(canonical.key)) {
+          seenCycles.add(canonical.key);
+          cycles.push(canonical.path);
+        }
+      }
+      return;
+    }
+    if (visited.has(node)) {
+      return;
+    }
+    visiting.add(node);
+    stack.push(node);
+    const neighbors = graph.get(node) || new Set();
+    for (const neighbor of neighbors) {
+      if (!graph.has(neighbor)) {
+        continue;
+      }
+      dfs(neighbor);
+    }
+    stack.pop();
+    visiting.delete(node);
+    visited.add(node);
+  };
+
+  for (const node of graph.keys()) {
+    if (!visited.has(node)) {
+      dfs(node);
+    }
+  }
+
+  const issues = [];
+  if (cycles.length > 0) {
+    for (const cycle of cycles) {
+      issues.push({
+        type: 'cycle',
+        files: cycle,
+        message: cycle.join(' -> '),
+      });
+    }
+  }
+  if (analysisIssues.length > 0) {
+    issues.push(...analysisIssues);
+  }
+
+  if (cycles.length > 0) {
+    const summaryParts = [`${cycles.length} circular dependenc${cycles.length === 1 ? 'y' : 'ies'} detected`];
+    if (analysisIssues.length > 0) {
+      summaryParts.push(
+        `${analysisIssues.length} file${analysisIssues.length === 1 ? '' : 's'} could not be analyzed`,
+      );
+    }
+    result.status = 'failed';
+    result.summary = summaryParts.join('; ');
+    result.issues = issues;
+    return;
+  }
+
+  if (analysisIssues.length > 0) {
+    result.status = 'issues';
+    result.summary = `${analysisIssues.length} file${analysisIssues.length === 1 ? '' : 's'} could not be analyzed.`;
+    result.issues = analysisIssues;
+    return;
+  }
+
+  result.status = 'passed';
+  result.summary = `Scanned ${graph.size} module${graph.size === 1 ? '' : 's'} with no circular dependencies detected.`;
 }
 
 async function checkUnusedCode(files, result) {
@@ -675,7 +895,7 @@ function buildMarkdownReport(generatedAt, overallStatus, exitCode, results, fata
   lines.push('');
   lines.push('| Check | Status | Details |');
   lines.push('| --- | --- | --- |');
-  for (const key of ['syntax', 'eslint', 'prettier', 'typescript', 'imports', 'unused']) {
+  for (const key of ['syntax', 'eslint', 'prettier', 'typescript', 'imports', 'circular', 'unused']) {
     const result = results[key];
     const detail = result.summary || '';
     lines.push(`| ${result.label} | ${statusSymbol(result.status)} ${result.status} | ${detail.replace(/\n/g, ' ')} |`);
@@ -747,6 +967,28 @@ function buildMarkdownReport(generatedAt, overallStatus, exitCode, results, fata
   }
   lines.push('');
 
+  const circularResult = results.circular;
+  lines.push('### Circular Dependencies');
+  lines.push('');
+  lines.push(`Status: ${statusSymbol(circularResult.status)} ${circularResult.status}`);
+  lines.push('');
+  if (circularResult.issues.length === 0) {
+    lines.push(circularResult.summary || 'No circular dependencies detected.');
+  } else {
+    lines.push(circularResult.summary || 'Circular dependencies detected:');
+    lines.push('');
+    for (const issue of circularResult.issues) {
+      if (issue.type === 'cycle') {
+        lines.push(`- ${issue.message}`);
+      } else if (issue.type === 'read-error') {
+        lines.push(`- **${issue.file}** (read error)${issue.message ? ` — ${issue.message}` : ''}`);
+      } else {
+        lines.push(`- ${issue.message || 'Analysis issue.'}`);
+      }
+    }
+  }
+  lines.push('');
+
   const unusedResult = results.unused;
   lines.push('### Unused Code');
   lines.push('');
@@ -788,6 +1030,7 @@ function buildJsonReport(generatedAt, overallStatus, exitCode, results, fatalErr
       prettier: results.prettier,
       typescript: results.typescript,
       imports: results.imports,
+      circular: results.circular,
       unused: results.unused,
     },
   };
@@ -806,6 +1049,7 @@ async function main() {
     prettier: createDefaultResult('Prettier'),
     typescript: createDefaultResult('TypeScript'),
     imports: createDefaultResult('Relative Imports'),
+    circular: createDefaultResult('Circular Dependencies'),
     unused: createDefaultResult('Unused Code'),
   };
 
@@ -829,6 +1073,7 @@ async function main() {
     await runSyntaxCheck(syntaxFiles, results.syntax);
     await runOptionalTools(pkgJson, results);
     await checkImportTargets(importFiles, results.imports);
+    await checkCircularDependencies(importFiles, results.circular);
     await checkUnusedCode(unusedFiles, results.unused);
 
     if (results.syntax.status === 'failed') {
@@ -841,6 +1086,9 @@ async function main() {
       exitCode = 1;
     }
     if (results.prettier.ran && results.prettier.status === 'failed') {
+      exitCode = 1;
+    }
+    if (results.circular.status === 'failed') {
       exitCode = 1;
     }
   } catch (error) {
@@ -856,11 +1104,16 @@ async function main() {
       results.syntax.status === 'failed' ||
       (results.eslint.ran && results.eslint.status === 'failed') ||
       (results.prettier.ran && results.prettier.status === 'failed') ||
-      (results.typescript.ran && results.typescript.status === 'failed')
+      (results.typescript.ran && results.typescript.status === 'failed') ||
+      results.circular.status === 'failed'
     ) {
       return 'failed';
     }
-    if (results.imports.status === 'issues' || results.unused.status === 'issues') {
+    if (
+      results.imports.status === 'issues' ||
+      results.circular.status === 'issues' ||
+      results.unused.status === 'issues'
+    ) {
       return 'issues';
     }
     return 'passed';
