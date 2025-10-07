@@ -42,6 +42,48 @@ function deriveSlug(game) {
   return null;
 }
 
+function parsePlayUrl(rawPlayUrl) {
+  if (typeof rawPlayUrl !== 'string') {
+    return {
+      value: null,
+      slug: null,
+      pathSegments: [],
+    };
+  }
+
+  const trimmed = rawPlayUrl.trim();
+  if (!trimmed) {
+    return {
+      value: null,
+      slug: null,
+      pathSegments: [],
+    };
+  }
+
+  const [withoutFragment] = trimmed.split(/[?#]/, 1);
+  let normalized = withoutFragment.replace(/\/{2,}/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
+  }
+  if (!normalized.endsWith('/')) {
+    normalized = `${normalized}/`;
+  }
+
+  const segments = normalized.split('/').filter(Boolean);
+  const slug = segments.length >= 2 && segments[0] === 'games' ? segments[1] : null;
+  const pathSegments = normalized
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+    .split('/')
+    .filter(Boolean);
+
+  return {
+    value: normalized,
+    slug,
+    pathSegments,
+  };
+}
+
 function formatIssue(message, context = {}) {
   return {
     message,
@@ -473,6 +515,31 @@ function buildMarkdownReport(report) {
     lines.push('');
     lines.push(`- Slug: ${game.slug ?? 'N/A'}`);
     lines.push(`- Status: ${game.ok ? '✅ Healthy' : '❌ Needs attention'}`);
+    if (game.routing?.playUrl) {
+      lines.push(`- Play URL: ${game.routing.playUrl}`);
+    } else {
+      lines.push('- Play URL: missing');
+    }
+    if (game.routing?.matchesSlug === false && game.slug) {
+      lines.push(
+        `- Routing hint: playUrl slug "${game.routing.slug}" does not match game slug "${game.slug}". Update playUrl to /games/${game.slug}/.`,
+      );
+    }
+    if (game.routing?.resolvedToShell) {
+      lines.push(`- Routing: ✅ playUrl resolves to ${game.routing.resolvedToShell}`);
+    } else if (game.routing?.resolvedToPublicAsset) {
+      lines.push(`- Routing: ✅ playUrl serves built asset at ${game.routing.resolvedToPublicAsset}`);
+    } else if (game.routing?.playUrl) {
+      lines.push(
+        '- Routing: ❌ playUrl did not resolve to a known shell. Update the playUrl to match the game slug or add an index.html at one of the checked locations.',
+      );
+      if (game.routing?.checked?.length) {
+        lines.push('  - Checked locations:');
+        for (const candidate of game.routing.checked) {
+          lines.push(`    - ${candidate}`);
+        }
+      }
+    }
     if (game.shell?.found) {
       lines.push(`- Shell: ${game.shell.found}`);
     } else {
@@ -703,6 +770,7 @@ async function main() {
 
     let foundShell = null;
     let foundShellAbsolute = null;
+    const availableShells = [];
     if (slug) {
       const shellCandidates = [
         path.join(ROOT, 'games', slug, 'index.html'),
@@ -710,11 +778,14 @@ async function main() {
       ];
 
       for (const candidate of shellCandidates) {
+        const relativeCandidate = relativeFromRoot(candidate);
         // eslint-disable-next-line no-await-in-loop
         if (await pathExists(candidate)) {
-          foundShellAbsolute = candidate;
-          foundShell = relativeFromRoot(candidate);
-          break;
+          if (!foundShellAbsolute) {
+            foundShellAbsolute = candidate;
+            foundShell = relativeCandidate;
+          }
+          availableShells.push({ absolute: candidate, relative: relativeCandidate });
         }
       }
 
@@ -722,6 +793,95 @@ async function main() {
         issues.push(
           formatIssue('Missing playable shell', {
             tried: shellCandidates.map(relativeFromRoot),
+          }),
+        );
+      }
+    }
+
+    const playUrlInfo = parsePlayUrl(game.playUrl);
+    const routingChecked = new Set();
+    const routing = {
+      playUrl: playUrlInfo.value,
+      slug: playUrlInfo.slug,
+      matchesSlug: slug && playUrlInfo.slug ? slug === playUrlInfo.slug : null,
+      resolvedToShell: null,
+      resolvedToPublicAsset: null,
+      checked: [],
+    };
+
+    const recordRoutingCheck = (candidate) => {
+      if (candidate) {
+        routingChecked.add(candidate);
+      }
+    };
+
+    if (slug && playUrlInfo.slug && slug !== playUrlInfo.slug) {
+      issues.push(
+        formatIssue('Play URL slug does not match game slug', {
+          slug,
+          playUrl: playUrlInfo.value ?? game.playUrl ?? null,
+          playUrlSlug: playUrlInfo.slug,
+        }),
+      );
+    }
+
+    const availableShellSet = new Set(availableShells.map((entry) => entry.absolute));
+    let publicCandidate = null;
+    if (playUrlInfo.slug) {
+      const routingCandidates = [
+        { absolute: path.join(ROOT, 'games', playUrlInfo.slug, 'index.html') },
+        { absolute: path.join(ROOT, 'gameshells', playUrlInfo.slug, 'index.html') },
+      ];
+
+      for (const candidate of routingCandidates) {
+        const relative = relativeFromRoot(candidate.absolute);
+        recordRoutingCheck(relative);
+        if (!routing.resolvedToShell) {
+          if (availableShellSet.has(candidate.absolute)) {
+            routing.resolvedToShell = relative;
+            continue;
+          }
+          // eslint-disable-next-line no-await-in-loop
+          if (await pathExists(candidate.absolute)) {
+            routing.resolvedToShell = relative;
+          }
+        }
+      }
+    }
+
+    if (!routing.resolvedToShell && playUrlInfo.pathSegments.length > 0) {
+      publicCandidate = path.join(ROOT, 'public', ...playUrlInfo.pathSegments, 'index.html');
+      const relativePublic = relativeFromRoot(publicCandidate);
+      recordRoutingCheck(relativePublic);
+      // eslint-disable-next-line no-await-in-loop
+      if (await pathExists(publicCandidate)) {
+        routing.resolvedToPublicAsset = relativePublic;
+      }
+    }
+
+    routing.checked = Array.from(routingChecked);
+
+    if (routing.playUrl && !routing.resolvedToShell && !routing.resolvedToPublicAsset) {
+      const context = {
+        playUrl: routing.playUrl,
+      };
+      if (playUrlInfo.slug) {
+        context.expectedShells = [
+          relativeFromRoot(path.join(ROOT, 'games', playUrlInfo.slug, 'index.html')),
+          relativeFromRoot(path.join(ROOT, 'gameshells', playUrlInfo.slug, 'index.html')),
+        ];
+      }
+      if (publicCandidate) {
+        context.publicCandidate = relativeFromRoot(publicCandidate);
+      }
+      issues.push(formatIssue('Play URL does not resolve to a known shell', context));
+    }
+    if (!routing.playUrl) {
+      routing.playUrl = game.playUrl ?? null;
+      if (routing.playUrl) {
+        issues.push(
+          formatIssue('Play URL is not a recognized /games/<slug>/ route', {
+            playUrl: routing.playUrl,
           }),
         );
       }
@@ -813,6 +973,7 @@ async function main() {
         sprites: checkedSprites,
         audio: checkedAudio,
       },
+      routing,
       thumbnail: { found: thumbnailFound },
     };
 

@@ -18,6 +18,7 @@ describe('tools/game-doctor.mjs', () => {
       {
         slug: 'healthy-game',
         title: 'Healthy Fixture',
+        playUrl: '/games/healthy-game/',
         firstFrame: {
           sprites: ['/assets/sprites/healthy-game.png'],
           audio: ['/assets/audio/healthy-game.mp3'],
@@ -41,10 +42,17 @@ describe('tools/game-doctor.mjs', () => {
     expect(report.games).toHaveLength(1);
     expect(report.games[0].slug).toBe('healthy-game');
     expect(report.games[0].ok).toBe(true);
+    expect(report.games[0].routing).toMatchObject({
+      playUrl: '/games/healthy-game/',
+      resolvedToShell: 'games/healthy-game/index.html',
+      resolvedToPublicAsset: null,
+    });
 
     const markdown = await fixture.readFile('health/report.md');
     expect(markdown).toContain('## Healthy Fixture');
     expect(markdown).toContain('- Status: ✅ Healthy');
+    expect(markdown).toContain('- Play URL: /games/healthy-game/');
+    expect(markdown).toContain('- Routing: ✅ playUrl resolves to games/healthy-game/index.html');
   });
 
   it('fails strict mode when regressions are introduced', async () => {
@@ -54,6 +62,7 @@ describe('tools/game-doctor.mjs', () => {
       {
         slug: 'troubled-game',
         title: 'Troubled Fixture',
+        playUrl: '/games/troubled-game/',
         firstFrame: {
           sprites: ['/assets/sprites/missing.png'],
         },
@@ -78,10 +87,15 @@ describe('tools/game-doctor.mjs', () => {
     expect(report.summary).toMatchObject({ total: 1, passing: 0, failing: 1 });
     expect(report.games[0].ok).toBe(false);
     expect(report.games[0].issues.some((issue) => issue.message === 'Missing playable shell')).toBe(true);
+    expect(report.games[0].issues.some((issue) => issue.message === 'Play URL does not resolve to a known shell')).toBe(
+      true,
+    );
 
     const markdown = await fixture.readFile('health/report.md');
     expect(markdown).toContain('## Troubled Fixture');
     expect(markdown).toContain('❌ Needs attention');
+    expect(markdown).toContain('- Play URL: /games/troubled-game/');
+    expect(markdown).toContain('Routing: ❌ playUrl did not resolve to a known shell');
   });
 
   it('lists all detected issues for unhealthy games', async () => {
@@ -91,6 +105,7 @@ describe('tools/game-doctor.mjs', () => {
       {
         slug: 'unhealthy-game',
         title: 'Unhealthy Fixture',
+        playUrl: '/games/unhealthy-game/',
         firstFrame: {
           sprites: [
             '/assets/sprites/unhealthy-game.png',
@@ -126,6 +141,7 @@ describe('tools/game-doctor.mjs', () => {
     expect(issueMessages).toEqual(
       expect.arrayContaining([
         'Missing playable shell',
+        'Play URL does not resolve to a known shell',
         'Manifest requirements entry must be an object',
         'Sprite asset missing on disk',
         'Sprite asset must live under /assets/',
@@ -143,7 +159,83 @@ describe('tools/game-doctor.mjs', () => {
     expect(markdown).toContain('## Unhealthy Fixture');
     expect(markdown).toContain('- Issues:');
     expect(markdown).toContain('Missing playable shell');
+    expect(markdown).toContain('Routing: ❌ playUrl did not resolve to a known shell');
     expect(markdown).toContain('Sprite asset must live under /assets/');
     expect(markdown).toContain('Audio asset must live under /assets/');
+  });
+
+  it('reports mismatched playUrl slug with remediation details', async () => {
+    fixture = await createGameDoctorFixture('playurl-mismatch');
+
+    await fixture.writeJson('games.json', [
+      {
+        slug: 'sluggy-game',
+        title: 'Sluggy Fixture',
+        playUrl: '/games/mismatch-route/',
+        firstFrame: {
+          sprites: ['/assets/sprites/sluggy-game.png'],
+        },
+      },
+    ]);
+
+    await fixture.writeFile('games/sluggy-game/index.html', '<!doctype html><title>Sluggy</title>');
+    await fixture.writeFile('assets/sprites/sluggy-game.png', 'sprite-bytes');
+
+    const result = await fixture.runDoctor();
+
+    expect(result.code).toBe(1);
+
+    const report = await fixture.readJson('health/report.json');
+    expect(report.summary).toMatchObject({ total: 1, passing: 0, failing: 1 });
+    const [gameReport] = report.games;
+    expect(gameReport.slug).toBe('sluggy-game');
+    expect(gameReport.routing.matchesSlug).toBe(false);
+    expect(gameReport.routing.resolvedToShell).toBeNull();
+    expect(gameReport.routing.resolvedToPublicAsset).toBeNull();
+    const issueMessages = gameReport.issues.map((issue) => issue.message);
+    expect(issueMessages).toEqual(
+      expect.arrayContaining([
+        'Play URL slug does not match game slug',
+        'Play URL does not resolve to a known shell',
+      ]),
+    );
+
+    const markdown = await fixture.readFile('health/report.md');
+    expect(markdown).toContain('## Sluggy Fixture');
+    expect(markdown).toContain('- Play URL: /games/mismatch-route/');
+    expect(markdown).toContain('- Routing hint: playUrl slug "mismatch-route" does not match game slug "sluggy-game".');
+    expect(markdown).toContain('Routing: ❌ playUrl did not resolve to a known shell');
+  });
+
+  it('validates routing when only a gameshell build exists', async () => {
+    fixture = await createGameDoctorFixture('gameshell-routing');
+
+    await fixture.writeJson('games.json', [
+      {
+        slug: 'shell-only',
+        title: 'Shell Only Fixture',
+        playUrl: '/games/shell-only/',
+        firstFrame: {
+          sprites: ['/assets/sprites/shell-only.png'],
+        },
+      },
+    ]);
+
+    await fixture.writeFile('gameshells/shell-only/index.html', '<!doctype html><title>Shell Only</title>');
+    await fixture.writeFile('assets/sprites/shell-only.png', 'sprite-bytes');
+
+    const result = await fixture.runDoctor();
+
+    expect(result.code).toBe(0);
+
+    const report = await fixture.readJson('health/report.json');
+    expect(report.summary).toMatchObject({ total: 1, passing: 1, failing: 0 });
+    const [gameReport] = report.games;
+    expect(gameReport.shell.found).toBe('gameshells/shell-only/index.html');
+    expect(gameReport.routing.resolvedToShell).toBe('gameshells/shell-only/index.html');
+
+    const markdown = await fixture.readFile('health/report.md');
+    expect(markdown).toContain('## Shell Only Fixture');
+    expect(markdown).toContain('- Routing: ✅ playUrl resolves to gameshells/shell-only/index.html');
   });
 });

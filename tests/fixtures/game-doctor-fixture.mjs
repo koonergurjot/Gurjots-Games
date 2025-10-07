@@ -121,10 +121,11 @@ async function writeFixtureSchema(fixture) {
     items: {
       type: 'object',
       additionalProperties: false,
-      required: ['slug', 'title', 'firstFrame'],
+      required: ['slug', 'title', 'firstFrame', 'playUrl'],
       properties: {
         slug: { type: 'string', minLength: 1 },
         title: { type: 'string', minLength: 1 },
+        playUrl: { type: 'string', minLength: 1 },
         firstFrame: {
           type: 'object',
           additionalProperties: false,
