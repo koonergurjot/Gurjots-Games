@@ -74,6 +74,12 @@ jobs:
             let summaryText = '⚠️ Game Doctor report was not generated.';
             let table = '';
 
+            const issueNumber = context.payload?.pull_request?.number;
+            if (!issueNumber) {
+              core.info('Skipping Game Doctor comment: no pull request context available.');
+              return;
+            }
+
             if (fs.existsSync(path)) {
               try {
                 const report = JSON.parse(fs.readFileSync(path, 'utf8'));
@@ -130,7 +136,7 @@ jobs:
             const { data: comments } = await github.rest.issues.listComments({
               owner,
               repo,
-              issue_number: context.issue.number,
+              issue_number: issueNumber,
               per_page: 100,
             });
 
@@ -147,7 +153,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner,
                 repo,
-                issue_number: context.issue.number,
+                issue_number: issueNumber,
                 body: commentBody,
               });
             }
