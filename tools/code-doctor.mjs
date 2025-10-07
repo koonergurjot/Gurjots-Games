@@ -58,6 +58,34 @@ const OPTIONAL_TOOL_CONFIG = [
   },
 ];
 
+const SCORE_RULES = {
+  syntax: {
+    failed: { base: 40, perIssue: 5 },
+    issues: { base: 10, perIssue: 2 },
+  },
+  eslint: {
+    failed: { base: 20, perIssue: 2 },
+  },
+  prettier: {
+    failed: { base: 10, perIssue: 1 },
+  },
+  typescript: {
+    failed: { base: 20, perIssue: 2 },
+  },
+  imports: {
+    failed: { base: 15, perIssue: 2 },
+    issues: { base: 5, perIssue: 1 },
+  },
+  circular: {
+    failed: { base: 25, perIssue: 3 },
+    issues: { base: 10, perIssue: 2 },
+  },
+  unused: {
+    failed: { base: 10, perIssue: 2 },
+    issues: { base: 5, perIssue: 1 },
+  },
+};
+
 const BABEL_PARSER_OPTIONS = {
   sourceType: 'unambiguous',
   allowAwaitOutsideFunction: true,
@@ -1019,6 +1047,52 @@ function buildMarkdownReport(generatedAt, overallStatus, exitCode, results, fata
   return lines.join('\n');
 }
 
+function computeHealthScore(results) {
+  let score = 100;
+  const breakdown = [];
+
+  for (const [key, ruleByStatus] of Object.entries(SCORE_RULES)) {
+    const result = results[key];
+    if (!result) {
+      continue;
+    }
+
+    const statusRule = ruleByStatus[result.status];
+    if (!statusRule) {
+      continue;
+    }
+
+    const base = typeof statusRule.base === 'number' ? statusRule.base : 0;
+    const perIssue = typeof statusRule.perIssue === 'number' ? statusRule.perIssue : 0;
+    let issueCount = Array.isArray(result.issues) ? result.issues.length : 0;
+    if (issueCount === 0 && (result.status === 'failed' || result.status === 'issues')) {
+      issueCount = 1;
+    }
+
+    const penalty = base + perIssue * issueCount;
+    if (penalty <= 0) {
+      continue;
+    }
+
+    score -= penalty;
+    breakdown.push({
+      check: result.label ?? key,
+      status: result.status,
+      issues: issueCount,
+      penalty,
+      base,
+      perIssue,
+    });
+  }
+
+  const normalized = Math.max(0, Math.min(100, Number(score.toFixed(2))));
+
+  return {
+    value: normalized,
+    breakdown,
+  };
+}
+
 function buildJsonReport(generatedAt, overallStatus, exitCode, results, fatalError) {
   const serialized = {
     generatedAt,
@@ -1033,6 +1107,7 @@ function buildJsonReport(generatedAt, overallStatus, exitCode, results, fatalErr
       circular: results.circular,
       unused: results.unused,
     },
+    score: computeHealthScore(results),
   };
   if (fatalError) {
     serialized.error = fatalError;
