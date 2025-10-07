@@ -113,7 +113,6 @@ coordsEl.style.width = '100%';
 coordsEl.style.height = '100%';
 coordsEl.style.pointerEvents = 'none';
 
-let squareToPosition, positionToSquare, tileSize;
 let currentCamera;
 let searchToken = 0;
 let evalBar;
@@ -491,7 +490,6 @@ async function boot(){
   statusEl.textContent = 'Scene ready';
 
   const helpers = await createBoard(scene, THREE);
-  ({ squareToPosition, positionToSquare, tileSize } = helpers);
   toggleCoords(true);
   const savedCoords = localStorage.getItem('chess3d.coords');
   if (savedCoords !== null) toggleCoords(savedCoords === '1');

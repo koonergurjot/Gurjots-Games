@@ -2,15 +2,6 @@ export function copyGrid(grid){
   return grid.map(r=>r.slice());
 }
 
-function slideRowLeft(row){
-  const a=row.filter(v=>v); let gained=0;
-  for(let i=0;i<a.length-1;i++){
-    if(a[i]===a[i+1]){ a[i]*=2; gained+=a[i]; a.splice(i+1,1); }
-  }
-  while(a.length<row.length) a.push(0);
-  return {row:a,gained};
-}
-
 export function computeMove(grid, dir){
   const N=grid.length;
   const after=Array.from({length:N},()=>Array(N).fill(0));
