@@ -73,7 +73,10 @@ export class Controls {
 
   /** Change mapping for an action at runtime */
   setMapping(action: string, key: string | string[], player = 0): void {
-    if (!this.maps[player]) this.maps[player] = {};
+    if (!this.maps[player]) {
+      this.maps[player] = {};
+      if (!this.handlers[player]) this.handlers[player] = new Map();
+    }
     this.maps[player][action] = key;
     if (player === 0) {
       const binding = this.touchBindings.get(action);
