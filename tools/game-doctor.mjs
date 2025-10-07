@@ -739,12 +739,22 @@ function buildMarkdownReport(report) {
   return lines.join('\n');
 }
 
+const WRITE_BASELINE_ENV = 'GAME_DOCTOR_ALLOW_WRITE_BASELINE';
+
+function isBaselineWriteEnabled() {
+  const flag = process.env[WRITE_BASELINE_ENV];
+  if (!flag) {
+    return false;
+  }
+  const normalized = String(flag).trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
+}
+
 function parseCliArgs() {
   const args = process.argv.slice(2);
   let strictMode = false;
   let baselinePath = DEFAULT_BASELINE;
-  const cliSlugs = new Set();
-  let changedRequested = false;
+  let writeBaseline = false;
 
   for (const arg of args) {
     if (arg === '--strict') {
@@ -754,17 +764,37 @@ function parseCliArgs() {
       if (value.trim()) {
         baselinePath = path.isAbsolute(value) ? value : path.join(ROOT, value);
       }
-    } else if (arg === '--changed') {
-      changedRequested = true;
-    } else if (arg.startsWith('--slug=')) {
-      const value = arg.slice('--slug='.length);
-      for (const slug of parseSlugList(value)) {
-        cliSlugs.add(slug);
-      }
+    } else if (arg === '--write-baseline') {
+      writeBaseline = true;
     }
   }
 
-  return { strictMode, baselinePath, cliSlugs, changedRequested };
+  return { strictMode, baselinePath, writeBaseline };
+}
+
+function buildBaselinePayload(report) {
+  const games = report.games.map((game) => {
+    const entry = {
+      index: game.index,
+      title: game.title,
+      slug: game.slug,
+      ok: game.ok,
+      issues: game.issues,
+      shell: game.shell,
+      assets: game.assets,
+      thumbnail: game.thumbnail,
+    };
+    if (game.requirements) {
+      entry.requirements = game.requirements;
+    }
+    return entry;
+  });
+
+  return {
+    generatedAt: report.generatedAt,
+    summary: report.summary,
+    games,
+  };
 }
 
 function mapBaselineGames(baseline) {
@@ -801,15 +831,15 @@ function selectBaselineEntry(game, maps) {
 }
 
 async function main() {
-  const { strictMode, baselinePath, cliSlugs, changedRequested: initialChangedRequested } = parseCliArgs();
+  const { strictMode, baselinePath, writeBaseline } = parseCliArgs();
 
-  const slugSources = new Map();
-  for (const slug of cliSlugs) {
-    addSlugSource(slugSources, slug, 'cli');
+  if (writeBaseline && !isBaselineWriteEnabled()) {
+    console.error(
+      `--write-baseline requested but ${WRITE_BASELINE_ENV} is not enabled. Refusing to write baseline.`,
+    );
+    process.exitCode = 1;
+    return;
   }
-
-  let changedRequested = initialChangedRequested;
-  let forceEmptyFilter = false;
 
   let validateGames;
   try {
@@ -1114,6 +1144,16 @@ async function main() {
   await fs.mkdir(HEALTH_DIR, { recursive: true });
   await fs.writeFile(REPORT_JSON, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   await fs.writeFile(REPORT_MD, `${buildMarkdownReport(report)}\n`, 'utf8');
+
+  if (writeBaseline) {
+    const baselineDir = path.dirname(baselinePath);
+    await fs.mkdir(baselineDir, { recursive: true });
+    const payload = buildBaselinePayload(report);
+    await fs.writeFile(baselinePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+    console.log(
+      `Game doctor baseline written to ${relativeFromRoot(baselinePath)}.`,
+    );
+  }
 
   if (strictMode) {
     const regressions = [];

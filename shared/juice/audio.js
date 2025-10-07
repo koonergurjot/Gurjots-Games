@@ -16,8 +16,24 @@ const pendingPlays = [];
 
 let muted = false;
 let paused = false;
-let unlocked = typeof document === 'undefined';
+
+const audioUnsupportedByEnv = (() => {
+  if (!AudioCtor) return true;
+  const ua = typeof navigator !== 'undefined' && typeof navigator.userAgent === 'string'
+    ? navigator.userAgent
+    : '';
+  if (ua && /jsdom/i.test(ua)) return true;
+  return false;
+})();
+
+let audioDisabled = audioUnsupportedByEnv;
+let unlocked = typeof document === 'undefined' || audioDisabled;
 let unlockRequested = false;
+
+function isUnsupportedError(error) {
+  if (!error || typeof error.message !== 'string') return false;
+  return /Not implemented: HTMLMediaElement\.prototype\./.test(error.message);
+}
 
 function clampVolume(value) {
   if (!Number.isFinite(value)) return 1;
@@ -27,33 +43,52 @@ function clampVolume(value) {
 function ensureAudio(name) {
   if (cache[name]) return cache[name];
   const src = AUDIO_SOURCES[name];
-  if (!src || !AudioCtor) return null;
+  if (!src || !AudioCtor || audioDisabled) return null;
   try {
     const audio = new AudioCtor(src);
     audio.preload = 'auto';
     audio.crossOrigin = 'anonymous';
-    try { audio.load(); } catch (_) {}
+    try {
+      if (typeof audio.load === 'function') {
+        audio.load();
+      }
+    } catch (error) {
+      if (isUnsupportedError(error)) {
+        audioDisabled = true;
+        cache[name] = null;
+        return null;
+      }
+    }
     cache[name] = audio;
     return audio;
   } catch (err) {
+    if (isUnsupportedError(err)) {
+      audioDisabled = true;
+    }
     cache[name] = null;
     return null;
   }
 }
 
 function preload(names) {
+  if (!AudioCtor || audioDisabled) return;
   const list = Array.isArray(names) && names.length ? names : Object.keys(AUDIO_SOURCES);
   for (const name of list) ensureAudio(name);
 }
 
 function stopAll() {
-  if (!AudioCtor) return;
+  if (!AudioCtor || audioDisabled) return;
   for (const audio of Object.values(cache)) {
     if (!(audio instanceof AudioCtor)) continue;
     try {
       audio.pause();
       audio.currentTime = 0;
-    } catch (_) {}
+    } catch (error) {
+      if (isUnsupportedError(error)) {
+        audioDisabled = true;
+        return;
+      }
+    }
   }
 }
 
@@ -99,7 +134,7 @@ function unlock() {
 }
 
 function requestUnlock() {
-  if (unlocked || unlockRequested || typeof document === 'undefined') return;
+  if (audioDisabled || unlocked || unlockRequested || typeof document === 'undefined') return;
   unlockRequested = true;
   const finish = () => {
     document.removeEventListener('pointerdown', finish, true);
@@ -118,6 +153,7 @@ function play(name, opts = {}) {
   if (typeof opts.volume === 'number') options.volume = clampVolume(opts.volume);
   if (muted) return false;
   if (paused && !options.allowWhilePaused) return false;
+  if (audioDisabled) return false;
   if (!unlocked) {
     requestUnlock();
     pendingPlays.push({ name, options });
