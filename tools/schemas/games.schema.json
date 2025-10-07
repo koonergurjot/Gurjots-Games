@@ -59,6 +59,10 @@
         "type": "string",
         "pattern": "^/games/[a-z0-9-]+/$"
       },
+      "thumbnail": {
+        "type": "string",
+        "pattern": "^/(assets|games)/.+"
+      },
       "firstFrame": {
         "type": "object",
         "required": ["sprites"],

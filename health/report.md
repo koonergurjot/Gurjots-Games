@@ -1,11 +1,11 @@
 # Game Doctor Report
 
-Generated: 2025-10-07T20:23:32.951Z
+Generated: 2025-10-07T21:13:46.273Z
 
 - Total games: 12
 - Passing: 12
 - Failing: 0
-- With warnings: 6
+- With warnings: 0
 - Manifest version: 1
 - Manifest source: tools/reporters/game-doctor-manifest.json
 
@@ -24,80 +24,69 @@ Generated: 2025-10-07T20:23:32.951Z
 ## Snake
 
 - Slug: snake
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/snake/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/snake/thumb.svg
 - Sprites checked: 1
 - Audio checked: 3
-- Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Manifest paths: all required paths found
+- Issues: none
 
 ## Tetris
 
 - Slug: tetris
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/tetris/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/tetris/thumb.svg
 - Sprites checked: 4
 - Audio checked: 3
-- Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Manifest paths: all required paths found
+- Issues: none
 
 ## Breakout
 
 - Slug: breakout
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/breakout/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/breakout/thumb.svg
 - Sprites checked: 3
 - Audio checked: 3
-- Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Manifest paths: all required paths found
+- Issues: none
 
 ## Chess (2D)
 
 - Slug: chess
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/chess/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/chess/thumb.svg
 - Sprites checked: 2
 - Audio checked: 1
-- Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Manifest paths: all required paths found
+- Issues: none
 
 ## Chess 3D (Local)
 
 - Slug: chess3d
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/chess3d/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/chess3d/thumb.svg
 - Sprites checked: 2
 - Audio checked: 1
-- Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Manifest paths: all required paths found
+- Manifest globs: all patterns matched files
+- Issues: none
 
 ## 2048
 
 - Slug: 2048
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/2048/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/2048/thumb.svg
 - Sprites checked: 1
 - Audio checked: 1
-- Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Manifest paths: all required paths found
+- Issues: none
 
 ## Asteroids
 
@@ -107,6 +96,7 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: games/asteroids/thumb.png
 - Sprites checked: 1
 - Audio checked: 3
+- Manifest paths: all required paths found
 - Issues: none
 
 ## Maze 3D
@@ -117,6 +107,7 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: games/maze3d/thumb.png
 - Sprites checked: 2
 - Audio checked: 1
+- Manifest paths: all required paths found
 - Issues: none
 
 ## Pixel Platformer
@@ -139,6 +130,7 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: games/runner/thumb.png
 - Sprites checked: 1
 - Audio checked: 3
+- Manifest paths: all required paths found
 - Issues: none
 
 ## Alien Shooter
@@ -149,5 +141,6 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: games/shooter/thumb.png
 - Sprites checked: 1
 - Audio checked: 2
+- Manifest paths: all required paths found
 - Issues: none
 

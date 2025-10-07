@@ -1,9 +1,14 @@
 {
-  "generatedAt": "2025-10-06T22:32:21.773Z",
+  "generatedAt": "2025-10-07T21:13:46.273Z",
   "summary": {
     "total": 12,
     "passing": 12,
-    "failing": 0
+    "failing": 0,
+    "withWarnings": 0
+  },
+  "manifest": {
+    "version": 1,
+    "source": "tools/reporters/game-doctor-manifest.json"
   },
   "games": [
     {
@@ -27,7 +32,53 @@
         ]
       },
       "thumbnail": {
-        "found": "games/pong/thumb.png"
+        "found": "games/pong/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "manifest.json",
+            "found": true,
+            "resolved": "games/pong/manifest.json"
+          },
+          {
+            "requirement": "pong.css",
+            "found": true,
+            "resolved": "games/pong/pong.css"
+          }
+        ],
+        "globs": [
+          {
+            "pattern": "*.js",
+            "matches": [
+              {
+                "relativeToShell": "adapter.js",
+                "relativeToRoot": "games/pong/adapter.js"
+              },
+              {
+                "relativeToShell": "career.js",
+                "relativeToRoot": "games/pong/career.js"
+              },
+              {
+                "relativeToShell": "main.js",
+                "relativeToRoot": "games/pong/main.js"
+              },
+              {
+                "relativeToShell": "pauseOverlay.js",
+                "relativeToRoot": "games/pong/pauseOverlay.js"
+              },
+              {
+                "relativeToShell": "pong.js",
+                "relativeToRoot": "games/pong/pong.js"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -50,7 +101,22 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "games/snake/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "snake.js",
+            "found": true,
+            "resolved": "games/snake/snake.js"
+          }
+        ],
+        "globs": []
       }
     },
     {
@@ -76,7 +142,47 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "games/tetris/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "tetris.js",
+            "found": true,
+            "resolved": "games/tetris/tetris.js"
+          },
+          {
+            "requirement": "engine.js",
+            "found": true,
+            "resolved": "games/tetris/engine.js"
+          },
+          {
+            "requirement": "replay.js",
+            "found": true,
+            "resolved": "games/tetris/replay.js"
+          },
+          {
+            "requirement": "play.html",
+            "found": true,
+            "resolved": "games/tetris/play.html"
+          },
+          {
+            "requirement": "replays/list.json",
+            "found": true,
+            "resolved": "games/tetris/replays/list.json"
+          },
+          {
+            "requirement": "replays/sample-replay.json",
+            "found": true,
+            "resolved": "games/tetris/replays/sample-replay.json"
+          }
+        ],
+        "globs": []
       }
     },
     {
@@ -101,7 +207,37 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "games/breakout/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "breakout.js",
+            "found": true,
+            "resolved": "games/breakout/breakout.js"
+          },
+          {
+            "requirement": "levels.js",
+            "found": true,
+            "resolved": "games/breakout/levels.js"
+          },
+          {
+            "requirement": "powerups.js",
+            "found": true,
+            "resolved": "games/breakout/powerups.js"
+          },
+          {
+            "requirement": "adapter.js",
+            "found": true,
+            "resolved": "games/breakout/adapter.js"
+          }
+        ],
+        "globs": []
       }
     },
     {
@@ -114,13 +250,61 @@
         "found": "games/chess/index.html"
       },
       "assets": {
-        "sprites": [],
+        "sprites": [
+          "assets/ui/panel.png",
+          "assets/ui/star.png"
+        ],
         "audio": [
           "assets/audio/click.wav"
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "games/chess/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "chess.js",
+            "found": true,
+            "resolved": "games/chess/chess.js"
+          },
+          {
+            "requirement": "ai.js",
+            "found": true,
+            "resolved": "games/chess/ai.js"
+          },
+          {
+            "requirement": "net.js",
+            "found": true,
+            "resolved": "games/chess/net.js"
+          },
+          {
+            "requirement": "puzzles.js",
+            "found": true,
+            "resolved": "games/chess/puzzles.js"
+          },
+          {
+            "requirement": "ratings.js",
+            "found": true,
+            "resolved": "games/chess/ratings.js"
+          },
+          {
+            "requirement": "engine/rules.js",
+            "found": true,
+            "resolved": "games/chess/engine/rules.js"
+          },
+          {
+            "requirement": "engine/chess.min.js",
+            "found": true,
+            "resolved": "games/chess/engine/chess.min.js"
+          }
+        ],
+        "globs": []
       }
     },
     {
@@ -133,13 +317,161 @@
         "found": "games/chess3d/index.html"
       },
       "assets": {
-        "sprites": [],
+        "sprites": [
+          "assets/sprites/chess3d/wood_light.png",
+          "assets/sprites/chess3d/wood_dark.png"
+        ],
         "audio": [
           "assets/audio/click.wav"
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "games/chess3d/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "main.js",
+            "found": true,
+            "resolved": "games/chess3d/main.js"
+          },
+          {
+            "requirement": "board.js",
+            "found": true,
+            "resolved": "games/chess3d/board.js"
+          },
+          {
+            "requirement": "input.js",
+            "found": true,
+            "resolved": "games/chess3d/input.js"
+          },
+          {
+            "requirement": "pieces.js",
+            "found": true,
+            "resolved": "games/chess3d/pieces.js"
+          },
+          {
+            "requirement": "adapter.js",
+            "found": true,
+            "resolved": "games/chess3d/adapter.js"
+          }
+        ],
+        "globs": [
+          {
+            "pattern": "textures/*.js",
+            "matches": [
+              {
+                "relativeToShell": "textures/env.js",
+                "relativeToRoot": "games/chess3d/textures/env.js"
+              },
+              {
+                "relativeToShell": "textures/marble.js",
+                "relativeToRoot": "games/chess3d/textures/marble.js"
+              },
+              {
+                "relativeToShell": "textures/wood.js",
+                "relativeToRoot": "games/chess3d/textures/wood.js"
+              }
+            ]
+          },
+          {
+            "pattern": "ui/*.js",
+            "matches": [
+              {
+                "relativeToShell": "ui/cameraPresets.js",
+                "relativeToRoot": "games/chess3d/ui/cameraPresets.js"
+              },
+              {
+                "relativeToShell": "ui/clocks.js",
+                "relativeToRoot": "games/chess3d/ui/clocks.js"
+              },
+              {
+                "relativeToShell": "ui/coords.js",
+                "relativeToRoot": "games/chess3d/ui/coords.js"
+              },
+              {
+                "relativeToShell": "ui/evalBar.js",
+                "relativeToRoot": "games/chess3d/ui/evalBar.js"
+              },
+              {
+                "relativeToShell": "ui/highlight.js",
+                "relativeToRoot": "games/chess3d/ui/highlight.js"
+              },
+              {
+                "relativeToShell": "ui/hud.js",
+                "relativeToRoot": "games/chess3d/ui/hud.js"
+              },
+              {
+                "relativeToShell": "ui/lastMove.js",
+                "relativeToRoot": "games/chess3d/ui/lastMove.js"
+              },
+              {
+                "relativeToShell": "ui/modeBar.js",
+                "relativeToRoot": "games/chess3d/ui/modeBar.js"
+              },
+              {
+                "relativeToShell": "ui/movelist.js",
+                "relativeToRoot": "games/chess3d/ui/movelist.js"
+              },
+              {
+                "relativeToShell": "ui/promotionModal.js",
+                "relativeToRoot": "games/chess3d/ui/promotionModal.js"
+              },
+              {
+                "relativeToShell": "ui/themePicker.js",
+                "relativeToRoot": "games/chess3d/ui/themePicker.js"
+              }
+            ]
+          },
+          {
+            "pattern": "modes/*.js",
+            "matches": [
+              {
+                "relativeToShell": "modes/analysis.js",
+                "relativeToRoot": "games/chess3d/modes/analysis.js"
+              }
+            ]
+          },
+          {
+            "pattern": "ai/*.js",
+            "matches": [
+              {
+                "relativeToShell": "ai/ai.js",
+                "relativeToRoot": "games/chess3d/ai/ai.js"
+              },
+              {
+                "relativeToShell": "ai/simpleEngine.js",
+                "relativeToRoot": "games/chess3d/ai/simpleEngine.js"
+              },
+              {
+                "relativeToShell": "ai/stockfish.js",
+                "relativeToRoot": "games/chess3d/ai/stockfish.js"
+              },
+              {
+                "relativeToShell": "ai/stockfish.worker.js",
+                "relativeToRoot": "games/chess3d/ai/stockfish.worker.js"
+              }
+            ]
+          },
+          {
+            "pattern": "lib/*.js",
+            "matches": [
+              {
+                "relativeToShell": "lib/OrbitControls.js",
+                "relativeToRoot": "games/chess3d/lib/OrbitControls.js"
+              },
+              {
+                "relativeToShell": "lib/three.module.js",
+                "relativeToRoot": "games/chess3d/lib/three.module.js"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -152,13 +484,55 @@
         "found": "games/2048/index.html"
       },
       "assets": {
-        "sprites": [],
+        "sprites": [
+          "assets/sprites/block.png"
+        ],
         "audio": [
           "assets/audio/click.wav"
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "games/2048/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "2048.js",
+            "found": true,
+            "resolved": "games/2048/2048.js"
+          },
+          {
+            "requirement": "engine.js",
+            "found": true,
+            "resolved": "games/2048/engine.js"
+          },
+          {
+            "requirement": "g2048.js",
+            "found": true,
+            "resolved": "games/2048/g2048.js"
+          },
+          {
+            "requirement": "net.js",
+            "found": true,
+            "resolved": "games/2048/net.js"
+          },
+          {
+            "requirement": "diag-adapter.js",
+            "found": true,
+            "resolved": "games/2048/diag-adapter.js"
+          },
+          {
+            "requirement": "assets/board-bg.png",
+            "found": true,
+            "resolved": "games/2048/assets/board-bg.png"
+          }
+        ],
+        "globs": []
       }
     },
     {
@@ -181,7 +555,42 @@
         ]
       },
       "thumbnail": {
-        "found": "games/asteroids/thumb.png"
+        "found": "games/asteroids/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "main.js",
+            "found": true,
+            "resolved": "games/asteroids/main.js"
+          },
+          {
+            "requirement": "net.js",
+            "found": true,
+            "resolved": "games/asteroids/net.js"
+          },
+          {
+            "requirement": "enemies.js",
+            "found": true,
+            "resolved": "games/asteroids/enemies.js"
+          },
+          {
+            "requirement": "diag-adapter.js",
+            "found": true,
+            "resolved": "games/asteroids/diag-adapter.js"
+          },
+          {
+            "requirement": "thumb.png",
+            "found": true,
+            "resolved": "games/asteroids/thumb.png"
+          }
+        ],
+        "globs": []
       }
     },
     {
@@ -194,13 +603,51 @@
         "found": "games/maze3d/index.html"
       },
       "assets": {
-        "sprites": [],
+        "sprites": [
+          "assets/sprites/maze3d/wall.png",
+          "assets/sprites/maze3d/floor.png"
+        ],
         "audio": [
           "assets/audio/powerup.wav"
         ]
       },
       "thumbnail": {
-        "found": "games/maze3d/thumb.png"
+        "found": "games/maze3d/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "main.js",
+            "found": true,
+            "resolved": "games/maze3d/main.js"
+          },
+          {
+            "requirement": "net.js",
+            "found": true,
+            "resolved": "games/maze3d/net.js"
+          },
+          {
+            "requirement": "generator.js",
+            "found": true,
+            "resolved": "games/maze3d/generator.js"
+          },
+          {
+            "requirement": "PointerLockControls.js",
+            "found": true,
+            "resolved": "games/maze3d/PointerLockControls.js"
+          },
+          {
+            "requirement": "adapter.js",
+            "found": true,
+            "resolved": "games/maze3d/adapter.js"
+          }
+        ],
+        "globs": []
       }
     },
     {
@@ -222,7 +669,56 @@
         ]
       },
       "thumbnail": {
-        "found": "games/platformer/thumb.png"
+        "found": "games/platformer/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "levels",
+            "found": true,
+            "resolved": "games/platformer/levels"
+          },
+          {
+            "requirement": "tiles.js",
+            "found": true,
+            "resolved": "games/platformer/tiles.js"
+          },
+          {
+            "requirement": "main.js",
+            "found": true,
+            "resolved": "games/platformer/main.js"
+          },
+          {
+            "requirement": "net.js",
+            "found": true,
+            "resolved": "games/platformer/net.js"
+          },
+          {
+            "requirement": "adapter.js",
+            "found": true,
+            "resolved": "games/platformer/adapter.js"
+          }
+        ],
+        "globs": [
+          {
+            "pattern": "levels/*.json",
+            "matches": [
+              {
+                "relativeToShell": "levels/level1.json",
+                "relativeToRoot": "games/platformer/levels/level1.json"
+              },
+              {
+                "relativeToShell": "levels/level2.json",
+                "relativeToRoot": "games/platformer/levels/level2.json"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -245,7 +741,47 @@
         ]
       },
       "thumbnail": {
-        "found": "games/runner/thumb.png"
+        "found": "games/runner/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "main.js",
+            "found": true,
+            "resolved": "games/runner/main.js"
+          },
+          {
+            "requirement": "editor.js",
+            "found": true,
+            "resolved": "games/runner/editor.js"
+          },
+          {
+            "requirement": "adapter.js",
+            "found": true,
+            "resolved": "games/runner/adapter.js"
+          },
+          {
+            "requirement": "levels.json",
+            "found": true,
+            "resolved": "games/runner/levels.json"
+          },
+          {
+            "requirement": "sample-level.json",
+            "found": true,
+            "resolved": "games/runner/sample-level.json"
+          },
+          {
+            "requirement": "thumb.png",
+            "found": true,
+            "resolved": "games/runner/thumb.png"
+          }
+        ],
+        "globs": []
       }
     },
     {
@@ -267,7 +803,37 @@
         ]
       },
       "thumbnail": {
-        "found": "games/shooter/thumb.png"
+        "found": "games/shooter/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "requirements": {
+        "paths": [
+          {
+            "requirement": "main.js",
+            "found": true,
+            "resolved": "games/shooter/main.js"
+          },
+          {
+            "requirement": "net.js",
+            "found": true,
+            "resolved": "games/shooter/net.js"
+          },
+          {
+            "requirement": "diagnostics-adapter.js",
+            "found": true,
+            "resolved": "games/shooter/diagnostics-adapter.js"
+          },
+          {
+            "requirement": "thumb.png",
+            "found": true,
+            "resolved": "games/shooter/thumb.png"
+          }
+        ],
+        "globs": []
       }
     }
   ]
