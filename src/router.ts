@@ -24,7 +24,11 @@ export class Router {
     this.outlet = outlet;
     window.addEventListener('popstate', () => this.resolve(location.pathname, { mode: 'pop', visited: new Set() }));
     document.addEventListener('click', e => {
-      const a = (e.target as HTMLElement).closest('a');
+      const target = e.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const a = target.closest('a');
       if (a && a instanceof HTMLAnchorElement && a.origin === location.origin) {
         const href = a.getAttribute('href');
         if (href && href.startsWith('/')) {
