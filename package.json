@@ -12,7 +12,10 @@
     "doctor": "node tools/game-doctor.mjs --strict --baseline=health/baseline.json",
     "sync:games": "node tools/sync-game-catalog.mjs",
     "deploy": "npx wrangler deploy --config wrangler.toml",
-    "deploy:check": "npx wrangler deploy --config wrangler.toml --dry-run"
+    "deploy:check": "npx wrangler deploy --config wrangler.toml --dry-run",
+    "doctor:quick": "node tools/game-doctor.mjs",
+    "doctor:report": "node tools/game-doctor.mjs --strict --baseline=health/baseline.json",
+    "code:doctor": "node tools/code-doctor.mjs"
   },
   "devDependencies": {
     "acorn": "^8.15.0",
