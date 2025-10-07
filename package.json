@@ -10,6 +10,7 @@
     "sitemap": "node tools/generate-sitemap.mjs",
     "health": "node tools/healthcheck.mjs",
     "doctor": "node tools/game-doctor.mjs --strict --baseline=health/baseline.json",
+    "doctor:changed": "node tools/game-doctor.mjs --strict --baseline=health/baseline.json --changed",
     "sync:games": "node tools/sync-game-catalog.mjs",
     "deploy": "npx wrangler deploy --config wrangler.toml",
     "deploy:check": "npx wrangler deploy --config wrangler.toml --dry-run"
