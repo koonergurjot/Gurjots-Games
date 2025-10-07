@@ -5,6 +5,7 @@
   "scripts": {
     "test": "npm run health && npm run test:unit",
     "test:unit": "vitest run",
+    "test:doctor": "vitest run tests/game-doctor.test.mjs",
     "test:smoke": "vitest run tests/runner.smoke.test.js",
     "sitemap": "node tools/generate-sitemap.mjs",
     "health": "node tools/healthcheck.mjs",
