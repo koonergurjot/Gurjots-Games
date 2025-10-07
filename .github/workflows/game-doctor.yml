@@ -8,6 +8,9 @@ jobs:
   check:
     name: Run Game Doctor
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -27,6 +30,12 @@ jobs:
 
       - name: Run Game Doctor
         run: node tools/game-doctor.mjs --strict --baseline=health/baseline.json
+
+      - name: Comment Game Doctor results
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/comment-game-doctor.mjs
 
       - name: Upload Game Doctor report
         if: always()
