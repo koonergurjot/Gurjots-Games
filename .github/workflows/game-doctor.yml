@@ -22,6 +22,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run Game Doctor tests
+        run: npm run test:doctor
+
       - name: Run Game Doctor
         run: node tools/game-doctor.mjs --strict --baseline=health/baseline.json
 
