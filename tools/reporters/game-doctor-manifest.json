@@ -2,6 +2,81 @@
   "version": 1,
   "notes": "Paths and glob patterns are relative to the folder containing the playable shell (index.html).",
   "requirements": {
+    "2048": {
+      "paths": [
+        "2048.js",
+        "engine.js",
+        "g2048.js",
+        "net.js",
+        "diag-adapter.js",
+        "assets/board-bg.png"
+      ]
+    },
+    "asteroids": {
+      "paths": [
+        "main.js",
+        "net.js",
+        "enemies.js",
+        "diag-adapter.js",
+        "thumb.png"
+      ]
+    },
+    "breakout": {
+      "paths": [
+        "breakout.js",
+        "levels.js",
+        "powerups.js",
+        "adapter.js"
+      ]
+    },
+    "chess": {
+      "paths": [
+        "chess.js",
+        "ai.js",
+        "net.js",
+        "puzzles.js",
+        "ratings.js",
+        "engine/rules.js",
+        "engine/chess.min.js"
+      ]
+    },
+    "chess3d": {
+      "paths": [
+        "main.js",
+        "board.js",
+        "input.js",
+        "pieces.js",
+        "adapter.js"
+      ],
+      "globs": [
+        "textures/*.js",
+        "ui/*.js",
+        "modes/*.js",
+        "ai/*.js",
+        "lib/*.js"
+      ]
+    },
+    "maze3d": {
+      "paths": [
+        "main.js",
+        "net.js",
+        "generator.js",
+        "PointerLockControls.js",
+        "adapter.js"
+      ]
+    },
+    "platformer": {
+      "paths": [
+        "levels",
+        "tiles.js",
+        "main.js",
+        "net.js",
+        "adapter.js"
+      ],
+      "globs": [
+        "levels/*.json"
+      ]
+    },
     "pong": {
       "paths": [
         "manifest.json",
@@ -11,13 +86,37 @@
         "*.js"
       ]
     },
-    "platformer": {
+    "runner": {
       "paths": [
-        "levels",
-        "tiles.js"
-      ],
-      "globs": [
-        "levels/*.json"
+        "main.js",
+        "editor.js",
+        "adapter.js",
+        "levels.json",
+        "sample-level.json",
+        "thumb.png"
+      ]
+    },
+    "shooter": {
+      "paths": [
+        "main.js",
+        "net.js",
+        "diagnostics-adapter.js",
+        "thumb.png"
+      ]
+    },
+    "snake": {
+      "paths": [
+        "snake.js"
+      ]
+    },
+    "tetris": {
+      "paths": [
+        "tetris.js",
+        "engine.js",
+        "replay.js",
+        "play.html",
+        "replays/list.json",
+        "replays/sample-replay.json"
       ]
     }
   }

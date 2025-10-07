@@ -139,6 +139,41 @@ describe('tools/game-doctor.mjs', () => {
     expect(result.stderr).toContain('requested slug(s) not found');
   });
 
+  it('fails when manifest-required assets are missing from disk', async () => {
+    fixture = await createGameDoctorFixture('manifest-missing');
+
+    await fixture.writeJson('games.json', [
+      buildGameEntry('platformer', {
+        title: 'Manifest Platformer',
+      }),
+    ]);
+
+    await fixture.writeFile('games/platformer/index.html', '<!doctype html><title>Platformer</title>');
+    await fixture.writeFile('games/platformer/main.js', '// main logic');
+    await fixture.writeFile('games/platformer/net.js', '// net logic');
+    await fixture.writeFile('games/platformer/adapter.js', '// adapter');
+    await fixture.writeFile('games/platformer/tiles.js', '// tiles');
+
+    await fixture.writeFile('assets/sprites/platformer.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/platformer.mp3', 'audio-bytes');
+    await fixture.writeFile('assets/thumbs/platformer.png', 'thumb-bytes');
+
+    const result = await fixture.runDoctor();
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Game doctor found 1 of 1 game(s) with issues');
+
+    const report = await fixture.readJson('health/report.json');
+    expect(report.summary).toMatchObject({ total: 1, passing: 0, failing: 1 });
+    expect(report.games[0].slug).toBe('platformer');
+    expect(
+      report.games[0].issues.some((issue) => issue.message === 'Manifest required asset missing'),
+    ).toBe(true);
+    expect(
+      report.games[0].issues.some((issue) => issue.message === 'Manifest glob matched no files'),
+    ).toBe(true);
+  });
+
   it('targets changed slugs when sprite assets referenced by games are removed', async () => {
     fixture = await createGameDoctorFixture('changed-sprite');
 
