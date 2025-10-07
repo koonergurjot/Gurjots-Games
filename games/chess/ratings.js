@@ -40,3 +40,7 @@ const Ratings = (() => {
 
   return { getRating, saveRating, expected, updateRating, sync };
 })();
+
+if (typeof window !== 'undefined') {
+  window.Ratings = Ratings;
+}

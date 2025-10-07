@@ -29,7 +29,6 @@ const ASTEROID_SEGMENTS = 8;
 const ASTEROID_SPEED = [0, 120, 90, 70];
 const ASTEROID_SCORE = [0, 100, 50, 20];
 const WAVE_ASTEROID_COUNT = [0, 4, 6, 8];
-const FIRE_MODES = ['single', 'burst', 'rapid'];
 const STORAGE_KEYS = {
   best: `${SLUG}:best`,
 };

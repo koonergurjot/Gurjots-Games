@@ -4,9 +4,6 @@ import { ParticleSystem } from './particles.js';
 import { ScreenShake } from './shake.js';
 import { play } from './audio.js';
 
-const currentScript = document.currentScript;
-const slug = currentScript?.dataset?.game || 'unknown';
-
 const overlay = document.createElement('div');
 overlay.className='gg-overlay';
 Object.assign(overlay.style,{position:'absolute',inset:'0',pointerEvents:'none',zIndex:20});

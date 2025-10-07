@@ -4,8 +4,6 @@ const fs = require('fs');
 const path = require('path');
 
 function fail(msg) { console.error(msg); process.exit(1); }
-function warn(msg) { console.warn('[warn]', msg); }
-
 if (!fs.existsSync('games.json')) {
   fail('games.json not found at repo root.');
 }

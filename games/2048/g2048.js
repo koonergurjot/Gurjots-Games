@@ -1,6 +1,6 @@
 
 import { GameEngine } from '../../shared/gameEngine.js';
-import { copyGrid, computeMove, pushState, undo as undoState, getHint as engineHint, canMove } from './engine.js';
+import { copyGrid, computeMove, undo as undoState, getHint as engineHint, canMove } from './engine.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 
 // Feature Configuration (all feature-flagged)
@@ -44,7 +44,7 @@ let hintDepth=parseInt(diffSel?.value||'1');
 diffSel?.addEventListener('change',()=>{
   hintDepth=parseInt(diffSel.value)||1;
 });
-const hud=HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset(false,'hud-restart')});
+HUD.create({title:'2048', onPauseToggle:()=>{}, onRestart:()=>reset(false,'hud-restart')});
 let postedReady=false;
 let initializationFailed=false;
 

@@ -44,3 +44,7 @@ const ChessNet = (() => {
     onStatus: cb => { statusHandler = cb; }
   };
 })();
+
+if (typeof window !== 'undefined') {
+  window.ChessNet = ChessNet;
+}
