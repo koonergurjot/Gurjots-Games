@@ -928,6 +928,9 @@ async function main() {
         REPORT_JSON,
       )} for details.`,
     );
+    if (writeBaseline) {
+      await writeBaselineFile();
+    }
     process.exitCode = 1;
   } else {
     console.log(`Game doctor: all ${summary.total} game(s) look healthy!`);
