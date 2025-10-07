@@ -37,3 +37,163 @@ jobs:
           path: |
             health/report.json
             health/report.md
+
+      - name: Comment Game Doctor results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const core = require('@actions/core');
+            const path = 'health/report.json';
+            const marker = '<!-- game-doctor-report -->';
+
+            const formatTableRow = (cells) => `| ${cells.join(' | ')} |`;
+            const formatStatus = (ok) => ok ? '✅ Pass' : '❌ Fail';
+            const formatIssueContext = (context = {}) => {
+              const entries = Object.entries(context);
+              if (entries.length === 0) return '';
+              return entries
+                .map(([key, value]) => `${key}: ${typeof value === 'string' ? value : JSON.stringify(value)}`)
+                .join('; ');
+            };
+
+            let bodySections = [];
+            let summaryText = '⚠️ Game Doctor report was not generated.';
+            let table = '';
+            let failingDetailsSection = '';
+            let generatedAt = '';
+            let artifactUrl = '';
+
+            if (fs.existsSync(path)) {
+              try {
+                const report = JSON.parse(fs.readFileSync(path, 'utf8'));
+                generatedAt = report?.generatedAt;
+                const total = report?.summary?.total ?? report?.games?.length ?? 0;
+                const passing = report?.summary?.passing ?? report?.games?.filter(game => game.ok).length ?? 0;
+                const failing = report?.summary?.failing ?? total - passing;
+                summaryText = `**Summary:** ${passing}/${total} passing, ${failing} failing.`;
+
+                if (Array.isArray(report?.games) && report.games.length) {
+                  const header = formatTableRow(['Game', 'Status', 'Issues']);
+                  const separator = formatTableRow(['---', '---', '---']);
+                  const rows = report.games.map(game => {
+                    const title = game.title || game.slug || `#${game.index}`;
+                    const status = formatStatus(Boolean(game.ok));
+                    const issues = Array.isArray(game.issues) ? game.issues.length : 0;
+                    return formatTableRow([game.ok ? title : `**${title}**`, status, `${issues}`]);
+                  });
+                  table = [header, separator, ...rows].join('\n');
+
+                  const failingGames = report.games.filter((game) => !game.ok);
+                  if (failingGames.length) {
+                    const failingLines = failingGames.map((game) => {
+                      const title = game.title || game.slug || `#${game.index}`;
+                      const issues = Array.isArray(game.issues) ? game.issues : [];
+                      if (issues.length === 0) {
+                        return `- **${title}** — issue details unavailable.`;
+                      }
+
+                      const issueLines = issues.slice(0, 5).map((issue) => {
+                        const context = formatIssueContext(issue.context);
+                        return context ? `  - ${issue.message} _(${context})_` : `  - ${issue.message}`;
+                      });
+
+                      const remaining = issues.length - issueLines.length;
+                      if (remaining > 0) {
+                        issueLines.push(`  - …and ${remaining} more issue${remaining === 1 ? '' : 's'}.`);
+                      }
+
+                      return ['- **' + title + '**', ...issueLines].join('\n');
+                    });
+
+                    failingDetailsSection = [
+                      '<details>',
+                      '<summary><strong>❌ Failing games and top issues</strong></summary>',
+                      '',
+                      ...failingLines,
+                      '',
+                      '</details>',
+                    ].join('\n');
+                  }
+                } else {
+                  table = '_No game entries were found in the report._';
+                }
+              } catch (error) {
+                summaryText = `⚠️ Failed to parse ${path}: ${error.message}`;
+              }
+            }
+
+            const { owner, repo } = context.repo;
+            const { data: artifactData } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner,
+              repo,
+              run_id: context.runId,
+            });
+
+            const artifact = artifactData.artifacts.find((artifact) => artifact.name === 'game-doctor-report');
+            let artifactSection = '_Artifact not available._';
+            if (artifact) {
+              artifactUrl = `https://github.com/${owner}/${repo}/actions/runs/${context.runId}/artifacts/${artifact.id}`;
+              artifactSection = `📎 [Download Game Doctor artifact](${artifactUrl})`;
+            }
+
+            bodySections.push(summaryText);
+            if (table) bodySections.push(table);
+            if (failingDetailsSection) bodySections.push(failingDetailsSection);
+            bodySections.push(artifactSection);
+            if (generatedAt) {
+              bodySections.push(`_Report generated at ${generatedAt}_`);
+            }
+
+            const commentBody = [
+              marker,
+              '### 🩺 Game Doctor Report',
+              '',
+              ...bodySections,
+              '',
+              marker,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+
+            const existing = comments.find(comment => comment.body?.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body: commentBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: context.issue.number,
+                body: commentBody,
+              });
+            }
+
+            core.summary.addHeading('Game Doctor Report', 3);
+            core.summary.addRaw(summaryText, true);
+            if (table) {
+              core.summary.addRaw('\n' + table + '\n', true);
+            }
+            if (failingDetailsSection) {
+              core.summary.addRaw('\n' + failingDetailsSection + '\n', true);
+            }
+            if (artifactUrl) {
+              core.summary.addLink('Download Game Doctor artifact', artifactUrl);
+            }
+            if (generatedAt) {
+              core.summary.addRaw(`\n<p><em>Report generated at ${generatedAt}</em></p>`, false);
+            }
+
+            await core.summary.write();
