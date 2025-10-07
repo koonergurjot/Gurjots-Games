@@ -1,9 +1,10 @@
 {
-  "generatedAt": "2025-10-06T22:49:41.382Z",
+  "generatedAt": "2025-10-07T20:23:32.951Z",
   "summary": {
     "total": 12,
     "passing": 12,
-    "failing": 0
+    "failing": 0,
+    "withWarnings": 6
   },
   "manifest": {
     "version": 1,
@@ -31,7 +32,12 @@
         ]
       },
       "thumbnail": {
-        "found": "games/pong/thumb.png"
+        "found": "games/pong/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
       },
       "requirements": {
         "paths": [
@@ -80,7 +86,16 @@
       "title": "Snake",
       "slug": "snake",
       "ok": true,
-      "issues": [],
+      "issues": [
+        {
+          "message": "Thumbnail uses placeholder art",
+          "context": {
+            "thumbnail": "assets/placeholder-thumb.png",
+            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+          },
+          "severity": "warning"
+        }
+      ],
       "shell": {
         "found": "games/snake/index.html"
       },
@@ -95,7 +110,12 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "assets/placeholder-thumb.png",
+        "placeholder": true
+      },
+      "status": {
+        "errors": false,
+        "warnings": true
       }
     },
     {
@@ -103,7 +123,16 @@
       "title": "Tetris",
       "slug": "tetris",
       "ok": true,
-      "issues": [],
+      "issues": [
+        {
+          "message": "Thumbnail uses placeholder art",
+          "context": {
+            "thumbnail": "assets/placeholder-thumb.png",
+            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+          },
+          "severity": "warning"
+        }
+      ],
       "shell": {
         "found": "games/tetris/index.html"
       },
@@ -121,7 +150,12 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "assets/placeholder-thumb.png",
+        "placeholder": true
+      },
+      "status": {
+        "errors": false,
+        "warnings": true
       }
     },
     {
@@ -129,7 +163,16 @@
       "title": "Breakout",
       "slug": "breakout",
       "ok": true,
-      "issues": [],
+      "issues": [
+        {
+          "message": "Thumbnail uses placeholder art",
+          "context": {
+            "thumbnail": "assets/placeholder-thumb.png",
+            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+          },
+          "severity": "warning"
+        }
+      ],
       "shell": {
         "found": "games/breakout/index.html"
       },
@@ -146,7 +189,12 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "assets/placeholder-thumb.png",
+        "placeholder": true
+      },
+      "status": {
+        "errors": false,
+        "warnings": true
       }
     },
     {
@@ -154,18 +202,35 @@
       "title": "Chess (2D)",
       "slug": "chess",
       "ok": true,
-      "issues": [],
+      "issues": [
+        {
+          "message": "Thumbnail uses placeholder art",
+          "context": {
+            "thumbnail": "assets/placeholder-thumb.png",
+            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+          },
+          "severity": "warning"
+        }
+      ],
       "shell": {
         "found": "games/chess/index.html"
       },
       "assets": {
-        "sprites": [],
+        "sprites": [
+          "assets/ui/panel.png",
+          "assets/ui/star.png"
+        ],
         "audio": [
           "assets/audio/click.wav"
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "assets/placeholder-thumb.png",
+        "placeholder": true
+      },
+      "status": {
+        "errors": false,
+        "warnings": true
       }
     },
     {
@@ -173,18 +238,35 @@
       "title": "Chess 3D (Local)",
       "slug": "chess3d",
       "ok": true,
-      "issues": [],
+      "issues": [
+        {
+          "message": "Thumbnail uses placeholder art",
+          "context": {
+            "thumbnail": "assets/placeholder-thumb.png",
+            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+          },
+          "severity": "warning"
+        }
+      ],
       "shell": {
         "found": "games/chess3d/index.html"
       },
       "assets": {
-        "sprites": [],
+        "sprites": [
+          "assets/sprites/chess3d/wood_light.png",
+          "assets/sprites/chess3d/wood_dark.png"
+        ],
         "audio": [
           "assets/audio/click.wav"
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "assets/placeholder-thumb.png",
+        "placeholder": true
+      },
+      "status": {
+        "errors": false,
+        "warnings": true
       }
     },
     {
@@ -192,18 +274,34 @@
       "title": "2048",
       "slug": "2048",
       "ok": true,
-      "issues": [],
+      "issues": [
+        {
+          "message": "Thumbnail uses placeholder art",
+          "context": {
+            "thumbnail": "assets/placeholder-thumb.png",
+            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+          },
+          "severity": "warning"
+        }
+      ],
       "shell": {
         "found": "games/2048/index.html"
       },
       "assets": {
-        "sprites": [],
+        "sprites": [
+          "assets/sprites/block.png"
+        ],
         "audio": [
           "assets/audio/click.wav"
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png"
+        "found": "assets/placeholder-thumb.png",
+        "placeholder": true
+      },
+      "status": {
+        "errors": false,
+        "warnings": true
       }
     },
     {
@@ -226,7 +324,12 @@
         ]
       },
       "thumbnail": {
-        "found": "games/asteroids/thumb.png"
+        "found": "games/asteroids/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
       }
     },
     {
@@ -239,13 +342,21 @@
         "found": "games/maze3d/index.html"
       },
       "assets": {
-        "sprites": [],
+        "sprites": [
+          "assets/sprites/maze3d/wall.png",
+          "assets/sprites/maze3d/floor.png"
+        ],
         "audio": [
           "assets/audio/powerup.wav"
         ]
       },
       "thumbnail": {
-        "found": "games/maze3d/thumb.png"
+        "found": "games/maze3d/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
       }
     },
     {
@@ -267,7 +378,12 @@
         ]
       },
       "thumbnail": {
-        "found": "games/platformer/thumb.png"
+        "found": "games/platformer/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
       },
       "requirements": {
         "paths": [
@@ -319,7 +435,12 @@
         ]
       },
       "thumbnail": {
-        "found": "games/runner/thumb.png"
+        "found": "games/runner/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
       }
     },
     {
@@ -341,7 +462,12 @@
         ]
       },
       "thumbnail": {
-        "found": "games/shooter/thumb.png"
+        "found": "games/shooter/thumb.png",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
       }
     }
   ]
