@@ -18,6 +18,172 @@ const SEVERITY = {
   ERROR: 'error',
   WARNING: 'warning',
 };
+
+const ISSUE_SEVERITY_LEVEL = {
+  BLOCKER: 'blocker',
+  MAJOR: 'major',
+  MINOR: 'minor',
+  INFO: 'info',
+};
+
+const ISSUE_SEVERITY_LABELS = {
+  [ISSUE_SEVERITY_LEVEL.BLOCKER]: '🚨 Blockers',
+  [ISSUE_SEVERITY_LEVEL.MAJOR]: 'Major issues',
+  [ISSUE_SEVERITY_LEVEL.MINOR]: 'Minor issues',
+  [ISSUE_SEVERITY_LEVEL.INFO]: 'Informational',
+};
+
+const ISSUE_SEVERITY_SINGLE_LABELS = {
+  [ISSUE_SEVERITY_LEVEL.BLOCKER]: 'Blocker',
+  [ISSUE_SEVERITY_LEVEL.MAJOR]: 'Major',
+  [ISSUE_SEVERITY_LEVEL.MINOR]: 'Minor',
+  [ISSUE_SEVERITY_LEVEL.INFO]: 'Info',
+};
+
+const ISSUE_SEVERITY_ORDER = [
+  ISSUE_SEVERITY_LEVEL.BLOCKER,
+  ISSUE_SEVERITY_LEVEL.MAJOR,
+  ISSUE_SEVERITY_LEVEL.MINOR,
+  ISSUE_SEVERITY_LEVEL.INFO,
+];
+
+const DEFAULT_ISSUE_CATEGORY = 'general';
+
+const ISSUE_TAXONOMY = new Map(
+  Object.entries({
+    'Manifest requirements entry must be an object': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Manifest requirements configured but playable shell not found': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
+    },
+    'Manifest paths entry must be an array of strings': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Manifest path requirement is not a string': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Manifest path requirement is empty': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MINOR,
+    },
+    'Manifest path requirement must be relative to the shell directory': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Manifest path requirement must not traverse above the shell directory': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Manifest required asset missing': {
+      category: 'missing-asset',
+      severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
+    },
+    'Manifest globs entry must be an array of strings': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Manifest glob requirement is not a string': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Manifest glob requirement is empty': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MINOR,
+    },
+    'Manifest glob requirement must be relative to the shell directory': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Manifest glob requirement must not traverse above the shell directory': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Manifest glob matched no files': {
+      category: 'manifest-misconfig',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Unable to determine slug for game entry': {
+      category: 'catalog-data',
+      severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
+    },
+    'Missing playable shell': {
+      category: 'missing-asset',
+      severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
+    },
+    'Sprite asset is not a valid path': {
+      category: 'invalid-asset-reference',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Sprite asset must live under /assets/': {
+      category: 'asset-policy',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Sprite asset missing on disk': {
+      category: 'missing-asset',
+      severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
+    },
+    'Audio asset is not a valid path': {
+      category: 'invalid-asset-reference',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Audio asset must live under /assets/': {
+      category: 'asset-policy',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Audio asset missing on disk': {
+      category: 'missing-asset',
+      severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
+    },
+    'Thumbnail missing': {
+      category: 'missing-asset',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Thumbnail uses placeholder art': {
+      category: 'placeholder-art',
+      severity: ISSUE_SEVERITY_LEVEL.MINOR,
+    },
+    'firstFrame.sprites is not an array': {
+      category: 'catalog-data',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'firstFrame.audio is not an array': {
+      category: 'catalog-data',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+  }),
+);
+
+function mapSeverityToLevel(severity) {
+  if (severity === SEVERITY.WARNING) {
+    return ISSUE_SEVERITY_LEVEL.MINOR;
+  }
+  return ISSUE_SEVERITY_LEVEL.MAJOR;
+}
+
+function resolveIssueSeverityLevel(issue) {
+  if (issue?.severityLevel && ISSUE_SEVERITY_ORDER.includes(issue.severityLevel)) {
+    return issue.severityLevel;
+  }
+  return mapSeverityToLevel(issue?.severity ?? SEVERITY.ERROR);
+}
+
+function summarizeSeverityCounts(issues) {
+  const counts = Object.fromEntries(ISSUE_SEVERITY_ORDER.map((level) => [level, 0]));
+  for (const issue of issues) {
+    const level = resolveIssueSeverityLevel(issue);
+    if (counts[level] == null) {
+      counts[level] = 0;
+    }
+    counts[level] += 1;
+  }
+  return counts;
+}
+
 const MANIFEST_PATH = path.join(ROOT, 'tools', 'reporters', 'game-doctor-manifest.json');
 const GAMES_SCHEMA_PATH = path.join(ROOT, 'tools', 'schemas', 'games.schema.json');
 
@@ -52,10 +218,15 @@ function deriveSlug(game) {
 }
 
 function formatIssue(message, context = {}, severity = SEVERITY.ERROR) {
+  const taxonomy = ISSUE_TAXONOMY.get(message);
+  const severityLevel = taxonomy?.severity ?? mapSeverityToLevel(severity);
+  const category = taxonomy?.category ?? DEFAULT_ISSUE_CATEGORY;
   return {
     message,
     context,
     severity,
+    severityLevel,
+    category,
   };
 }
 
@@ -750,10 +921,42 @@ function buildMarkdownReport(report) {
     if (game.issues.length === 0) {
       lines.push('- Issues: none');
     } else {
+      const severityCounts = summarizeSeverityCounts(game.issues);
+      const severitySummary = [];
+      for (const level of ISSUE_SEVERITY_ORDER) {
+        const count = severityCounts[level];
+        if (count > 0) {
+          severitySummary.push(`${ISSUE_SEVERITY_LABELS[level]}: ${count}`);
+        }
+      }
+      if (severitySummary.length > 0) {
+        const hasBlockers = (severityCounts[ISSUE_SEVERITY_LEVEL.BLOCKER] ?? 0) > 0;
+        const prefix = hasBlockers ? '- **Severity:** ' : '- Severity: ';
+        lines.push(`${prefix}${severitySummary.join(', ')}`);
+      }
       lines.push('- Issues:');
       for (const issue of game.issues) {
-        const prefix = issueIsWarning(issue) ? '⚠️ Warning' : '❌ Error';
-        lines.push(`  - ${prefix}: ${issue.message}`);
+        const level = resolveIssueSeverityLevel(issue);
+        const levelLabel = ISSUE_SEVERITY_SINGLE_LABELS[level] ?? level;
+        const categoryLabel = issue.category && issue.category !== DEFAULT_ISSUE_CATEGORY
+          ? ` [${issue.category}]`
+          : '';
+        let prefix;
+        if (level === ISSUE_SEVERITY_LEVEL.BLOCKER) {
+          prefix = '❌ Blocker';
+        } else if (
+          issueIsWarning(issue) ||
+          level === ISSUE_SEVERITY_LEVEL.MINOR ||
+          level === ISSUE_SEVERITY_LEVEL.INFO
+        ) {
+          prefix = '⚠️ Warning';
+        } else {
+          prefix = '❌ Error';
+        }
+        const detailLabel = levelLabel && !prefix.toLowerCase().includes(levelLabel.toLowerCase())
+          ? ` (${levelLabel})`
+          : '';
+        lines.push(`  - ${prefix}${categoryLabel}${detailLabel}: ${issue.message}`);
         const entries = Object.entries(issue.context ?? {});
         if (entries.length) {
           for (const [key, value] of entries) {
