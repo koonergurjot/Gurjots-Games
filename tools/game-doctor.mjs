@@ -282,11 +282,11 @@ function analyzeChangedFiles(files, knownSlugs = new Set(), assetCatalog = new M
       continue;
     }
 
+    let slugFromAsset = null;
     if (segments[0] === 'assets') {
-      const slug = detectSlugFromAssetPath(segments, knownSlugs);
-      if (slug) {
-        slugs.add(slug);
-        continue;
+      slugFromAsset = detectSlugFromAssetPath(segments, knownSlugs);
+      if (slugFromAsset) {
+        slugs.add(slugFromAsset);
       }
     }
     const catalogEntry = assetCatalog.get(normalized);
@@ -298,6 +298,9 @@ function analyzeChangedFiles(files, knownSlugs = new Set(), assetCatalog = new M
     }
 
     if (segments[0] === 'assets') {
+      if (slugFromAsset) {
+        continue;
+      }
       return { slugs: null, reason: `asset change not mapped to a game (${normalized})` };
     }
   }
