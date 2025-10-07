@@ -10,6 +10,10 @@ npm run doctor
 
 The command generates `health/report.json` and `health/report.md` summaries. Use `--strict` (enabled in the npm script) to fail the run when new issues are introduced.
 
+## CI reporting
+
+Pull requests automatically surface Game Doctor results in a dedicated comment on the thread. The workflow parses `health/report.json` and renders a status table for every game, updating the same comment on reruns to avoid notification spam. A download link to the `game-doctor-report` workflow artifact (containing the JSON and Markdown outputs) is also included for deeper inspection.
+
 ## Schema validation
 
 Before any other check runs, Game Doctor validates `games.json` against [`tools/schemas/games.schema.json`](../tools/schemas/games.schema.json).
