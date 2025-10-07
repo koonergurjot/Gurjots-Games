@@ -197,6 +197,88 @@ describe('tools/game-doctor.mjs', () => {
     ).toBe(true);
   });
 
+  it('flags missing /assets/ references discovered in shell sources', async () => {
+    fixture = await createGameDoctorFixture('asset-references');
+
+    await fixture.writeJson('games.json', [
+      buildGameEntry('asset-check', {
+        title: 'Asset Reference Check',
+      }),
+    ]);
+
+    await fixture.writeFile(
+      'games/asset-check/index.html',
+      [
+        '<!doctype html>',
+        '<html>',
+        '<head>',
+        '  <title>Asset Check</title>',
+        '</head>',
+        '<body>',
+        '  <img src="/assets/sprites/asset-check.png">',
+        '  <img src="/assets/sprites/missing.png">',
+        '  <script src="./main.js"></script>',
+        '</body>',
+        '</html>',
+      ].join('\n'),
+    );
+
+    await fixture.writeFile(
+      'games/asset-check/main.js',
+      "export const SOUND = '/assets/audio/missing-sound.mp3';\n",
+    );
+
+    await fixture.writeFile('assets/sprites/asset-check.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/asset-check.mp3', 'audio-bytes');
+    await fixture.writeFile('assets/thumbs/asset-check.png', 'thumb-bytes');
+
+    const result = await fixture.runDoctor();
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Game doctor found 1 of 1 game(s) with issues');
+
+    const report = await fixture.readJson('health/report.json');
+    expect(report.summary).toMatchObject({ total: 1, passing: 0, failing: 1 });
+
+    const gameReport = report.games[0];
+    expect(gameReport.slug).toBe('asset-check');
+
+    const referenceIssues = gameReport.issues.filter(
+      (issue) => issue.message === 'Asset reference missing on disk',
+    );
+    expect(referenceIssues).toHaveLength(2);
+
+    const referencedAssets = referenceIssues.map((issue) => issue.context.asset).sort();
+    expect(referencedAssets).toEqual([
+      '/assets/audio/missing-sound.mp3',
+      '/assets/sprites/missing.png',
+    ]);
+
+    const htmlIssue = referenceIssues.find(
+      (issue) => issue.context.asset === '/assets/sprites/missing.png',
+    );
+    expect(htmlIssue.context.references).toEqual([
+      {
+        file: 'games/asset-check/index.html',
+        line: 8,
+        column: expect.any(Number),
+      },
+    ]);
+
+    const scriptIssue = referenceIssues.find(
+      (issue) => issue.context.asset === '/assets/audio/missing-sound.mp3',
+    );
+    expect(scriptIssue.context.references).toEqual([
+      {
+        file: 'games/asset-check/main.js',
+        line: 1,
+        column: expect.any(Number),
+      },
+    ]);
+
+    expect(gameReport.assets.references).toMatchObject({ total: 3, missing: 2 });
+  });
+
   it('targets changed slugs when sprite assets referenced by games are removed', async () => {
     fixture = await createGameDoctorFixture('changed-sprite');
 

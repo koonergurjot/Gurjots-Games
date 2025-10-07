@@ -140,6 +140,10 @@ const ISSUE_TAXONOMY = new Map(
       category: 'missing-asset',
       severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
     },
+    'Asset reference missing on disk': {
+      category: 'missing-asset',
+      severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
+    },
     'Thumbnail missing': {
       category: 'missing-asset',
       severity: ISSUE_SEVERITY_LEVEL.MAJOR,
@@ -158,6 +162,9 @@ const ISSUE_TAXONOMY = new Map(
     },
   }),
 );
+
+const SHELL_ASSET_SCAN_EXTENSIONS = new Set(['.html', '.htm', '.js', '.mjs', '.cjs']);
+const ASSET_REFERENCE_PATTERN = /\/assets\/[^\s"'`()<>]+/g;
 
 function mapSeverityToLevel(severity) {
   if (severity === SEVERITY.WARNING) {
@@ -665,6 +672,196 @@ async function collectShellEntries(baseDir) {
   return collected;
 }
 
+async function collectShellSourceFiles(baseDir) {
+  const collected = [];
+
+  async function walk(currentDir) {
+    let dirEntries;
+    try {
+      dirEntries = await fs.readdir(currentDir, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return;
+      }
+      throw error;
+    }
+
+    for (const entry of dirEntries) {
+      const absolutePath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        // eslint-disable-next-line no-await-in-loop
+        await walk(absolutePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      const extension = path.extname(entry.name).toLowerCase();
+      if (!SHELL_ASSET_SCAN_EXTENSIONS.has(extension)) {
+        continue;
+      }
+      const relativePath = path.relative(baseDir, absolutePath).replace(/\\/g, '/');
+      collected.push({ absolute: absolutePath, relative: relativePath });
+    }
+  }
+
+  await walk(baseDir);
+  return collected;
+}
+
+function isLocalAssetReference(source, matchIndex) {
+  if (matchIndex <= 0) {
+    return true;
+  }
+
+  const boundaryChars = new Set(['"', "'", '`', ' ', '\t', '\r', '\n', '(', '[', '{', '<', '>', '=']);
+  let boundaryIndex = -1;
+  for (let i = matchIndex - 1; i >= 0; i -= 1) {
+    const char = source[i];
+    if (boundaryChars.has(char)) {
+      boundaryIndex = i;
+      break;
+    }
+  }
+
+  const contextStart = boundaryIndex + 1;
+  const context = source.slice(contextStart, matchIndex);
+  if (context.startsWith('//')) {
+    return false;
+  }
+  if (context.includes('://')) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeAssetReference(raw) {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  let normalized = raw;
+  const queryIndex = normalized.search(/[?#]/);
+  if (queryIndex !== -1) {
+    normalized = normalized.slice(0, queryIndex);
+  }
+  normalized = normalized.replace(/^\/+/, '');
+  if (!normalized.startsWith('assets/')) {
+    return null;
+  }
+  return normalized;
+}
+
+function computeLineAndColumn(source, index) {
+  let line = 1;
+  let column = 1;
+  for (let i = 0; i < index; i += 1) {
+    if (source[i] === '\n') {
+      line += 1;
+      column = 1;
+    } else {
+      column += 1;
+    }
+  }
+  return { line, column };
+}
+
+function extractAssetReferences(source) {
+  if (typeof source !== 'string' || !source.includes('/assets/')) {
+    return [];
+  }
+  const matches = [];
+  ASSET_REFERENCE_PATTERN.lastIndex = 0;
+  let match;
+  // eslint-disable-next-line no-cond-assign
+  while ((match = ASSET_REFERENCE_PATTERN.exec(source)) != null) {
+    if (!isLocalAssetReference(source, match.index)) {
+      continue;
+    }
+    const normalized = normalizeAssetReference(match[0]);
+    if (!normalized) {
+      continue;
+    }
+    matches.push({ raw: match[0], normalized, index: match.index });
+  }
+  return matches;
+}
+
+async function analyzeShellAssetReferences(slug, shellAbsolutePath, issues) {
+  if (!shellAbsolutePath) {
+    return null;
+  }
+
+  const shellDir = path.dirname(shellAbsolutePath);
+  const sourceFiles = await collectShellSourceFiles(shellDir);
+
+  const assetMap = new Map();
+  let totalReferences = 0;
+
+  for (const file of sourceFiles) {
+    let contents;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      contents = await fs.readFile(file.absolute, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        continue;
+      }
+      throw error;
+    }
+
+    const references = extractAssetReferences(contents);
+    if (references.length === 0) {
+      continue;
+    }
+
+    for (const reference of references) {
+      totalReferences += 1;
+      const key = reference.normalized;
+      if (!assetMap.has(key)) {
+        assetMap.set(key, {
+          asset: `/${key}`,
+          references: [],
+        });
+      }
+      const location = computeLineAndColumn(contents, reference.index);
+      assetMap.get(key).references.push({
+        file: relativeFromRoot(file.absolute),
+        line: location.line,
+        column: location.column,
+      });
+    }
+  }
+
+  const missingAssets = [];
+
+  for (const [normalized, entry] of assetMap.entries()) {
+    const absoluteAssetPath = path.join(ROOT, normalized);
+    // eslint-disable-next-line no-await-in-loop
+    const exists = await pathExists(absoluteAssetPath);
+    if (!exists) {
+      missingAssets.push(entry);
+      issues.push(
+        formatIssue('Asset reference missing on disk', {
+          slug,
+          asset: entry.asset,
+          expected: relativeFromRoot(absoluteAssetPath),
+          references: entry.references,
+        }),
+      );
+    }
+  }
+
+  if (assetMap.size === 0) {
+    return { total: 0, unique: 0, missing: 0 };
+  }
+
+  return {
+    total: totalReferences,
+    unique: assetMap.size,
+    missing: missingAssets.length,
+  };
+}
+
 function matchGlobEntries(entries, pattern) {
   const normalized = normalizeGlobPattern(pattern);
   const matcher = globToRegExp(normalized);
@@ -940,6 +1137,12 @@ function buildMarkdownReport(report) {
     }
     if (game.assets?.audio?.length) {
       lines.push(`- Audio checked: ${game.assets.audio.length}`);
+    }
+    if (game.assets?.references) {
+      lines.push(`- Asset references scanned: ${game.assets.references.total ?? 0}`);
+      if ((game.assets.references.missing ?? 0) > 0) {
+        lines.push(`- Asset references missing: ${game.assets.references.missing}`);
+      }
     }
     if (game.requirements?.paths?.length) {
       const pathProblems = game.requirements.paths.filter(
@@ -1365,6 +1568,12 @@ async function main() {
       checkedAudio.push(relativeFromRoot(audioPath));
     }
 
+    const assetReferenceSummary = await analyzeShellAssetReferences(
+      slug,
+      foundShellAbsolute,
+      issues,
+    );
+
     let thumbnailFound = null;
     let thumbnailIsPlaceholder = false;
     if (slug) {
@@ -1437,6 +1646,13 @@ async function main() {
         warnings: hasWarnings,
       },
     };
+
+    if (
+      assetReferenceSummary &&
+      (assetReferenceSummary.total > 0 || assetReferenceSummary.missing > 0)
+    ) {
+      result.assets.references = assetReferenceSummary;
+    }
 
     if (includeManifestDetails) {
       result.requirements = manifestCheck;
