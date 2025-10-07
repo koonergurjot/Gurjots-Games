@@ -1,12 +1,11 @@
 # Game Doctor Report
 
-Generated: 2025-10-07T21:30:48.739Z
+Generated: 2025-10-07T21:13:46.273Z
 
 - Total games: 12
 - Passing: 12
 - Failing: 0
 - With warnings: 0
-- Issues found: 0
 - Manifest version: 1
 - Manifest source: tools/reporters/game-doctor-manifest.json
 

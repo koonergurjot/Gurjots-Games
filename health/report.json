@@ -1,20 +1,10 @@
 {
-  "generatedAt": "2025-10-07T21:30:48.739Z",
+  "generatedAt": "2025-10-07T21:13:46.273Z",
   "summary": {
     "total": 12,
     "passing": 12,
     "failing": 0,
-    "withWarnings": 0,
-    "issueCounts": {
-      "total": 0,
-      "bySeverity": {
-        "blocker": 0,
-        "major": 0,
-        "minor": 0,
-        "info": 0
-      },
-      "byCategory": {}
-    }
+    "withWarnings": 0
   },
   "manifest": {
     "version": 1,
