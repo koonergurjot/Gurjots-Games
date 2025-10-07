@@ -1,11 +1,14 @@
 # Game Doctor Report
 
-Generated: 2025-10-07T20:23:32.951Z
+Generated: 2025-10-07T21:19:27.394Z
 
 - Total games: 12
 - Passing: 12
 - Failing: 0
 - With warnings: 6
+- Issues found: 6
+- Issues by severity: Minor issues: 6
+- Issues by category: placeholder-art: 6
 - Manifest version: 1
 - Manifest source: tools/reporters/game-doctor-manifest.json
 
@@ -29,8 +32,10 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
 - Sprites checked: 1
 - Audio checked: 3
+- Manifest paths: all required paths found
+- Severity: Minor issues: 1
 - Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
+  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
     - thumbnail: "assets/placeholder-thumb.png"
     - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
 
@@ -42,8 +47,10 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
 - Sprites checked: 4
 - Audio checked: 3
+- Manifest paths: all required paths found
+- Severity: Minor issues: 1
 - Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
+  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
     - thumbnail: "assets/placeholder-thumb.png"
     - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
 
@@ -55,8 +62,10 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
 - Sprites checked: 3
 - Audio checked: 3
+- Manifest paths: all required paths found
+- Severity: Minor issues: 1
 - Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
+  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
     - thumbnail: "assets/placeholder-thumb.png"
     - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
 
@@ -68,8 +77,10 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
 - Sprites checked: 2
 - Audio checked: 1
+- Manifest paths: all required paths found
+- Severity: Minor issues: 1
 - Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
+  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
     - thumbnail: "assets/placeholder-thumb.png"
     - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
 
@@ -81,8 +92,11 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
 - Sprites checked: 2
 - Audio checked: 1
+- Manifest paths: all required paths found
+- Manifest globs: all patterns matched files
+- Severity: Minor issues: 1
 - Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
+  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
     - thumbnail: "assets/placeholder-thumb.png"
     - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
 
@@ -94,8 +108,10 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
 - Sprites checked: 1
 - Audio checked: 1
+- Manifest paths: all required paths found
+- Severity: Minor issues: 1
 - Issues:
-  - ⚠️ Warning: Thumbnail uses placeholder art
+  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
     - thumbnail: "assets/placeholder-thumb.png"
     - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
 
@@ -107,6 +123,7 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: games/asteroids/thumb.png
 - Sprites checked: 1
 - Audio checked: 3
+- Manifest paths: all required paths found
 - Issues: none
 
 ## Maze 3D
@@ -117,6 +134,7 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: games/maze3d/thumb.png
 - Sprites checked: 2
 - Audio checked: 1
+- Manifest paths: all required paths found
 - Issues: none
 
 ## Pixel Platformer
@@ -139,6 +157,7 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: games/runner/thumb.png
 - Sprites checked: 1
 - Audio checked: 3
+- Manifest paths: all required paths found
 - Issues: none
 
 ## Alien Shooter
@@ -149,5 +168,6 @@ Generated: 2025-10-07T20:23:32.951Z
 - Thumbnail: games/shooter/thumb.png
 - Sprites checked: 1
 - Audio checked: 2
+- Manifest paths: all required paths found
 - Issues: none
 
