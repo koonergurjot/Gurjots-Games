@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -25,8 +27,13 @@ jobs:
       - name: Run Game Doctor tests
         run: npm run test:doctor
 
-      - name: Run Game Doctor
-        run: node tools/game-doctor.mjs --strict --baseline=health/baseline.json
+      - name: Run Game Doctor (targeted)
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
+        run: npm run doctor:changed
+
+      - name: Run Game Doctor (full)
+        if: github.ref == 'refs/heads/main'
+        run: npm run doctor
 
       - name: Upload Game Doctor report
         if: always()

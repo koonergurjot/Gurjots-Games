@@ -1,6 +1,30 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createGameDoctorFixture } from './fixtures/game-doctor-fixture.mjs';
 
+function buildGameEntry(slug, overrides = {}) {
+  const base = {
+    id: slug,
+    slug,
+    title: `${slug} title`,
+    short: 'Short description',
+    tags: ['arcade'],
+    difficulty: 'easy',
+    released: '2024-01-01',
+    playUrl: `/games/${slug}/`,
+    firstFrame: {
+      sprites: [`/assets/sprites/${slug}.png`],
+      audio: [`/assets/audio/${slug}.mp3`],
+    },
+    help: {
+      objective: 'Score points',
+      controls: 'Arrow keys',
+      tips: ['Have fun'],
+      steps: ['Start'],
+    },
+  };
+  return { ...base, ...overrides };
+}
+
 let fixture;
 
 afterEach(async () => {
@@ -15,14 +39,9 @@ describe('tools/game-doctor.mjs', () => {
     fixture = await createGameDoctorFixture('healthy');
 
     await fixture.writeJson('games.json', [
-      {
-        slug: 'healthy-game',
+      buildGameEntry('healthy-game', {
         title: 'Healthy Fixture',
-        firstFrame: {
-          sprites: ['/assets/sprites/healthy-game.png'],
-          audio: ['/assets/audio/healthy-game.mp3'],
-        },
-      },
+      }),
     ]);
 
     await fixture.writeFile('games/healthy-game/index.html', '<!doctype html><title>Healthy</title>');
@@ -51,13 +70,12 @@ describe('tools/game-doctor.mjs', () => {
     fixture = await createGameDoctorFixture('regression');
 
     await fixture.writeJson('games.json', [
-      {
-        slug: 'troubled-game',
+      buildGameEntry('troubled-game', {
         title: 'Troubled Fixture',
         firstFrame: {
           sprites: ['/assets/sprites/missing.png'],
         },
-      },
+      }),
     ]);
 
     await fixture.writeJson('health/baseline.json', {
@@ -82,5 +100,42 @@ describe('tools/game-doctor.mjs', () => {
     const markdown = await fixture.readFile('health/report.md');
     expect(markdown).toContain('## Troubled Fixture');
     expect(markdown).toContain('❌ Needs attention');
+  });
+
+  it('filters validation to requested slugs', async () => {
+    fixture = await createGameDoctorFixture('slug-filter');
+
+    await fixture.writeJson('games.json', [
+      buildGameEntry('keep-me', {
+        title: 'Keep Me',
+      }),
+      buildGameEntry('skip-me', {
+        title: 'Skip Me',
+      }),
+    ]);
+
+    await fixture.writeFile('games/keep-me/index.html', '<!doctype html><title>Keep</title>');
+    await fixture.writeFile('assets/sprites/keep-me.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/keep-me.mp3', 'audio-bytes');
+    await fixture.writeFile('assets/thumbs/keep-me.png', 'thumb-bytes');
+
+    const result = await fixture.runDoctor(['--slug=keep-me']);
+
+    expect(result.code).toBe(0);
+    const report = await fixture.readJson('health/report.json');
+    expect(report.summary).toMatchObject({ total: 1, passing: 1, failing: 0 });
+    expect(report.games).toHaveLength(1);
+    expect(report.games[0].slug).toBe('keep-me');
+  });
+
+  it('fails when requested slugs are missing from the catalog', async () => {
+    fixture = await createGameDoctorFixture('missing-slug');
+
+    await fixture.writeJson('games.json', [buildGameEntry('exists')]);
+
+    const result = await fixture.runDoctor(['--slug=ghost']);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('requested slug(s) not found');
   });
 });

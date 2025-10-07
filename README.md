@@ -164,7 +164,9 @@ To add new asset requirements:
 3. Keep requirements in arrays of strings—invalid entries will be treated
    as manifest errors during the health check.
 4. Run `node tools/game-doctor.mjs` (or `npm run doctor`) to confirm the
-   manifest changes pass.
+   manifest changes pass. Use `--slug=<slug>` to focus on specific games or
+   `npm run doctor:changed` to automatically target slugs detected from your
+   git diff against `origin/main`.
 
 ---
 

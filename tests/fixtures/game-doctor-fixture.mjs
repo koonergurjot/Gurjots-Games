@@ -80,6 +80,7 @@ export async function createGameDoctorFixture(name = 'fixture') {
   const fixture = new GameDoctorFixture(tmpRoot);
 
   await fs.mkdir(fixture.path('tools/reporters'), { recursive: true });
+  await fs.mkdir(fixture.path('tools/schemas'), { recursive: true });
   await fs.mkdir(fixture.path('assets'), { recursive: true });
   await fs.mkdir(fixture.path('games'), { recursive: true });
   await fs.mkdir(fixture.path('gameshells'), { recursive: true });
@@ -91,9 +92,21 @@ export async function createGameDoctorFixture(name = 'fixture') {
     fixture.path('tools/reporters/game-doctor-manifest.json'),
   );
   await copyFileIfExists(
+    path.join(REPO_ROOT, 'tools', 'schemas', 'games.schema.json'),
+    fixture.path('tools/schemas/games.schema.json'),
+  );
+  await copyFileIfExists(
     path.join(REPO_ROOT, 'assets', 'placeholder-thumb.png'),
     fixture.path('assets/placeholder-thumb.png'),
   );
+
+  try {
+    await fs.symlink(path.join(REPO_ROOT, 'node_modules'), fixture.path('node_modules'), 'dir');
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      throw error;
+    }
+  }
 
   return fixture;
 }

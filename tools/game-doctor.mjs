@@ -1,8 +1,10 @@
 import { promises as fs } from 'fs';
+import { execFile } from 'child_process';
 import path from 'path';
 import process from 'process';
 import { fileURLToPath } from 'url';
 import Ajv from 'ajv';
+import { promisify } from 'util';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -15,6 +17,8 @@ const MANIFEST_PATH = path.join(ROOT, 'tools', 'reporters', 'game-doctor-manifes
 const GAMES_SCHEMA_PATH = path.join(ROOT, 'tools', 'schemas', 'games.schema.json');
 
 const gamesPath = path.join(ROOT, 'games.json');
+const execFileAsync = promisify(execFile);
+const GIT_DIFF_BASE_CANDIDATES = ['origin/main', 'main'];
 
 async function pathExists(candidate) {
   try {
@@ -136,6 +140,81 @@ function ensureArray(value, label, issues) {
 
 function relativeFromRoot(filePath) {
   return path.relative(ROOT, filePath).replace(/\\/g, '/');
+}
+
+function parseSlugList(value) {
+  return value
+    .split(',')
+    .map((slug) => slug.trim())
+    .filter(Boolean);
+}
+
+function addSlugSource(slugSources, slug, source) {
+  if (!slug) {
+    return;
+  }
+  if (!slugSources.has(slug)) {
+    slugSources.set(slug, new Set());
+  }
+  slugSources.get(slug).add(source);
+}
+
+function analyzeChangedFiles(files) {
+  const slugs = new Set();
+
+  for (const file of files) {
+    const normalized = file.replace(/\\/g, '/');
+    if (normalized === 'games.json' || normalized.startsWith('games.json/')) {
+      return { slugs: null, reason: 'games.json changed' };
+    }
+    if (normalized === 'tools/reporters/game-doctor-manifest.json') {
+      return { slugs: null, reason: 'game doctor manifest changed' };
+    }
+
+    const segments = normalized.split('/').filter(Boolean);
+    if (segments[0] === 'games' && segments[1]) {
+      slugs.add(segments[1]);
+      continue;
+    }
+    if (segments[0] === 'gameshells' && segments[1]) {
+      slugs.add(segments[1]);
+      continue;
+    }
+    if (segments[0] === 'assets' && segments[1] === 'thumbs' && segments.length >= 3) {
+      const filename = segments[segments.length - 1];
+      const slug = filename.replace(path.extname(filename), '').trim();
+      if (slug) {
+        slugs.add(slug);
+      }
+    }
+  }
+
+  return { slugs, reason: null };
+}
+
+async function detectChangedSlugs() {
+  let lastError = null;
+
+  for (const base of GIT_DIFF_BASE_CANDIDATES) {
+    try {
+      const { stdout } = await execFileAsync('git', ['diff', '--name-only', `${base}...HEAD`], {
+        cwd: ROOT,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      const files = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const analysis = analyzeChangedFiles(files);
+      return { base, files, ...analysis };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const fallbackReason = lastError?.message ?? 'git diff failed';
+  const firstLine = fallbackReason.split(/\r?\n/, 1)[0];
+  return { base: null, files: null, slugs: null, reason: firstLine };
 }
 
 async function loadManifest() {
@@ -541,6 +620,8 @@ function parseCliArgs() {
   const args = process.argv.slice(2);
   let strictMode = false;
   let baselinePath = DEFAULT_BASELINE;
+  const cliSlugs = new Set();
+  let changedRequested = false;
 
   for (const arg of args) {
     if (arg === '--strict') {
@@ -550,10 +631,17 @@ function parseCliArgs() {
       if (value.trim()) {
         baselinePath = path.isAbsolute(value) ? value : path.join(ROOT, value);
       }
+    } else if (arg === '--changed') {
+      changedRequested = true;
+    } else if (arg.startsWith('--slug=')) {
+      const value = arg.slice('--slug='.length);
+      for (const slug of parseSlugList(value)) {
+        cliSlugs.add(slug);
+      }
     }
   }
 
-  return { strictMode, baselinePath };
+  return { strictMode, baselinePath, cliSlugs, changedRequested };
 }
 
 function mapBaselineGames(baseline) {
@@ -590,7 +678,43 @@ function selectBaselineEntry(game, maps) {
 }
 
 async function main() {
-  const { strictMode, baselinePath } = parseCliArgs();
+  const { strictMode, baselinePath, cliSlugs, changedRequested: initialChangedRequested } = parseCliArgs();
+
+  const slugSources = new Map();
+  for (const slug of cliSlugs) {
+    addSlugSource(slugSources, slug, 'cli');
+  }
+
+  let changedRequested = initialChangedRequested;
+  let forceEmptyFilter = false;
+
+  if (changedRequested) {
+    const detection = await detectChangedSlugs();
+    if (detection.slugs == null) {
+      const reasonSuffix = detection.reason ? ` (${detection.reason})` : '';
+      console.log(
+        `Game doctor: unable to determine changed slugs${reasonSuffix}. Running full validation instead.`,
+      );
+      changedRequested = false;
+    } else {
+      if (detection.slugs.size > 0) {
+        for (const slug of detection.slugs) {
+          addSlugSource(slugSources, slug, 'changed');
+        }
+        const baseLabel = detection.base ?? 'git history';
+        console.log(
+          `Game doctor: targeting ${detection.slugs.size} changed game slug(s) based on git diff against ${baseLabel}.`,
+        );
+      } else if (slugSources.size === 0) {
+        forceEmptyFilter = true;
+        console.log('Game doctor: --changed detected no modified game slugs.');
+      }
+    }
+  }
+
+  const filterActive = slugSources.size > 0 || forceEmptyFilter;
+  const slugFilter = filterActive ? new Set(slugSources.keys()) : null;
+  const matchedSlugs = new Set();
 
   let validateGames;
   try {
@@ -650,6 +774,15 @@ async function main() {
     const slug = deriveSlug(game);
     if (!slug) {
       issues.push(formatIssue('Unable to determine slug for game entry', { index }));
+    }
+
+    if (slugFilter) {
+      if (!slug || !slugFilter.has(slug)) {
+        continue;
+      }
+      if (slug) {
+        matchedSlugs.add(slug);
+      }
     }
 
     const title = typeof game.title === 'string' ? game.title : `Game #${index + 1}`;
@@ -781,6 +914,37 @@ async function main() {
     passing: results.filter((game) => game.ok).length,
     failing: results.filter((game) => !game.ok).length,
   };
+
+  if (slugFilter) {
+    const missingCliSlugs = [];
+    const missingChangedSlugs = [];
+
+    for (const [slug, sources] of slugSources.entries()) {
+      if (matchedSlugs.has(slug)) {
+        continue;
+      }
+      if (sources.has('cli')) {
+        missingCliSlugs.push(slug);
+      }
+      if (sources.has('changed')) {
+        missingChangedSlugs.push(slug);
+      }
+    }
+
+    if (missingCliSlugs.length > 0) {
+      console.error(
+        `Game doctor: requested slug(s) not found in games.json: ${missingCliSlugs.join(', ')}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    if (missingChangedSlugs.length > 0) {
+      console.warn(
+        `Game doctor: detected changed slug(s) not present in games.json: ${missingChangedSlugs.join(', ')}.`,
+      );
+    }
+  }
 
   const report = {
     generatedAt: new Date().toISOString(),

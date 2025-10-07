@@ -26,7 +26,7 @@ npm test             # runs the test suite
 
 ## Game Doctor continuous integration check
 
-Every push and pull request triggers the **Game Doctor** GitHub Action, which runs `node tools/game-doctor.mjs --strict --baseline=health/baseline.json` and fails the
+Every push and pull request triggers the **Game Doctor** GitHub Action. Pull requests run `npm run doctor:changed`, targeting only the slugs detected in the git diff, while pushes to `main` continue to run the full `npm run doctor` sweep. The workflow fails the
 check when any game needs attention. If you need to re-run the check, open your pull request, switch to the **Checks** tab,
 select **Game Doctor**, and click **Re-run**. The workflow uploads `health/report.json` and `health/report.md` as artifacts;
 download them from the same check summary to review the full report.
