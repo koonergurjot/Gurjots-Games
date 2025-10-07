@@ -217,6 +217,48 @@ describe('tools/game-doctor.mjs', () => {
     ).toBe(true);
   });
 
+  it('targets slug-named asset changes even when assets are not referenced directly', async () => {
+    fixture = await createGameDoctorFixture('slug-assets');
+
+    await fixture.writeJson(
+      'games.json',
+      [
+        buildGameEntry('standalone-assets', {
+          firstFrame: {
+            sprites: ['/assets/sprites/shared/hero.png'],
+            audio: ['/assets/audio/shared/theme.mp3'],
+          },
+        }),
+      ],
+    );
+
+    await fixture.writeFile('games/standalone-assets/index.html', '<!doctype html><title>Standalone</title>');
+    await fixture.writeFile('assets/thumbs/standalone-assets.png', 'thumb-bytes');
+
+    await fixture.writeFile('assets/sprites/shared/hero.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/shared/theme.mp3', 'audio-bytes');
+
+    await fixture.writeFile('assets/sprites/standalone-assets.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/standalone-assets.mp3', 'audio-bytes');
+
+    await fixture.initGitRepo();
+    await fixture.runGit(['checkout', '-b', 'remove-slug-assets']);
+    await fixture.runGit(['rm', 'assets/sprites/standalone-assets.png']);
+    await fixture.runGit(['rm', 'assets/audio/standalone-assets.mp3']);
+    await fixture.runGit(['commit', '-m', 'Remove slug-named assets']);
+
+    const result = await fixture.runDoctor(['--changed']);
+
+    expect(result.stdout).toContain('targeting 1 changed game slug(s)');
+    expect(result.stdout).not.toContain('Game doctor: --changed detected no modified game slugs.');
+    expect(result.code).toBe(0);
+
+    const report = await fixture.readJson('health/report.json');
+    expect(report.summary).toMatchObject({ total: 1, passing: 1, failing: 0 });
+    expect(report.games).toHaveLength(1);
+    expect(report.games[0].slug).toBe('standalone-assets');
+  });
+
   it('falls back to full validation when asset changes cannot be mapped to games', async () => {
     fixture = await createGameDoctorFixture('ambiguous-asset');
 

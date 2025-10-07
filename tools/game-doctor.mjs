@@ -218,6 +218,37 @@ function buildAssetCatalog(games) {
   return catalog;
 }
 
+function detectSlugFromAssetPath(segments, knownSlugs) {
+  if (!Array.isArray(segments) || segments.length < 3) {
+    return null;
+  }
+
+  if (segments[0] !== 'assets') {
+    return null;
+  }
+
+  for (let index = segments.length - 1; index >= 1; index -= 1) {
+    const segment = segments[index];
+    if (!segment) {
+      continue;
+    }
+
+    const trimmed = segment.trim();
+    if (trimmed && knownSlugs.has(trimmed)) {
+      return trimmed;
+    }
+
+    if (index === segments.length - 1) {
+      const withoutExtension = trimmed.replace(path.extname(trimmed), '').trim();
+      if (withoutExtension && knownSlugs.has(withoutExtension)) {
+        return withoutExtension;
+      }
+    }
+  }
+
+  return null;
+}
+
 function analyzeChangedFiles(files, knownSlugs = new Set(), assetCatalog = new Map()) {
   const slugs = new Set();
 
@@ -249,6 +280,14 @@ function analyzeChangedFiles(files, knownSlugs = new Set(), assetCatalog = new M
         slugs.add(slug);
       }
       continue;
+    }
+
+    if (segments[0] === 'assets') {
+      const slug = detectSlugFromAssetPath(segments, knownSlugs);
+      if (slug) {
+        slugs.add(slug);
+        continue;
+      }
     }
     const catalogEntry = assetCatalog.get(normalized);
     if (catalogEntry && catalogEntry.size > 0) {
