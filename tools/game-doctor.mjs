@@ -865,7 +865,7 @@ async function main() {
   await fs.writeFile(REPORT_JSON, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
   await fs.writeFile(REPORT_MD, `${buildMarkdownReport(report)}\n`, 'utf8');
 
-  if (writeBaseline) {
+  const writeBaselineFile = async () => {
     const baselineDir = path.dirname(baselinePath);
     await fs.mkdir(baselineDir, { recursive: true });
     const payload = buildBaselinePayload(report);
@@ -873,7 +873,7 @@ async function main() {
     console.log(
       `Game doctor baseline written to ${relativeFromRoot(baselinePath)}.`,
     );
-  }
+  };
 
   if (strictMode) {
     const regressions = [];
@@ -900,6 +900,11 @@ async function main() {
           REPORT_JSON,
         )} for details.`,
       );
+      if (writeBaseline) {
+        console.error(
+          'Skipping baseline rewrite because regressions were detected in strict mode.',
+        );
+      }
       process.exitCode = 1;
       return;
     }
@@ -914,6 +919,9 @@ async function main() {
     } else {
       console.log(`Game doctor strict mode: all ${summary.total} game(s) look healthy!`);
     }
+    if (writeBaseline) {
+      await writeBaselineFile();
+    }
   } else if (summary.failing > 0) {
     console.error(
       `Game doctor found ${summary.failing} of ${summary.total} game(s) with issues. See ${relativeFromRoot(
@@ -923,6 +931,9 @@ async function main() {
     process.exitCode = 1;
   } else {
     console.log(`Game doctor: all ${summary.total} game(s) look healthy!`);
+    if (writeBaseline) {
+      await writeBaselineFile();
+    }
   }
 }
 
