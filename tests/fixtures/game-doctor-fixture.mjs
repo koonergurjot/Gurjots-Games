@@ -10,7 +10,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 class GameDoctorFixture {
   constructor(root) {
     this.root = root;
-    this.gameDoctorPath = this.path('tools/game-doctor.mjs');
+    this.gameDoctorPath = path.join(REPO_ROOT, 'tools', 'game-doctor.mjs');
   }
 
   path(relativePath) {
@@ -41,7 +41,7 @@ class GameDoctorFixture {
     return new Promise((resolve, reject) => {
       const child = spawn(process.execPath, [this.gameDoctorPath, ...args], {
         cwd: this.root,
-        env: { ...process.env, ...env },
+        env: { ...process.env, GAME_DOCTOR_ROOT: this.root, ...env },
       });
 
       let stdout = '';
@@ -80,15 +80,19 @@ export async function createGameDoctorFixture(name = 'fixture') {
   const fixture = new GameDoctorFixture(tmpRoot);
 
   await fs.mkdir(fixture.path('tools/reporters'), { recursive: true });
+  await fs.mkdir(fixture.path('tools/schemas'), { recursive: true });
   await fs.mkdir(fixture.path('assets'), { recursive: true });
   await fs.mkdir(fixture.path('games'), { recursive: true });
   await fs.mkdir(fixture.path('gameshells'), { recursive: true });
   await fs.mkdir(fixture.path('health'), { recursive: true });
 
-  await copyFileIfExists(path.join(REPO_ROOT, 'tools', 'game-doctor.mjs'), fixture.path('tools/game-doctor.mjs'));
   await copyFileIfExists(
     path.join(REPO_ROOT, 'tools', 'reporters', 'game-doctor-manifest.json'),
     fixture.path('tools/reporters/game-doctor-manifest.json'),
+  );
+  await copyFileIfExists(
+    path.join(REPO_ROOT, 'tools', 'schemas', 'games.schema.json'),
+    fixture.path('tools/schemas/games.schema.json'),
   );
   await copyFileIfExists(
     path.join(REPO_ROOT, 'assets', 'placeholder-thumb.png'),

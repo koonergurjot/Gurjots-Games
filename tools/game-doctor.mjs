@@ -5,7 +5,8 @@ import { fileURLToPath } from 'url';
 import Ajv from 'ajv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..');
+const DEFAULT_ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(process.env.GAME_DOCTOR_ROOT ?? DEFAULT_ROOT);
 const HEALTH_DIR = path.join(ROOT, 'health');
 const REPORT_JSON = path.join(HEALTH_DIR, 'report.json');
 const REPORT_MD = path.join(HEALTH_DIR, 'report.md');
