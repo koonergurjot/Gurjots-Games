@@ -42,7 +42,7 @@ jobs:
         run: node tools/game-doctor.mjs --strict --baseline=health/baseline.json
 
       - name: Comment Game Doctor results
-        if: github.event_name == 'pull_request'
+        if: inputs.mode == 'targeted'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node tools/comment-game-doctor.mjs
@@ -58,7 +58,7 @@ jobs:
             health/report.md
 
       - name: Comment Game Doctor results
-        if: github.event_name == 'pull_request'
+        if: inputs.mode == 'targeted'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
