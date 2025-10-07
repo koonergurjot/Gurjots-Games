@@ -12,7 +12,7 @@ The command generates `health/report.json` and `health/report.md` summaries. Use
 
 ## CI reporting
 
-Pull requests automatically surface Game Doctor results in a dedicated comment on the thread. The workflow parses `health/report.json` and renders a status table for every game, updating the same comment on reruns to avoid notification spam. A download link to the `game-doctor-report` workflow artifact (containing the JSON and Markdown outputs) is also included for deeper inspection.
+Targeted CI (`.github/workflows/ci-targeted.yml`) runs on every pull request and automatically surfaces Game Doctor results in a dedicated comment on the thread. Full CI (`.github/workflows/ci-full.yml`) reuses the same job on pushes to `main` to guard the catalog after merges. The workflow parses `health/report.json` and renders a status table for every game, updating the same comment on reruns to avoid notification spam. A download link to the `game-doctor-report` workflow artifact (containing the JSON and Markdown outputs) is also included for deeper inspection.
 
 ## Schema validation
 
