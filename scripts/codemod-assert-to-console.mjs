@@ -1,4 +1,3 @@
-\
 /**
  * Usage:
  *   node scripts/codemod-assert-to-console.mjs

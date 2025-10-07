@@ -419,16 +419,16 @@ function ensureOverlays(){
     err.setAttribute('aria-hidden', 'true');
     err.setAttribute('aria-labelledby', 'error-message');
     err.setAttribute('aria-describedby', 'error-details');
-    err.innerHTML = '
-      <div class="panel">
-        <div class="message" id="error-message"></div>
-        <button type="button" class="toggle" aria-expanded="false">Show details</button>
-        <pre class="details" id="error-details" aria-hidden="true"></pre>
-        <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
-         <button class="btn" id="btn-restart">Retry</button>
-          <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>
-        </div>
-      </div>';
+    err.innerHTML = `
+        <div class="panel">
+          <div class="message" id="error-message"></div>
+          <button type="button" class="toggle" aria-expanded="false">Show details</button>
+          <pre class="details" id="error-details" aria-hidden="true"></pre>
+          <div style="margin-top:10px;display:flex;gap:8px;justify-content:center">
+            <button class="btn" id="btn-restart">Retry</button>
+            <a class="btn" id="open-new" target="_blank" rel="noopener">Open in new tab</a>
+          </div>
+        </div>`;
     stage.appendChild(err);
   }
 
