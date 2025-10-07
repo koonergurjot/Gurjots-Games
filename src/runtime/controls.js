@@ -34,18 +34,18 @@ export class Controls {
     if (opts.touch !== false) this.buildTouch();
   }
 
-  ensurePlayer(player) {
-    if (!this.maps[player]) this.maps[player] = {};
+  ensureHandlerMap(player) {
     if (!this.handlers[player]) this.handlers[player] = new Map();
+    return this.handlers[player];
   }
 
   /** Register callback for an action. Returns unsubscribe function. */
   on(action, cb, player = 0) {
-    this.ensurePlayer(player);
-    let set = this.handlers[player].get(action);
+    const handlers = this.ensureHandlerMap(player);
+    let set = handlers.get(action);
     if (!set) {
       set = new Set();
-      this.handlers[player].set(action, set);
+      handlers.set(action, set);
     }
     set.add(cb);
     return () => set.delete(cb);
@@ -61,7 +61,10 @@ export class Controls {
 
   /** Change mapping for an action at runtime */
   setMapping(action, key, player = 0) {
-    this.ensurePlayer(player);
+    if (!this.maps[player]) {
+      this.maps[player] = {};
+      if (!this.handlers[player]) this.handlers[player] = new Map();
+    }
     this.maps[player][action] = key;
     if (player === 0) {
       const binding = this.touchBindings.get(action);
@@ -116,7 +119,7 @@ export class Controls {
 
   fireByCode(code) {
     for (let p = 0; p < this.maps.length; p++) {
-      this.ensurePlayer(p);
+      this.ensureHandlerMap(p);
       const map = this.maps[p];
       for (const action in map) {
         if (this.match(action, code, p)) this.fire(action, p);
