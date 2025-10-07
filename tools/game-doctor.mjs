@@ -159,11 +159,73 @@ function addSlugSource(slugSources, slug, source) {
   slugSources.get(slug).add(source);
 }
 
-function analyzeChangedFiles(files, knownSlugs = new Set()) {
+function normalizeRepoRelativePath(candidate) {
+  if (typeof candidate !== 'string') {
+    return null;
+  }
+  let normalized = candidate.trim();
+  if (!normalized) {
+    return null;
+  }
+  normalized = normalized.replace(/\\+/g, '/');
+  normalized = normalized.replace(/^\.\/+/, '');
+  normalized = normalized.replace(/^\/+/, '');
+  return normalized;
+}
+
+function recordAssetReference(assetCatalog, slug, assetPath) {
+  const normalized = normalizeRepoRelativePath(assetPath);
+  if (!normalized || !normalized.startsWith('assets/')) {
+    return;
+  }
+  if (!assetCatalog.has(normalized)) {
+    assetCatalog.set(normalized, new Set());
+  }
+  assetCatalog.get(normalized).add(slug);
+}
+
+function buildAssetCatalog(games) {
+  const catalog = new Map();
+
+  for (const game of games) {
+    const slug = deriveSlug(game);
+    if (!slug) {
+      continue;
+    }
+
+    const firstFrame = game && typeof game === 'object' ? game.firstFrame : null;
+    if (!firstFrame || typeof firstFrame !== 'object') {
+      continue;
+    }
+
+    if (Array.isArray(firstFrame.sprites)) {
+      for (const sprite of firstFrame.sprites) {
+        if (typeof sprite === 'string') {
+          recordAssetReference(catalog, slug, sprite);
+        }
+      }
+    }
+
+    if (Array.isArray(firstFrame.audio)) {
+      for (const audio of firstFrame.audio) {
+        if (typeof audio === 'string') {
+          recordAssetReference(catalog, slug, audio);
+        }
+      }
+    }
+  }
+
+  return catalog;
+}
+
+function analyzeChangedFiles(files, knownSlugs = new Set(), assetCatalog = new Map()) {
   const slugs = new Set();
 
   for (const file of files) {
-    const normalized = file.replace(/\\/g, '/');
+    const normalized = normalizeRepoRelativePath(file);
+    if (!normalized) {
+      continue;
+    }
     if (normalized === 'games.json' || normalized.startsWith('games.json/')) {
       return { slugs: null, reason: 'games.json changed' };
     }
@@ -188,23 +250,23 @@ function analyzeChangedFiles(files, knownSlugs = new Set()) {
       }
       continue;
     }
-    if (segments[0] === 'assets' && (segments[1] === 'sprites' || segments[1] === 'audio')) {
-      if (segments.length === 3) {
-        const filename = segments[2];
-        const slugCandidate = filename.replace(path.extname(filename), '').trim();
-        if (slugCandidate && knownSlugs.has(slugCandidate)) {
-          slugs.add(slugCandidate);
-          continue;
-        }
+    const catalogEntry = assetCatalog.get(normalized);
+    if (catalogEntry && catalogEntry.size > 0) {
+      for (const slug of catalogEntry) {
+        slugs.add(slug);
       }
-      return { slugs: null, reason: `assets/${segments[1]} change` };
+      continue;
+    }
+
+    if (segments[0] === 'assets') {
+      return { slugs: null, reason: `asset change not mapped to a game (${normalized})` };
     }
   }
 
   return { slugs, reason: null };
 }
 
-async function detectChangedSlugs(knownSlugs = new Set()) {
+async function detectChangedSlugs(knownSlugs = new Set(), assetCatalog = new Map()) {
   let lastError = null;
 
   for (const base of GIT_DIFF_BASE_CANDIDATES) {
@@ -217,7 +279,7 @@ async function detectChangedSlugs(knownSlugs = new Set()) {
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean);
-      const analysis = analyzeChangedFiles(files, knownSlugs);
+      const analysis = analyzeChangedFiles(files, knownSlugs, assetCatalog);
       return { base, files, ...analysis };
     } catch (error) {
       lastError = error;
@@ -739,8 +801,10 @@ async function main() {
     }
   }
 
+  const assetCatalog = buildAssetCatalog(games);
+
   if (changedRequested) {
-    const detection = await detectChangedSlugs(knownSlugs);
+    const detection = await detectChangedSlugs(knownSlugs, assetCatalog);
     if (detection.slugs == null) {
       const reasonSuffix = detection.reason ? ` (${detection.reason})` : '';
       console.log(

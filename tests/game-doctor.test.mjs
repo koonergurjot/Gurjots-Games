@@ -139,19 +139,29 @@ describe('tools/game-doctor.mjs', () => {
     expect(result.stderr).toContain('requested slug(s) not found');
   });
 
-  it('targets changed slugs when sprite assets are removed', async () => {
+  it('targets changed slugs when sprite assets referenced by games are removed', async () => {
     fixture = await createGameDoctorFixture('changed-sprite');
 
-    await fixture.writeJson('games.json', [buildGameEntry('asset-game')]);
+    await fixture.writeJson(
+      'games.json',
+      [
+        buildGameEntry('asset-game', {
+          firstFrame: {
+            sprites: ['/assets/sprites/shared/hero.png'],
+            audio: ['/assets/audio/shared/hit.mp3'],
+          },
+        }),
+      ],
+    );
 
     await fixture.writeFile('games/asset-game/index.html', '<!doctype html><title>Asset Game</title>');
-    await fixture.writeFile('assets/sprites/asset-game.png', 'sprite-bytes');
-    await fixture.writeFile('assets/audio/asset-game.mp3', 'audio-bytes');
+    await fixture.writeFile('assets/sprites/shared/hero.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/shared/hit.mp3', 'audio-bytes');
     await fixture.writeFile('assets/thumbs/asset-game.png', 'thumb-bytes');
 
     await fixture.initGitRepo();
     await fixture.runGit(['checkout', '-b', 'remove-sprite']);
-    await fixture.runGit(['rm', 'assets/sprites/asset-game.png']);
+    await fixture.runGit(['rm', 'assets/sprites/shared/hero.png']);
     await fixture.runGit(['commit', '-m', 'Remove sprite asset']);
 
     const result = await fixture.runDoctor(['--changed']);
@@ -168,19 +178,29 @@ describe('tools/game-doctor.mjs', () => {
     ).toBe(true);
   });
 
-  it('targets changed slugs when audio assets are removed', async () => {
+  it('targets changed slugs when audio assets referenced by games are removed', async () => {
     fixture = await createGameDoctorFixture('changed-audio');
 
-    await fixture.writeJson('games.json', [buildGameEntry('asset-audio')]);
+    await fixture.writeJson(
+      'games.json',
+      [
+        buildGameEntry('asset-audio', {
+          firstFrame: {
+            sprites: ['/assets/sprites/asset-audio.png'],
+            audio: ['/assets/audio/shared/theme.mp3'],
+          },
+        }),
+      ],
+    );
 
     await fixture.writeFile('games/asset-audio/index.html', '<!doctype html><title>Asset Audio</title>');
     await fixture.writeFile('assets/sprites/asset-audio.png', 'sprite-bytes');
-    await fixture.writeFile('assets/audio/asset-audio.mp3', 'audio-bytes');
+    await fixture.writeFile('assets/audio/shared/theme.mp3', 'audio-bytes');
     await fixture.writeFile('assets/thumbs/asset-audio.png', 'thumb-bytes');
 
     await fixture.initGitRepo();
     await fixture.runGit(['checkout', '-b', 'remove-audio']);
-    await fixture.runGit(['rm', 'assets/audio/asset-audio.mp3']);
+    await fixture.runGit(['rm', 'assets/audio/shared/theme.mp3']);
     await fixture.runGit(['commit', '-m', 'Remove audio asset']);
 
     const result = await fixture.runDoctor(['--changed']);
@@ -195,5 +215,27 @@ describe('tools/game-doctor.mjs', () => {
     expect(
       report.games[0].issues.some((issue) => issue.message === 'Audio asset missing on disk'),
     ).toBe(true);
+  });
+
+  it('falls back to full validation when asset changes cannot be mapped to games', async () => {
+    fixture = await createGameDoctorFixture('ambiguous-asset');
+
+    await fixture.writeJson('games.json', [buildGameEntry('mystery-game')]);
+
+    await fixture.writeFile('games/mystery-game/index.html', '<!doctype html><title>Mystery</title>');
+    await fixture.writeFile('assets/sprites/mystery-game.png', 'sprite');
+    await fixture.writeFile('assets/audio/mystery-game.mp3', 'audio');
+    await fixture.writeFile('assets/thumbs/mystery-game.png', 'thumb');
+
+    await fixture.initGitRepo();
+    await fixture.runGit(['checkout', '-b', 'change-placeholder']);
+    await fixture.runGit(['rm', 'assets/placeholder-thumb.png']);
+    await fixture.runGit(['commit', '-m', 'Remove shared placeholder']);
+
+    const result = await fixture.runDoctor(['--changed']);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('unable to determine changed slugs');
+    expect(result.stdout).toContain('Running full validation instead');
   });
 });
