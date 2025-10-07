@@ -1,0 +1,16 @@
+name: Full CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  game-doctor:
+    uses: ./.github/workflows/game-doctor.yml
+    with:
+      mode: full
+    secrets: inherit

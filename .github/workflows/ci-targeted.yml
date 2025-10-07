@@ -1,0 +1,15 @@
+name: Targeted CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  game-doctor:
+    uses: ./.github/workflows/game-doctor.yml
+    with:
+      mode: targeted
+    secrets: inherit
