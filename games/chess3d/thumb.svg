@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="title desc">
+  <title id="title">3D Chess thumbnail</title>
+  <desc id="desc">Isometric chessboard floating with highlighted squares.</desc>
+  <defs>
+    <linearGradient id="c3bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#070b22"/>
+      <stop offset="100%" stop-color="#131b45"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="90" fill="url(#c3bg)"/>
+  <g transform="translate(80,50) skewX(-20) skewY(-10) scale(0.9)">
+    <rect x="-40" y="-40" width="80" height="80" fill="#f7e1c6" stroke="#3a2618" stroke-width="5"/>
+    <g fill="#c08a54">
+      <rect x="-40" y="-40" width="10" height="10"/>
+      <rect x="-20" y="-40" width="10" height="10"/>
+      <rect x="0" y="-40" width="10" height="10"/>
+      <rect x="20" y="-40" width="10" height="10"/>
+      <rect x="-30" y="-30" width="10" height="10"/>
+      <rect x="-10" y="-30" width="10" height="10"/>
+      <rect x="10" y="-30" width="10" height="10"/>
+      <rect x="30" y="-30" width="10" height="10"/>
+      <rect x="-40" y="-20" width="10" height="10"/>
+      <rect x="-20" y="-20" width="10" height="10"/>
+      <rect x="0" y="-20" width="10" height="10"/>
+      <rect x="20" y="-20" width="10" height="10"/>
+      <rect x="-30" y="-10" width="10" height="10"/>
+      <rect x="-10" y="-10" width="10" height="10"/>
+      <rect x="10" y="-10" width="10" height="10"/>
+      <rect x="30" y="-10" width="10" height="10"/>
+    </g>
+    <g fill="#ffffff" stroke="#d6d6d6" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M-10 20h12l3 6h-18z"/>
+      <path d="M-4 2l-4 12h8z"/>
+      <circle cx="0" cy="-2" r="3"/>
+    </g>
+    <g fill="#1d223a" stroke="#0b0d16" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M18 25h14l4 6h-22z"/>
+      <path d="M25 6l-5 10h10z"/>
+      <circle cx="25" cy="2" r="3"/>
+    </g>
+    <polygon points="-40 -40 -30 -35 -30 -45" fill="#f7e1c6" opacity="0.3"/>
+  </g>
+  <path d="M30 82h100" stroke="#4ec5ff" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+</svg>

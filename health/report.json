@@ -1,21 +1,19 @@
 {
-  "generatedAt": "2025-10-07T21:19:27.394Z",
+  "generatedAt": "2025-10-07T21:30:48.739Z",
   "summary": {
     "total": 12,
     "passing": 12,
     "failing": 0,
-    "withWarnings": 6,
+    "withWarnings": 0,
     "issueCounts": {
-      "total": 6,
+      "total": 0,
       "bySeverity": {
         "blocker": 0,
         "major": 0,
-        "minor": 6,
+        "minor": 0,
         "info": 0
       },
-      "byCategory": {
-        "placeholder-art": 6
-      }
+      "byCategory": {}
     }
   },
   "manifest": {
@@ -98,18 +96,7 @@
       "title": "Snake",
       "slug": "snake",
       "ok": true,
-      "issues": [
-        {
-          "message": "Thumbnail uses placeholder art",
-          "context": {
-            "thumbnail": "assets/placeholder-thumb.png",
-            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
-          },
-          "severity": "warning",
-          "severityLevel": "minor",
-          "category": "placeholder-art"
-        }
-      ],
+      "issues": [],
       "shell": {
         "found": "games/snake/index.html"
       },
@@ -124,12 +111,12 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png",
-        "placeholder": true
+        "found": "games/snake/thumb.svg",
+        "placeholder": false
       },
       "status": {
         "errors": false,
-        "warnings": true
+        "warnings": false
       },
       "requirements": {
         "paths": [
@@ -147,18 +134,7 @@
       "title": "Tetris",
       "slug": "tetris",
       "ok": true,
-      "issues": [
-        {
-          "message": "Thumbnail uses placeholder art",
-          "context": {
-            "thumbnail": "assets/placeholder-thumb.png",
-            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
-          },
-          "severity": "warning",
-          "severityLevel": "minor",
-          "category": "placeholder-art"
-        }
-      ],
+      "issues": [],
       "shell": {
         "found": "games/tetris/index.html"
       },
@@ -176,12 +152,12 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png",
-        "placeholder": true
+        "found": "games/tetris/thumb.svg",
+        "placeholder": false
       },
       "status": {
         "errors": false,
-        "warnings": true
+        "warnings": false
       },
       "requirements": {
         "paths": [
@@ -224,18 +200,7 @@
       "title": "Breakout",
       "slug": "breakout",
       "ok": true,
-      "issues": [
-        {
-          "message": "Thumbnail uses placeholder art",
-          "context": {
-            "thumbnail": "assets/placeholder-thumb.png",
-            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
-          },
-          "severity": "warning",
-          "severityLevel": "minor",
-          "category": "placeholder-art"
-        }
-      ],
+      "issues": [],
       "shell": {
         "found": "games/breakout/index.html"
       },
@@ -252,12 +217,12 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png",
-        "placeholder": true
+        "found": "games/breakout/thumb.svg",
+        "placeholder": false
       },
       "status": {
         "errors": false,
-        "warnings": true
+        "warnings": false
       },
       "requirements": {
         "paths": [
@@ -290,18 +255,7 @@
       "title": "Chess (2D)",
       "slug": "chess",
       "ok": true,
-      "issues": [
-        {
-          "message": "Thumbnail uses placeholder art",
-          "context": {
-            "thumbnail": "assets/placeholder-thumb.png",
-            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
-          },
-          "severity": "warning",
-          "severityLevel": "minor",
-          "category": "placeholder-art"
-        }
-      ],
+      "issues": [],
       "shell": {
         "found": "games/chess/index.html"
       },
@@ -315,12 +269,12 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png",
-        "placeholder": true
+        "found": "games/chess/thumb.svg",
+        "placeholder": false
       },
       "status": {
         "errors": false,
-        "warnings": true
+        "warnings": false
       },
       "requirements": {
         "paths": [
@@ -368,18 +322,7 @@
       "title": "Chess 3D (Local)",
       "slug": "chess3d",
       "ok": true,
-      "issues": [
-        {
-          "message": "Thumbnail uses placeholder art",
-          "context": {
-            "thumbnail": "assets/placeholder-thumb.png",
-            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
-          },
-          "severity": "warning",
-          "severityLevel": "minor",
-          "category": "placeholder-art"
-        }
-      ],
+      "issues": [],
       "shell": {
         "found": "games/chess3d/index.html"
       },
@@ -393,12 +336,12 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png",
-        "placeholder": true
+        "found": "games/chess3d/thumb.svg",
+        "placeholder": false
       },
       "status": {
         "errors": false,
-        "warnings": true
+        "warnings": false
       },
       "requirements": {
         "paths": [
@@ -546,18 +489,7 @@
       "title": "2048",
       "slug": "2048",
       "ok": true,
-      "issues": [
-        {
-          "message": "Thumbnail uses placeholder art",
-          "context": {
-            "thumbnail": "assets/placeholder-thumb.png",
-            "recommendation": "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
-          },
-          "severity": "warning",
-          "severityLevel": "minor",
-          "category": "placeholder-art"
-        }
-      ],
+      "issues": [],
       "shell": {
         "found": "games/2048/index.html"
       },
@@ -570,12 +502,12 @@
         ]
       },
       "thumbnail": {
-        "found": "assets/placeholder-thumb.png",
-        "placeholder": true
+        "found": "games/2048/thumb.svg",
+        "placeholder": false
       },
       "status": {
         "errors": false,
-        "warnings": true
+        "warnings": false
       },
       "requirements": {
         "paths": [

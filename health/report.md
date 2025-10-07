@@ -1,14 +1,12 @@
 # Game Doctor Report
 
-Generated: 2025-10-07T21:19:27.394Z
+Generated: 2025-10-07T21:30:48.739Z
 
 - Total games: 12
 - Passing: 12
 - Failing: 0
-- With warnings: 6
-- Issues found: 6
-- Issues by severity: Minor issues: 6
-- Issues by category: placeholder-art: 6
+- With warnings: 0
+- Issues found: 0
 - Manifest version: 1
 - Manifest source: tools/reporters/game-doctor-manifest.json
 
@@ -27,93 +25,69 @@ Generated: 2025-10-07T21:19:27.394Z
 ## Snake
 
 - Slug: snake
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/snake/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/snake/thumb.svg
 - Sprites checked: 1
 - Audio checked: 3
 - Manifest paths: all required paths found
-- Severity: Minor issues: 1
-- Issues:
-  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Issues: none
 
 ## Tetris
 
 - Slug: tetris
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/tetris/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/tetris/thumb.svg
 - Sprites checked: 4
 - Audio checked: 3
 - Manifest paths: all required paths found
-- Severity: Minor issues: 1
-- Issues:
-  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Issues: none
 
 ## Breakout
 
 - Slug: breakout
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/breakout/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/breakout/thumb.svg
 - Sprites checked: 3
 - Audio checked: 3
 - Manifest paths: all required paths found
-- Severity: Minor issues: 1
-- Issues:
-  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Issues: none
 
 ## Chess (2D)
 
 - Slug: chess
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/chess/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/chess/thumb.svg
 - Sprites checked: 2
 - Audio checked: 1
 - Manifest paths: all required paths found
-- Severity: Minor issues: 1
-- Issues:
-  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Issues: none
 
 ## Chess 3D (Local)
 
 - Slug: chess3d
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/chess3d/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/chess3d/thumb.svg
 - Sprites checked: 2
 - Audio checked: 1
 - Manifest paths: all required paths found
 - Manifest globs: all patterns matched files
-- Severity: Minor issues: 1
-- Issues:
-  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Issues: none
 
 ## 2048
 
 - Slug: 2048
-- Status: ⚠️ Review warnings
+- Status: ✅ Healthy
 - Shell: games/2048/index.html
-- Thumbnail: assets/placeholder-thumb.png (⚠️ placeholder)
+- Thumbnail: games/2048/thumb.svg
 - Sprites checked: 1
 - Audio checked: 1
 - Manifest paths: all required paths found
-- Severity: Minor issues: 1
-- Issues:
-  - ⚠️ Warning [placeholder-art] (Minor): Thumbnail uses placeholder art
-    - thumbnail: "assets/placeholder-thumb.png"
-    - recommendation: "Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png"
+- Issues: none
 
 ## Asteroids
 

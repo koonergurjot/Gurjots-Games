@@ -13,6 +13,7 @@ const REPORT_JSON = path.join(HEALTH_DIR, 'report.json');
 const REPORT_MD = path.join(HEALTH_DIR, 'report.md');
 const DEFAULT_BASELINE = path.join(HEALTH_DIR, 'baseline.json');
 const PLACEHOLDER_THUMB = 'assets/placeholder-thumb.png';
+const THUMB_EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg', 'gif', 'svg'];
 
 const SEVERITY = {
   ERROR: 'error',
@@ -1367,11 +1368,14 @@ async function main() {
     let thumbnailFound = null;
     let thumbnailIsPlaceholder = false;
     if (slug) {
-      const thumbCandidates = [
-        path.join(ROOT, 'assets', 'thumbs', `${slug}.png`),
-        path.join(ROOT, 'games', slug, 'thumb.png'),
-        path.join(ROOT, PLACEHOLDER_THUMB),
-      ];
+      const thumbCandidates = [];
+      for (const ext of THUMB_EXTENSIONS) {
+        thumbCandidates.push(path.join(ROOT, 'assets', 'thumbs', `${slug}.${ext}`));
+      }
+      for (const ext of THUMB_EXTENSIONS) {
+        thumbCandidates.push(path.join(ROOT, 'games', slug, `thumb.${ext}`));
+      }
+      thumbCandidates.push(path.join(ROOT, PLACEHOLDER_THUMB));
       for (const candidate of thumbCandidates) {
         // eslint-disable-next-line no-await-in-loop
         if (await pathExists(candidate)) {
@@ -1394,7 +1398,8 @@ async function main() {
             'Thumbnail uses placeholder art',
             {
               thumbnail: thumbnailFound,
-              recommendation: 'Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png',
+              recommendation:
+                'Provide a bespoke thumbnail in assets/thumbs/<slug>.(png|svg) or games/<slug>/thumb.(png|svg)',
             },
             SEVERITY.WARNING,
           ),
