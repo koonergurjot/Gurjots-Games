@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import os from 'os';
 import path from 'path';
 import process from 'process';
 import { fileURLToPath } from 'url';
@@ -12,6 +13,24 @@ const REPORT_JSON = path.join(HEALTH_DIR, 'code-report.json');
 
 const SYNTAX_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx']);
 const IMPORT_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx']);
+const SKIP_DIRECTORIES = new Set([
+  'node_modules',
+  'dist',
+  '.git',
+  '.hg',
+  '.svn',
+  'coverage',
+  'build',
+  '.next',
+  '.turbo',
+]);
+const DEFAULT_CONCURRENCY = (() => {
+  const cpuCount = Array.isArray(os.cpus()) ? os.cpus().length : 0;
+  if (!cpuCount || Number.isNaN(cpuCount)) {
+    return 4;
+  }
+  return Math.min(Math.max(cpuCount, 2), 12);
+})();
 const OPTIONAL_TOOL_CONFIG = [
   {
     key: 'eslint',
@@ -90,7 +109,7 @@ async function collectFiles(startDir) {
       }
       const fullPath = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === 'dist') {
+        if (SKIP_DIRECTORIES.has(entry.name)) {
           continue;
         }
         pending.push(fullPath);
@@ -123,6 +142,53 @@ function statusSymbol(status) {
 
 function formatMarkdownBlock(content) {
   return ['```', content.trimEnd(), '```'].join('\n');
+}
+
+async function runWithConcurrency(items, worker, limit = DEFAULT_CONCURRENCY) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+
+  const boundedLimit = Number.isInteger(limit) && limit > 0 ? limit : DEFAULT_CONCURRENCY;
+
+  return new Promise((resolve, reject) => {
+    const results = new Array(items.length);
+    let nextIndex = 0;
+    let active = 0;
+
+    const launch = () => {
+      if (nextIndex >= items.length) {
+        if (active === 0) {
+          resolve(results);
+        }
+        return;
+      }
+
+      const currentIndex = nextIndex++;
+      active += 1;
+
+      Promise.resolve(worker(items[currentIndex], currentIndex))
+        .then((result) => {
+          results[currentIndex] = result;
+        })
+        .catch((error) => {
+          reject(error);
+        })
+        .finally(() => {
+          active -= 1;
+          if (nextIndex < items.length) {
+            launch();
+          } else if (active === 0) {
+            resolve(results);
+          }
+        });
+    };
+
+    const initial = Math.min(boundedLimit, items.length);
+    for (let i = 0; i < initial; i += 1) {
+      launch();
+    }
+  });
 }
 
 async function runCommand(command, args, options = {}) {
@@ -164,16 +230,17 @@ async function runSyntaxCheck(files, result) {
   }
   result.ran = true;
   const issues = [];
-  for (const filePath of files) {
+  await runWithConcurrency(files, async (filePath) => {
     const checkResult = await runCommand('node', ['--check', filePath]);
     if (checkResult.code !== 0) {
       issues.push({
         file: relativePath(filePath),
-        output: (checkResult.stderr || checkResult.stdout || '').trim() ||
+        output:
+          (checkResult.stderr || checkResult.stdout || '').trim() ||
           'Unknown syntax error.',
       });
     }
-  }
+  });
   if (issues.length === 0) {
     result.status = 'passed';
     result.summary = `Checked ${files.length} file${files.length === 1 ? '' : 's'}.`;
@@ -219,13 +286,31 @@ async function checkImportTargets(files, result) {
     return;
   }
   result.ran = true;
+  const extensionCandidates = ['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx'];
+  const existenceCache = new Map();
+
   const missing = [];
-  for (const filePath of files) {
+
+  const checkCandidateExists = async (candidate) => {
+    if (existenceCache.has(candidate)) {
+      return existenceCache.get(candidate);
+    }
+    try {
+      await fs.access(candidate);
+      existenceCache.set(candidate, true);
+      return true;
+    } catch {
+      existenceCache.set(candidate, false);
+      return false;
+    }
+  };
+
+  await runWithConcurrency(files, async (filePath) => {
     let content;
     try {
       content = await fs.readFile(filePath, 'utf8');
     } catch (error) {
-      continue;
+      return;
     }
     const fromRegex = /from\s+['"]([^'"]+)['"]/g;
     const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
@@ -251,7 +336,6 @@ async function checkImportTargets(files, result) {
       const targetBase = path.resolve(baseDir, normalized);
       const candidates = new Set();
       candidates.add(targetBase);
-      const extensionCandidates = ['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx'];
       if (!path.extname(targetBase)) {
         for (const ext of extensionCandidates) {
           candidates.add(`${targetBase}${ext}`);
@@ -260,14 +344,13 @@ async function checkImportTargets(files, result) {
       for (const ext of extensionCandidates) {
         candidates.add(path.join(targetBase, `index${ext}`));
       }
+
       let exists = false;
       for (const candidate of candidates) {
-        try {
-          await fs.access(candidate);
+        // eslint-disable-next-line no-await-in-loop
+        if (await checkCandidateExists(candidate)) {
           exists = true;
           break;
-        } catch {
-          continue;
         }
       }
       if (!exists) {
@@ -277,7 +360,7 @@ async function checkImportTargets(files, result) {
         });
       }
     }
-  }
+  });
   if (missing.length === 0) {
     result.status = 'passed';
     result.summary = 'All relative imports resolved.';
