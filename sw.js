@@ -174,9 +174,17 @@ async function loadCatalog() {
   try {
     const response = await fetch('/games.json', { credentials: 'omit' });
     if (response && response.ok) {
-      const json = await response.json();
-      if (Array.isArray(json)) {
-        return json;
+      try {
+        const json = await response.clone().json();
+        if (Array.isArray(json)) {
+          return json;
+        }
+      } catch (parseError) {
+        // Ignore parse errors caused by non-JSON bodies and fall through to
+        // the offline catalog fallback without spamming the console.
+        if (!(parseError instanceof SyntaxError)) {
+          throw parseError;
+        }
       }
     }
   } catch (error) {
