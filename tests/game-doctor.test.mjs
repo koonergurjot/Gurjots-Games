@@ -16,11 +16,23 @@ describe('tools/game-doctor.mjs', () => {
 
     await fixture.writeJson('games.json', [
       {
+        id: 'healthy-game',
         slug: 'healthy-game',
         title: 'Healthy Fixture',
+        short: 'A healthy test game.',
+        tags: ['Action'],
+        difficulty: 'easy',
+        released: '2024-01-01',
+        playUrl: '/games/healthy-game/',
         firstFrame: {
           sprites: ['/assets/sprites/healthy-game.png'],
           audio: ['/assets/audio/healthy-game.mp3'],
+        },
+        help: {
+          objective: 'Stay healthy.',
+          controls: 'Use the arrow keys.',
+          tips: ['Collect all the hearts.'],
+          steps: ['Press start to play.'],
         },
       },
     ]);
@@ -52,10 +64,22 @@ describe('tools/game-doctor.mjs', () => {
 
     await fixture.writeJson('games.json', [
       {
+        id: 'troubled-game',
         slug: 'troubled-game',
         title: 'Troubled Fixture',
+        short: 'A troubled test game.',
+        tags: ['Puzzle'],
+        difficulty: 'medium',
+        released: '2023-12-12',
+        playUrl: '/games/troubled-game/',
         firstFrame: {
           sprites: ['/assets/sprites/missing.png'],
+        },
+        help: {
+          objective: 'Solve the puzzle.',
+          controls: 'Tap to interact.',
+          tips: ['Look for hidden clues.'],
+          steps: ['Open the game from the arcade.'],
         },
       },
     ]);

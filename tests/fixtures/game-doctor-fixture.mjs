@@ -75,15 +75,60 @@ async function copyFileIfExists(source, destination) {
   await fs.copyFile(source, destination);
 }
 
+async function copyDependencyTree(moduleName, fixture, visited = new Set()) {
+  if (visited.has(moduleName)) {
+    return;
+  }
+  visited.add(moduleName);
+
+  const sourceDir = path.join(REPO_ROOT, 'node_modules', moduleName);
+  try {
+    await fs.stat(sourceDir);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+
+  const destinationDir = fixture.path(path.join('node_modules', moduleName));
+  await fs.cp(sourceDir, destinationDir, { recursive: true });
+
+  let packageJsonRaw;
+  try {
+    packageJsonRaw = await fs.readFile(path.join(sourceDir, 'package.json'), 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+
+  let packageJson;
+  try {
+    packageJson = JSON.parse(packageJsonRaw);
+  } catch {
+    return;
+  }
+
+  const dependencies = packageJson.dependencies ? Object.keys(packageJson.dependencies) : [];
+  for (const dependency of dependencies) {
+    // eslint-disable-next-line no-await-in-loop
+    await copyDependencyTree(dependency, fixture, visited);
+  }
+}
+
 export async function createGameDoctorFixture(name = 'fixture') {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), `game-doctor-${name}-`));
   const fixture = new GameDoctorFixture(tmpRoot);
 
   await fs.mkdir(fixture.path('tools/reporters'), { recursive: true });
+  await fs.mkdir(fixture.path('tools/schemas'), { recursive: true });
   await fs.mkdir(fixture.path('assets'), { recursive: true });
   await fs.mkdir(fixture.path('games'), { recursive: true });
   await fs.mkdir(fixture.path('gameshells'), { recursive: true });
   await fs.mkdir(fixture.path('health'), { recursive: true });
+  await fs.mkdir(fixture.path('node_modules'), { recursive: true });
 
   await copyFileIfExists(path.join(REPO_ROOT, 'tools', 'game-doctor.mjs'), fixture.path('tools/game-doctor.mjs'));
   await copyFileIfExists(
@@ -91,9 +136,15 @@ export async function createGameDoctorFixture(name = 'fixture') {
     fixture.path('tools/reporters/game-doctor-manifest.json'),
   );
   await copyFileIfExists(
+    path.join(REPO_ROOT, 'tools', 'schemas', 'games.schema.json'),
+    fixture.path('tools/schemas/games.schema.json'),
+  );
+  await copyFileIfExists(
     path.join(REPO_ROOT, 'assets', 'placeholder-thumb.png'),
     fixture.path('assets/placeholder-thumb.png'),
   );
+
+  await copyDependencyTree('ajv', fixture);
 
   return fixture;
 }
