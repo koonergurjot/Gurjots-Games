@@ -755,21 +755,77 @@ function parseCliArgs() {
   let strictMode = false;
   let baselinePath = DEFAULT_BASELINE;
   let writeBaseline = false;
+  let changedRequested = false;
+  const slugSources = new Map();
 
-  for (const arg of args) {
+  function registerSlugList(value) {
+    if (!value) {
+      return;
+    }
+    for (const slug of parseSlugList(value)) {
+      addSlugSource(slugSources, slug, 'cli');
+    }
+  }
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
     if (arg === '--strict') {
       strictMode = true;
-    } else if (arg.startsWith('--baseline=')) {
+      continue;
+    }
+
+    if (arg === '--write-baseline') {
+      writeBaseline = true;
+      continue;
+    }
+
+    if (arg === '--changed') {
+      changedRequested = true;
+      continue;
+    }
+
+    if (arg.startsWith('--baseline=')) {
       const value = arg.slice('--baseline='.length);
       if (value.trim()) {
         baselinePath = path.isAbsolute(value) ? value : path.join(ROOT, value);
       }
-    } else if (arg === '--write-baseline') {
-      writeBaseline = true;
+      continue;
+    }
+
+    if (arg === '--baseline') {
+      const value = args[index + 1];
+      if (value && !value.startsWith('--')) {
+        if (value.trim()) {
+          baselinePath = path.isAbsolute(value) ? value : path.join(ROOT, value);
+        }
+        index += 1;
+      }
+      continue;
+    }
+
+    if (arg.startsWith('--slug=')) {
+      registerSlugList(arg.slice('--slug='.length));
+      continue;
+    }
+
+    if (arg === '--slug') {
+      const value = args[index + 1];
+      if (value && !value.startsWith('--')) {
+        registerSlugList(value);
+        index += 1;
+      }
     }
   }
 
-  return { strictMode, baselinePath, writeBaseline };
+  return {
+    strictMode,
+    baselinePath,
+    writeBaseline,
+    changedRequested,
+    slugSources,
+    forceEmptyFilter: false,
+  };
 }
 
 function buildBaselinePayload(report) {
@@ -831,7 +887,10 @@ function selectBaselineEntry(game, maps) {
 }
 
 async function main() {
-  const { strictMode, baselinePath, writeBaseline } = parseCliArgs();
+  const cliConfig = parseCliArgs();
+  const { strictMode, baselinePath, writeBaseline } = cliConfig;
+  const { slugSources } = cliConfig;
+  let { changedRequested, forceEmptyFilter } = cliConfig;
 
   if (writeBaseline && !isBaselineWriteEnabled()) {
     console.error(
