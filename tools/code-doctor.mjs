@@ -4,6 +4,10 @@ import path from 'path';
 import process from 'process';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
+import { parse } from '@babel/parser';
+import traverseModule from '@babel/traverse';
+
+const traverse = traverseModule.default ?? traverseModule;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -13,6 +17,7 @@ const REPORT_JSON = path.join(HEALTH_DIR, 'code-report.json');
 
 const SYNTAX_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx']);
 const IMPORT_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx']);
+const UNUSED_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx']);
 const SKIP_DIRECTORIES = new Set([
   'node_modules',
   'dist',
@@ -50,6 +55,37 @@ const OPTIONAL_TOOL_CONFIG = [
     packageName: 'typescript',
     command: ['tsc', '--noEmit'],
   },
+];
+
+const BABEL_PARSER_OPTIONS = {
+  sourceType: 'unambiguous',
+  allowAwaitOutsideFunction: true,
+  allowReturnOutsideFunction: false,
+  plugins: [
+    'jsx',
+    'typescript',
+    'classProperties',
+    'classPrivateProperties',
+    'classPrivateMethods',
+    'decorators-legacy',
+    'dynamicImport',
+    'importMeta',
+    'topLevelAwait',
+    'exportDefaultFrom',
+    'exportNamespaceFrom',
+    'optionalChaining',
+    'nullishCoalescingOperator',
+    'objectRestSpread',
+  ],
+};
+
+const TYPE_DECLARATION_TESTERS = [
+  'isTSTypeAliasDeclaration',
+  'isTSInterfaceDeclaration',
+  'isTSModuleDeclaration',
+  'isTSImportEqualsDeclaration',
+  'isTSEnumDeclaration',
+  'isTSDeclareFunction',
 ];
 
 function createDefaultResult(label) {
@@ -142,6 +178,159 @@ function statusSymbol(status) {
 
 function formatMarkdownBlock(content) {
   return ['```', content.trimEnd(), '```'].join('\n');
+}
+
+function matchesTypeDeclaration(pathRef) {
+  if (!pathRef) {
+    return false;
+  }
+  return TYPE_DECLARATION_TESTERS.some((method) =>
+    typeof pathRef[method] === 'function' ? pathRef[method]() : false,
+  );
+}
+
+function isTypeOnlyDeclaration(bindingPath) {
+  if (!bindingPath) {
+    return false;
+  }
+  if (matchesTypeDeclaration(bindingPath)) {
+    return true;
+  }
+  const declaringParent = bindingPath.findParent((parent) => {
+    if (matchesTypeDeclaration(parent)) {
+      return true;
+    }
+    if (
+      (typeof parent.isVariableDeclaration === 'function' && parent.isVariableDeclaration()) ||
+      (typeof parent.isFunctionDeclaration === 'function' && parent.isFunctionDeclaration()) ||
+      (typeof parent.isClassDeclaration === 'function' && parent.isClassDeclaration())
+    ) {
+      return Boolean(parent.node && parent.node.declare);
+    }
+    return false;
+  });
+  if (!declaringParent) {
+    return false;
+  }
+  if (matchesTypeDeclaration(declaringParent)) {
+    return true;
+  }
+  if (
+    (typeof declaringParent.isVariableDeclaration === 'function' && declaringParent.isVariableDeclaration()) ||
+    (typeof declaringParent.isFunctionDeclaration === 'function' && declaringParent.isFunctionDeclaration()) ||
+    (typeof declaringParent.isClassDeclaration === 'function' && declaringParent.isClassDeclaration())
+  ) {
+    return Boolean(declaringParent.node && declaringParent.node.declare);
+  }
+  return false;
+}
+
+function isBindingExported(bindingPath) {
+  if (!bindingPath) {
+    return false;
+  }
+  const exportParent = bindingPath.findParent((parent) => {
+    if (typeof parent.isExportNamedDeclaration === 'function' && parent.isExportNamedDeclaration()) {
+      return true;
+    }
+    if (typeof parent.isExportDefaultDeclaration === 'function' && parent.isExportDefaultDeclaration()) {
+      return true;
+    }
+    if (typeof parent.isExportSpecifier === 'function' && parent.isExportSpecifier()) {
+      return true;
+    }
+    return false;
+  });
+  return Boolean(exportParent);
+}
+
+function isTypeOnlyImport(binding) {
+  if (!binding || !binding.path) {
+    return false;
+  }
+  const pathRef = binding.path;
+  if (
+    (typeof pathRef.isImportSpecifier === 'function' && pathRef.isImportSpecifier()) ||
+    (typeof pathRef.isImportDefaultSpecifier === 'function' && pathRef.isImportDefaultSpecifier()) ||
+    (typeof pathRef.isImportNamespaceSpecifier === 'function' && pathRef.isImportNamespaceSpecifier())
+  ) {
+    if (pathRef.node && pathRef.node.importKind === 'type') {
+      return true;
+    }
+    if (pathRef.parentPath && pathRef.parentPath.node && pathRef.parentPath.node.importKind === 'type') {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldSkipUnusedAnalysis(filePath) {
+  return filePath.endsWith('.d.ts');
+}
+
+function createUnusedIssue(filePath, type, name, loc) {
+  const line = loc && loc.start ? loc.start.line : null;
+  const column = loc && loc.start && typeof loc.start.column === 'number' ? loc.start.column + 1 : null;
+  const message =
+    type === 'import'
+      ? `Unused import \`${name}\` may be removed.`
+      : type === 'variable'
+        ? `Unused variable \`${name}\` may be removed.`
+        : `Unable to analyze \`${name}\`.`;
+  return {
+    file: relativePath(filePath),
+    type,
+    name,
+    line,
+    column,
+    message,
+  };
+}
+
+function analyzeUnusedBindings(ast, filePath) {
+  const unused = [];
+  traverse(ast, {
+    Program(pathProgram) {
+      const bindings = pathProgram.scope.getAllBindings();
+      for (const binding of Object.values(bindings)) {
+        if (!binding || !binding.identifier) {
+          continue;
+        }
+        const { identifier } = binding;
+        const name = identifier.name;
+        if (!name || name.startsWith('_')) {
+          continue;
+        }
+        if (binding.kind === 'param' || binding.kind === 'unknown' || binding.kind === 'global') {
+          continue;
+        }
+        if (binding.kind === 'module') {
+          if (binding.referenced) {
+            continue;
+          }
+          if (isTypeOnlyImport(binding)) {
+            continue;
+          }
+          if (isBindingExported(binding.path)) {
+            continue;
+          }
+          unused.push(createUnusedIssue(filePath, 'import', name, identifier.loc));
+          continue;
+        }
+        if (!binding.referenced) {
+          if (isBindingExported(binding.path)) {
+            continue;
+          }
+          if (isTypeOnlyDeclaration(binding.path)) {
+            continue;
+          }
+          unused.push(createUnusedIssue(filePath, 'variable', name, identifier.loc));
+        }
+      }
+      pathProgram.stop();
+    },
+  });
+  return unused;
 }
 
 async function runWithConcurrency(items, worker, limit = DEFAULT_CONCURRENCY) {
@@ -371,6 +560,109 @@ async function checkImportTargets(files, result) {
   }
 }
 
+async function checkUnusedCode(files, result) {
+  const candidates = files.filter(
+    (filePath) => UNUSED_EXTENSIONS.has(path.extname(filePath)) && !shouldSkipUnusedAnalysis(filePath),
+  );
+  if (candidates.length === 0) {
+    result.status = 'passed';
+    result.summary = 'No files eligible for unused code analysis.';
+    result.ran = false;
+    return;
+  }
+  result.ran = true;
+  const issues = [];
+  await runWithConcurrency(candidates, async (filePath) => {
+    let content;
+    try {
+      content = await fs.readFile(filePath, 'utf8');
+    } catch (error) {
+      issues.push({
+        file: relativePath(filePath),
+        type: 'read-error',
+        name: path.basename(filePath),
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    let ast;
+    try {
+      ast = parse(content, { ...BABEL_PARSER_OPTIONS, sourceFilename: filePath });
+    } catch (error) {
+      issues.push({
+        file: relativePath(filePath),
+        type: 'parse-error',
+        name: path.basename(filePath),
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    try {
+      const fileIssues = analyzeUnusedBindings(ast, filePath);
+      if (fileIssues.length > 0) {
+        issues.push(...fileIssues);
+      }
+    } catch (error) {
+      issues.push({
+        file: relativePath(filePath),
+        type: 'analysis-error',
+        name: path.basename(filePath),
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  if (issues.length === 0) {
+    result.status = 'passed';
+    result.summary = `No unused imports or variables detected across ${candidates.length} file${candidates.length === 1 ? '' : 's'}.`;
+    return;
+  }
+
+  issues.sort((a, b) => {
+    const fileDiff = a.file.localeCompare(b.file);
+    if (fileDiff !== 0) {
+      return fileDiff;
+    }
+    const lineDiff = (a.line ?? 0) - (b.line ?? 0);
+    if (lineDiff !== 0) {
+      return lineDiff;
+    }
+    const columnDiff = (a.column ?? 0) - (b.column ?? 0);
+    if (columnDiff !== 0) {
+      return columnDiff;
+    }
+    return (a.type || '').localeCompare(b.type || '');
+  });
+
+  const counts = issues.reduce(
+    (acc, issue) => {
+      if (issue.type === 'import') {
+        acc.imports += 1;
+      } else if (issue.type === 'variable') {
+        acc.variables += 1;
+      } else {
+        acc.failures += 1;
+      }
+      return acc;
+    },
+    { imports: 0, variables: 0, failures: 0 },
+  );
+
+  const summaryParts = [];
+  const unusedCount = counts.imports + counts.variables;
+  if (unusedCount > 0) {
+    summaryParts.push(`${unusedCount} unused binding${unusedCount === 1 ? '' : 's'}`);
+  }
+  if (counts.failures > 0) {
+    summaryParts.push(`${counts.failures} file${counts.failures === 1 ? '' : 's'} could not be analyzed`);
+  }
+  result.status = 'issues';
+  result.summary = summaryParts.join('; ') || 'Unused code detected.';
+  result.issues = issues;
+}
+
 function buildMarkdownReport(generatedAt, overallStatus, exitCode, results, fatalError) {
   const lines = [];
   lines.push('# Code Doctor Report');
@@ -383,7 +675,7 @@ function buildMarkdownReport(generatedAt, overallStatus, exitCode, results, fata
   lines.push('');
   lines.push('| Check | Status | Details |');
   lines.push('| --- | --- | --- |');
-  for (const key of ['syntax', 'eslint', 'prettier', 'typescript', 'imports']) {
+  for (const key of ['syntax', 'eslint', 'prettier', 'typescript', 'imports', 'unused']) {
     const result = results[key];
     const detail = result.summary || '';
     lines.push(`| ${result.label} | ${statusSymbol(result.status)} ${result.status} | ${detail.replace(/\n/g, ' ')} |`);
@@ -455,6 +747,30 @@ function buildMarkdownReport(generatedAt, overallStatus, exitCode, results, fata
   }
   lines.push('');
 
+  const unusedResult = results.unused;
+  lines.push('### Unused Code');
+  lines.push('');
+  lines.push(`Status: ${statusSymbol(unusedResult.status)} ${unusedResult.status}`);
+  lines.push('');
+  if (unusedResult.issues.length === 0) {
+    lines.push(unusedResult.summary || 'No unused imports or variables detected.');
+  } else {
+    lines.push(unusedResult.summary || 'Unused code detected:');
+    lines.push('');
+    for (const issue of unusedResult.issues) {
+      const location = issue.line ? `:${issue.line}${issue.column ? `:${issue.column}` : ''}` : '';
+      const label =
+        issue.type === 'import'
+          ? 'Unused import'
+          : issue.type === 'variable'
+            ? 'Unused variable'
+            : 'Analysis issue';
+      const message = issue.message ? ` — ${issue.message}` : '';
+      lines.push(`- **${issue.file}${location}** (${label})${message}`);
+    }
+  }
+  lines.push('');
+
   lines.push(`Exit Code: ${exitCode}`);
   lines.push('');
 
@@ -472,6 +788,7 @@ function buildJsonReport(generatedAt, overallStatus, exitCode, results, fatalErr
       prettier: results.prettier,
       typescript: results.typescript,
       imports: results.imports,
+      unused: results.unused,
     },
   };
   if (fatalError) {
@@ -489,6 +806,7 @@ async function main() {
     prettier: createDefaultResult('Prettier'),
     typescript: createDefaultResult('TypeScript'),
     imports: createDefaultResult('Relative Imports'),
+    unused: createDefaultResult('Unused Code'),
   };
 
   let fatalErrorMessage = '';
@@ -504,10 +822,14 @@ async function main() {
     const importFiles = allFiles.filter((filePath) =>
       IMPORT_EXTENSIONS.has(path.extname(filePath)),
     );
+    const unusedFiles = allFiles.filter((filePath) =>
+      UNUSED_EXTENSIONS.has(path.extname(filePath)),
+    );
 
     await runSyntaxCheck(syntaxFiles, results.syntax);
     await runOptionalTools(pkgJson, results);
     await checkImportTargets(importFiles, results.imports);
+    await checkUnusedCode(unusedFiles, results.unused);
 
     if (results.syntax.status === 'failed') {
       exitCode = 1;
@@ -538,7 +860,7 @@ async function main() {
     ) {
       return 'failed';
     }
-    if (results.imports.status === 'issues') {
+    if (results.imports.status === 'issues' || results.unused.status === 'issues') {
       return 'issues';
     }
     return 'passed';
