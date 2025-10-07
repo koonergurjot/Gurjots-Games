@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Gurjots Games catalog",
+  "description": "Schema describing the structure of games.json entries for Game Doctor checks.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "slug",
+      "title",
+      "short",
+      "tags",
+      "difficulty",
+      "released",
+      "playUrl",
+      "firstFrame",
+      "help"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$",
+        "minLength": 1
+      },
+      "slug": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$",
+        "minLength": 1
+      },
+      "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "short": {
+        "type": "string",
+        "minLength": 1
+      },
+      "tags": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9+\\-/ ]*$"
+        }
+      },
+      "difficulty": {
+        "type": "string",
+        "enum": ["easy", "medium", "hard"]
+      },
+      "released": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+      },
+      "playUrl": {
+        "type": "string",
+        "pattern": "^/games/[a-z0-9-]+/$"
+      },
+      "firstFrame": {
+        "type": "object",
+        "required": ["sprites"],
+        "additionalProperties": false,
+        "properties": {
+          "sprites": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^/assets/.+"
+            }
+          },
+          "audio": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^/assets/.+"
+            }
+          }
+        }
+      },
+      "help": {
+        "type": "object",
+        "required": ["objective", "controls", "tips", "steps"],
+        "additionalProperties": false,
+        "properties": {
+          "objective": {
+            "type": "string",
+            "minLength": 1
+          },
+          "controls": {
+            "type": "string",
+            "minLength": 1
+          },
+          "tips": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}
