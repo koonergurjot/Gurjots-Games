@@ -11,6 +11,11 @@ const REPORT_JSON = path.join(HEALTH_DIR, 'report.json');
 const REPORT_MD = path.join(HEALTH_DIR, 'report.md');
 const DEFAULT_BASELINE = path.join(HEALTH_DIR, 'baseline.json');
 const PLACEHOLDER_THUMB = 'assets/placeholder-thumb.png';
+
+const SEVERITY = {
+  ERROR: 'error',
+  WARNING: 'warning',
+};
 const MANIFEST_PATH = path.join(ROOT, 'tools', 'reporters', 'game-doctor-manifest.json');
 const GAMES_SCHEMA_PATH = path.join(ROOT, 'tools', 'schemas', 'games.schema.json');
 
@@ -42,11 +47,20 @@ function deriveSlug(game) {
   return null;
 }
 
-function formatIssue(message, context = {}) {
+function formatIssue(message, context = {}, severity = SEVERITY.ERROR) {
   return {
     message,
     context,
+    severity,
   };
+}
+
+function issueIsError(issue) {
+  return (issue?.severity ?? SEVERITY.ERROR) === SEVERITY.ERROR;
+}
+
+function issueIsWarning(issue) {
+  return (issue?.severity ?? SEVERITY.ERROR) === SEVERITY.WARNING;
 }
 
 function decodePointerSegment(segment) {
@@ -463,6 +477,9 @@ function buildMarkdownReport(report) {
   lines.push(`- Total games: ${report.summary.total}`);
   lines.push(`- Passing: ${report.summary.passing}`);
   lines.push(`- Failing: ${report.summary.failing}`);
+  if (typeof report.summary.withWarnings === 'number') {
+    lines.push(`- With warnings: ${report.summary.withWarnings}`);
+  }
   if (report.manifest) {
     lines.push(`- Manifest version: ${report.manifest.version ?? 'unknown'}`);
     lines.push(`- Manifest source: ${report.manifest.source ?? relativeFromRoot(MANIFEST_PATH)}`);
@@ -472,13 +489,23 @@ function buildMarkdownReport(report) {
     lines.push(`## ${game.title ?? game.slug ?? 'Unknown Game'}`);
     lines.push('');
     lines.push(`- Slug: ${game.slug ?? 'N/A'}`);
-    lines.push(`- Status: ${game.ok ? '✅ Healthy' : '❌ Needs attention'}`);
+    const statusIcon = game.status?.errors
+      ? '❌ Needs attention'
+      : game.status?.warnings
+        ? '⚠️ Review warnings'
+        : '✅ Healthy';
+    lines.push(`- Status: ${statusIcon}`);
     if (game.shell?.found) {
       lines.push(`- Shell: ${game.shell.found}`);
     } else {
       lines.push(`- Shell: missing`);
     }
-    lines.push(`- Thumbnail: ${game.thumbnail?.found ?? 'missing'}`);
+    if (game.thumbnail?.found) {
+      const note = game.thumbnail.placeholder ? ' (⚠️ placeholder)' : '';
+      lines.push(`- Thumbnail: ${game.thumbnail.found}${note}`);
+    } else {
+      lines.push(`- Thumbnail: missing`);
+    }
     if (game.assets?.sprites?.length) {
       lines.push(`- Sprites checked: ${game.assets.sprites.length}`);
     }
@@ -523,7 +550,8 @@ function buildMarkdownReport(report) {
     } else {
       lines.push('- Issues:');
       for (const issue of game.issues) {
-        lines.push(`  - ${issue.message}`);
+        const prefix = issueIsWarning(issue) ? '⚠️ Warning' : '❌ Error';
+        lines.push(`  - ${prefix}: ${issue.message}`);
         const entries = Object.entries(issue.context ?? {});
         if (entries.length) {
           for (const [key, value] of entries) {
@@ -581,6 +609,7 @@ function buildBaselinePayload(report) {
       shell: game.shell,
       assets: game.assets,
       thumbnail: game.thumbnail,
+      status: game.status,
     };
     if (game.requirements) {
       entry.requirements = game.requirements;
@@ -770,6 +799,7 @@ async function main() {
     }
 
     let thumbnailFound = null;
+    let thumbnailIsPlaceholder = false;
     if (slug) {
       const thumbCandidates = [
         path.join(ROOT, 'assets', 'thumbs', `${slug}.png`),
@@ -780,6 +810,9 @@ async function main() {
         // eslint-disable-next-line no-await-in-loop
         if (await pathExists(candidate)) {
           thumbnailFound = relativeFromRoot(candidate);
+          if (thumbnailFound === PLACEHOLDER_THUMB) {
+            thumbnailIsPlaceholder = true;
+          }
           break;
         }
       }
@@ -788,6 +821,17 @@ async function main() {
           formatIssue('Thumbnail missing', {
             tried: thumbCandidates.map(relativeFromRoot),
           }),
+        );
+      } else if (thumbnailIsPlaceholder) {
+        issues.push(
+          formatIssue(
+            'Thumbnail uses placeholder art',
+            {
+              thumbnail: thumbnailFound,
+              recommendation: 'Provide a bespoke thumbnail in assets/thumbs/<slug>.png or games/<slug>/thumb.png',
+            },
+            SEVERITY.WARNING,
+          ),
         );
       }
     }
@@ -802,18 +846,25 @@ async function main() {
     const includeManifestDetails =
       manifestCheck.paths.length > 0 || manifestCheck.globs.length > 0;
 
+    const hasErrors = issues.some(issueIsError);
+    const hasWarnings = issues.some(issueIsWarning);
+
     const result = {
       index,
       title,
       slug,
-      ok: issues.length === 0,
+      ok: !hasErrors,
       issues,
       shell: { found: foundShell },
       assets: {
         sprites: checkedSprites,
         audio: checkedAudio,
       },
-      thumbnail: { found: thumbnailFound },
+      thumbnail: { found: thumbnailFound, placeholder: thumbnailIsPlaceholder },
+      status: {
+        errors: hasErrors,
+        warnings: hasWarnings,
+      },
     };
 
     if (includeManifestDetails) {
@@ -827,6 +878,7 @@ async function main() {
     total: results.length,
     passing: results.filter((game) => game.ok).length,
     failing: results.filter((game) => !game.ok).length,
+    withWarnings: results.filter((game) => game.issues.some(issueIsWarning)).length,
   };
 
   const report = {
@@ -912,7 +964,13 @@ async function main() {
         `Game doctor strict mode: ${summary.failing} game(s) still failing but acknowledged in baseline (${list}).`,
       );
     } else {
-      console.log(`Game doctor strict mode: all ${summary.total} game(s) look healthy!`);
+      if (summary.withWarnings > 0) {
+        console.log(
+          `Game doctor strict mode: ${summary.total} game(s) passing with ${summary.withWarnings} warning(s).`,
+        );
+      } else {
+        console.log(`Game doctor strict mode: all ${summary.total} game(s) look healthy!`);
+      }
     }
   } else if (summary.failing > 0) {
     console.error(
@@ -922,7 +980,13 @@ async function main() {
     );
     process.exitCode = 1;
   } else {
-    console.log(`Game doctor: all ${summary.total} game(s) look healthy!`);
+    if (summary.withWarnings > 0) {
+      console.log(
+        `Game doctor: ${summary.total} game(s) passing with ${summary.withWarnings} warning(s).`,
+      );
+    } else {
+      console.log(`Game doctor: all ${summary.total} game(s) look healthy!`);
+    }
   }
 }
 
