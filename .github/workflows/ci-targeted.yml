@@ -1,4 +1,4 @@
-name: Targeted CI
+name: Game Doctor (Targeted)
 
 on:
   pull_request:
@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   game-doctor:
+    name: Game Doctor
     uses: ./.github/workflows/game-doctor.yml
     with:
       mode: targeted

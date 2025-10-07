@@ -1,4 +1,4 @@
-name: Full CI
+name: Game Doctor (Full)
 
 on:
   push:
@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   game-doctor:
+    name: Game Doctor
     uses: ./.github/workflows/game-doctor.yml
     with:
       mode: full
