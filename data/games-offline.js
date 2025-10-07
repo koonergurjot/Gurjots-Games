@@ -2,6 +2,7 @@
 export const games = [
   {
     "id": "pong",
+    "slug": "pong",
     "title": "Pong Classic",
     "short": "A snappy canvas remake of the arcade legend.",
     "tags": [
@@ -11,6 +12,7 @@ export const games = [
     "difficulty": "easy",
     "released": "2025-08-20",
     "playUrl": "/games/pong/",
+    "thumbnail": "/games/pong/thumb.png",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/paddle.png",
@@ -39,6 +41,7 @@ export const games = [
   },
   {
     "id": "snake",
+    "slug": "snake",
     "title": "Snake",
     "short": "Eat, grow, don't bonk into yourself.",
     "tags": [
@@ -48,6 +51,7 @@ export const games = [
     "difficulty": "easy",
     "released": "2025-08-25",
     "playUrl": "/games/snake/",
+    "thumbnail": "/games/snake/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -75,6 +79,7 @@ export const games = [
   },
   {
     "id": "tetris",
+    "slug": "tetris",
     "title": "Tetris",
     "short": "Classic falling blocks. Clear lines, level up.",
     "tags": [
@@ -84,6 +89,7 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-26",
     "playUrl": "/games/tetris/",
+    "thumbnail": "/games/tetris/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/block.png",
@@ -114,6 +120,7 @@ export const games = [
   },
   {
     "id": "breakout",
+    "slug": "breakout",
     "title": "Breakout",
     "short": "Smash bricks, power-ups, chase the score.",
     "tags": [
@@ -123,6 +130,7 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-26",
     "playUrl": "/games/breakout/",
+    "thumbnail": "/games/breakout/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/paddle.png",
@@ -152,6 +160,7 @@ export const games = [
   },
   {
     "id": "chess",
+    "slug": "chess",
     "title": "Chess (2D)",
     "short": "Traditional chess for two players.",
     "tags": [
@@ -161,7 +170,12 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-20",
     "playUrl": "/games/chess/",
+    "thumbnail": "/games/chess/thumb.svg",
     "firstFrame": {
+      "sprites": [
+        "/assets/ui/panel.png",
+        "/assets/ui/star.png"
+      ],
       "audio": [
         "/assets/audio/click.wav"
       ]
@@ -183,6 +197,7 @@ export const games = [
   },
   {
     "id": "chess3d",
+    "slug": "chess3d",
     "title": "Chess 3D (Local)",
     "short": "A three-dimensional chess experiment.",
     "tags": [
@@ -192,7 +207,12 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/chess3d/",
+    "thumbnail": "/games/chess3d/thumb.svg",
     "firstFrame": {
+      "sprites": [
+        "/assets/sprites/chess3d/wood_light.png",
+        "/assets/sprites/chess3d/wood_dark.png"
+      ],
       "audio": [
         "/assets/audio/click.wav"
       ]
@@ -214,6 +234,7 @@ export const games = [
   },
   {
     "id": "2048",
+    "slug": "2048",
     "title": "2048",
     "short": "Slide numbers to reach 2048.",
     "tags": [
@@ -223,7 +244,11 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-20",
     "playUrl": "/games/2048/",
+    "thumbnail": "/games/2048/thumb.svg",
     "firstFrame": {
+      "sprites": [
+        "/assets/sprites/block.png"
+      ],
       "audio": [
         "/assets/audio/click.wav"
       ]
@@ -245,6 +270,7 @@ export const games = [
   },
   {
     "id": "asteroids",
+    "slug": "asteroids",
     "title": "Asteroids",
     "short": "Pilot your ship and blast space rocks.",
     "tags": [
@@ -254,6 +280,7 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/asteroids/",
+    "thumbnail": "/games/asteroids/thumb.png",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"
@@ -281,6 +308,7 @@ export const games = [
   },
   {
     "id": "maze3d",
+    "slug": "maze3d",
     "title": "Maze 3D",
     "short": "Wander a first-person labyrinth to find the exit.",
     "tags": [
@@ -289,7 +317,12 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/maze3d/",
+    "thumbnail": "/games/maze3d/thumb.png",
     "firstFrame": {
+      "sprites": [
+        "/assets/sprites/maze3d/wall.png",
+        "/assets/sprites/maze3d/floor.png"
+      ],
       "audio": [
         "/assets/audio/powerup.wav"
       ]
@@ -311,6 +344,7 @@ export const games = [
   },
   {
     "id": "platformer",
+    "slug": "platformer",
     "title": "Pixel Platformer",
     "short": "Run and jump across platforms to reach the goal.",
     "tags": [
@@ -319,6 +353,7 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
+    "thumbnail": "/games/platformer/thumb.png",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -345,6 +380,7 @@ export const games = [
   },
   {
     "id": "runner",
+    "slug": "runner",
     "title": "City Runner",
     "short": "Dash through the city and avoid obstacles.",
     "tags": [
@@ -380,6 +416,7 @@ export const games = [
   },
   {
     "id": "shooter",
+    "slug": "shooter",
     "title": "Alien Shooter",
     "short": "Blast waves of invaders and survive.",
     "tags": [
@@ -388,6 +425,7 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
+    "thumbnail": "/games/shooter/thumb.png",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"

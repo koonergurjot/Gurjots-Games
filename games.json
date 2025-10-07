@@ -11,6 +11,7 @@
     "difficulty": "easy",
     "released": "2025-08-20",
     "playUrl": "/games/pong/",
+    "thumbnail": "/games/pong/thumb.png",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/paddle.png",
@@ -278,6 +279,7 @@
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/asteroids/",
+    "thumbnail": "/games/asteroids/thumb.png",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"
@@ -314,6 +316,7 @@
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/maze3d/",
+    "thumbnail": "/games/maze3d/thumb.png",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/maze3d/wall.png",
@@ -349,6 +352,7 @@
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
+    "thumbnail": "/games/platformer/thumb.png",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -420,6 +424,7 @@
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
+    "thumbnail": "/games/shooter/thumb.png",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"
