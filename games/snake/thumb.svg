@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="title desc">
+  <title id="title">Snake thumbnail</title>
+  <desc id="desc">Green snake winding toward a red apple on a dark grid.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0b3d2e"/>
+      <stop offset="100%" stop-color="#042015"/>
+    </linearGradient>
+    <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="10" height="10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="160" height="90" fill="url(#bg)"/>
+  <rect width="160" height="90" fill="url(#grid)"/>
+  <path d="M20 70h40v-20h20v-20h40v20h-20v20h-40v20h-20z" fill="#5de06d" stroke="#173f2e" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="125" cy="25" r="8" fill="#e84141" stroke="#7a1c1c" stroke-width="3"/>
+  <path d="M125 17c3 0 6 3 6 6" stroke="#2f7c2f" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

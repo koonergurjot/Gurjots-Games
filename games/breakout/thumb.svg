@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="title desc">
+  <title id="title">Breakout thumbnail</title>
+  <desc id="desc">A paddle deflects a glowing ball toward rows of bricks.</desc>
+  <defs>
+    <linearGradient id="bbg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#1b0f3b"/>
+      <stop offset="100%" stop-color="#090414"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="90" fill="url(#bbg)"/>
+  <g transform="translate(20,16)" stroke="#221144" stroke-width="2" stroke-linejoin="round">
+    <rect x="0" y="0" width="24" height="12" fill="#ff7676"/>
+    <rect x="26" y="0" width="24" height="12" fill="#ffd166"/>
+    <rect x="52" y="0" width="24" height="12" fill="#06d6a0"/>
+    <rect x="78" y="0" width="24" height="12" fill="#118ab2"/>
+    <rect x="0" y="14" width="24" height="12" fill="#ffd166"/>
+    <rect x="26" y="14" width="24" height="12" fill="#06d6a0"/>
+    <rect x="52" y="14" width="24" height="12" fill="#118ab2"/>
+    <rect x="78" y="14" width="24" height="12" fill="#ff7676"/>
+  </g>
+  <rect x="48" y="68" width="64" height="10" rx="5" fill="#f7f7ff" stroke="#3a3a7a" stroke-width="3"/>
+  <circle cx="90" cy="46" r="8" fill="#f8f9ff" stroke="#6dd5ff" stroke-width="4"/>
+  <path d="M90 46 L115 35" stroke="#6dd5ff" stroke-width="3" stroke-linecap="round" opacity="0.6"/>
+</svg>

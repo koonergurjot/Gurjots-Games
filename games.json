@@ -49,6 +49,7 @@
     "difficulty": "easy",
     "released": "2025-08-25",
     "playUrl": "/games/snake/",
+    "thumbnail": "/games/snake/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -86,6 +87,7 @@
     "difficulty": "medium",
     "released": "2025-08-26",
     "playUrl": "/games/tetris/",
+    "thumbnail": "/games/tetris/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/block.png",
@@ -126,6 +128,7 @@
     "difficulty": "medium",
     "released": "2025-08-26",
     "playUrl": "/games/breakout/",
+    "thumbnail": "/games/breakout/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/paddle.png",
@@ -165,6 +168,7 @@
     "difficulty": "hard",
     "released": "2025-08-20",
     "playUrl": "/games/chess/",
+    "thumbnail": "/games/chess/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/ui/panel.png",
@@ -201,6 +205,7 @@
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/chess3d/",
+    "thumbnail": "/games/chess3d/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/chess3d/wood_light.png",
@@ -237,6 +242,7 @@
     "difficulty": "medium",
     "released": "2025-08-20",
     "playUrl": "/games/2048/",
+    "thumbnail": "/games/2048/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/block.png"
