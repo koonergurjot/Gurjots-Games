@@ -1,11 +1,13 @@
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawn } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+import { promisify } from 'util';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
+const execFileAsync = promisify(execFile);
 
 class GameDoctorFixture {
   constructor(root) {
@@ -63,6 +65,24 @@ class GameDoctorFixture {
         resolve({ code, stdout, stderr });
       });
     });
+  }
+
+  async runGit(args) {
+    try {
+      return await execFileAsync('git', args, { cwd: this.root });
+    } catch (error) {
+      error.message = `git ${args.join(' ')} failed: ${error.message}`;
+      throw error;
+    }
+  }
+
+  async initGitRepo() {
+    await this.runGit(['init']);
+    await this.runGit(['config', 'user.email', 'fixture@example.com']);
+    await this.runGit(['config', 'user.name', 'Game Doctor Fixture']);
+    await this.runGit(['add', '.']);
+    await this.runGit(['commit', '-m', 'Initial commit']);
+    await this.runGit(['branch', '-M', 'main']);
   }
 
   async cleanup() {

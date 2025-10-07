@@ -138,4 +138,62 @@ describe('tools/game-doctor.mjs', () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('requested slug(s) not found');
   });
+
+  it('targets changed slugs when sprite assets are removed', async () => {
+    fixture = await createGameDoctorFixture('changed-sprite');
+
+    await fixture.writeJson('games.json', [buildGameEntry('asset-game')]);
+
+    await fixture.writeFile('games/asset-game/index.html', '<!doctype html><title>Asset Game</title>');
+    await fixture.writeFile('assets/sprites/asset-game.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/asset-game.mp3', 'audio-bytes');
+    await fixture.writeFile('assets/thumbs/asset-game.png', 'thumb-bytes');
+
+    await fixture.initGitRepo();
+    await fixture.runGit(['checkout', '-b', 'remove-sprite']);
+    await fixture.runGit(['rm', 'assets/sprites/asset-game.png']);
+    await fixture.runGit(['commit', '-m', 'Remove sprite asset']);
+
+    const result = await fixture.runDoctor(['--changed']);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('targeting 1 changed game slug(s)');
+    expect(result.stderr).toContain('Game doctor found 1 of 1 game(s) with issues');
+
+    const report = await fixture.readJson('health/report.json');
+    expect(report.summary).toMatchObject({ total: 1, passing: 0, failing: 1 });
+    expect(report.games[0].slug).toBe('asset-game');
+    expect(
+      report.games[0].issues.some((issue) => issue.message === 'Sprite asset missing on disk'),
+    ).toBe(true);
+  });
+
+  it('targets changed slugs when audio assets are removed', async () => {
+    fixture = await createGameDoctorFixture('changed-audio');
+
+    await fixture.writeJson('games.json', [buildGameEntry('asset-audio')]);
+
+    await fixture.writeFile('games/asset-audio/index.html', '<!doctype html><title>Asset Audio</title>');
+    await fixture.writeFile('assets/sprites/asset-audio.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/asset-audio.mp3', 'audio-bytes');
+    await fixture.writeFile('assets/thumbs/asset-audio.png', 'thumb-bytes');
+
+    await fixture.initGitRepo();
+    await fixture.runGit(['checkout', '-b', 'remove-audio']);
+    await fixture.runGit(['rm', 'assets/audio/asset-audio.mp3']);
+    await fixture.runGit(['commit', '-m', 'Remove audio asset']);
+
+    const result = await fixture.runDoctor(['--changed']);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain('targeting 1 changed game slug(s)');
+    expect(result.stderr).toContain('Game doctor found 1 of 1 game(s) with issues');
+
+    const report = await fixture.readJson('health/report.json');
+    expect(report.summary).toMatchObject({ total: 1, passing: 0, failing: 1 });
+    expect(report.games[0].slug).toBe('asset-audio');
+    expect(
+      report.games[0].issues.some((issue) => issue.message === 'Audio asset missing on disk'),
+    ).toBe(true);
+  });
 });

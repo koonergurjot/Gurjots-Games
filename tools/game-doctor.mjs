@@ -159,7 +159,7 @@ function addSlugSource(slugSources, slug, source) {
   slugSources.get(slug).add(source);
 }
 
-function analyzeChangedFiles(files) {
+function analyzeChangedFiles(files, knownSlugs = new Set()) {
   const slugs = new Set();
 
   for (const file of files) {
@@ -186,13 +186,25 @@ function analyzeChangedFiles(files) {
       if (slug) {
         slugs.add(slug);
       }
+      continue;
+    }
+    if (segments[0] === 'assets' && (segments[1] === 'sprites' || segments[1] === 'audio')) {
+      if (segments.length === 3) {
+        const filename = segments[2];
+        const slugCandidate = filename.replace(path.extname(filename), '').trim();
+        if (slugCandidate && knownSlugs.has(slugCandidate)) {
+          slugs.add(slugCandidate);
+          continue;
+        }
+      }
+      return { slugs: null, reason: `assets/${segments[1]} change` };
     }
   }
 
   return { slugs, reason: null };
 }
 
-async function detectChangedSlugs() {
+async function detectChangedSlugs(knownSlugs = new Set()) {
   let lastError = null;
 
   for (const base of GIT_DIFF_BASE_CANDIDATES) {
@@ -205,7 +217,7 @@ async function detectChangedSlugs() {
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean);
-      const analysis = analyzeChangedFiles(files);
+      const analysis = analyzeChangedFiles(files, knownSlugs);
       return { base, files, ...analysis };
     } catch (error) {
       lastError = error;
@@ -688,34 +700,6 @@ async function main() {
   let changedRequested = initialChangedRequested;
   let forceEmptyFilter = false;
 
-  if (changedRequested) {
-    const detection = await detectChangedSlugs();
-    if (detection.slugs == null) {
-      const reasonSuffix = detection.reason ? ` (${detection.reason})` : '';
-      console.log(
-        `Game doctor: unable to determine changed slugs${reasonSuffix}. Running full validation instead.`,
-      );
-      changedRequested = false;
-    } else {
-      if (detection.slugs.size > 0) {
-        for (const slug of detection.slugs) {
-          addSlugSource(slugSources, slug, 'changed');
-        }
-        const baseLabel = detection.base ?? 'git history';
-        console.log(
-          `Game doctor: targeting ${detection.slugs.size} changed game slug(s) based on git diff against ${baseLabel}.`,
-        );
-      } else if (slugSources.size === 0) {
-        forceEmptyFilter = true;
-        console.log('Game doctor: --changed detected no modified game slugs.');
-      }
-    }
-  }
-
-  const filterActive = slugSources.size > 0 || forceEmptyFilter;
-  const slugFilter = filterActive ? new Set(slugSources.keys()) : null;
-  const matchedSlugs = new Set();
-
   let validateGames;
   try {
     validateGames = await loadGamesValidator();
@@ -746,6 +730,42 @@ async function main() {
     process.exitCode = 1;
     return;
   }
+
+  const knownSlugs = new Set();
+  for (const game of games) {
+    const slug = deriveSlug(game);
+    if (slug) {
+      knownSlugs.add(slug);
+    }
+  }
+
+  if (changedRequested) {
+    const detection = await detectChangedSlugs(knownSlugs);
+    if (detection.slugs == null) {
+      const reasonSuffix = detection.reason ? ` (${detection.reason})` : '';
+      console.log(
+        `Game doctor: unable to determine changed slugs${reasonSuffix}. Running full validation instead.`,
+      );
+      changedRequested = false;
+    } else {
+      if (detection.slugs.size > 0) {
+        for (const slug of detection.slugs) {
+          addSlugSource(slugSources, slug, 'changed');
+        }
+        const baseLabel = detection.base ?? 'git history';
+        console.log(
+          `Game doctor: targeting ${detection.slugs.size} changed game slug(s) based on git diff against ${baseLabel}.`,
+        );
+      } else if (slugSources.size === 0) {
+        forceEmptyFilter = true;
+        console.log('Game doctor: --changed detected no modified game slugs.');
+      }
+    }
+  }
+
+  const filterActive = slugSources.size > 0 || forceEmptyFilter;
+  const slugFilter = filterActive ? new Set(slugSources.keys()) : null;
+  const matchedSlugs = new Set();
 
   if (!validateGames(games)) {
     console.error('games.json failed schema validation:');
