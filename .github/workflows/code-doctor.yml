@@ -1,0 +1,75 @@
+name: Code Doctor
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  code-doctor:
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        if: ${{ hashFiles('package-lock.json') != '' }}
+        run: npm ci || npm i
+      - name: Run Code Doctor
+        run: node tools/code-doctor.mjs || true
+      - name: Upload Code Doctor report
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-doctor-report
+          path: |
+            health/code-report.md
+            health/code-report.json
+          if-no-files-found: warn
+      - name: Update PR comment
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const header = '# Code Doctor';
+            const reportPath = path.join(process.cwd(), 'health', 'code-report.md');
+            let reportBody = '';
+            if (fs.existsSync(reportPath)) {
+              reportBody = fs.readFileSync(reportPath, 'utf8').trim();
+            }
+            let body;
+            if (reportBody) {
+              body = `${header}\n\n${reportBody}`;
+            } else {
+              body = `${header}\n\n_No Code Doctor report was generated. Please review the workflow logs._`;
+            }
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const existingComments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = existingComments.find((comment) => comment.body && comment.body.startsWith(header));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }

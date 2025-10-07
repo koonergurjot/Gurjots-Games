@@ -1,8 +1,10 @@
 import { promises as fs } from 'fs';
+import { execFile } from 'child_process';
 import path from 'path';
 import process from 'process';
 import { fileURLToPath } from 'url';
 import Ajv from 'ajv';
+import { promisify } from 'util';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -15,6 +17,8 @@ const MANIFEST_PATH = path.join(ROOT, 'tools', 'reporters', 'game-doctor-manifes
 const GAMES_SCHEMA_PATH = path.join(ROOT, 'tools', 'schemas', 'games.schema.json');
 
 const gamesPath = path.join(ROOT, 'games.json');
+const execFileAsync = promisify(execFile);
+const GIT_DIFF_BASE_CANDIDATES = ['origin/main', 'main'];
 
 async function pathExists(candidate) {
   try {
@@ -178,6 +182,204 @@ function ensureArray(value, label, issues) {
 
 function relativeFromRoot(filePath) {
   return path.relative(ROOT, filePath).replace(/\\/g, '/');
+}
+
+function parseSlugList(value) {
+  return value
+    .split(',')
+    .map((slug) => slug.trim())
+    .filter(Boolean);
+}
+
+function addSlugSource(slugSources, slug, source) {
+  if (!slug) {
+    return;
+  }
+  if (!slugSources.has(slug)) {
+    slugSources.set(slug, new Set());
+  }
+  slugSources.get(slug).add(source);
+}
+
+function normalizeRepoRelativePath(candidate) {
+  if (typeof candidate !== 'string') {
+    return null;
+  }
+  let normalized = candidate.trim();
+  if (!normalized) {
+    return null;
+  }
+  normalized = normalized.replace(/\\+/g, '/');
+  normalized = normalized.replace(/^\.\/+/, '');
+  normalized = normalized.replace(/^\/+/, '');
+  return normalized;
+}
+
+function recordAssetReference(assetCatalog, slug, assetPath) {
+  const normalized = normalizeRepoRelativePath(assetPath);
+  if (!normalized || !normalized.startsWith('assets/')) {
+    return;
+  }
+  if (!assetCatalog.has(normalized)) {
+    assetCatalog.set(normalized, new Set());
+  }
+  assetCatalog.get(normalized).add(slug);
+}
+
+function buildAssetCatalog(games) {
+  const catalog = new Map();
+
+  for (const game of games) {
+    const slug = deriveSlug(game);
+    if (!slug) {
+      continue;
+    }
+
+    const firstFrame = game && typeof game === 'object' ? game.firstFrame : null;
+    if (!firstFrame || typeof firstFrame !== 'object') {
+      continue;
+    }
+
+    if (Array.isArray(firstFrame.sprites)) {
+      for (const sprite of firstFrame.sprites) {
+        if (typeof sprite === 'string') {
+          recordAssetReference(catalog, slug, sprite);
+        }
+      }
+    }
+
+    if (Array.isArray(firstFrame.audio)) {
+      for (const audio of firstFrame.audio) {
+        if (typeof audio === 'string') {
+          recordAssetReference(catalog, slug, audio);
+        }
+      }
+    }
+  }
+
+  return catalog;
+}
+
+function detectSlugFromAssetPath(segments, knownSlugs) {
+  if (!Array.isArray(segments) || segments.length < 3) {
+    return null;
+  }
+
+  if (segments[0] !== 'assets') {
+    return null;
+  }
+
+  for (let index = segments.length - 1; index >= 1; index -= 1) {
+    const segment = segments[index];
+    if (!segment) {
+      continue;
+    }
+
+    const trimmed = segment.trim();
+    if (trimmed && knownSlugs.has(trimmed)) {
+      return trimmed;
+    }
+
+    if (index === segments.length - 1) {
+      const withoutExtension = trimmed.replace(path.extname(trimmed), '').trim();
+      if (withoutExtension && knownSlugs.has(withoutExtension)) {
+        return withoutExtension;
+      }
+    }
+  }
+
+  return null;
+}
+
+function analyzeChangedFiles(files, knownSlugs = new Set(), assetCatalog = new Map()) {
+  const slugs = new Set();
+
+  for (const file of files) {
+    const normalized = normalizeRepoRelativePath(file);
+    if (!normalized) {
+      continue;
+    }
+    if (normalized === 'games.json' || normalized.startsWith('games.json/')) {
+      return { slugs: null, reason: 'games.json changed' };
+    }
+    if (normalized === 'tools/reporters/game-doctor-manifest.json') {
+      return { slugs: null, reason: 'game doctor manifest changed' };
+    }
+
+    const segments = normalized.split('/').filter(Boolean);
+    if (segments[0] === 'games' && segments[1]) {
+      slugs.add(segments[1]);
+      continue;
+    }
+    if (segments[0] === 'gameshells' && segments[1]) {
+      slugs.add(segments[1]);
+      continue;
+    }
+    if (segments[0] === 'assets' && segments[1] === 'thumbs' && segments.length >= 3) {
+      const filename = segments[segments.length - 1];
+      const slug = filename.replace(path.extname(filename), '').trim();
+      if (slug) {
+        slugs.add(slug);
+      }
+      continue;
+    }
+
+    if (segments[0] === 'assets') {
+      const slugFromAsset = detectSlugFromAssetPath(segments, knownSlugs);
+      if (slugFromAsset) {
+        slugs.add(slugFromAsset);
+      }
+
+      const catalogEntry = assetCatalog.get(normalized);
+      if (catalogEntry && catalogEntry.size > 0) {
+        for (const slug of catalogEntry) {
+          slugs.add(slug);
+        }
+        continue;
+      }
+
+      if (!slugFromAsset) {
+        return { slugs: null, reason: `asset change not mapped to a game (${normalized})` };
+      }
+
+      continue;
+    }
+
+    const catalogEntry = assetCatalog.get(normalized);
+    if (catalogEntry && catalogEntry.size > 0) {
+      for (const slug of catalogEntry) {
+        slugs.add(slug);
+      }
+      continue;
+    }
+  }
+
+  return { slugs, reason: null };
+}
+
+async function detectChangedSlugs(knownSlugs = new Set(), assetCatalog = new Map()) {
+  let lastError = null;
+
+  for (const base of GIT_DIFF_BASE_CANDIDATES) {
+    try {
+      const { stdout } = await execFileAsync('git', ['diff', '--name-only', `${base}...HEAD`], {
+        cwd: ROOT,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      const files = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const analysis = analyzeChangedFiles(files, knownSlugs, assetCatalog);
+      return { base, files, ...analysis };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const fallbackReason = lastError?.message ?? 'git diff failed';
+  const firstLine = fallbackReason.split(/\r?\n/, 1)[0];
+  return { base: null, files: null, slugs: null, reason: firstLine };
 }
 
 async function loadManifest() {
@@ -737,6 +939,44 @@ async function main() {
     return;
   }
 
+  const knownSlugs = new Set();
+  for (const game of games) {
+    const slug = deriveSlug(game);
+    if (slug) {
+      knownSlugs.add(slug);
+    }
+  }
+
+  const assetCatalog = buildAssetCatalog(games);
+
+  if (changedRequested) {
+    const detection = await detectChangedSlugs(knownSlugs, assetCatalog);
+    if (detection.slugs == null) {
+      const reasonSuffix = detection.reason ? ` (${detection.reason})` : '';
+      console.log(
+        `Game doctor: unable to determine changed slugs${reasonSuffix}. Running full validation instead.`,
+      );
+      changedRequested = false;
+    } else {
+      if (detection.slugs.size > 0) {
+        for (const slug of detection.slugs) {
+          addSlugSource(slugSources, slug, 'changed');
+        }
+        const baseLabel = detection.base ?? 'git history';
+        console.log(
+          `Game doctor: targeting ${detection.slugs.size} changed game slug(s) based on git diff against ${baseLabel}.`,
+        );
+      } else if (slugSources.size === 0) {
+        forceEmptyFilter = true;
+        console.log('Game doctor: --changed detected no modified game slugs.');
+      }
+    }
+  }
+
+  const filterActive = slugSources.size > 0 || forceEmptyFilter;
+  const slugFilter = filterActive ? new Set(slugSources.keys()) : null;
+  const matchedSlugs = new Set();
+
   if (!validateGames(games)) {
     console.error('games.json failed schema validation:');
     for (const error of validateGames.errors ?? []) {
@@ -764,6 +1004,15 @@ async function main() {
     const slug = deriveSlug(game);
     if (!slug) {
       issues.push(formatIssue('Unable to determine slug for game entry', { index }));
+    }
+
+    if (slugFilter) {
+      if (!slug || !slugFilter.has(slug)) {
+        continue;
+      }
+      if (slug) {
+        matchedSlugs.add(slug);
+      }
     }
 
     const title = typeof game.title === 'string' ? game.title : `Game #${index + 1}`;
@@ -989,6 +1238,37 @@ async function main() {
     passing: results.filter((game) => game.ok).length,
     failing: results.filter((game) => !game.ok).length,
   };
+
+  if (slugFilter) {
+    const missingCliSlugs = [];
+    const missingChangedSlugs = [];
+
+    for (const [slug, sources] of slugSources.entries()) {
+      if (matchedSlugs.has(slug)) {
+        continue;
+      }
+      if (sources.has('cli')) {
+        missingCliSlugs.push(slug);
+      }
+      if (sources.has('changed')) {
+        missingChangedSlugs.push(slug);
+      }
+    }
+
+    if (missingCliSlugs.length > 0) {
+      console.error(
+        `Game doctor: requested slug(s) not found in games.json: ${missingCliSlugs.join(', ')}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    if (missingChangedSlugs.length > 0) {
+      console.warn(
+        `Game doctor: detected changed slug(s) not present in games.json: ${missingChangedSlugs.join(', ')}.`,
+      );
+    }
+  }
 
   const report = {
     generatedAt: new Date().toISOString(),
