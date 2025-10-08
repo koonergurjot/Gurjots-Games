@@ -113,12 +113,107 @@ minimapOverlay.style.right = mapRenderer.domElement.style.right;
 minimapOverlay.style.bottom = mapRenderer.domElement.style.bottom;
 minimapOverlay.style.width = `${mapRenderer.domElement.width}px`;
 minimapOverlay.style.height = `${mapRenderer.domElement.height}px`;
-minimapOverlay.style.pointerEvents = 'none';
+minimapOverlay.style.pointerEvents = 'auto';
+minimapOverlay.style.cursor = 'crosshair';
 minimapOverlay.style.borderRadius = mapRenderer.domElement.style.borderRadius;
 minimapOverlay.style.zIndex = '10';
 document.body.appendChild(minimapOverlay);
 const minimapCtx = minimapOverlay.getContext('2d');
 minimapOverlay.style.display = 'block';
+
+const MINIMAP_SIZE = mapRenderer.domElement.width;
+const MARKER_COLORS = ['#f97316', '#a855f7', '#22d3ee', '#facc15', '#34d399'];
+const MAX_MARKERS = 40;
+let minimapMarkers = [];
+let markerSequence = 1;
+
+function getMinimapSpan() {
+  return cellSize * MAZE_CELLS * 1.2;
+}
+
+function worldToMinimap(x, z) {
+  const span = getMinimapSpan();
+  const u = (x / span) * (MINIMAP_SIZE / 2) + (MINIMAP_SIZE / 2);
+  const v = (z / span) * (MINIMAP_SIZE / 2) + (MINIMAP_SIZE / 2);
+  return { u, v };
+}
+
+function minimapToWorld(u, v) {
+  const span = getMinimapSpan();
+  const worldX = ((u - MINIMAP_SIZE / 2) / (MINIMAP_SIZE / 2)) * span;
+  const worldZ = ((v - MINIMAP_SIZE / 2) / (MINIMAP_SIZE / 2)) * span;
+  return { x: worldX, z: worldZ };
+}
+
+function addMinimapMarker(position, options = {}) {
+  if (!position) return;
+  const providedColor = typeof options.color === 'string' ? options.color.trim() : '';
+  const color = providedColor || MARKER_COLORS[(markerSequence - 1) % MARKER_COLORS.length];
+  const providedLabel = typeof options.label === 'string' ? options.label.trim() : '';
+  const label = providedLabel || String(markerSequence);
+  const marker = {
+    position: new THREE.Vector3(position.x, 0.05, position.z),
+    color,
+    label,
+    timestamp: performance?.now?.() ?? Date.now(),
+  };
+  minimapMarkers.push(marker);
+  if (minimapMarkers.length > MAX_MARKERS) {
+    minimapMarkers = minimapMarkers.slice(-MAX_MARKERS);
+  }
+  markerSequence += 1;
+}
+
+function removeNearestMarker(worldX, worldZ) {
+  if (!minimapMarkers.length) return;
+  let nearestIndex = -1;
+  let nearestDistSq = Infinity;
+  for (let i = 0; i < minimapMarkers.length; i++) {
+    const marker = minimapMarkers[i];
+    const dx = marker.position.x - worldX;
+    const dz = marker.position.z - worldZ;
+    const distSq = dx * dx + dz * dz;
+    if (distSq < nearestDistSq) {
+      nearestDistSq = distSq;
+      nearestIndex = i;
+    }
+  }
+  if (nearestIndex >= 0) {
+    minimapMarkers.splice(nearestIndex, 1);
+  }
+}
+
+function clearMinimapMarkers() {
+  minimapMarkers = [];
+  markerSequence = 1;
+}
+
+function handleMinimapPointerEvent(event) {
+  if (!minimapOverlay) return;
+  const rect = minimapOverlay.getBoundingClientRect();
+  const u = ((event.clientX - rect.left) / rect.width) * MINIMAP_SIZE;
+  const v = ((event.clientY - rect.top) / rect.height) * MINIMAP_SIZE;
+  return minimapToWorld(u, v);
+}
+
+function handleMinimapClick(event) {
+  const coords = handleMinimapPointerEvent(event);
+  if (!coords) return;
+  addMinimapMarker(coords);
+}
+
+function handleMinimapContextMenu(event) {
+  event.preventDefault();
+  const coords = handleMinimapPointerEvent(event);
+  if (event.shiftKey || !coords) {
+    clearMinimapMarkers();
+    return;
+  }
+  removeNearestMarker(coords.x, coords.z);
+}
+
+minimapOverlay.addEventListener('click', handleMinimapClick);
+minimapOverlay.addEventListener('contextmenu', handleMinimapContextMenu);
 
 function renderMinimapOverlay() {
   if (!minimapCtx) return;
@@ -130,8 +225,7 @@ function renderMinimapOverlay() {
   minimapCtx.restore();
   if (assistEnabled && assistHeatSamples.length) {
     for (const { vec, weight } of assistHeatSamples) {
-      const u = (vec.x / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
-      const v = (vec.z / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
+      const { u, v } = worldToMinimap(vec.x, vec.z);
       const gradient = minimapCtx.createRadialGradient(u, v, 0, u, v, 12);
       const alpha = 0.08 + 0.35 * (1 - weight);
       gradient.addColorStop(0, `rgba(56,189,248,${alpha})`);
@@ -145,14 +239,35 @@ function renderMinimapOverlay() {
   if (trail.length) {
     minimapCtx.fillStyle = '#38bdf8';
     for (const p of trail) {
-      const u = (p.x / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
-      const v = (p.z / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
+      const { u, v } = worldToMinimap(p.x, p.z);
       minimapCtx.fillRect(u - 1, v - 1, 2, 2);
     }
   }
+  if (minimapMarkers.length) {
+    minimapCtx.save();
+    minimapCtx.font = '10px "Segoe UI", sans-serif';
+    minimapCtx.textAlign = 'center';
+    minimapCtx.textBaseline = 'top';
+    for (const marker of minimapMarkers) {
+      const { u, v } = worldToMinimap(marker.position.x, marker.position.z);
+      minimapCtx.fillStyle = marker.color;
+      minimapCtx.beginPath();
+      minimapCtx.arc(u, v, 4, 0, Math.PI * 2);
+      minimapCtx.fill();
+      const label = marker.label;
+      const metrics = minimapCtx.measureText(label);
+      const padding = 4;
+      const rectWidth = Math.ceil(metrics.width) + padding * 2;
+      const rectHeight = 12;
+      minimapCtx.fillStyle = 'rgba(15,23,42,0.85)';
+      minimapCtx.fillRect(u - rectWidth / 2, v + 4, rectWidth, rectHeight);
+      minimapCtx.fillStyle = '#f8fafc';
+      minimapCtx.fillText(label, u, v + 6);
+    }
+    minimapCtx.restore();
+  }
   const playerPos = controls.getObject().position;
-  const u = (playerPos.x / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
-  const v = (playerPos.z / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
+  const { u, v } = worldToMinimap(playerPos.x, playerPos.z);
   minimapCtx.fillStyle = '#eab308';
   minimapCtx.fillRect(u - 2, v - 2, 4, 4);
 }
@@ -168,9 +283,33 @@ const playerLight = new THREE.PointLight(0xffffff, 1, 20, 2);
 playerLight.castShadow = true;
 scene.add(playerLight);
 
+function randomRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+const fogPulseColor = new THREE.Color(0x172033);
+const lightingState = {
+  baseHemiIntensity: hemi.intensity,
+  baseDirIntensity: dir.intensity,
+  basePlayerIntensity: playerLight.intensity,
+  baseFogNear: scene.fog?.near ?? 10,
+  baseFogFar: scene.fog?.far ?? 60,
+  baseFogColor: scene.fog?.color.clone() ?? new THREE.Color(0x0e0f12),
+  nextFlicker: (performance?.now?.() ?? Date.now()) + randomRange(4500, 9000),
+  nextFogPulse: (performance?.now?.() ?? Date.now()) + randomRange(7000, 14000),
+  flicker: null,
+  fogPulse: null,
+};
+const fogTargetColor = lightingState.baseFogColor.clone();
+
 const controls = new PointerLockControls(camera, renderer.domElement);
 const player = controls.getObject();
 let opponent = { mesh: null };
+
+function dropMarkerAtPlayerPosition() {
+  const pos = controls.getObject().position;
+  addMinimapMarker({ x: pos.x, z: pos.z });
+}
 
 const isTouchDevice = typeof window !== 'undefined' && (
   window.matchMedia?.('(pointer:coarse)')?.matches ||
@@ -183,6 +322,19 @@ const desiredInput = new THREE.Vector2();
 const targetVelocity = new THREE.Vector2();
 const mobileInput = new THREE.Vector2();
 let mobileInputActive = false;
+const DEFAULT_DEAD_ZONE = 0.07;
+const DEFAULT_SENSITIVITY = 1;
+const MIN_DEAD_ZONE = 0;
+const MAX_DEAD_ZONE = 0.45;
+const MIN_SENSITIVITY = 0.5;
+const MAX_SENSITIVITY = 1.6;
+function clampNumber(value, min, max, fallback) {
+  const numeric = typeof value === 'number' ? value : parseFloat(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return THREE.MathUtils.clamp(numeric, min, max);
+}
+let mobileDeadZone = clampNumber(loadPreference('maze3d:mobileDeadZone', DEFAULT_DEAD_ZONE), MIN_DEAD_ZONE, MAX_DEAD_ZONE, DEFAULT_DEAD_ZONE);
+let mobileSensitivity = clampNumber(loadPreference('maze3d:mobileSensitivity', DEFAULT_SENSITIVITY), MIN_SENSITIVITY, MAX_SENSITIVITY, DEFAULT_SENSITIVITY);
 const MOVE_SETTINGS = {
   maxSpeed: 5.5,
   accel: 9,
@@ -419,6 +571,13 @@ if (typeof window !== 'undefined') {
     }),
     setAssistMode,
     setInputProfile,
+    dropMarker: dropMarkerAtPlayerPosition,
+    addMarker: ({ x, z, label, color }) => {
+      if (Number.isFinite(x) && Number.isFinite(z)) {
+        addMinimapMarker({ x, z }, { label: typeof label === 'string' ? label : undefined, color: typeof color === 'string' ? color : undefined });
+      }
+    },
+    clearMarkers: clearMinimapMarkers,
   };
 
   import('./adapter.js').catch((err) => {
@@ -442,6 +601,12 @@ let rematchBtn = document.getElementById('rematchBtn');
 let algorithmSelect = document.getElementById('mazeAlgorithm');
 let assistSelect = document.getElementById('assistMode');
 let controlSelect = document.getElementById('controlProfile');
+let deadZoneSlider = document.getElementById('mobileDeadZone');
+let deadZoneValueLabel = document.querySelector('[data-slider-value="mobileDeadZone"]');
+let deadZoneContainer = deadZoneSlider?.parentElement || null;
+let sensitivitySlider = document.getElementById('mobileSensitivity');
+let sensitivityValueLabel = document.querySelector('[data-slider-value="mobileSensitivity"]');
+let sensitivityContainer = sensitivitySlider?.parentElement || null;
 
 ({
   overlay,
@@ -453,7 +618,16 @@ let controlSelect = document.getElementById('controlProfile');
   enemySelect,
   roomInput,
   connectBtn,
-  rematchBtn
+  rematchBtn,
+  algorithmSelect,
+  assistSelect,
+  controlSelect,
+  deadZoneSlider,
+  deadZoneValueLabel,
+  deadZoneContainer,
+  sensitivitySlider,
+  sensitivityValueLabel,
+  sensitivityContainer
 } = ensureOverlayElements({
   overlay,
   message,
@@ -464,7 +638,16 @@ let controlSelect = document.getElementById('controlProfile');
   enemySelect,
   roomInput,
   connectBtn,
-  rematchBtn
+  rematchBtn,
+  algorithmSelect,
+  assistSelect,
+  controlSelect,
+  deadZoneSlider,
+  deadZoneValueLabel,
+  deadZoneContainer,
+  sensitivitySlider,
+  sensitivityValueLabel,
+  sensitivityContainer
 }));
 
 ({ timeEl, oppTimeEl, bestEl } = ensureHudElements({ timeEl, oppTimeEl, bestEl }));
@@ -524,9 +707,16 @@ let virtualStickPointerId = null;
 const keys = {};
 document.addEventListener('keydown', (e) => {
   keys[e.code] = true;
-  if (e.code === 'KeyP') togglePause();
-  if (e.code === 'KeyR') restart();
-  if (e.code === 'KeyM' && !e.repeat) toggleMap();
+  const activeElement = document.activeElement;
+  const tagName = activeElement?.tagName;
+  const typing = activeElement?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA';
+  if (!typing) {
+    if (e.code === 'KeyP') togglePause();
+    if (e.code === 'KeyR') restart();
+    if (e.code === 'KeyM' && !e.repeat) toggleMap();
+    if (e.code === 'KeyB' && !e.repeat) dropMarkerAtPlayerPosition();
+    if (e.code === 'KeyC' && !e.repeat) clearMinimapMarkers();
+  }
 });
 document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 
@@ -546,11 +736,23 @@ assistSelect?.addEventListener('change', () => {
 controlSelect?.addEventListener('change', () => {
   setInputProfile(controlSelect.value);
 });
+deadZoneSlider?.addEventListener('input', (event) => {
+  mobileDeadZone = clampNumber(event.target?.value, MIN_DEAD_ZONE, MAX_DEAD_ZONE, mobileDeadZone);
+  savePreference('maze3d:mobileDeadZone', mobileDeadZone);
+  updateMobileCalibrationUi();
+  resetMobileInput();
+});
+sensitivitySlider?.addEventListener('input', (event) => {
+  mobileSensitivity = clampNumber(event.target?.value, MIN_SENSITIVITY, MAX_SENSITIVITY, mobileSensitivity);
+  savePreference('maze3d:mobileSensitivity', mobileSensitivity);
+  updateMobileCalibrationUi();
+});
 connectBtn?.addEventListener('click', connectMatch);
 rematchBtn?.addEventListener('click', () => { opponentFinish = myFinish = null; restart(); start(); if (rematchBtn) rematchBtn.style.display='none'; });
 
 applyInputProfile();
 setAssistMode(assistMode);
+updateMobileCalibrationUi();
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -560,7 +762,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function ensureOverlayElements(elements) {
-  let { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect } = elements;
+  let { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect, deadZoneSlider, deadZoneValueLabel, deadZoneContainer, sensitivitySlider, sensitivityValueLabel, sensitivityContainer } = elements;
   const doc = document;
   const body = doc.body || doc.documentElement;
 
@@ -644,6 +846,43 @@ function ensureOverlayElements(elements) {
     return select;
   }
 
+  function ensureSlider(id, labelText, { min, max, step, format }) {
+    let container = panel.querySelector(`[data-slider-for="${id}"]`);
+    if (!container) {
+      container = doc.createElement('div');
+      container.dataset.sliderFor = id;
+      container.style.marginTop = '10px';
+      container.style.textAlign = 'left';
+      const labelRow = doc.createElement('div');
+      labelRow.style.display = 'flex';
+      labelRow.style.alignItems = 'center';
+      labelRow.style.justifyContent = 'space-between';
+      const label = doc.createElement('label');
+      label.setAttribute('for', id);
+      label.textContent = labelText;
+      const value = doc.createElement('span');
+      value.dataset.sliderValue = id;
+      value.style.fontVariantNumeric = 'tabular-nums';
+      value.style.marginLeft = '12px';
+      labelRow.appendChild(label);
+      labelRow.appendChild(value);
+      const slider = doc.createElement('input');
+      slider.type = 'range';
+      slider.id = id;
+      slider.min = String(min);
+      slider.max = String(max);
+      slider.step = String(step);
+      slider.style.width = '100%';
+      slider.style.marginTop = '6px';
+      container.appendChild(labelRow);
+      container.appendChild(slider);
+      panel.appendChild(container);
+    }
+    const slider = container.querySelector(`#${id}`);
+    const valueEl = container.querySelector(`[data-slider-value="${id}"]`);
+    return { container, slider, valueEl, format };
+  }
+
   function ensureButton(id, label) {
     let btn = panel.querySelector(`#${id}`);
     if (!btn) {
@@ -708,6 +947,26 @@ function ensureOverlayElements(elements) {
     controlSelect.value = inputProfile;
   }
 
+  const deadZoneParts = ensureSlider('mobileDeadZone', 'Virtual Dead Zone', {
+    min: MIN_DEAD_ZONE,
+    max: MAX_DEAD_ZONE,
+    step: 0.01,
+    format: (value) => `${Math.round(value * 100)}%`,
+  });
+  deadZoneContainer = deadZoneParts.container;
+  deadZoneSlider = deadZoneParts.slider;
+  deadZoneValueLabel = deadZoneParts.valueEl;
+
+  const sensitivityParts = ensureSlider('mobileSensitivity', 'Virtual Sensitivity', {
+    min: MIN_SENSITIVITY,
+    max: MAX_SENSITIVITY,
+    step: 0.05,
+    format: (value) => `${value.toFixed(2)}×`,
+  });
+  sensitivityContainer = sensitivityParts.container;
+  sensitivitySlider = sensitivityParts.slider;
+  sensitivityValueLabel = sensitivityParts.valueEl;
+
   const needsMultiplayerFallback = !roomInput || !connectBtn || !rematchBtn;
   let multiplayerRow = panel.querySelector('#multiplayerRow');
   if (!multiplayerRow && needsMultiplayerFallback) {
@@ -766,7 +1025,41 @@ function ensureOverlayElements(elements) {
     buttonTarget.appendChild(shareBtn);
   }
 
-  return { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect };
+  return { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect, deadZoneSlider, deadZoneValueLabel, deadZoneContainer, sensitivitySlider, sensitivityValueLabel, sensitivityContainer };
+}
+
+function applyMobileCalibration(target) {
+  const mag = target.length();
+  if (mag <= mobileDeadZone || mag === 0) {
+    target.set(0, 0);
+    return 0;
+  }
+  const adjusted = (mag - mobileDeadZone) / (1 - mobileDeadZone);
+  const scaled = THREE.MathUtils.clamp(adjusted * mobileSensitivity, 0, 1);
+  target.multiplyScalar(scaled / mag);
+  return scaled;
+}
+
+function updateMobileCalibrationUi() {
+  if (deadZoneSlider && deadZoneSlider.value !== mobileDeadZone.toFixed(2)) {
+    deadZoneSlider.value = mobileDeadZone.toFixed(2);
+  }
+  if (deadZoneValueLabel) {
+    deadZoneValueLabel.textContent = `${Math.round(mobileDeadZone * 100)}%`;
+  }
+  if (sensitivitySlider && sensitivitySlider.value !== mobileSensitivity.toFixed(2)) {
+    sensitivitySlider.value = mobileSensitivity.toFixed(2);
+  }
+  if (sensitivityValueLabel) {
+    sensitivityValueLabel.textContent = `${mobileSensitivity.toFixed(2)}×`;
+  }
+  const showMobileOptions = isTouchDevice && inputProfile !== 'keyboard';
+  if (deadZoneContainer) {
+    deadZoneContainer.style.display = showMobileOptions ? 'block' : 'none';
+  }
+  if (sensitivityContainer) {
+    sensitivityContainer.style.display = showMobileOptions ? 'block' : 'none';
+  }
 }
 
 function resetMobileInput() {
@@ -851,13 +1144,12 @@ function updateVirtualStickFromEvent(event) {
     strafe /= mag;
     forward /= mag;
   }
-  if (Math.abs(strafe) < 0.05) strafe = 0;
-  if (Math.abs(forward) < 0.05) forward = 0;
   mobileInput.set(strafe, forward);
-  mobileInputActive = mag > 0.05;
+  const applied = applyMobileCalibration(mobileInput);
+  mobileInputActive = applied > 0;
   if (virtualStickThumb) {
-    const offsetX = strafe * radius * 0.4;
-    const offsetY = -forward * radius * 0.4;
+    const offsetX = mobileInput.x * radius * 0.4;
+    const offsetY = -mobileInput.y * radius * 0.4;
     virtualStickThumb.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
   }
 }
@@ -900,12 +1192,11 @@ function handleDeviceOrientation(event) {
   let forward = THREE.MathUtils.clamp((baselineBeta - beta) / 28, -1, 1);
   tiltBaseline.beta = THREE.MathUtils.lerp(baselineBeta, beta, 0.05);
   tiltBaseline.gamma = THREE.MathUtils.lerp(baselineGamma, gamma, 0.05);
-  if (Math.abs(strafe) < 0.07) strafe = 0;
-  if (Math.abs(forward) < 0.07) forward = 0;
   mobileInput.set(strafe, forward);
   const mag = mobileInput.length();
   if (mag > 1) mobileInput.divideScalar(mag);
-  mobileInputActive = mag > 0.05;
+  const applied = applyMobileCalibration(mobileInput);
+  mobileInputActive = applied > 0;
 }
 
 function handleTiltPermissionDenied() {
@@ -969,6 +1260,7 @@ function applyInputProfile() {
     resetMobileInput();
   }
   updatePointerLockPreference();
+  updateMobileCalibrationUi();
 }
 
 function setInputProfile(profile) {
@@ -1445,6 +1737,7 @@ function buildMaze(seed) {
   wallBoxes = [];
   trail = [];
   lastTrailPos = null;
+  clearMinimapMarkers();
   playerVelocity.set(0, 0);
   mazeSolutionCells = [];
   mazeSolutionWorld = [];
@@ -1726,6 +2019,74 @@ function finish(time) {
   }
 }
 
+function updateLighting(now) {
+  if (!Number.isFinite(now) || !lightingState) return;
+  if (!lightingState.flicker && now >= lightingState.nextFlicker) {
+    const duration = randomRange(380, 760);
+    lightingState.flicker = {
+      start: now,
+      end: now + duration,
+      seed: Math.random() * Math.PI * 2,
+    };
+    lightingState.nextFlicker = now + randomRange(5200, 11500);
+  }
+  if (lightingState.flicker) {
+    const { start, end, seed } = lightingState.flicker;
+    const span = Math.max(1, end - start);
+    const t = THREE.MathUtils.clamp((now - start) / span, 0, 1);
+    if (t >= 1) {
+      lightingState.flicker = null;
+    } else {
+      const envelope = 1 - Math.pow(t, 0.45);
+      const waveA = Math.sin((now - start) * 0.045 + seed) * 0.35;
+      const waveB = Math.sin((now - start) * 0.12 + seed * 2.2) * 0.2;
+      const flickerFactor = THREE.MathUtils.clamp(0.7 + envelope * 0.4 + (waveA + waveB) * 0.2, 0.4, 1.6);
+      playerLight.intensity = THREE.MathUtils.lerp(playerLight.intensity, lightingState.basePlayerIntensity * flickerFactor, 0.45);
+      dir.intensity = THREE.MathUtils.lerp(dir.intensity, lightingState.baseDirIntensity * (0.9 + envelope * 0.2), 0.3);
+    }
+  } else {
+    playerLight.intensity = THREE.MathUtils.lerp(playerLight.intensity, lightingState.basePlayerIntensity, 0.08);
+    dir.intensity = THREE.MathUtils.lerp(dir.intensity, lightingState.baseDirIntensity, 0.08);
+  }
+
+  if (!lightingState.fogPulse && now >= lightingState.nextFogPulse) {
+    const duration = randomRange(2400, 4200);
+    lightingState.fogPulse = {
+      start: now,
+      end: now + duration,
+      strength: randomRange(0.15, 0.35),
+    };
+    lightingState.nextFogPulse = now + randomRange(10000, 18000);
+  }
+
+  if (lightingState.fogPulse) {
+    const { start, end, strength } = lightingState.fogPulse;
+    const span = Math.max(1, end - start);
+    const t = THREE.MathUtils.clamp((now - start) / span, 0, 1);
+    if (t >= 1) {
+      lightingState.fogPulse = null;
+    } else {
+      const pulse = Math.sin(Math.PI * t);
+      if (scene.fog) {
+        const nearTarget = lightingState.baseFogNear * (1 - strength * 0.4 * pulse);
+        const farTarget = lightingState.baseFogFar * (1 - strength * 0.55 * pulse);
+        scene.fog.near = THREE.MathUtils.lerp(scene.fog.near, nearTarget, 0.15);
+        scene.fog.far = THREE.MathUtils.lerp(scene.fog.far, farTarget, 0.12);
+        fogTargetColor.copy(lightingState.baseFogColor).lerp(fogPulseColor, strength * pulse);
+        scene.fog.color.lerp(fogTargetColor, 0.2);
+      }
+      hemi.intensity = THREE.MathUtils.lerp(hemi.intensity, lightingState.baseHemiIntensity * (1 - strength * 0.25 * pulse), 0.2);
+    }
+  } else {
+    if (scene.fog) {
+      scene.fog.near = THREE.MathUtils.lerp(scene.fog.near, lightingState.baseFogNear, 0.05);
+      scene.fog.far = THREE.MathUtils.lerp(scene.fog.far, lightingState.baseFogFar, 0.05);
+      scene.fog.color.lerp(lightingState.baseFogColor, 0.08);
+    }
+    hemi.intensity = THREE.MathUtils.lerp(hemi.intensity, lightingState.baseHemiIntensity, 0.08);
+  }
+}
+
 function update(dt) {
   const prev = controls.getObject().position.clone();
   const input = computeMovementInput();
@@ -1775,23 +2136,24 @@ function loop() {
     return;
   }
   const dt = 0.016; // fixed timestep
+  const frameNow = performance.now();
   if (running && !paused) {
-    const now = performance.now();
-    const t = (now - startTime) / 1000;
+    const t = (frameNow - startTime) / 1000;
     timeEl.textContent = t.toFixed(2);
     update(dt);
-    if (net && now - lastPosSent > 100) {
+    if (net && frameNow - lastPosSent > 100) {
       const p = controls.getObject().position;
-      const latency = lastPosSent ? now - lastPosSent : 0;
+      const latency = lastPosSent ? frameNow - lastPosSent : 0;
       net.send('pos', { id: myId, x: p.x, z: p.z, time: t });
       notifyNetworkLatency(latency, {
         event: 'posSync',
         intervalMs: latency,
         position: vectorToSnapshot(p),
       });
-      lastPosSent = now;
+      lastPosSent = frameNow;
     }
   }
+  updateLighting(frameNow);
   playerLight.position.copy(controls.getObject().position);
   playerLight.position.y += 1.5;
   renderer.render(scene, camera);
