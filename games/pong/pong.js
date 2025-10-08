@@ -13,17 +13,230 @@ import "./pauseOverlay.js";
   const STEP = 1/60;
   const MAX_FRAME_DELTA = 0.1;
 
-  const AI_LEVELS = ["Easy","Medium","Hard"];
-  const AI_SETTINGS = {
+  const DEFAULT_AI_TABLE = {
     Easy:   { speed: 460, reaction: 0.26, offset: 90, noise: 18 },
     Medium: { speed: 560, reaction: 0.16, offset: 42, noise: 10 },
     Hard:   { speed: 720, reaction: 0.08, offset: 14, noise: 4 },
+  };
+  const AI_BASE_CONFIG = DEFAULT_AI_TABLE.Medium;
+  const MODE_BACKGROUND_MAP = {
+    "1P": "arcade",
+    "2P": "city",
+    Endless: "forest",
+    Mayhem: "vapor",
+  };
+  const PARALLAX_PRESETS = {
+    arcade: [
+      { src: "/assets/backgrounds/parallax/arcade_layer1.png", speed: 18, alpha: 0.85 },
+      { src: "/assets/backgrounds/parallax/arcade_layer2.png", speed: 36, alpha: 1 },
+    ],
+    city: [
+      { src: "/assets/backgrounds/parallax/city_layer1.png", speed: 20, alpha: 0.8 },
+      { src: "/assets/backgrounds/parallax/city_layer2.png", speed: 42, alpha: 1 },
+    ],
+    forest: [
+      { src: "/assets/backgrounds/parallax/forest_layer1.png", speed: 14, alpha: 0.82 },
+      { src: "/assets/backgrounds/parallax/forest_layer2.png", speed: 28, alpha: 0.95 },
+    ],
+    vapor: [
+      { src: "/assets/backgrounds/parallax/space_layer1.png", speed: 26, alpha: 0.9 },
+      { src: "/assets/backgrounds/parallax/space_layer2.png", speed: 52, alpha: 1 },
+    ],
+  };
+  const BACKGROUND_THEMES = {
+    arcade: {
+      hueA: 220,
+      hueB: 260,
+      satA: 60,
+      satB: 60,
+      lightA: 12,
+      lightB: 10,
+      hueSpeed: 0.05,
+      vignette: 0.4,
+      speedMultiplier: 1,
+      pulseSpeedBoost: 1.4,
+      pulse: { color: [105, 225, 255], alpha: 0.38 },
+    },
+    city: {
+      hueA: 212,
+      hueB: 238,
+      satA: 68,
+      satB: 64,
+      lightA: 16,
+      lightB: 11,
+      hueSpeed: 0.045,
+      vignette: 0.45,
+      speedMultiplier: 0.95,
+      pulseSpeedBoost: 1.25,
+      pulse: { color: [255, 153, 51], alpha: 0.42 },
+    },
+    forest: {
+      hueA: 138,
+      hueB: 108,
+      satA: 58,
+      satB: 55,
+      lightA: 14,
+      lightB: 8,
+      hueSpeed: 0.035,
+      vignette: 0.36,
+      speedMultiplier: 0.8,
+      pulseSpeedBoost: 1.2,
+      pulse: { color: [120, 255, 170], alpha: 0.4 },
+    },
+    vapor: {
+      hueA: 295,
+      hueB: 210,
+      satA: 74,
+      satB: 68,
+      lightA: 18,
+      lightB: 12,
+      hueSpeed: 0.07,
+      vignette: 0.5,
+      speedMultiplier: 1.25,
+      pulseSpeedBoost: 1.6,
+      pulse: { color: [255, 110, 220], alpha: 0.52 },
+    },
   };
   const SPIN_ACCEL = 22;
   const SPIN_DECAY = 0.985;
   const TOUCH_DEBOUNCE_MS = 18;
   const TOUCH_MIN_DELTA = 2.5;
   const TOUCH_SCALE = 88;
+
+  function cloneAiTable(table){
+    return JSON.parse(JSON.stringify(table || {}));
+  }
+
+  function formatAiTable(table){
+    try {
+      return JSON.stringify(table, null, 2);
+    } catch {
+      return "";
+    }
+  }
+
+  function sanitizeAiNumber(value, fallback, name, opts={}){
+    const { min = -Infinity, max = Infinity } = opts;
+    if(value === null || value === undefined || value === ""){
+      if(fallback !== undefined) return fallback;
+      throw new Error(`Missing ${name}`);
+    }
+    const num = Number(value);
+    if(!Number.isFinite(num)){
+      if(Number.isFinite(fallback)) return fallback;
+      throw new Error(`${name} must be a number`);
+    }
+    if(num < min || num > max){
+      throw new Error(`${name} must be between ${min} and ${max}`);
+    }
+    return num;
+  }
+
+  function normalizeAiConfig(value, fallback){
+    const base = fallback || AI_BASE_CONFIG;
+    if(typeof value === "string"){
+      const preset = DEFAULT_AI_TABLE[value];
+      if(preset && !Array.isArray(preset)){
+        return normalizeAiConfig(preset, base);
+      }
+      throw new Error(`Unknown preset "${value}"`);
+    }
+    if(!value || typeof value !== "object"){
+      return {
+        speed: sanitizeAiNumber(undefined, base.speed, "speed", { min: 0 }),
+        reaction: sanitizeAiNumber(undefined, base.reaction, "reaction", { min: 0 }),
+        offset: sanitizeAiNumber(undefined, base.offset, "offset", { min: 0 }),
+        noise: sanitizeAiNumber(undefined, base.noise, "noise", { min: 0 }),
+      };
+    }
+    const presetName = typeof value.use === "string" ? value.use : (typeof value.preset === "string" ? value.preset : null);
+    let presetBase = base;
+    if(presetName){
+      const preset = DEFAULT_AI_TABLE[presetName];
+      if(preset && !Array.isArray(preset)){
+        presetBase = normalizeAiConfig(preset, base);
+      }
+    }
+    return {
+      speed: sanitizeAiNumber(value.speed, presetBase.speed, "speed", { min: 0 }),
+      reaction: sanitizeAiNumber(value.reaction, presetBase.reaction, "reaction", { min: 0 }),
+      offset: sanitizeAiNumber(value.offset, presetBase.offset, "offset", { min: 0 }),
+      noise: sanitizeAiNumber(value.noise, presetBase.noise, "noise", { min: 0 }),
+    };
+  }
+
+  function sanitizeLowerBound(value, fallback){
+    if(value === null || value === undefined || value === "") return Math.max(0, fallback || 0);
+    const num = Number(value);
+    if(!Number.isFinite(num)) throw new Error("Progress threshold must be a number");
+    return Math.max(0, num);
+  }
+
+  function sanitizeUpperBound(value, min){
+    if(value === null || value === undefined || value === "") return Infinity;
+    const num = Number(value);
+    if(!Number.isFinite(num)) throw new Error("Progress limit must be a number");
+    if(num <= min) throw new Error("Progress limit must be greater than the lower bound");
+    return num;
+  }
+
+  function sanitizeAiSchedule(stages){
+    if(!Array.isArray(stages) || !stages.length){
+      throw new Error("AI schedule must include at least one stage");
+    }
+    const normalized = [];
+    const raw = [];
+    let fallbackMin = 0;
+    for(const stage of stages){
+      const config = normalizeAiConfig(stage, AI_BASE_CONFIG);
+      const source = stage && typeof stage === "object" ? stage : {};
+      const min = sanitizeLowerBound(source.from ?? source.min ?? source.after, fallbackMin);
+      const max = sanitizeUpperBound(source.to ?? source.until ?? source.max, min);
+      normalized.push({ config, min, max });
+      const cleaned = { speed: config.speed, reaction: config.reaction, offset: config.offset, noise: config.noise };
+      if(min > 0) cleaned.from = min;
+      if(Number.isFinite(max)) cleaned.to = max;
+      raw.push(cleaned);
+      fallbackMin = Number.isFinite(max) ? max : min;
+    }
+    return { raw, normalized };
+  }
+
+  function buildAiData(rawTable){
+    const source = rawTable && typeof rawTable === "object" ? rawTable : DEFAULT_AI_TABLE;
+    const entries = Object.entries(source);
+    if(!entries.length){
+      throw new Error("AI table must define at least one profile");
+    }
+    const raw = {};
+    const profiles = {};
+    for(const [name, value] of entries){
+      try {
+        if(Array.isArray(value)){
+          const schedule = sanitizeAiSchedule(value);
+          raw[name] = schedule.raw;
+          profiles[name] = { type: "schedule", stages: schedule.normalized };
+        } else {
+          const config = normalizeAiConfig(value, AI_BASE_CONFIG);
+          raw[name] = { ...config };
+          profiles[name] = { type: "single", config };
+        }
+      } catch(err){
+        throw new Error(`Profile "${name}": ${err.message}`);
+      }
+    }
+    return { raw, profiles };
+  }
+
+  const savedConfig = loadLS();
+  let initialAiData;
+  try {
+    initialAiData = buildAiData(savedConfig.aiTable || DEFAULT_AI_TABLE);
+  } catch (err) {
+    console.warn("[pong] failed to parse stored AI table, using defaults", err);
+    initialAiData = buildAiData(DEFAULT_AI_TABLE);
+    savedConfig.aiTable = cloneAiTable(DEFAULT_AI_TABLE);
+  }
 
   const DFLT = {
     mode:"1P",            // 1P, 2P, Endless, Mayhem
@@ -35,26 +248,33 @@ import "./pauseOverlay.js";
     theme:"neon",         // neon | vapor | crt | minimal
     reduceMotion:false,
     keys:{p1Up:"KeyW", p1Down:"KeyS", p2Up:"ArrowUp", p2Down:"ArrowDown", pause:"Space"},
+    aiTable: cloneAiTable(DEFAULT_AI_TABLE),
+    aiTableSource: formatAiTable(DEFAULT_AI_TABLE),
   };
 
-  const BG_HUE_BASE_A = 220;
-  const BG_HUE_BASE_B = 260;
   const BG_HUE_AMP = 15;
-  const BG_HUE_SPEED = 0.05;
   const BG_VIGNETTE_ALPHA = 0.4;
+  const BACKGROUND_PULSE_DURATION = 1.35;
 
   const state = {
-    ...DFLT, ...loadLS(),
+    ...DFLT,
+    ...savedConfig,
+    aiTable: initialAiData.raw,
+    aiProfiles: initialAiData.profiles,
+    aiTableSource: formatAiTable(initialAiData.raw),
     running:false, t0:0, last:0, dt:0, acc:0,
     canvas:null, ctx:null, ratio:1, scaleX:1, scaleY:1, paused:false, over:false,
     score:{p1:0,p2:0}, ball:null, balls:[], p1:null, p2:null, hud:null, loopId:0,
     effects:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
-    trail:[], trailMax:20, touches:{}, replay:[], replayMax:5*60, recording:true,
+    trail:[], trailMax:20, touches:{}, replay:[], replayMax:12*60, recording:true,
     shellPaused:false,
     images:{ powerups:{}, effects:{} },
     backgroundLayers:null,
     backgroundCanvas:null,
     backgroundCtx:null,
+    backgroundPreset:null,
+    backgroundPulse:null,
+    backgroundPulseStrength:0,
     pauseOverlay:null,
     debugHud:null,
     debugVisible:false,
@@ -67,13 +287,19 @@ import "./pauseOverlay.js";
     },
     touchBuffer:[],
     aiBrain:{ targetY:H/2, timer:0 },
+    aiSelect:null,
+    aiEditorInput:null,
+    aiEditorStatusEl:null,
+    lastRallyFrames:[],
+    lastRallyMeta:null,
+    currentRallyStart:0,
   };
 
-  if(!AI_LEVELS.includes(state.ai)){
-    if(state.ai === "Normal") state.ai = "Medium";
-    else if(state.ai === "Insane") state.ai = "Hard";
-    else state.ai = "Medium";
-  }
+  state.backgroundPreset = getBackgroundPresetForMode(state.mode);
+  state.ai = mapLegacyAiName(state.ai);
+  ensureAiSelection();
+  state.aiTableSource = formatAiTable(state.aiTable);
+  markRallyStart();
 
   const globalScope = typeof window !== "undefined" ? window : undefined;
   const pongReadyQueue = (() => {
@@ -94,10 +320,42 @@ import "./pauseOverlay.js";
     shield: "/assets/effects/shield.png",
   };
 
-  const PARALLAX_LAYERS = [
-    { src: "/assets/backgrounds/parallax/arcade_layer1.png", speed: 18, alpha: 0.85 },
-    { src: "/assets/backgrounds/parallax/arcade_layer2.png", speed: 36, alpha: 1 },
-  ];
+  function getBackgroundPresetForMode(mode){
+    return MODE_BACKGROUND_MAP[mode] || "arcade";
+  }
+
+  function getBackgroundTheme(){
+    const key = state.backgroundPreset || getBackgroundPresetForMode(state.mode);
+    return BACKGROUND_THEMES[key] || BACKGROUND_THEMES.arcade;
+  }
+
+  function createParallaxLayersForPreset(key){
+    const preset = PARALLAX_PRESETS[key] || PARALLAX_PRESETS.arcade || [];
+    const layers = [];
+    for(const cfg of preset){
+      const img = createImage(cfg.src);
+      const layer = {
+        image: img,
+        baseSpeed: Number.isFinite(cfg.speed) ? cfg.speed : 0,
+        alpha: typeof cfg.alpha === "number" ? Math.max(0, Math.min(1, cfg.alpha)) : 1,
+        offset: 0,
+        width: 0,
+        height: 0,
+      };
+      if(img){
+        img.addEventListener("load", ()=>{
+          layer.width = img.naturalWidth || img.width || 0;
+          layer.height = img.naturalHeight || img.height || 0;
+        });
+        img.addEventListener("error", ()=>{
+          layer.width = 0;
+          layer.height = 0;
+        });
+      }
+      layers.push(layer);
+    }
+    return layers;
+  }
 
   const POWERUP_SOURCES = {
     grow: SPRITE_SOURCES.shield,
@@ -159,6 +417,70 @@ import "./pauseOverlay.js";
     });
   }
 
+  function mapLegacyAiName(name){
+    if(name === "Normal") return "Medium";
+    if(name === "Insane") return "Hard";
+    return name;
+  }
+
+  function getAiOptions(){
+    return Object.keys(state.aiTable || {});
+  }
+
+  function ensureAiSelection(){
+    const options = getAiOptions();
+    if(!options.length){
+      const defaults = buildAiData(DEFAULT_AI_TABLE);
+      state.aiTable = defaults.raw;
+      state.aiProfiles = defaults.profiles;
+      state.aiTableSource = formatAiTable(defaults.raw);
+      return ensureAiSelection();
+    }
+    const previous = state.ai;
+    let target = mapLegacyAiName(previous);
+    if(!options.includes(target)){
+      if(options.includes("Medium")) target = "Medium";
+      else if(options.includes("Easy")) target = "Easy";
+      else target = options[0];
+    }
+    state.ai = target;
+    return target !== previous;
+  }
+
+  function resolveAiProfile(name){
+    const profiles = state.aiProfiles || {};
+    if(profiles[name]) return profiles[name];
+    const mapped = mapLegacyAiName(name);
+    if(profiles[mapped]) return profiles[mapped];
+    if(profiles.Medium) return profiles.Medium;
+    const keys = Object.keys(profiles);
+    if(keys.length) return profiles[keys[0]];
+    return { type: "single", config: { ...AI_BASE_CONFIG } };
+  }
+
+  function pickScheduleConfig(stages){
+    if(!Array.isArray(stages) || !stages.length) return AI_BASE_CONFIG;
+    const progress = Math.max(0, (state.score?.p1 || 0) + (state.score?.p2 || 0));
+    let fallback = stages[stages.length - 1]?.config || AI_BASE_CONFIG;
+    for(const stage of stages){
+      const min = Number.isFinite(stage.min) ? stage.min : 0;
+      const max = Number.isFinite(stage.max) ? stage.max : Infinity;
+      if(progress >= min && progress < max){
+        return stage.config || fallback;
+      }
+    }
+    return fallback;
+  }
+
+  function getAiConfig(name){
+    const profile = resolveAiProfile(name);
+    if(!profile) return AI_BASE_CONFIG;
+    if(profile.type === "schedule"){
+      return pickScheduleConfig(profile.stages);
+    }
+    return profile.config || AI_BASE_CONFIG;
+  }
+
   // ---------- Utilities ----------
   function post(type, detail){ try{ window.parent && window.parent.postMessage({type, slug:SLUG, detail}, "*"); }catch{} }
   function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
@@ -169,7 +491,7 @@ import "./pauseOverlay.js";
     try{ return JSON.parse(localStorage.getItem(LS_KEY)||"{}"); }catch{return{}}
   }
   function saveLS(){
-    const o={mode:state.mode, ai:state.ai, toScore:state.toScore, winByTwo:state.winByTwo, powerups:state.powerups, sfx:state.sfx, theme:state.theme, reduceMotion:state.reduceMotion, keys:state.keys};
+    const o={mode:state.mode, ai:state.ai, toScore:state.toScore, winByTwo:state.winByTwo, powerups:state.powerups, sfx:state.sfx, theme:state.theme, reduceMotion:state.reduceMotion, keys:state.keys, aiTable:state.aiTable};
     try{ localStorage.setItem(LS_KEY, JSON.stringify(o)); }catch{}
   }
 
@@ -180,32 +502,13 @@ import "./pauseOverlay.js";
   }
 
   // ---------- Rendering helpers ----------
-  function ensureParallaxLayers(){
-    if(state.backgroundLayers) return;
-    const layers = [];
-    for(const cfg of PARALLAX_LAYERS){
-      const img = createImage(cfg.src);
-      const layer = {
-        image: img,
-        speed: Number.isFinite(cfg.speed) ? cfg.speed : 0,
-        alpha: typeof cfg.alpha === "number" ? Math.max(0, Math.min(1, cfg.alpha)) : 1,
-        offset: 0,
-        width: 0,
-        height: 0,
-      };
-      if(img){
-        img.addEventListener("load", ()=>{
-          layer.width = img.naturalWidth || img.width || 0;
-          layer.height = img.naturalHeight || img.height || 0;
-        });
-        img.addEventListener("error", ()=>{
-          layer.width = 0;
-          layer.height = 0;
-        });
-      }
-      layers.push(layer);
+  function ensureParallaxLayers(force){
+    const targetPreset = getBackgroundPresetForMode(state.mode);
+    if(force || !state.backgroundLayers || state.backgroundPreset !== targetPreset){
+      state.backgroundLayers = createParallaxLayersForPreset(targetPreset);
+      state.backgroundPreset = targetPreset;
     }
-    state.backgroundLayers = layers;
+    return state.backgroundLayers;
   }
 
   function getParallaxMetrics(layer){
@@ -222,16 +525,44 @@ import "./pauseOverlay.js";
     return { width: destWidth, height: destHeight };
   }
 
+  function updateBackgroundPulse(delta){
+    const pulse = state.backgroundPulse;
+    if(!pulse) return 0;
+    if(pulse.timer > 0){
+      pulse.timer = Math.max(0, pulse.timer - delta);
+    }
+    if(pulse.timer <= 0){
+      pulse.timer = 0;
+      pulse.lastStrength = 0;
+      return 0;
+    }
+    const duration = pulse.duration || BACKGROUND_PULSE_DURATION;
+    const normalized = duration > 0 ? pulse.timer / duration : 0;
+    const magnitude = pulse.magnitude || 1;
+    const strength = normalized * magnitude;
+    pulse.lastStrength = strength;
+    return strength;
+  }
+
   function updateParallax(delta){
     ensureParallaxLayers();
+    const strength = updateBackgroundPulse(delta);
+    state.backgroundPulseStrength = strength;
     if(!Array.isArray(state.backgroundLayers)) return;
     if(state.reduceMotion) return;
+    const theme = getBackgroundTheme();
+    const baseMultiplier = theme.speedMultiplier ?? 1;
+    const pulseBoost = 1 + strength * (theme.pulseSpeedBoost ?? 1.4);
+    const direction = state.backgroundPulse?.direction || 0;
     for(const layer of state.backgroundLayers){
       const metrics = getParallaxMetrics(layer);
       if(!metrics) continue;
-      const speed = layer.speed || 0;
-      if(!speed) continue;
-      let offset = (layer.offset || 0) + speed * delta;
+      const baseSpeed = layer.baseSpeed ?? layer.speed ?? 0;
+      if(!baseSpeed) continue;
+      let offset = (layer.offset || 0) + baseSpeed * baseMultiplier * pulseBoost * delta;
+      if(direction && strength){
+        offset += direction * strength * 120 * delta;
+      }
       const span = metrics.width;
       if(span > 0){
         offset %= span;
@@ -245,14 +576,15 @@ import "./pauseOverlay.js";
     const ctx = state.ctx;
     if(!ctx) return;
     ctx.clearRect(0,0,W,H);
-    ctx.fillStyle = "#050516";
+    ctx.fillStyle = getCSS("--pong-bg") || "#050516";
     ctx.fillRect(0,0,W,H);
     ensureParallaxLayers();
     if(!Array.isArray(state.backgroundLayers)) return;
+    const strength = state.backgroundPulseStrength || 0;
     for(const layer of state.backgroundLayers){
       const metrics = getParallaxMetrics(layer);
       if(!metrics) continue;
-      const alpha = layer.alpha ?? 1;
+      const alpha = Math.min(1, (layer.alpha ?? 1) * (1 + strength * 0.35));
       let startX = -(layer.offset || 0);
       while(startX > 0) startX -= metrics.width;
       ctx.save();
@@ -262,6 +594,23 @@ import "./pauseOverlay.js";
       }
       ctx.restore();
     }
+  }
+
+  function triggerBackgroundPulse(side){
+    if(state.reduceMotion) return;
+    if(!state.backgroundPulse){
+      state.backgroundPulse = { timer:0, duration:BACKGROUND_PULSE_DURATION, magnitude:1, direction:0, lastStrength:0 };
+    }
+    const pulse = state.backgroundPulse;
+    const total = (state.score?.p1 || 0) + (state.score?.p2 || 0);
+    const target = Math.max(1, state.toScore || 11);
+    const progressBoost = clamp(total / target, 0, 1);
+    pulse.duration = BACKGROUND_PULSE_DURATION;
+    pulse.timer = BACKGROUND_PULSE_DURATION;
+    pulse.magnitude = 0.65 + progressBoost * 0.8;
+    pulse.direction = side === "p1" ? -1 : side === "p2" ? 1 : 0;
+    pulse.lastStrength = pulse.magnitude;
+    state.backgroundPulseStrength = pulse.magnitude;
   }
 
   function ensureBackgroundCanvas(){
@@ -311,26 +660,48 @@ import "./pauseOverlay.js";
     const w = canvas.width;
     const h = canvas.height;
     if(!w || !h) return;
+    const theme = getBackgroundTheme();
     const seconds = (timeMs || performance.now()) / 1000;
-    const phase = seconds * BG_HUE_SPEED;
+    const hueSpeed = theme.hueSpeed ?? 0.05;
     const motionScale = state.reduceMotion ? 0 : 1;
-    const hue1 = BG_HUE_BASE_A + BG_HUE_AMP * Math.sin(phase) * motionScale;
-    const hue2 = BG_HUE_BASE_B + BG_HUE_AMP * Math.sin(phase + Math.PI / 2) * motionScale;
+    const phase = seconds * hueSpeed;
+    const hue1 = (theme.hueA ?? 220) + BG_HUE_AMP * Math.sin(phase) * motionScale;
+    const hue2 = (theme.hueB ?? 260) + BG_HUE_AMP * Math.cos(phase) * motionScale;
+    const strength = state.backgroundPulseStrength || 0;
+    const lightBoost = strength * 8;
+    const topLight = (theme.lightA ?? 12) + lightBoost;
+    const bottomLight = (theme.lightB ?? 10) + lightBoost * 0.6;
+    const satA = theme.satA ?? 60;
+    const satB = theme.satB ?? satA;
     ctx.globalCompositeOperation = "source-over";
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, `hsl(${hue1}, 60%, 12%)`);
-    gradient.addColorStop(1, `hsl(${hue2}, 60%, 10%)`);
+    gradient.addColorStop(0, `hsl(${hue1}, ${satA}%, ${topLight}%)`);
+    gradient.addColorStop(1, `hsl(${hue2}, ${satB}%, ${bottomLight}%)`);
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, w, h);
 
     const radius = Math.sqrt(w * w + h * h) * 0.6;
     const vignette = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, radius);
     vignette.addColorStop(0, "rgba(0,0,0,0)");
-    vignette.addColorStop(1, `rgba(0,0,0,${BG_VIGNETTE_ALPHA})`);
+    vignette.addColorStop(1, `rgba(0,0,0,${theme.vignette ?? BG_VIGNETTE_ALPHA})`);
     ctx.globalCompositeOperation = "multiply";
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, w, h);
     ctx.globalCompositeOperation = "source-over";
+    if(strength > 0.01 && theme.pulse){
+      const pulse = state.backgroundPulse || {};
+      const [r, g, b] = theme.pulse.color || [255, 255, 255];
+      const alpha = (theme.pulse.alpha ?? 0.4) * Math.min(1, strength);
+      const centerX = pulse.direction < 0 ? w * 0.25 : pulse.direction > 0 ? w * 0.75 : w / 2;
+      const pulseRadius = Math.max(w, h) * 0.65;
+      const glow = ctx.createRadialGradient(centerX, h / 2, 0, centerX, h / 2, pulseRadius);
+      glow.addColorStop(0, `rgba(${r},${g},${b},${alpha})`);
+      glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.globalCompositeOperation = "screen";
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "source-over";
+    }
   }
 
   function clear(){
@@ -443,6 +814,12 @@ import "./pauseOverlay.js";
     powerups.length=0;
     state.effects.length=0;
     state.trail.length=0;
+    state.replay.length=0;
+    state.lastRallyFrames = [];
+    state.lastRallyMeta = null;
+    state.backgroundPulse = null;
+    state.backgroundPulseStrength = 0;
+    state.backgroundPreset = getBackgroundPresetForMode(state.mode);
     state.p1 = {x:32, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
     state.p2 = {x:W-50, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
     spawnBall(Math.random()<0.5? -1 : 1);
@@ -464,6 +841,8 @@ import "./pauseOverlay.js";
         if(layer) layer.offset = 0;
       }
     }
+    ensureParallaxLayers(true);
+    markRallyStart();
     updateTitleOverlay();
   }
 
@@ -475,6 +854,7 @@ import "./pauseOverlay.js";
 
   function award(pointTo){
     state.score[pointTo]++; updateHUD();
+    triggerBackgroundPulse(pointTo);
     if(state.mode==="Endless") { // endless: don't end, just reset
       spawnBall(pointTo==="p1" ? 1 : -1);
     } else if(isMatchOver()) endMatch();
@@ -637,7 +1017,7 @@ import "./pauseOverlay.js";
   // ---------- AI ----------
   function moveAI(dt){
     if(state.mode==="2P") return;
-    const config = AI_SETTINGS[state.ai] || AI_SETTINGS.Medium;
+    const config = getAiConfig(state.ai) || AI_BASE_CONFIG;
     state.p2.speed = config.speed;
     const brain = state.aiBrain;
     brain.timer = Math.max(0, brain.timer - dt);
@@ -732,6 +1112,8 @@ import "./pauseOverlay.js";
         }
         case "score":{
           award(collision.side);
+          recordReplayFrame(snapshotFrame());
+          captureLastRally(collision.side);
           respawn(b, collision.side === "p1" ? -1 : 1);
           state.debugData.lastNormal = {x:0,y:0};
           return;
@@ -966,6 +1348,49 @@ import "./pauseOverlay.js";
         break;
     }
   }
+  function snapshotFrame(){
+    return {
+      p1y: state.p1?.y ?? 0,
+      p2y: state.p2?.y ?? 0,
+      balls: state.balls.map(b=>({ x:b.x, y:b.y, dx:b.dx, dy:b.dy, r:b.r })),
+      score: { p1: state.score.p1, p2: state.score.p2 },
+    };
+  }
+
+  function recordReplayFrame(frame){
+    if(!state.recording) return;
+    state.replay.push(frame);
+    if(state.replay.length>state.replayMax){
+      state.replay.shift();
+      state.currentRallyStart = Math.max(0, state.currentRallyStart - 1);
+    }
+  }
+
+  function cloneReplayFrame(frame){
+    return {
+      p1y: frame.p1y,
+      p2y: frame.p2y,
+      balls: (frame.balls || []).map(b=>({ ...b })),
+      score: frame.score ? { p1: frame.score.p1, p2: frame.score.p2 } : undefined,
+    };
+  }
+
+  function markRallyStart(){
+    state.currentRallyStart = Math.max(0, state.replay.length);
+  }
+
+  function captureLastRally(scoredBy){
+    const startIndex = Math.max(0, Math.min(state.currentRallyStart, state.replay.length));
+    const frames = state.replay.slice(startIndex);
+    if(frames.length){
+      state.lastRallyFrames = frames.map(cloneReplayFrame);
+      state.lastRallyMeta = scoredBy ? { scoredBy } : null;
+    } else {
+      state.lastRallyFrames = [];
+      state.lastRallyMeta = scoredBy ? { scoredBy } : null;
+    }
+    markRallyStart();
+  }
 
   // ---------- Frame ----------
   function update(dt){
@@ -997,10 +1422,7 @@ import "./pauseOverlay.js";
     checkPowerupCollisions();
     updateEffects(dt);
 
-    if(state.recording){
-      state.replay.push({p1y:state.p1.y, p2y:state.p2.y, balls:state.balls.map(b=>({x:b.x,y:b.y,dx:b.dx,dy:b.dy,r:b.r}))});
-      if(state.replay.length>state.replayMax) state.replay.shift();
-    }
+    recordReplayFrame(snapshotFrame());
   }
 
   function render(){
@@ -1186,14 +1608,30 @@ import "./pauseOverlay.js";
       h("span",{class:"touch-hint"}," • Swipe left/right to move")
     );
 
+    const modeSelect = select(["1P","2P","Endless","Mayhem"], state.mode, v=>{state.mode=v; saveLS(); reset(); emitStateChange("mode", v);});
+    const aiSelect = h("select",{class:"pong-select", id:"pong-ai-select"});
+    aiSelect.addEventListener("change", ()=>{
+      state.ai = aiSelect.value;
+      saveLS();
+      emitStateChange("difficulty", state.ai);
+    });
+    state.aiSelect = aiSelect;
+
+    const aiTextarea = h("textarea",{class:"pong-textarea", id:"ai-script-editor", rows:"10", spellcheck:"false"});
+    state.aiEditorInput = aiTextarea;
+    aiTextarea.value = state.aiTableSource || "";
+
+    const aiStatus = h("div",{class:"pong-hint", id:"ai-script-status"},"");
+    state.aiEditorStatusEl = aiStatus;
+
     const menu = h("div",{class:"pong-menu"},
       h("div",{class:"pong-row"},
         h("label",{},"Mode:"),
-        select(["1P","2P","Endless","Mayhem"], state.mode, v=>{state.mode=v; saveLS(); reset(); emitStateChange("mode", v);})
+        modeSelect
       ),
       h("div",{class:"pong-row"},
         h("label",{},"AI:"),
-        select(["Easy","Medium","Hard"], state.ai, v=>{state.ai=v; saveLS(); emitStateChange("difficulty", v);})
+        aiSelect
       ),
       h("div",{class:"pong-row"},
         h("label",{},"To Score:"),
@@ -1218,8 +1656,18 @@ import "./pauseOverlay.js";
         h("label",{},"Reduce motion:"),
         toggle(state.reduceMotion, v=>{state.reduceMotion=v; saveLS();})
       ),
-      h("button",{class:"pong-btn",onclick:playReplay},"Instant Replay"),
-      h("button",{class:"pong-btn",onclick:()=>dispatchAction('restart',{source:'ui'})},"Reset Match")
+      h("button",{class:"pong-btn",onclick:watchLastRally},"Watch Last Rally"),
+      h("button",{class:"pong-btn",onclick:()=>dispatchAction('restart',{source:'ui'})},"Reset Match"),
+      h("div",{class:"pong-menu__section"},
+        h("label",{for:"ai-script-editor"},"AI Script"),
+        h("div",{class:"pong-hint"},"Edit the JSON to add custom AI profiles or progressive schedules. Use optional \"from\"/\"to\" bounds to ramp difficulty."),
+        aiTextarea,
+        h("div",{class:"pong-row"},
+          h("button",{class:"pong-btn",onclick:applyAiScriptFromEditor},"Apply AI Script"),
+          h("button",{class:"pong-btn",onclick:resetAiScript},"Restore Defaults")
+        ),
+        aiStatus
+      )
     );
 
     const keyModal = state.keyModal = h("div",{class:"pong-modal", id:"key-modal"},
@@ -1238,6 +1686,9 @@ import "./pauseOverlay.js";
     );
 
     root.append(bar, wrap, hud, menu, keyModal);
+    renderAiOptions();
+    updateAiEditorValue();
+    setAiStatus("Edit the JSON to add custom AI profiles or progressive schedules.", "info");
     state.hud = {p1: hud.querySelector("#score-p1"), p2: hud.querySelector("#score-p2")};
     state.overlay = {
       root: overlayRoot,
@@ -1286,6 +1737,74 @@ import "./pauseOverlay.js";
   }
   function toggle(value, on){ const b=h("button",{class:"pong-btn", "aria-pressed":String(!!value)}, value?"On":"Off"); b.addEventListener("click", ()=>{ value=!value; b.setAttribute("aria-pressed", String(!!value)); b.textContent=value?"On":"Off"; on(value); }); return b; }
   function number(value, on){ const i=h("input",{class:"pong-input", type:"number", value:String(value), min:"1", max:"99", style:"width:5rem"}); i.addEventListener("change", ()=>on(parseInt(i.value||"0")||11)); return i; }
+
+  function renderAiOptions(){
+    const selectEl = state.aiSelect;
+    if(!selectEl) return;
+    const changed = ensureAiSelection();
+    const options = getAiOptions();
+    selectEl.innerHTML = "";
+    for(const option of options){
+      const opt = document.createElement("option");
+      opt.value = option;
+      opt.textContent = option;
+      selectEl.append(opt);
+    }
+    if(options.length){
+      selectEl.value = state.ai;
+    }
+    if(changed) emitStateChange("difficulty", state.ai);
+  }
+
+  function updateAiEditorValue(){
+    if(state.aiEditorInput){
+      state.aiEditorInput.value = state.aiTableSource || "";
+    }
+  }
+
+  function setAiStatus(message, type){
+    const el = state.aiEditorStatusEl;
+    if(!el) return;
+    el.textContent = message;
+    el.classList.remove("success","error");
+    if(type === "success") el.classList.add("success");
+    else if(type === "error") el.classList.add("error");
+  }
+
+  function applyAiScriptFromEditor(){
+    if(!state.aiEditorInput) return;
+    try {
+      const parsed = JSON.parse(state.aiEditorInput.value || "{}");
+      const data = buildAiData(parsed);
+      state.aiTable = data.raw;
+      state.aiProfiles = data.profiles;
+      state.aiTableSource = formatAiTable(data.raw);
+      renderAiOptions();
+      updateAiEditorValue();
+      state.aiEditorInput.classList.remove("is-error");
+      saveLS();
+      setAiStatus("Custom AI script applied.", "success");
+    } catch(err){
+      state.aiEditorInput.classList.add("is-error");
+      setAiStatus(`Script error: ${err.message}`, "error");
+    }
+  }
+
+  function resetAiScript(){
+    try {
+      const data = buildAiData(DEFAULT_AI_TABLE);
+      state.aiTable = data.raw;
+      state.aiProfiles = data.profiles;
+      state.aiTableSource = formatAiTable(data.raw);
+      renderAiOptions();
+      updateAiEditorValue();
+      if(state.aiEditorInput) state.aiEditorInput.classList.remove("is-error");
+      saveLS();
+      setAiStatus("Restored default AI tuning.", "info");
+    } catch(err){
+      setAiStatus(`Failed to reset AI table: ${err.message}`, "error");
+    }
+  }
 
   function isTouchPreferred(){
     if(typeof window === "undefined") return false;
@@ -1366,20 +1885,49 @@ import "./pauseOverlay.js";
     }
   }
   // Replay
-  function playReplay(){
-    if(state.replay.length<10) return toast("Not enough replay data yet");
-    state.paused=true;
-    const frames = state.replay.slice(-Math.min(state.replay.length, 5*60));
-    const saveBalls = state.balls.map(b=>({...b}));
-    const saveP1 = {...state.p1}, saveP2 = {...state.p2};
+  function watchLastRally(){
+    const frames = Array.isArray(state.lastRallyFrames) ? state.lastRallyFrames.map(cloneReplayFrame) : [];
+    if(frames.length < 2) return toast("No rally recorded yet");
     const ctx = state.ctx;
-    let i=0;
-    const step=()=>{
-      if(i>=frames.length){ state.p1=saveP1; state.p2=saveP2; state.balls=saveBalls; state.paused=false; return; }
-      const f=frames[i++];
-      state.p1.y=f.p1y; state.p2.y=f.p2y;
-      state.balls = f.balls.map(b=>({...b, spin:0, lastHit:null}));
-      // draw only
+    if(!ctx) return;
+    const wasPaused = state.paused;
+    const wasShellPaused = state.shellPaused;
+    const recordingBefore = state.recording;
+    const savedBalls = state.balls.map(b=>({...b}));
+    const savedP1 = {...state.p1};
+    const savedP2 = {...state.p2};
+    const savedScore = { p1: state.score.p1, p2: state.score.p2 };
+    let index = 0;
+    state.paused = true;
+    state.shellPaused = false;
+    state.recording = false;
+    const announce = state.lastRallyMeta?.scoredBy;
+    if(announce === "p1") toast("Replaying last rally – point to Player 1");
+    else if(announce === "p2") toast("Replaying last rally – point to Player 2");
+    else toast("Replaying last rally");
+    const step = ()=>{
+      if(index >= frames.length){
+        state.p1 = savedP1;
+        state.p2 = savedP2;
+        state.balls = savedBalls;
+        state.score.p1 = savedScore.p1;
+        state.score.p2 = savedScore.p2;
+        updateHUD();
+        state.paused = wasPaused;
+        state.shellPaused = wasShellPaused;
+        state.recording = recordingBefore;
+        state.last = performance.now();
+        return;
+      }
+      const frame = frames[index++];
+      state.p1.y = frame.p1y;
+      state.p2.y = frame.p2y;
+      state.balls = (frame.balls || []).map(b=>({ ...b, spin:0, lastHit:null }));
+      if(frame.score){
+        state.score.p1 = frame.score.p1 ?? state.score.p1;
+        state.score.p2 = frame.score.p2 ?? state.score.p2;
+        updateHUD();
+      }
       ctx.save();
       clear();
       drawNet();
@@ -1390,6 +1938,10 @@ import "./pauseOverlay.js";
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
+  }
+
+  function playReplay(){
+    watchLastRally();
   }
 
   function matchStatus(){
@@ -1503,6 +2055,7 @@ import "./pauseOverlay.js";
     api.resumeFromShell = resumeFromShell;
     api.emitStateChange = emitStateChange;
     api.playReplay = playReplay;
+    api.watchLastRally = watchLastRally;
     api.pushEvent = pushEvent;
     api.getScoreSnapshot = getScoreSnapshot;
     api.getLifecycleSnapshot = getLifecycleSnapshot;
