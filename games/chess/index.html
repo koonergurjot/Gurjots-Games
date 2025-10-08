@@ -29,9 +29,20 @@
     .chess-layout__board {
       position: relative;
       display: flex;
+      flex-wrap: wrap;
       justify-content: center;
+      gap: 20px;
     }
-    .chess-layout__board canvas {
+    .chess-board-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .chess-board-stack {
+      position: relative;
+    }
+    .chess-board-stack canvas {
       border: 1px solid #243047;
       border-radius: 12px;
       background: #0f172a;
@@ -40,6 +51,147 @@
       height: auto;
       image-rendering: pixelated;
       box-shadow: 0 0 0 4px rgba(7, 16, 33, 0.6);
+    }
+    .chess-board-stack canvas + canvas {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .chess-clock {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 480px;
+    }
+    .chess-clock__player {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(12, 20, 40, 0.85);
+      border: 1px solid rgba(56, 72, 112, 0.8);
+      font-size: 0.8rem;
+      letter-spacing: 0.04em;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .chess-clock__player--active {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(7, 16, 33, 0.45);
+    }
+    .chess-clock__label {
+      text-transform: uppercase;
+      color: #9bb3ff;
+      font-size: 0.72rem;
+      letter-spacing: 0.18em;
+    }
+    .chess-clock__time {
+      font-size: 1.2rem;
+      font-variant-numeric: tabular-nums;
+      color: #fefefe;
+    }
+    .chess-clock__display {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .chess-clock__increment {
+      font-size: 0.7rem;
+      color: #7dd3fc;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      margin-left: 8px;
+    }
+    .chess-clock__increment--visible {
+      opacity: 1;
+    }
+    .clock-mode-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #9bb3ff;
+      text-align: center;
+    }
+    .evaluation-panel {
+      flex: 0 1 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 18px 20px;
+      border-radius: 16px;
+      background: rgba(9, 16, 32, 0.92);
+      border: 1px solid rgba(44, 60, 96, 0.8);
+      box-shadow: 0 0 0 4px rgba(7, 16, 33, 0.4);
+    }
+    .evaluation-panel__bar {
+      position: relative;
+      height: 200px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(56, 72, 112, 0.8);
+      background: linear-gradient(180deg, rgba(239, 246, 255, 0.9) 0%, rgba(9, 16, 32, 0.95) 100%);
+    }
+    .evaluation-panel__fill {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 50%;
+      background: linear-gradient(180deg, rgba(148, 197, 255, 0.9) 0%, rgba(11, 29, 62, 0.95) 100%);
+      transition: height 0.2s ease;
+    }
+    .evaluation-panel__markers {
+      position: absolute;
+      inset: 8px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: rgba(12, 20, 40, 0.85);
+      pointer-events: none;
+      font-weight: 600;
+    }
+    .evaluation-panel__score {
+      font-size: 1.1rem;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      color: #ffe082;
+    }
+    #evaluation-history {
+      width: 100%;
+      height: 140px;
+      border-radius: 12px;
+      background: rgba(6, 10, 22, 0.8);
+      border: 1px solid rgba(44, 60, 96, 0.6);
+    }
+    .evaluation-panel__legend {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #9bb3ff;
+    }
+    .evaluation-swings {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      font-size: 0.72rem;
+      line-height: 1.4;
+    }
+    .evaluation-swings li {
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(11, 22, 45, 0.7);
+      border: 1px solid rgba(52, 70, 110, 0.6);
+    }
+    .evaluation-swings__empty {
+      text-align: center;
+      color: #a1accf;
+      font-style: italic;
     }
     .chess-hud {
       flex: 0 1 320px;
@@ -115,6 +267,65 @@
       font-size: 0.75rem;
       text-transform: none;
     }
+    .training-ladder {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: rgba(9, 16, 34, 0.82);
+      border: 1px solid rgba(52, 70, 110, 0.65);
+    }
+    .training-ladder__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .training-ladder__title {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: #ffe082;
+    }
+    .training-ladder__streak {
+      font-size: 0.72rem;
+      color: #7dd3fc;
+      letter-spacing: 0.08em;
+    }
+    .training-ladder__status {
+      margin: 0;
+      font-size: 0.74rem;
+      line-height: 1.5;
+      color: #fefefe;
+    }
+    .training-ladder__progress {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #c3dafe;
+    }
+    .training-ladder__controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .training-ladder__controls button {
+      flex: 1 1 auto;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #2f3b5f;
+      background: rgba(12, 20, 40, 0.85);
+      color: inherit;
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .training-ladder__controls button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
     .pixel-panel__status {
       min-height: 48px;
       padding: 12px 14px;
@@ -185,8 +396,41 @@
     <div class="game-shell__surface game-shell__surface--plain">
       <div class="chess-layout">
         <div class="chess-layout__board">
-          <canvas id="board" aria-label="Chess board"></canvas>
-          <canvas id="fx" aria-hidden="true"></canvas>
+          <div class="chess-board-area">
+            <div class="chess-clock" aria-label="Match clock">
+              <div class="chess-clock__player" id="clock-player-black" data-color="b">
+                <span class="chess-clock__label">Black</span>
+                <div class="chess-clock__display">
+                  <span class="chess-clock__time" id="clock-b-time">--:--</span>
+                  <span class="chess-clock__increment" id="clock-b-increment"></span>
+                </div>
+              </div>
+              <div class="chess-clock__player" id="clock-player-white" data-color="w">
+                <span class="chess-clock__label">White</span>
+                <div class="chess-clock__display">
+                  <span class="chess-clock__time" id="clock-w-time">--:--</span>
+                  <span class="chess-clock__increment" id="clock-w-increment"></span>
+                </div>
+              </div>
+            </div>
+            <div class="chess-board-stack">
+              <canvas id="board" aria-label="Chess board"></canvas>
+              <canvas id="fx" aria-hidden="true"></canvas>
+            </div>
+          </div>
+          <aside class="evaluation-panel" aria-label="Evaluation insights">
+            <div class="evaluation-panel__bar">
+              <div class="evaluation-panel__fill" id="evaluation-bar-fill" style="height:50%;"></div>
+              <div class="evaluation-panel__markers">
+                <span>White</span>
+                <span>Black</span>
+              </div>
+            </div>
+            <div class="evaluation-panel__score" id="evaluation-score">+0.0</div>
+            <canvas id="evaluation-history" aria-hidden="true"></canvas>
+            <div class="evaluation-panel__legend">Advantage swings</div>
+            <ul id="evaluation-swings" class="evaluation-swings" aria-live="polite"></ul>
+          </aside>
         </div>
         <aside class="chess-hud" aria-labelledby="chess-title">
           <div class="pixel-panel">
@@ -204,11 +448,28 @@
                   <option value="4">Expert</option>
                 </select>
               </label>
-              <label class="pixel-panel__field">Puzzles
-                <select id="puzzle-select">
-                  <option value="-1">Free Play</option>
+              <label class="pixel-panel__field">Time Control
+                <select id="time-control">
+                  <option value="none">Free Play (∞)</option>
+                  <option value="rapid" selected>Rapid 10 | 5</option>
+                  <option value="blitz">Blitz 5 | 3</option>
+                  <option value="bullet">Bullet 1 | 0</option>
+                  <option value="classic">Classical 15 | 10</option>
                 </select>
               </label>
+              <div class="clock-mode-label" id="clock-mode-label" aria-live="polite">Rapid 10 | 5</div>
+              <div class="training-ladder">
+                <div class="training-ladder__header">
+                  <span class="training-ladder__title">Training Ladder</span>
+                  <span class="training-ladder__streak" id="training-streak">Streak 0</span>
+                </div>
+                <p class="training-ladder__status" id="training-status">Start a guided challenge to sharpen your tactics.</p>
+                <div class="training-ladder__progress" id="training-progress"></div>
+                <div class="training-ladder__controls">
+                  <button id="training-start">Start Ladder</button>
+                  <button id="training-hint" disabled>Hint</button>
+                </div>
+              </div>
               <div id="status" class="pixel-panel__status" role="status" aria-live="polite"></div>
               <div class="pixel-panel__footer">
                 <div id="lobby">
