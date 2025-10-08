@@ -702,7 +702,6 @@ let tiltBaseline = null;
 let tiltActive = false;
 let virtualStickPad = null;
 let virtualStickThumb = null;
-let virtualStickPointerId = null;
 
 const keys = {};
 document.addEventListener('keydown', (e) => {
