@@ -14,8 +14,32 @@
     "difficulty": "easy",
     "released": "2025-08-20",
     "playUrl": "/games/pong/",
-    "entry": "/games/pong/index.html",
+    "version": "2.1.0",
+    "thumbnailPath": "/games/pong/thumb.svg",
     "thumbnail": "/games/pong/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/backgrounds/parallax/arcade_layer1.png",
+        "/assets/backgrounds/parallax/arcade_layer2.png",
+        "/assets/backgrounds/parallax/city_layer1.png",
+        "/assets/backgrounds/parallax/city_layer2.png",
+        "/assets/backgrounds/parallax/forest_layer1.png",
+        "/assets/backgrounds/parallax/forest_layer2.png",
+        "/assets/backgrounds/parallax/space_layer1.png",
+        "/assets/backgrounds/parallax/space_layer2.png",
+        "/assets/effects/particle.png",
+        "/assets/effects/spark.png",
+        "/assets/effects/explosion.png",
+        "/assets/effects/shield.png",
+        "/assets/sprites/paddle.png",
+        "/assets/sprites/ball.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/paddle.png",
@@ -440,14 +464,26 @@
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/asteroids/",
-    "entry": "/games/asteroids/index.html",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/asteroids/thumb.svg",
     "thumbnail": "/games/asteroids/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/ship.png"
+      ],
+      "audio": [
+        "/assets/audio/laser.wav",
+        "/assets/audio/explode.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/gameover.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"
       ],
       "audio": [
-        "/assets/audio/hit.wav",
+        "/assets/audio/laser.wav",
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
       ]
@@ -489,8 +525,18 @@
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/maze3d/",
-    "entry": "/games/maze3d/index.html",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/maze3d/thumb.svg",
     "thumbnail": "/games/maze3d/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/maze3d/wall.png",
+        "/assets/sprites/maze3d/floor.png"
+      ],
+      "audio": [
+        "/assets/audio/powerup.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/maze3d/wall.png",
@@ -538,8 +584,21 @@
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
-    "entry": "/games/platformer/index.html",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/platformer/thumb.svg",
     "thumbnail": "/games/platformer/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/player/platformer_idle.png",
+        "/assets/sprites/player/platformer_run.png",
+        "/assets/sprites/player/platformer_jump.png",
+        "/assets/sprites/coin.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -587,8 +646,26 @@
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/runner/",
-    "entry": "/games/runner/index.html",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/runner/thumb.svg",
     "thumbnail": "/games/runner/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/backgrounds/parallax/city_layer1.png",
+        "/assets/backgrounds/parallax/city_layer2.png",
+        "/assets/effects/clouds/cloud1.png",
+        "/assets/effects/clouds/cloud2.png",
+        "/assets/effects/portal.png",
+        "/assets/powerups/multi.png",
+        "/assets/ui/star.png",
+        "/assets/sprites/coin.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -637,13 +714,33 @@
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
-    "entry": "/games/shooter/index.html",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/shooter/thumb.svg",
     "thumbnail": "/games/shooter/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/backgrounds/parallax/space_layer1.png",
+        "/assets/backgrounds/parallax/space_layer2.png",
+        "/assets/effects/explosion.png",
+        "/assets/effects/portal.png",
+        "/assets/sprites/bullet.png",
+        "/assets/sprites/enemy1.png",
+        "/assets/sprites/enemy2.png",
+        "/assets/sprites/ship.png"
+      ],
+      "audio": [
+        "/assets/audio/laser.wav",
+        "/assets/audio/explode.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/gameover.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"
       ],
       "audio": [
+        "/assets/audio/laser.wav",
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
       ]
