@@ -445,6 +445,134 @@ let won = false;
 let winHandled = false;
 const spriteEffects = [];
 
+const gridTextureState = {
+  canvas: null,
+  baseCanvas: null,
+  size: 0,
+  cellSize: 0,
+  colorsKey: '',
+  cells: 0,
+  needsBaseRedraw: true,
+  needsComposite: true,
+  bandCenter: 0.5
+};
+
+function invalidateGridTexture() {
+  gridTextureState.needsBaseRedraw = true;
+  gridTextureState.needsComposite = true;
+}
+
+function ensureGridCanvases() {
+  if (!gridTextureState.baseCanvas) {
+    gridTextureState.baseCanvas = document.createElement('canvas');
+  }
+  if (!gridTextureState.canvas) {
+    gridTextureState.canvas = document.createElement('canvas');
+  }
+}
+
+function drawGridBase(size, cellSize, cells, colors) {
+  ensureGridCanvases();
+  const base = gridTextureState.baseCanvas;
+  if (!base) return;
+  if (base.width !== size || base.height !== size) {
+    base.width = size;
+    base.height = size;
+  }
+  const bctx = base.getContext('2d');
+  if (!bctx) return;
+  bctx.clearRect(0, 0, size, size);
+  const baseColor = colors[0] || '#111623';
+  bctx.fillStyle = baseColor;
+  bctx.fillRect(0, 0, size, size);
+  const accentColor = colors[1] || baseColor;
+  const accentHex = (typeof accentColor === 'string' && accentColor.startsWith('#'))
+    ? accentColor
+    : ((typeof baseColor === 'string' && baseColor.startsWith('#')) ? baseColor : null);
+  const accentRgb = accentHex ? hexToRgb(accentHex) : null;
+  if (accentRgb) {
+    const grad = bctx.createLinearGradient(0, 0, size, size);
+    grad.addColorStop(0, `rgba(${accentRgb.r},${accentRgb.g},${accentRgb.b},0.26)`);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    bctx.fillStyle = grad;
+    bctx.fillRect(0, 0, size, size);
+  }
+  const lineAlpha = 0.08;
+  bctx.save();
+  bctx.strokeStyle = `rgba(255,255,255,${lineAlpha})`;
+  bctx.lineWidth = 1;
+  bctx.beginPath();
+  for (let i = 1; i < cells; i++) {
+    const x = i * cellSize + 0.5;
+    bctx.moveTo(x, 0);
+    bctx.lineTo(x, size);
+  }
+  for (let j = 1; j < cells; j++) {
+    const y = j * cellSize + 0.5;
+    bctx.moveTo(0, y);
+    bctx.lineTo(size, y);
+  }
+  bctx.stroke();
+  bctx.restore();
+}
+
+function ensureGridTexture(size, cellSize, cells, colors, time) {
+  ensureGridCanvases();
+  const base = gridTextureState.baseCanvas;
+  const composite = gridTextureState.canvas;
+  if (!base || !composite) return null;
+  const roundedSize = Math.max(1, Math.round(size));
+  const colorsKey = Array.isArray(colors) ? colors.join('|') : String(colors);
+  const changedSize = gridTextureState.size !== roundedSize;
+  const changedCell = Math.abs(gridTextureState.cellSize - cellSize) > 0.001;
+  const changedColors = gridTextureState.colorsKey !== colorsKey;
+  const changedCells = gridTextureState.cells !== cells;
+  if (changedSize) {
+    base.width = roundedSize;
+    base.height = roundedSize;
+    composite.width = roundedSize;
+    composite.height = roundedSize;
+  }
+  if (gridTextureState.needsBaseRedraw || changedSize || changedCell || changedColors || changedCells) {
+    drawGridBase(roundedSize, roundedSize / cells, cells, colors);
+    gridTextureState.needsBaseRedraw = false;
+    gridTextureState.needsComposite = true;
+    gridTextureState.size = roundedSize;
+    gridTextureState.cellSize = roundedSize / cells;
+    gridTextureState.colorsKey = colorsKey;
+    gridTextureState.cells = cells;
+  }
+  const ctx = composite.getContext('2d');
+  if (!ctx) return null;
+  const drift = 0.08;
+  const bandCenter = 0.5 + drift * Math.sin(time / 6000);
+  const needsBandUpdate = gridTextureState.needsComposite || Math.abs(bandCenter - gridTextureState.bandCenter) > 0.002;
+  if (needsBandUpdate) {
+    ctx.clearRect(0, 0, composite.width, composite.height);
+    ctx.drawImage(base, 0, 0);
+    const sigma = roundedSize / 3;
+    const centerPx = bandCenter * roundedSize;
+    const highlightColor = colors[1] || colors[0] || '#ffffff';
+    const rgb = hexToRgb(typeof highlightColor === 'string' && highlightColor.startsWith('#') ? highlightColor : '#ffffff') || { r: 255, g: 255, b: 255 };
+    const gradient = ctx.createLinearGradient(0, 0, roundedSize, 0);
+    const steps = 16;
+    for (let i = 0; i <= steps; i++) {
+      const pos = i / steps;
+      const x = pos * roundedSize;
+      const alpha = 0.12 * Math.exp(-Math.pow(x - centerPx, 2) / (2 * sigma * sigma));
+      gradient.addColorStop(pos, `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`);
+    }
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, roundedSize, roundedSize);
+    ctx.restore();
+    gridTextureState.bandCenter = bandCenter;
+    gridTextureState.needsComposite = false;
+  }
+  return composite;
+}
+
 const CellType = {
   Empty: 0,
   Snake: 1,
@@ -553,6 +681,7 @@ function applySkin() {
   gemSpriteIndex = 0;
   fruitColor = f.color;
   saveSkinSelection();
+  invalidateGridTexture();
 }
 function populateSkinSelects() {
   const ss = document.getElementById('snakeSkin');
@@ -1041,6 +1170,14 @@ function draw() {
   if (!backgroundDrawn) {
     ctx.fillStyle = boardColors[0];
     ctx.fillRect(offsetX, offsetY, side, side);
+  }
+
+  const gridTexture = ensureGridTexture(side, CELL, N, boardColors, time);
+  if (gridTexture) {
+    ctx.save();
+    ctx.globalAlpha = backgroundDrawn ? 0.85 : 1;
+    ctx.drawImage(gridTexture, offsetX, offsetY, side, side);
+    ctx.restore();
   }
 
   if (scoreNode) {
