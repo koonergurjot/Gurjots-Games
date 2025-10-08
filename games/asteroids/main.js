@@ -373,7 +373,6 @@ const bootTracker = createBootTracker(SLUG);
 const {
   milestone: recordMilestone,
   rafTick: recordRafTick,
-  rafActive: setRafActive,
   warnCanvas: recordCanvasWarning,
   recordCanvasSample,
   updateReadyState,
@@ -679,34 +678,6 @@ function createAudio(src, volume = 0.6) {
       // ignore playback failures (likely due to user gesture requirements)
     }
   };
-}
-
-function loadImage(src) {
-  if (typeof Image === 'undefined') return null;
-  const image = new Image();
-  image.decoding = 'async';
-  image.loading = 'eager';
-  image.src = src;
-  return image;
-}
-
-function createTintedSprite(image, color) {
-  if (typeof document === 'undefined') return null;
-  const width = image.naturalWidth || image.width || 0;
-  const height = image.naturalHeight || image.height || 0;
-  if (!width || !height) return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  ctx.clearRect(0, 0, width, height);
-  ctx.drawImage(image, 0, 0, width, height);
-  ctx.globalCompositeOperation = 'source-in';
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, width, height);
-  ctx.globalCompositeOperation = 'source-over';
-  return canvas;
 }
 
 class AsteroidsGame {

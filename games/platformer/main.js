@@ -1,6 +1,6 @@
 import * as net from './net.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
-import { drawTileSprite, getTilePattern, getSpriteFrame, preloadTileTextures } from '../../shared/render/tileTextures.js';
+import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
 import { loadStrip } from '../../shared/assets.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
 import { tiles, TILE } from './tiles.js';
@@ -397,7 +397,6 @@ const PLAYER_SPRITE_SPECS = {
   jump: { src: '/assets/sprites/player/platformer_jump.png', frameWidth: 16, frameHeight: 16, frames: 1 },
 };
 
-const COIN_SPRITE = tiles['2']?.sprite ?? null;
 const GOAL_SPRITE = tiles['3']?.sprite ?? null;
 function normKey(key) {
   if (key === ' ') return 'space';
