@@ -6,7 +6,7 @@ import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
 import { play as playSfx } from '../../shared/juice/audio.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
-import { createBag, createSeed, generateSequence as generateBagSequence } from './randomizer.js';
+import { createSeed, generateSequence as generateRandomSequence, createRandomizerSelector } from './randomizer.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
@@ -124,13 +124,62 @@ if(c){
   const MAX_CANVAS_HEIGHT=1440;
 
   function syncHudLayout(){
-    const root=document.documentElement?.style;
-    if(!root) return;
+    const doc=document.documentElement;
+    const root=doc?.style;
+    if(!root || !c) return;
     const rect=c.getBoundingClientRect();
-    root.setProperty('--tetris-hud-max-width',`${Math.round(rect.width)}px`);
-    root.setProperty('--tetris-hud-center',`${Math.round(rect.left+rect.width/2)}px`);
-    const top=Math.max(rect.top+16,CANVAS_PADDING);
-    root.setProperty('--tetris-hud-top',`${Math.round(top)}px`);
+    const width=Math.round(rect.width);
+    const height=Math.round(rect.height);
+    const left=Math.round(rect.left);
+    const right=Math.round(rect.right);
+    const top=Math.round(rect.top);
+    const bottom=Math.round(rect.bottom);
+    const center=Math.round(rect.left+rect.width/2);
+    const safeLeft=Math.max(0,left);
+    const safeRight=Math.max(0,Math.round(window.innerWidth-right));
+    const safeTop=Math.max(0,top);
+    const safeBottom=Math.max(0,Math.round(window.innerHeight-bottom));
+    root.setProperty('--tetris-hud-width',`${width}px`);
+    root.setProperty('--tetris-hud-height',`${height}px`);
+    root.setProperty('--tetris-hud-max-width',`${width}px`);
+    root.setProperty('--tetris-hud-center',`${center}px`);
+    root.setProperty('--tetris-hud-left',`${left}px`);
+    root.setProperty('--tetris-hud-right',`${right}px`);
+    root.setProperty('--tetris-hud-bottom',`${bottom}px`);
+    root.setProperty('--tetris-hud-safe-left',`${safeLeft}px`);
+    root.setProperty('--tetris-hud-safe-right',`${safeRight}px`);
+    root.setProperty('--tetris-hud-safe-top',`${safeTop}px`);
+    root.setProperty('--tetris-hud-safe-bottom',`${safeBottom}px`);
+    const topOffset=Math.max(rect.top+16,CANVAS_PADDING);
+    root.setProperty('--tetris-hud-top',`${Math.round(topOffset)}px`);
+    const orientation=height>width?'portrait':'landscape';
+    const horizontalSpace=Math.max(0,window.innerWidth-width);
+    const spaceLeft=Math.max(0,rect.left);
+    const spaceRight=Math.max(0,window.innerWidth-rect.right);
+    const splitThreshold=Math.max(180,width*0.4);
+    const split=orientation==='landscape' && horizontalSpace>splitThreshold;
+    let layout='stack';
+    if(split){
+      layout=spaceRight>=spaceLeft?'split-right':'split-left';
+    }else if(orientation==='portrait'){
+      layout='portrait';
+    }
+    const toastAnchor=layout==='split-left'?left:(layout==='split-right'?right:center);
+    const toastTranslate=layout==='split-left'?'0':(layout==='split-right'?' -100%':'-50%');
+    root.setProperty('--tetris-hud-layout',layout);
+    root.setProperty('--tetris-hud-orientation',orientation);
+    root.setProperty('--tetris-hud-columns',layout.startsWith('split')?'1fr 1fr':'1fr');
+    root.setProperty('--tetris-hud-flow',layout==='portrait'?'column':'row');
+    const toastMaxWidth=layout.startsWith('split')
+      ? Math.round(Math.min(width,Math.max(240,width*0.85)))
+      : width;
+    root.setProperty('--tetris-hud-toast-x',`${Math.round(toastAnchor)}px`);
+    root.setProperty('--tetris-hud-toast-translate',toastTranslate.trim());
+    root.setProperty('--tetris-hud-toast-max',`${toastMaxWidth}px`);
+    if(doc){
+      doc.dataset.tetrisHudLayout=layout;
+      doc.dataset.tetrisHudOrientation=orientation;
+    }
   }
 
   function applyResponsiveCanvas(){
@@ -155,18 +204,50 @@ const tintCache=new Map();
 const effects=[];
 
 const PARALLAX_LAYERS=[
-  {key:'layer1',src:'/assets/backgrounds/parallax/arcade_layer1.png',speed:18,alpha:0.85},
-  {key:'layer2',src:'/assets/backgrounds/parallax/arcade_layer2.png',speed:36,alpha:1}
+  {
+    key:'layer1',
+    src:'/assets/backgrounds/parallax/arcade_layer1.png',
+    speed:18,
+    alpha:0.85,
+    tiers:[
+      { level:1, multiplier:1 },
+      { level:5, multiplier:1.2 },
+      { level:10, multiplier:1.45 },
+      { level:15, multiplier:1.7 },
+    ],
+  },
+  {
+    key:'layer2',
+    src:'/assets/backgrounds/parallax/arcade_layer2.png',
+    speed:36,
+    alpha:1,
+    tiers:[
+      { level:1, multiplier:1 },
+      { level:5, multiplier:1.3 },
+      { level:10, multiplier:1.65 },
+      { level:15, multiplier:1.95 },
+    ],
+  }
 ];
 const parallaxLayers=PARALLAX_LAYERS.map(cfg=>({
   key:cfg.key,
   src:cfg.src,
-  speed:cfg.speed,
+  baseSpeed:Number.isFinite(cfg.speed)?cfg.speed:0,
+  tiers:Array.isArray(cfg.tiers)
+    ? cfg.tiers.map(tier=>({
+        level:Math.max(1,Number.isFinite(tier?.level)?Math.floor(tier.level):1),
+        multiplier:Number.isFinite(tier?.multiplier)?tier.multiplier:undefined,
+        speed:Number.isFinite(tier?.speed)?tier.speed:undefined,
+      })).sort((a,b)=>a.level-b.level)
+    : [],
   alpha:typeof cfg.alpha==='number'?Math.max(0,Math.min(1,cfg.alpha)):1,
   offset:0,
   image:null,
   width:0,
-  height:0
+  height:0,
+  renderWidth:0,
+  renderHeight:0,
+  currentSpeed:Number.isFinite(cfg.speed)?cfg.speed:0,
 }));
 const parallaxRequests=new Set();
 
@@ -258,13 +339,32 @@ const motionPreference=params.get('motion');
 const motionPrefersAnimation=motionPreference==='animate'||motionPreference==='on';
 const motionPrefersReduction=motionPreference==='reduce'||motionPreference==='off';
 const shouldReduceMotion=motionPrefersReduction||(!motionPrefersAnimation && !!reduceMotionQuery?.matches);
+function parseSeedParam(value){
+  if(value==null) return null;
+  if(typeof value==='number' && Number.isFinite(value)) return value>>>0;
+  if(typeof value!=='string') return null;
+  const trimmed=value.trim();
+  if(!trimmed) return null;
+  const radix=trimmed.startsWith('0x')||trimmed.startsWith('0X')?16:10;
+  const parsed=Number.parseInt(trimmed,radix);
+  if(!Number.isFinite(parsed)) return null;
+  return (parsed>>>0);
+}
+const requestedRandomizerMode=params.get('randomizer')||params.get('rng')||'';
+const requestedSeed=parseSeedParam(params.get('seed'));
 const mode=params.has('spectate')?'spectate':(params.get('replay')?'replay':'play');
 const replayFile=params.get('replay');
+
+const initialRandomizerMode=requestedRandomizerMode||'bag';
+const initialSeed=typeof requestedSeed==='number'?requestedSeed:createSeed();
+const pieceRandomizer=createRandomizerSelector({ mode: initialRandomizerMode, seed: initialSeed });
+let rngSeed=pieceRandomizer.seed;
 
 const broadcastState={
   supported:false,
   channel:'tetris',
   mode,
+  randomizerMode:pieceRandomizer.mode,
   open:false,
   lastEvent:null,
   lastInbound:null,
@@ -315,6 +415,24 @@ function ensureParallaxLayers(){
   }
 }
 
+function resolveLayerSpeed(layer,currentLevel){
+  if(!layer) return 0;
+  const base=Number.isFinite(layer.baseSpeed)?layer.baseSpeed:0;
+  const tiers=Array.isArray(layer.tiers)?layer.tiers:[];
+  if(!tiers.length) return base;
+  let speed=base;
+  for(const tier of tiers){
+    const threshold=Math.max(1,Number.isFinite(tier.level)?Math.floor(tier.level):1);
+    if(currentLevel>=threshold){
+      if(Number.isFinite(tier.speed)) speed=tier.speed;
+      else if(Number.isFinite(tier.multiplier)) speed=base*tier.multiplier;
+    }else{
+      break;
+    }
+  }
+  return speed;
+}
+
 function getParallaxMetrics(layer){
   if(!layer) return null;
   const img=layer.image;
@@ -332,13 +450,13 @@ function getParallaxMetrics(layer){
 }
 
 function updateParallax(dt){
-  if(shouldReduceMotion) return;
   ensureParallaxLayers();
   if(!Number.isFinite(dt)) dt=0;
   for(const layer of parallaxLayers){
     const metrics=getParallaxMetrics(layer);
     if(!metrics) continue;
-    const speed=Number.isFinite(layer.speed)?layer.speed:0;
+    const speed=shouldReduceMotion?0:resolveLayerSpeed(layer, level);
+    layer.currentSpeed=speed;
     if(!speed) continue;
     let offset=(layer.offset||0)+speed*dt;
     const span=metrics.width;
@@ -352,7 +470,9 @@ function updateParallax(dt){
 
 function resetParallax(){
   for(const layer of parallaxLayers){
-    if(layer) layer.offset=0;
+    if(!layer) continue;
+    layer.offset=0;
+    layer.currentSpeed=resolveLayerSpeed(layer, level);
   }
 }
 
@@ -666,17 +786,38 @@ const rotationGrid={
     return getGridCell(grid,x,y);
   },
 };
-let rngSeed=createSeed();
-const bagRandomizer=createBag(rngSeed);
+
+function syncRandomizerUrl(){
+  if(typeof history?.replaceState!=='function') return;
+  if(typeof URL!=='function') return;
+  if(mode!=='play') return;
+  try{
+    const current=new URL(location.href);
+    if(Number.isInteger(rngSeed)) current.searchParams.set('seed',String(rngSeed>>>0));
+    else current.searchParams.delete('seed');
+    const randomizerMode=pieceRandomizer.mode;
+    if(randomizerMode && randomizerMode!=='bag') current.searchParams.set('randomizer',randomizerMode);
+    else current.searchParams.delete('randomizer');
+    history.replaceState({},'',`${current.pathname}${current.search}${current.hash}`);
+  }catch(err){
+    console.warn('[tetris] unable to sync randomizer params',err);
+  }
+}
 
 function reseed(seed=createSeed()){
-  rngSeed=bagRandomizer.reset(seed);
+  const parsedSeed=parseSeedParam(seed);
+  const nextSeed=typeof parsedSeed==='number'?parsedSeed:createSeed();
+  rngSeed=pieceRandomizer.reset(nextSeed);
+  if(!Number.isInteger(rngSeed)) rngSeed=pieceRandomizer.seed;
+  syncRandomizerUrl();
   const replayApi=globalScope?.Replay;
   if(mode==='play' && replayApi && typeof replayApi.setSeed==='function'){
     replayApi.setSeed(rngSeed);
   }
   return rngSeed;
 }
+
+syncRandomizerUrl();
 
 function summarizeBroadcastPayload(data){
   if(!data || typeof data!=='object') return null;
@@ -696,6 +837,7 @@ function summarizeBroadcastPayload(data){
   if(nextPiece) summary.next=nextPiece;
   if(holdPiece) summary.hold=holdPiece;
   if(Number.isInteger(data.seed)) summary.seed=data.seed;
+  if(typeof data.randomizerMode==='string' && data.randomizerMode) summary.randomizer=data.randomizerMode;
   if(Array.isArray(data.grid) || data.grid instanceof Uint8Array){
     summary.hasGrid=true;
     let filled=0;
@@ -724,6 +866,7 @@ function logBroadcastEvent(direction,payload,details){
     level,
     lines,
     combo,
+    randomizerMode:pieceRandomizer.mode,
     ready:tetrisReady,
   };
   if(details && typeof details==='object') Object.assign(entry,details);
@@ -742,6 +885,7 @@ function logBroadcastEvent(direction,payload,details){
   if(eventType==='open') broadcastState.open=true;
   if(eventType==='close') broadcastState.open=false;
   broadcastState.mode=mode;
+  broadcastState.randomizerMode=pieceRandomizer.mode;
   broadcastState.lastEvent=record;
   if(direction==='inbound') broadcastState.lastInbound=record;
   if(direction==='outbound') broadcastState.lastOutbound=record;
@@ -780,6 +924,7 @@ function getPublicState(){
     canHold,
     showGhost,
     seed:rngSeed,
+    randomizerMode:pieceRandomizer.mode,
     grid: cloneMatrix(grid),
     current: clonePiece(cur),
     next: clonePiece(nextM),
@@ -804,6 +949,7 @@ function getBroadcastSnapshot(){
     supported:broadcastState.supported,
     channel:broadcastState.channel,
     mode:broadcastState.mode,
+    randomizerMode:broadcastState.randomizerMode,
     open:broadcastState.open,
     lastEvent:cloneBroadcastEvent(broadcastState.lastEvent),
     lastInbound:cloneBroadcastEvent(broadcastState.lastInbound),
@@ -823,6 +969,7 @@ function snapshotScore(){
     lines,
     combo,
     mode,
+    randomizerMode:pieceRandomizer.mode,
     started,
     paused,
     over,
@@ -848,6 +995,7 @@ function snapshotEntities(){
       canHold,
       showGhost,
       seed:rngSeed,
+      randomizerMode:pieceRandomizer.mode,
     },
   };
 }
@@ -918,10 +1066,27 @@ const TetrisAPI={
   get nextPiece(){ return clonePiece(nextM); },
   get holdPiece(){ return clonePiece(holdM); },
   get seed(){ return rngSeed; },
+  get randomizerMode(){ return pieceRandomizer.mode; },
+  get randomizerModes(){
+    return Array.isArray(pieceRandomizer.modes)?pieceRandomizer.modes.slice():[];
+  },
   get state(){ return getPublicState(); },
-  generateSequence(count=14,seed=rngSeed){
+  generateSequence(count=14,seed=rngSeed,modeOverride){
     const safeCount=Math.max(0,Math.min(10000,Number.isFinite(count)?Math.floor(count):0));
-    return generateBagSequence(seed, safeCount);
+    const parsedSeed=parseSeedParam(seed);
+    const resolvedSeed=typeof parsedSeed==='number'?parsedSeed:(Number.isFinite(seed)?(seed>>>0):rngSeed);
+    const requestedMode=typeof modeOverride==='string' && modeOverride.trim()?modeOverride:pieceRandomizer.mode;
+    return generateRandomSequence(resolvedSeed, safeCount, requestedMode);
+  },
+  setSeed(seed){
+    return reseed(seed);
+  },
+  setRandomizerMode(nextMode,seed){
+    const parsedSeed=seed!==undefined?parseSeedParam(seed):undefined;
+    const appliedMode=pieceRandomizer.setMode(nextMode,typeof parsedSeed==='number'?parsedSeed:undefined);
+    rngSeed=pieceRandomizer.seed;
+    syncRandomizerUrl();
+    return appliedMode;
   },
   start(){
     if(over) return false;
@@ -1004,7 +1169,7 @@ function nextFromBag(){
     const key=(t&&SHAPES[t])?t:'I';
     return {m:SHAPES[key].map(r=>r.slice()),t:key};
   }
-  const t=bagRandomizer.next();
+  const t=pieceRandomizer.next();
   return {m:SHAPES[t].map(r=>r.slice()),t};
 }
 
@@ -1029,7 +1194,17 @@ if(bc && mode==='spectate'){
       grid=importGrid(data.grid);
       ({cur,nextM,holdM,score,level,lines,over,paused,started,showGhost}=data);
       if(typeof data.combo==='number') combo=data.combo;
-      if(Number.isInteger(data.seed)) rngSeed=data.seed>>>0;
+      if(typeof data.randomizerMode==='string' && data.randomizerMode){
+        const normalizedMode=data.randomizerMode;
+        if(pieceRandomizer.mode!==normalizedMode){
+          pieceRandomizer.setMode(normalizedMode, data.seed);
+        }else if(Number.isInteger(data.seed)){
+          pieceRandomizer.reset(data.seed);
+        }
+      }else if(Number.isInteger(data.seed)){
+        pieceRandomizer.reset(data.seed);
+      }
+      rngSeed=Number.isInteger(data.seed)?(data.seed>>>0):pieceRandomizer.seed;
       syncScoreDisplay();
       updateGhost();
     }
@@ -1648,7 +1823,7 @@ function loop(ts){
   ctx.clearRect(0,0,c.width,c.height);
   draw();
   if(bc && mode==='play'){
-    const payload={grid:cloneGrid(grid),cur,nextM,holdM,score,level,lines,over,paused,started,showGhost,combo,seed:rngSeed};
+    const payload={grid:cloneGrid(grid),cur,nextM,holdM,score,level,lines,over,paused,started,showGhost,combo,seed:rngSeed,randomizerMode:pieceRandomizer.mode};
     bc.postMessage(payload);
     logBroadcastEvent('outbound',payload,{event:'message'});
   }

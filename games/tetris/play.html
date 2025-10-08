@@ -19,15 +19,53 @@
 
     body.game-shell .hud {
       --hud-max-width: var(--tetris-hud-max-width, 720px);
-      --hud-center: var(--tetris-hud-center, 50%);
       --hud-top: var(--tetris-hud-top, 16px);
+      --hud-anchor-x: var(--tetris-hud-toast-x, var(--tetris-hud-center, 50%));
+      --hud-anchor-translate: var(--tetris-hud-toast-translate, -50%);
+      --hud-toast-max: var(--tetris-hud-toast-max, var(--hud-max-width));
+      display: grid;
+      grid-auto-flow: var(--tetris-hud-flow, row);
+      grid-template-columns: var(--tetris-hud-columns, 1fr);
+      justify-items: center;
+      align-content: flex-start;
     }
 
     body.game-shell .hud .toast {
-      left: var(--hud-center);
+      left: var(--hud-anchor-x);
       top: var(--hud-top);
-      max-width: min(100%, var(--hud-max-width));
-      width: min(100%, var(--hud-max-width));
+      max-width: min(100%, var(--hud-toast-max));
+      width: min(100%, var(--hud-toast-max));
+      transform: translate3d(var(--hud-anchor-translate), 0, 0);
+      text-align: center;
+      animation: tetris-toast-fade-in 0.2s;
+    }
+
+    :root[data-tetris-hud-layout='split-left'] body.game-shell .hud {
+      justify-items: start;
+    }
+
+    :root[data-tetris-hud-layout='split-right'] body.game-shell .hud {
+      justify-items: end;
+    }
+
+    :root[data-tetris-hud-layout='split-left'] body.game-shell .hud .toast {
+      text-align: left;
+    }
+
+    :root[data-tetris-hud-layout='split-right'] body.game-shell .hud .toast {
+      text-align: right;
+    }
+
+    @keyframes tetris-toast-fade-in {
+      from {
+        opacity: 0;
+        transform: translate3d(var(--hud-anchor-translate), -10px, 0);
+      }
+
+      to {
+        opacity: 1;
+        transform: translate3d(var(--hud-anchor-translate), 0, 0);
+      }
     }
   </style>
 </head>
