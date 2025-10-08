@@ -12,7 +12,7 @@ export const games = [
     "difficulty": "easy",
     "released": "2025-08-20",
     "playUrl": "/games/pong/",
-    "thumbnail": "/games/pong/thumb.png",
+    "thumbnail": "/games/pong/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/paddle.png",
@@ -280,7 +280,7 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/asteroids/",
-    "thumbnail": "/games/asteroids/thumb.png",
+    "thumbnail": "/games/asteroids/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"
@@ -317,7 +317,7 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/maze3d/",
-    "thumbnail": "/games/maze3d/thumb.png",
+    "thumbnail": "/games/maze3d/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/maze3d/wall.png",
@@ -353,7 +353,7 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
-    "thumbnail": "/games/platformer/thumb.png",
+    "thumbnail": "/games/platformer/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -389,6 +389,7 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/runner/",
+    "thumbnail": "/games/runner/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -425,7 +426,7 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
-    "thumbnail": "/games/shooter/thumb.png",
+    "thumbnail": "/games/shooter/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"

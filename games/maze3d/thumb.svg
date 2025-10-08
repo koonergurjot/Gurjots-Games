@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="title desc">
+  <title id="title">Maze 3D thumbnail</title>
+  <desc id="desc">Isometric maze platforms with a glowing goal cube.</desc>
+  <defs>
+    <linearGradient id="maze-bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0a0f1f" />
+      <stop offset="100%" stop-color="#101b3a" />
+    </linearGradient>
+  </defs>
+  <rect width="160" height="90" rx="12" fill="url(#maze-bg)" />
+  <g transform="translate(30 20)">
+    <g fill="#22395b" stroke="#16233d" stroke-width="2">
+      <path d="M0 40 L20 30 L40 40 L20 50 Z" />
+      <path d="M40 20 L60 10 L80 20 L60 30 Z" />
+      <path d="M80 40 L100 30 L120 40 L100 50 Z" />
+      <path d="M40 40 L60 30 L80 40 L60 50 Z" />
+    </g>
+    <g fill="#1b2c4a" stroke="#111f35" stroke-width="2">
+      <path d="M0 40 L0 20 L20 10 L20 30 Z" />
+      <path d="M40 20 L40 0 L60 -10 L60 10 Z" />
+      <path d="M80 40 L80 20 L100 10 L100 30 Z" />
+      <path d="M40 40 L40 20 L60 10 L60 30 Z" />
+    </g>
+    <g transform="translate(60 6)">
+      <path d="M0 0 L12 -6 L24 0 L12 6 Z" fill="#38bdf8" stroke="#0ea5e9" stroke-width="2" />
+      <path d="M0 0 L0 14 L12 20 L12 6 Z" fill="#1e88e5" stroke="#0f5ea8" stroke-width="2" />
+      <path d="M24 0 L24 14 L12 20 L12 6 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="2" />
+      <circle cx="12" cy="8" r="3" fill="#f8fafc" />
+    </g>
+  </g>
+</svg>

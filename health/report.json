@@ -32,7 +32,7 @@
         ]
       },
       "thumbnail": {
-        "found": "games/pong/thumb.png",
+        "found": "games/pong/thumb.svg",
         "placeholder": false
       },
       "status": {
@@ -555,7 +555,7 @@
         ]
       },
       "thumbnail": {
-        "found": "games/asteroids/thumb.png",
+        "found": "games/asteroids/thumb.svg",
         "placeholder": false
       },
       "status": {
@@ -585,9 +585,9 @@
             "resolved": "games/asteroids/diag-adapter.js"
           },
           {
-            "requirement": "thumb.png",
+            "requirement": "thumb.svg",
             "found": true,
-            "resolved": "games/asteroids/thumb.png"
+            "resolved": "games/asteroids/thumb.svg"
           }
         ],
         "globs": []
@@ -612,7 +612,7 @@
         ]
       },
       "thumbnail": {
-        "found": "games/maze3d/thumb.png",
+        "found": "games/maze3d/thumb.svg",
         "placeholder": false
       },
       "status": {
@@ -669,7 +669,7 @@
         ]
       },
       "thumbnail": {
-        "found": "games/platformer/thumb.png",
+        "found": "games/platformer/thumb.svg",
         "placeholder": false
       },
       "status": {
@@ -741,7 +741,7 @@
         ]
       },
       "thumbnail": {
-        "found": "games/runner/thumb.png",
+        "found": "games/runner/thumb.svg",
         "placeholder": false
       },
       "status": {
@@ -776,9 +776,9 @@
             "resolved": "games/runner/sample-level.json"
           },
           {
-            "requirement": "thumb.png",
+            "requirement": "thumb.svg",
             "found": true,
-            "resolved": "games/runner/thumb.png"
+            "resolved": "games/runner/thumb.svg"
           }
         ],
         "globs": []
@@ -803,7 +803,7 @@
         ]
       },
       "thumbnail": {
-        "found": "games/shooter/thumb.png",
+        "found": "games/shooter/thumb.svg",
         "placeholder": false
       },
       "status": {
@@ -828,9 +828,9 @@
             "resolved": "games/shooter/diagnostics-adapter.js"
           },
           {
-            "requirement": "thumb.png",
+            "requirement": "thumb.svg",
             "found": true,
-            "resolved": "games/shooter/thumb.png"
+            "resolved": "games/shooter/thumb.svg"
           }
         ],
         "globs": []

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="title desc">
+  <title id="title">City Runner thumbnail</title>
+  <desc id="desc">Runner sprinting across rooftops with city skyline and obstacles.</desc>
+  <defs>
+    <linearGradient id="runner-bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+  </defs>
+  <rect width="160" height="90" rx="12" fill="url(#runner-bg)" />
+  <g fill="#334155">
+    <rect x="10" y="58" width="20" height="18" rx="3" />
+    <rect x="38" y="46" width="24" height="30" rx="3" />
+    <rect x="72" y="52" width="26" height="24" rx="3" />
+    <rect x="108" y="40" width="28" height="36" rx="3" />
+  </g>
+  <g fill="#0ea5e9">
+    <rect x="14" y="62" width="4" height="6" rx="1" />
+    <rect x="44" y="50" width="4" height="6" rx="1" />
+    <rect x="80" y="56" width="4" height="6" rx="1" />
+    <rect x="118" y="44" width="4" height="6" rx="1" />
+  </g>
+  <g transform="translate(60 22)">
+    <path d="M20 54 L30 42 L44 48 L34 60 Z" fill="#f97316" stroke="#ea580c" stroke-width="3" stroke-linejoin="round" />
+    <path d="M24 38 L32 28 L40 32 L36 44 Z" fill="#facc15" stroke="#eab308" stroke-width="3" stroke-linejoin="round" />
+    <path d="M18 28 L24 16 L32 16 L28 30 Z" fill="#38bdf8" stroke="#0ea5e9" stroke-width="3" stroke-linejoin="round" />
+    <path d="M12 36 L18 30 L24 36 L18 44 Z" fill="#f1f5f9" stroke="#cbd5f5" stroke-width="3" stroke-linejoin="round" />
+  </g>
+  <g fill="#f97316">
+    <rect x="30" y="68" width="12" height="4" rx="2" />
+    <rect x="94" y="62" width="10" height="4" rx="2" />
+  </g>
+</svg>
