@@ -1297,7 +1297,7 @@ function buildMarkdownReport(
   scoreDetails,
 ) {
   const lines = [];
-  lines.push('# Code Doctor Report');
+  lines.push('# Code Doctor');
   lines.push('');
   lines.push(`Generated: ${generatedAt}`);
   lines.push('');
@@ -1357,7 +1357,7 @@ function buildMarkdownReport(
   if (fatalError) {
     lines.push('## Errors');
     lines.push('');
-    lines.push('The Code Doctor encountered a fatal error:');
+    lines.push('Code Doctor encountered a fatal error:');
     lines.push('');
     lines.push(formatMarkdownBlock(fatalError));
     lines.push('');
