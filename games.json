@@ -11,6 +11,7 @@
     "difficulty": "easy",
     "released": "2025-08-20",
     "playUrl": "/games/pong/",
+    "entry": "/games/pong/index.html",
     "thumbnail": "/games/pong/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -50,6 +51,7 @@
     "difficulty": "easy",
     "released": "2025-08-25",
     "playUrl": "/games/snake/",
+    "entry": "/games/snake/index.html",
     "thumbnail": "/games/snake/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -88,6 +90,7 @@
     "difficulty": "medium",
     "released": "2025-08-26",
     "playUrl": "/games/tetris/",
+    "entry": "/games/tetris/index.html",
     "thumbnail": "/games/tetris/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -129,6 +132,7 @@
     "difficulty": "medium",
     "released": "2025-08-26",
     "playUrl": "/games/breakout/",
+    "entry": "/games/breakout/index.html",
     "thumbnail": "/games/breakout/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -169,6 +173,7 @@
     "difficulty": "hard",
     "released": "2025-08-20",
     "playUrl": "/games/chess/",
+    "entry": "/games/chess/index.html",
     "thumbnail": "/games/chess/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -206,6 +211,7 @@
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/chess3d/",
+    "entry": "/games/chess3d/index.html",
     "thumbnail": "/games/chess3d/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -243,6 +249,7 @@
     "difficulty": "medium",
     "released": "2025-08-20",
     "playUrl": "/games/2048/",
+    "entry": "/games/2048/index.html",
     "thumbnail": "/games/2048/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -279,6 +286,7 @@
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/asteroids/",
+    "entry": "/games/asteroids/index.html",
     "thumbnail": "/games/asteroids/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -316,6 +324,7 @@
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/maze3d/",
+    "entry": "/games/maze3d/index.html",
     "thumbnail": "/games/maze3d/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -352,6 +361,7 @@
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
+    "entry": "/games/platformer/index.html",
     "thumbnail": "/games/platformer/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -388,6 +398,7 @@
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/runner/",
+    "entry": "/games/runner/index.html",
     "thumbnail": "/games/runner/thumb.svg",
     "firstFrame": {
       "sprites": [
@@ -425,6 +436,7 @@
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
+    "entry": "/games/shooter/index.html",
     "thumbnail": "/games/shooter/thumb.svg",
     "firstFrame": {
       "sprites": [
