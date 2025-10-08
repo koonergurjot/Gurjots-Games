@@ -4,6 +4,7 @@ import { createPieces, applySnapshot, animateMove, update as updatePieces } from
 import { mountHUD } from "./ui/hud.js";
 import { mountThemePicker } from "./ui/themePicker.js";
 import { mountCameraPresets } from "./ui/cameraPresets.js";
+import { mountEvalMood } from "./ui/evalMood.js";
 import { log, warn } from '../../tools/reporters/console-signature.js';
 import { injectHelpButton } from '../../shared/ui.js';
 import { pushEvent } from "/games/common/diag-adapter.js";
@@ -115,6 +116,7 @@ let currentCamera;
 let searchToken = 0;
 let evalBar;
 let lastMoveHelper;
+let evalMoodEffect;
 let autoRotate = localStorage.getItem('chess3d.rotate') === '1';
 let postedReady=false;
 let lastEvaluation = null;
@@ -207,9 +209,11 @@ function handlePostMove(){
         fen: logic.fen(),
         timestamp: Date.now(),
       };
+      evalMoodEffect?.update(lastEvaluation);
     }).catch((err) => {
       if (token === evaluationToken) {
         warn('chess3d', '[Chess3D] evaluation failed', err);
+        evalMoodEffect?.update(null);
       }
     });
   }catch(_){ }
@@ -369,6 +373,7 @@ mountHUD({
     thinkingEl.hidden = true;
     lastEvaluation = null;
     evaluationToken++;
+    evalMoodEffect?.update(null);
     notifyStateChange('play', { reason: 'new-game' });
     maybeAIMove();
   },
@@ -381,6 +386,7 @@ difficultyEl?.addEventListener('change', () => {
   logic.stopSearch();
   searchToken++;
   thinkingEl.hidden = true;
+  evalMoodEffect?.update(null);
   maybeAIMove();
 });
 
@@ -443,6 +449,8 @@ async function boot(){
   controls.update();
 
   mountCameraPresets(document.getElementById('hud'), camera, controls);
+  evalMoodEffect = mountEvalMood(stage, () => currentCamera);
+  evalMoodEffect?.update(null);
 
   const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.8);
   scene.add(amb);
@@ -514,6 +522,7 @@ async function boot(){
     if (shouldReset) {
       applySnapshot(snapshot.pieces);
       try { lastMoveHelper?.clear?.(); } catch (_) {}
+      evalMoodEffect?.update(lastEvaluation);
     }
     updateStatus();
     if (reason === 'move' && snapshot.lastMove) {
