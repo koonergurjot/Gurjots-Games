@@ -202,6 +202,8 @@ export function boot() {
     weaponTimer: 0,
     invuln: 0,
     weaponId: 'blaster',
+    rimFlashTimer: 0,
+    rimFlashDuration: 0,
     layer: COLLISION_LAYERS.PLAYER,
     mask: COLLISION_LAYERS.ENEMY | COLLISION_LAYERS.ENEMY_PROJECTILE | COLLISION_LAYERS.LOOT,
   };
@@ -215,6 +217,8 @@ export function boot() {
   const lootDrops = [];
   const activeWaves = [];
   const rayEffects = [];
+  const muzzleFlashes = [];
+  const PLAYER_RIM_FLASH_DURATION = 1 / 60;
 
   let elapsedTime = 0;
   let nextWaveIndex = 0;
@@ -667,6 +671,74 @@ export function boot() {
     ctx.restore();
   }
 
+  function spawnMuzzleFlash(actor, angle) {
+    if (!actor) return;
+    const radius = Math.max(4, actor.r || 12);
+    const offset = radius + 2;
+    const x = actor.x + Math.cos(angle) * offset;
+    const y = actor.y + Math.sin(angle) * offset;
+    const cone = (30 + Math.random() * 15) * (Math.PI / 180);
+    const duration = 0.06 + Math.random() * 0.04;
+    muzzleFlashes.push({
+      x,
+      y,
+      angle,
+      life: 0,
+      duration,
+      cone,
+      length: 42,
+      glowRadius: Math.max(10, radius * 1.4),
+    });
+  }
+
+  function updateMuzzleFlashes(delta) {
+    for (let i = muzzleFlashes.length - 1; i >= 0; i--) {
+      const flash = muzzleFlashes[i];
+      flash.life += delta;
+      if (flash.life >= flash.duration) {
+        muzzleFlashes.splice(i, 1);
+      }
+    }
+  }
+
+  function drawMuzzleFlashes() {
+    if (!muzzleFlashes.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const flash of muzzleFlashes) {
+      const t = Math.max(0, 1 - flash.life / flash.duration);
+      const length = flash.length * (0.75 + 0.35 * t);
+      const halfCone = (flash.cone || (35 * Math.PI / 180)) * 0.5;
+      const baseColor = `rgba(255, 196, 120, ${0.55 * t})`;
+      const startX = flash.x;
+      const startY = flash.y;
+      const endX = startX + Math.cos(flash.angle) * length;
+      const endY = startY + Math.sin(flash.angle) * length;
+      const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
+      gradient.addColorStop(0, `rgba(255, 220, 180, ${0.7 * t})`);
+      gradient.addColorStop(0.45, `rgba(255, 180, 80, ${0.4 * t})`);
+      gradient.addColorStop(1, 'rgba(255, 120, 40, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(startX + Math.cos(flash.angle - halfCone) * length, startY + Math.sin(flash.angle - halfCone) * length);
+      ctx.lineTo(startX + Math.cos(flash.angle + halfCone) * length, startY + Math.sin(flash.angle + halfCone) * length);
+      ctx.closePath();
+      ctx.fill();
+
+      const glowRadius = flash.glowRadius * (0.85 + 0.25 * t);
+      ctx.fillStyle = `rgba(253, 186, 116, ${0.25 * t})`;
+      ctx.beginPath();
+      ctx.arc(startX, startY, glowRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.arc(startX, startY, glowRadius * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function updateExplosions() {
     if (!explosions.length) return;
     const totalFrames = Math.max(1, explosionSprite.totalFrames || 1);
@@ -849,6 +921,11 @@ export function boot() {
             width: projectileDef.width || 28,
             color: source === 'enemy' ? '#f472b6' : '#60a5fa',
           });
+          if (source === 'player') {
+            spawnMuzzleFlash(actor, shotAngle);
+            player.rimFlashDuration = PLAYER_RIM_FLASH_DURATION;
+            player.rimFlashTimer = PLAYER_RIM_FLASH_DURATION;
+          }
           if (hit) {
             spawnChromaticBurst(actor.x + Math.cos(shotAngle) * 40, actor.y + Math.sin(shotAngle) * 40, 0.6);
           }
@@ -873,6 +950,11 @@ export function boot() {
           projectile.layer = source === 'enemy' ? COLLISION_LAYERS.ENEMY_PROJECTILE : COLLISION_LAYERS.PLAYER_PROJECTILE;
           projectile.owner = actor;
           projectiles.push(projectile);
+          if (source === 'player') {
+            spawnMuzzleFlash(actor, shotAngle);
+            player.rimFlashDuration = PLAYER_RIM_FLASH_DURATION;
+            player.rimFlashTimer = PLAYER_RIM_FLASH_DURATION;
+          }
           fired = true;
         }
       }
@@ -1163,6 +1245,12 @@ export function boot() {
 
     const weaponDef = getWeapon(player.weaponId);
     player.weaponTimer = Math.max(0, (player.weaponTimer || 0) - delta);
+    if (player.rimFlashTimer > 0) {
+      player.rimFlashTimer = Math.max(0, player.rimFlashTimer - delta);
+      if (player.rimFlashTimer === 0) {
+        player.rimFlashDuration = 0;
+      }
+    }
     if ((keys.has(' ') || keys.has('Enter')) && player.weaponTimer <= 0){
       if (fireWeapon(player, weaponDef, 'player')) {
         player.weaponTimer = weaponDef.fireCooldown || 0.2;
@@ -1180,6 +1268,7 @@ export function boot() {
     updateLootTexts(delta);
     updateChromaticBursts(delta);
     updateRayEffects(delta);
+    updateMuzzleFlashes(delta);
     updateScreenShake(delta);
 
     publishDiagnostics('running');
@@ -1260,7 +1349,20 @@ export function boot() {
     ctx.beginPath();
     ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
     ctx.fill();
+    if (player.rimFlashTimer > 0 && player.rimFlashDuration > 0) {
+      const rimStrength = Math.max(0, Math.min(1, player.rimFlashTimer / player.rimFlashDuration));
+      const rimAlpha = 0.55 * rimStrength;
+      const rimRadius = player.r + 1.5;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = `rgba(255, 176, 102, ${rimAlpha})`;
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, rimRadius, -Math.PI / 5, Math.PI / 5);
+      ctx.stroke();
+    }
     ctx.restore();
+
+    drawMuzzleFlashes();
 
     drawExplosions();
     drawChromaticBursts();
