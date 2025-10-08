@@ -382,24 +382,108 @@ function isImageReady(img){
   return !!img && img.complete && img.naturalWidth>0 && img.naturalHeight>0;
 }
 
+function clamp(value,min,max){
+  return Math.min(max,Math.max(min,value));
+}
+
+function hexToRgb(color){
+  if(typeof color!=='string') return null;
+  let hex=color.trim();
+  if(hex.startsWith('#')) hex=hex.slice(1);
+  if(hex.length===3){
+    hex=hex.split('').map(ch=>ch+ch).join('');
+  }
+  if(hex.length!==6) return null;
+  const num=parseInt(hex,16);
+  if(Number.isNaN(num)) return null;
+  const r=(num>>16)&0xff;
+  const g=(num>>8)&0xff;
+  const b=num&0xff;
+  return { r, g, b };
+}
+
+function rgbToHsl({ r, g, b }){
+  const rn=r/255;
+  const gn=g/255;
+  const bn=b/255;
+  const max=Math.max(rn,gn,bn);
+  const min=Math.min(rn,gn,bn);
+  const delta=max-min;
+  let h=0;
+  if(delta!==0){
+    if(max===rn) h=((gn-bn)/delta)%6;
+    else if(max===gn) h=(bn-rn)/delta+2;
+    else h=(rn-gn)/delta+4;
+    h*=60;
+    if(h<0) h+=360;
+  }
+  const l=(max+min)/2;
+  const s=delta===0?0:delta/(1-Math.abs(2*l-1));
+  return { h, s, l };
+}
+
+function hslToRgb({ h, s, l }){
+  const c=(1-Math.abs(2*l-1))*s;
+  const hp=h/60;
+  const x=c*(1-Math.abs((hp%2)-1));
+  let rn=0,gn=0,bn=0;
+  if(hp>=0&&hp<1){ rn=c; gn=x; }
+  else if(hp>=1&&hp<2){ rn=x; gn=c; }
+  else if(hp>=2&&hp<3){ gn=c; bn=x; }
+  else if(hp>=3&&hp<4){ gn=x; bn=c; }
+  else if(hp>=4&&hp<5){ rn=x; bn=c; }
+  else if(hp>=5&&hp<6){ rn=c; bn=x; }
+  const m=l-c/2;
+  const r=Math.round((rn+m)*255);
+  const g=Math.round((gn+m)*255);
+  const b=Math.round((bn+m)*255);
+  return { r, g, b };
+}
+
+function rgbToHex({ r, g, b }){
+  const toHex=v=>v.toString(16).padStart(2,'0');
+  return `#${toHex(clamp(r,0,255))}${toHex(clamp(g,0,255))}${toHex(clamp(b,0,255))}`;
+}
+
+function adjustLightness(color,delta){
+  const rgb=hexToRgb(color);
+  if(!rgb) return color;
+  const hsl=rgbToHsl(rgb);
+  hsl.l=clamp(hsl.l+delta/100,0,1);
+  return rgbToHex(hslToRgb(hsl));
+}
+
 function getTintedBlock(color){
-  const base=spriteStore.block;
-  if(!isImageReady(base) || !color) return null;
+  if(!color) return null;
   if(tintCache.has(color)) return tintCache.get(color);
+  const base=spriteStore.block;
+  const width=(isImageReady(base)?(base.naturalWidth||base.width):24)||24;
+  const height=(isImageReady(base)?(base.naturalHeight||base.height):24)||24;
   const canvas=document.createElement('canvas');
-  const width=base.naturalWidth||base.width||24;
-  const height=base.naturalHeight||base.height||24;
   canvas.width=width;
   canvas.height=height;
   const context=canvas.getContext('2d');
   if(!context) return null;
   context.imageSmoothingEnabled=false;
   context.clearRect(0,0,width,height);
-  context.drawImage(base,0,0,width,height);
-  context.globalCompositeOperation='source-atop';
   context.fillStyle=color;
   context.fillRect(0,0,width,height);
-  context.globalCompositeOperation='source-over';
+  const gradient=context.createLinearGradient(0,0,0,height);
+  gradient.addColorStop(0,adjustLightness(color,15));
+  gradient.addColorStop(1,adjustLightness(color,-10));
+  context.fillStyle=gradient;
+  context.fillRect(0,0,width,height);
+  const lightRim=adjustLightness(color,25);
+  const darkRim=adjustLightness(color,-25);
+  context.globalAlpha=0.25;
+  context.fillStyle=lightRim;
+  context.fillRect(0,0,width,1);
+  context.fillRect(0,0,1,height);
+  context.globalAlpha=0.20;
+  context.fillStyle=darkRim;
+  context.fillRect(0,height-1,width,1);
+  context.fillRect(width-1,0,1,height);
+  context.globalAlpha=1;
   tintCache.set(color,canvas);
   return canvas;
 }
