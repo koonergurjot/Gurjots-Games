@@ -20,9 +20,10 @@ Before any other check runs, Game Doctor validates `games.json` against [`tools/
 
 The schema enforces:
 
-- required catalog fields (`id`, `slug`, `title`, `playUrl`, `firstFrame.sprites`, `help.tips`, etc.)
+- required catalog fields (`id`, `slug`, `title`, `description`, `controls`, `engineType`, `assets.sprites`, `thumbnailPath`,
+  `featureFlags`, `minDevice.width`, etc.)
 - canonical formats (e.g. IDs/slugs are lowercase-hyphenated, `playUrl` ends with `/games/<slug>/`, ISO `released` dates, asset paths under `/assets/`)
-- no unexpected top-level, `firstFrame`, or `help` properties
+- no unexpected top-level, `assets`, or `help` properties
 
 If validation fails you will see output similar to:
 

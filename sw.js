@@ -259,7 +259,7 @@ async function loadCatalogAssets() {
       addAsset(game.playUrl);
     }
 
-    const meta = game?.firstFrame || game?.firstFrameAssets;
+    const meta = game?.assets || game?.firstFrame || game?.firstFrameAssets;
     if (!meta) continue;
 
     const sprites = normalizeList(meta.sprites || meta.images);

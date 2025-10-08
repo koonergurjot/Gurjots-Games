@@ -42,7 +42,11 @@ export async function preloadFirstFrameAssets(slug) {
   } catch (err) {
     console.warn('[assets] unable to read catalog for slug', slug, err);
   }
-  const meta = game?.firstFrame || game?.firstFrameAssets || null;
+  const meta =
+    game?.assets ||
+    game?.firstFrame ||
+    game?.firstFrameAssets ||
+    null;
   if (!meta) return;
   const sprites = normalizeList(meta.sprites || meta.images);
   const audio = normalizeList(meta.audio || meta.sounds);

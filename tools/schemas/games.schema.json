@@ -11,12 +11,18 @@
       "id",
       "slug",
       "title",
-      "short",
+      "description",
+      "controls",
       "tags",
+      "engineType",
+      "assets",
+      "version",
+      "thumbnailPath",
+      "featureFlags",
+      "minDevice",
       "difficulty",
       "released",
       "playUrl",
-      "firstFrame",
       "help"
     ],
     "properties": {
@@ -31,6 +37,14 @@
         "minLength": 1
       },
       "title": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": {
+        "type": "string",
+        "minLength": 1
+      },
+      "controls": {
         "type": "string",
         "minLength": 1
       },
@@ -59,9 +73,75 @@
         "type": "string",
         "pattern": "^/games/[a-z0-9-]+/$"
       },
+      "engineType": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$",
+        "minLength": 1
+      },
+      "version": {
+        "type": "string",
+        "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9.-]+)?$"
+      },
+      "thumbnailPath": {
+        "type": "string",
+        "pattern": "^/(assets|games)/.+"
+      },
+      "featureFlags": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9+\\-/ ]*$"
+        }
+      },
+      "minDevice": {
+        "type": "object",
+        "required": ["width", "height"],
+        "additionalProperties": false,
+        "properties": {
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "memoryMB": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "cpu": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
       "thumbnail": {
         "type": "string",
         "pattern": "^/(assets|games)/.+"
+      },
+      "assets": {
+        "type": "object",
+        "required": ["sprites"],
+        "additionalProperties": false,
+        "properties": {
+          "sprites": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^/assets/.+"
+            }
+          },
+          "audio": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^/assets/.+"
+            }
+          }
+        }
       },
       "firstFrame": {
         "type": "object",

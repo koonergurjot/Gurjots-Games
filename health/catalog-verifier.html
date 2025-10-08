@@ -19,7 +19,7 @@
 </head>
 <body>
 <h1>Catalog Verifier</h1>
-<p>Checks <code>/games.json</code> vs actual files and validates preload assets listed in <code>firstFrame</code>.</p>
+<p>Checks <code>/games.json</code> vs actual files and validates preload assets listed in <code>assets</code> (falls back to <code>firstFrame</code>).</p>
 <div id="out">Loading…</div>
 <script>
 (async function(){
@@ -46,7 +46,8 @@
     if (!g.title) chips.push(chip('warn','missing title'));
     if (!g.difficulty) chips.push(chip('muted','no difficulty'));
 
-    const first = (g.firstFrame && (g.firstFrame.sprites||[]).concat(g.firstFrame.audio||[])) || [];
+    const assets = g.assets || g.firstFrame || {};
+    const first = ((assets.sprites||[]).concat(assets.audio||[]));
     let checked = 0, missing = 0;
     await Promise.all(first.map(async (url)=>{
       try{
