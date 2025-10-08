@@ -2,95 +2,122 @@ export function copyGrid(grid){
   return grid.map(r=>r.slice());
 }
 
+export function compressLine(line){
+  const filtered=line.filter(v=>v!==0);
+  const zeros=Array(line.length-filtered.length).fill(0);
+  return filtered.concat(zeros);
+}
+
+export function mergeLine(line){
+  const merged=line.slice();
+  let gained=0;
+  const merges=[];
+  for(let i=0;i<merged.length-1;i++){
+    const current=merged[i];
+    if(current===0) continue;
+    if(current===merged[i+1]){
+      const value=current*2;
+      merged[i]=value;
+      merged[i+1]=0;
+      gained+=value;
+      merges.push({from:[i,i+1],to:i,value});
+      i++;
+    }
+  }
+  return {line:merged,gained,merges};
+}
+
+function compressWithSources(line, sources){
+  const compressed=[];
+  const compressedSources=[];
+  for(let i=0;i<line.length;i++){
+    const v=line[i];
+    if(v!==0){
+      compressed.push(v);
+      compressedSources.push(sources[i]);
+    }
+  }
+  while(compressed.length<line.length){
+    compressed.push(0);
+    compressedSources.push([]);
+  }
+  return {line:compressed,sources:compressedSources};
+}
+
+function buildCoords(dir, index, size){
+  const coords=[];
+  if(dir===0){
+    for(let x=0;x<size;x++) coords.push({x,y:index});
+  }else if(dir===2){
+    for(let x=0;x<size;x++) coords.push({x:size-1-x,y:index});
+  }else if(dir===1){
+    for(let y=0;y<size;y++) coords.push({x:index,y});
+  }else if(dir===3){
+    for(let y=0;y<size;y++) coords.push({x:index,y:size-1-y});
+  }
+  return coords;
+}
+
+function normalizeLine(grid, coords){
+  return coords.map(({x,y})=>grid[y][x]);
+}
+
 export function computeMove(grid, dir){
   const N=grid.length;
   const after=Array.from({length:N},()=>Array(N).fill(0));
-  const animations=[]; let moved=false; let gained=0;
-  if(dir===0){
-    for(let y=0;y<N;y++){
-      let target=0, lastMerge=-1;
-      for(let x=0;x<N;x++){
-        const v=grid[y][x]; if(!v) continue;
-        if(after[y][target]===0){
-          after[y][target]=v; if(target!==x) moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:target,toY:y});
-        }else if(after[y][target]===v && lastMerge!==target){
-          after[y][target]+=v; gained+=after[y][target]; lastMerge=target; moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:target,toY:y});
-        }else{
-          target++; after[y][target]=v; if(target!==x) moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:target,toY:y});
-        }
+  const animations=[];
+  let moved=false;
+  let totalGained=0;
+
+  for(let i=0;i<N;i++){
+    const coords=buildCoords(dir,i,N);
+    const originalLine=normalizeLine(grid,coords);
+    const identitySources=originalLine.map((_,idx)=>[idx]);
+
+    const firstCompress=compressWithSources(originalLine,identitySources);
+    const merged=mergeLine(firstCompress.line);
+    const mergedSources=firstCompress.sources.map(arr=>arr.slice());
+    for(const merge of merged.merges){
+      const [a,b]=merge.from;
+      mergedSources[merge.to]=mergedSources[merge.to].concat(mergedSources[b]);
+      mergedSources[b]=[];
+    }
+    const finalCompress=compressWithSources(merged.line,mergedSources);
+    const finalLine=finalCompress.line;
+    const finalSources=finalCompress.sources;
+
+    for(let idx=0;idx<N;idx++){
+      const {x,y}=coords[idx];
+      after[y][x]=finalLine[idx];
+    }
+
+    const sourceToTarget=new Map();
+    finalSources.forEach((sourcesArr,targetIdx)=>{
+      for(const sourceIdx of sourcesArr){
+        sourceToTarget.set(sourceIdx,targetIdx);
+      }
+    });
+
+    for(let sourceIdx=0;sourceIdx<originalLine.length;sourceIdx++){
+      const value=originalLine[sourceIdx];
+      if(!value) continue;
+      const from=coords[sourceIdx];
+      const targetIndex=sourceToTarget.has(sourceIdx)?sourceToTarget.get(sourceIdx):sourceIdx;
+      const to=coords[targetIndex];
+      animations.push({value,fromX:from.x,fromY:from.y,toX:to.x,toY:to.y});
+    }
+
+    for(let idx=0;idx<N;idx++){
+      if(finalLine[idx]!==originalLine[idx]){
+        moved=true;
+        break;
       }
     }
-  }else if(dir===2){
-    for(let y=0;y<N;y++){
-      let target=0, lastMerge=-1;
-      for(let x=0;x<N;x++){
-        const v=grid[y][N-1-x]; if(!v) continue;
-        const fromX=N-1-x, toX=N-1-target;
-        if(after[y][toX]===0){
-          after[y][toX]=v; if(fromX!==toX) moved=true;
-          animations.push({value:v,fromX,fromY:y,toX,toY:y});
-        }else if(after[y][toX]===v && lastMerge!==target){
-          after[y][toX]+=v; gained+=after[y][toX]; lastMerge=target; moved=true;
-          animations.push({value:v,fromX,fromY:y,toX,toY:y});
-        }else{
-          target++; const nx=N-1-target; after[y][nx]=v; if(fromX!==nx) moved=true;
-          animations.push({value:v,fromX,fromY:y,toX:nx,toY:y});
-        }
-      }
-    }
-  }else if(dir===1){
-    for(let x=0;x<N;x++){
-      let target=0, lastMerge=-1;
-      for(let y=0;y<N;y++){
-        const v=grid[y][x]; if(!v) continue;
-        if(after[target][x]===0){
-          after[target][x]=v; if(target!==y) moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:x,toY:target});
-        }else if(after[target][x]===v && lastMerge!==target){
-          after[target][x]+=v; gained+=after[target][x]; lastMerge=target; moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:x,toY:target});
-        }else{
-          target++; after[target][x]=v; if(target!==y) moved=true;
-          animations.push({value:v,fromX:x,fromY:y,toX:x,toY:target});
-        }
-      }
-    }
-  }else if(dir===3){
-    for(let x=0;x<N;x++){
-      let target=0, lastMerge=-1;
-      for(let y=0;y<N;y++){
-        const v=grid[N-1-y][x]; if(!v) continue;
-        const fromY=N-1-y, toY=N-1-target;
-        if(after[toY][x]===0){
-          after[toY][x]=v; if(fromY!==toY) moved=true;
-          animations.push({value:v,fromX:x,fromY,toX:x,toY});
-        }else if(after[toY][x]===v && lastMerge!==target){
-          after[toY][x]+=v; gained+=after[toY][x]; lastMerge=target; moved=true;
-          animations.push({value:v,fromX:x,fromY,toX:x,toY});
-        }else{
-          target++; const ny=N-1-target; after[ny][x]=v; if(fromY!==ny) moved=true;
-          animations.push({value:v,fromX:x,fromY,toX:x,toY:ny});
-        }
-      }
-    }
+
+    totalGained+=merged.gained;
   }
-  return {after, animations, moved, gained};
-}
 
-export function pushState(history, grid, score){
-  const h=[...history,{grid:copyGrid(grid),score}];
-  if(h.length>10) h.shift();
-  return h;
-}
-
-export function undo(history){
-  if(history.length<=1) return null;
-  const h=history.slice(0,-1);
-  const {grid,score}=h[h.length-1];
-  return {grid:copyGrid(grid),score,history:h};
+  return {after,animations,moved,gained:totalGained};
 }
 
 export function canMove(grid){
@@ -107,6 +134,92 @@ export function simulate(grid, score, dir){
   const {after,moved,gained}=computeMove(grid,dir);
   if(!moved) return null;
   return {grid:after,score:score+gained,max:Math.max(...after.flat())};
+}
+
+export function hashState(grid, score, meta){
+  let hash=2166136261 ^ score;
+  for(const row of grid){
+    for(const value of row){
+      hash=Math.imul(hash ^ value,16777619);
+    }
+  }
+  if(meta){
+    const streak=meta.mergeStreak ?? 0;
+    const last=meta.lastMoveHadMerge ? 1 : 0;
+    hash=Math.imul(hash ^ streak,16777619);
+    hash=Math.imul(hash ^ last,16777619);
+  }
+  return (hash>>>0).toString(36);
+}
+
+function cloneState(state){
+  return {
+    grid:copyGrid(state.grid),
+    score:state.score,
+    rngState:state.rngState?{...state.rngState}:null,
+    meta:state.meta?{...state.meta}:null,
+    hash:state.hash
+  };
+}
+
+export function createHistoryManager({maxSize=50}={}){
+  let current=null;
+  const past=[];
+  const future=[];
+
+  return {
+    init(state){
+      current={...cloneState({...state,hash:hashState(state.grid,state.score,state.meta)})};
+      past.length=0;
+      future.length=0;
+    },
+    pushCurrent(){
+      if(!current) return;
+      if(past.length && past[past.length-1].hash===current.hash) return;
+      past.push(cloneState(current));
+      if(past.length>maxSize){
+        past.shift();
+      }
+    },
+    clearFuture(){
+      future.length=0;
+    },
+    commit(state){
+      current={...cloneState({...state,hash:hashState(state.grid,state.score,state.meta)})};
+    },
+    undo(){
+      if(!past.length || !current) return null;
+      future.push(cloneState(current));
+      current=past.pop();
+      return cloneState(current);
+    },
+    redo(){
+      if(!future.length || !current) return null;
+      past.push(cloneState(current));
+      if(past.length>maxSize){
+        past.shift();
+      }
+      current=future.pop();
+      return cloneState(current);
+    },
+    canUndo(){
+      return past.length>0;
+    },
+    canRedo(){
+      return future.length>0;
+    },
+    getCurrent(){
+      return current?cloneState(current):null;
+    }
+  };
+}
+
+export function confirmNoMoves(grid){
+  for(let dir=0;dir<4;dir++){
+    const {moved}=computeMove(grid,dir);
+    if(moved) return false;
+  }
+  return true;
 }
 
 function heuristic(grid){
