@@ -11,8 +11,6 @@
   const existingQueue = Array.isArray(global.__GG_DIAG_QUEUE) ? global.__GG_DIAG_QUEUE.splice(0) : [];
   global.__GG_DIAG_OPTS = Object.assign({}, { suppressButton: false }, global.__GG_DIAG_OPTS || {});
 
-  const ADAPTER_READY_TIMEOUT_MS = 5000;
-  const ADAPTER_READY_POLL_INTERVAL_MS = 50;
   const adapterReadyWaiters = [];
   let adapterReadyTimer = null;
   let adapterReadyDeadline = 0;
@@ -152,10 +150,6 @@
 
   const ADAPTER_READY_TIMEOUT_MS = 5000;
   const ADAPTER_READY_POLL_INTERVAL_MS = 50;
-  const adapterReadyWaiters = [];
-  let adapterReadyTimer = null;
-  let adapterReadyDeadline = 0;
-
   const state = {
     store: reportStore,
     maxLogs: reportStore?.config?.maxConsole || 500,
