@@ -15,20 +15,7 @@ export const games = [
     "difficulty": "easy",
     "released": "2025-08-20",
     "playUrl": "/games/pong/",
-    "version": "2.1.0",
-    "thumbnailPath": "/games/pong/thumb.png",
-    "thumbnail": "/games/pong/thumb.png",
-    "assets": {
-      "sprites": [
-        "/assets/sprites/paddle.png",
-        "/assets/sprites/ball.png"
-      ],
-      "audio": [
-        "/assets/audio/hit.wav",
-        "/assets/audio/powerup.wav",
-        "/assets/audio/click.wav"
-      ]
-    },
+    "thumbnail": "/games/pong/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/paddle.png",
@@ -453,19 +440,7 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/asteroids/",
-    "version": "1.0.0",
-    "thumbnailPath": "/games/asteroids/thumb.png",
-    "thumbnail": "/games/asteroids/thumb.png",
-    "assets": {
-      "sprites": [
-        "/assets/sprites/ship.png"
-      ],
-      "audio": [
-        "/assets/audio/hit.wav",
-        "/assets/audio/explode.wav",
-        "/assets/audio/powerup.wav"
-      ]
-    },
+    "thumbnail": "/games/asteroids/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"
@@ -513,18 +488,7 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/maze3d/",
-    "version": "1.0.0",
-    "thumbnailPath": "/games/maze3d/thumb.png",
-    "thumbnail": "/games/maze3d/thumb.png",
-    "assets": {
-      "sprites": [
-        "/assets/sprites/maze3d/wall.png",
-        "/assets/sprites/maze3d/floor.png"
-      ],
-      "audio": [
-        "/assets/audio/powerup.wav"
-      ]
-    },
+    "thumbnail": "/games/maze3d/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/maze3d/wall.png",
@@ -572,18 +536,7 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
-    "version": "1.0.0",
-    "thumbnailPath": "/games/platformer/thumb.png",
-    "thumbnail": "/games/platformer/thumb.png",
-    "assets": {
-      "sprites": [
-        "/assets/sprites/coin.png"
-      ],
-      "audio": [
-        "/assets/audio/hit.wav",
-        "/assets/audio/powerup.wav"
-      ]
-    },
+    "thumbnail": "/games/platformer/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -631,19 +584,7 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/runner/",
-    "version": "1.0.0",
-    "thumbnailPath": "/games/runner/thumb.png",
-    "thumbnail": "/games/runner/thumb.png",
-    "assets": {
-      "sprites": [
-        "/assets/sprites/coin.png"
-      ],
-      "audio": [
-        "/assets/audio/hit.wav",
-        "/assets/audio/powerup.wav",
-        "/assets/audio/click.wav"
-      ]
-    },
+    "thumbnail": "/games/runner/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -692,18 +633,7 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
-    "version": "1.0.0",
-    "thumbnailPath": "/games/shooter/thumb.png",
-    "thumbnail": "/games/shooter/thumb.png",
-    "assets": {
-      "sprites": [
-        "/assets/sprites/ship.png"
-      ],
-      "audio": [
-        "/assets/audio/explode.wav",
-        "/assets/audio/powerup.wav"
-      ]
-    },
+    "thumbnail": "/games/shooter/thumb.svg",
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"

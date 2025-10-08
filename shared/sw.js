@@ -88,7 +88,7 @@ export function precacheAssets(assets) {
   scheduleFlush(0);
 }
 
-export function cacheGameAssets(slug, files = ['index.html', 'main.js', 'thumb.png']) {
+export function cacheGameAssets(slug, files = ['index.html', 'main.js', 'thumb.svg']) {
   if (!slug || !Array.isArray(files) || !files.length) return;
   const baseUrl = new URL(`/games/${slug}/`, window.location.origin);
   const assets = files.map(file => {
