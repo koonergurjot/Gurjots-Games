@@ -1,9 +1,14 @@
 import * as net from './net.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
-import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
+import { drawTileOverlay, drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
 import { loadStrip } from '../../shared/assets.js';
-import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
-import { tiles, TILE } from './tiles.js';
+import {
+  play as playSfx,
+  setPaused as setAudioPaused,
+  setVolume as setAudioVolume,
+  getVolume as getAudioVolume,
+} from '../../shared/juice/audio.js';
+import { tiles, TILE, isSolid } from './tiles.js';
 import { loadLevelByIndex } from './level-loader.js';
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
@@ -397,6 +402,14 @@ const PLAYER_SPRITE_SPECS = {
   run: { src: '/assets/sprites/player/platformer_run.png', frameWidth: 16, frameHeight: 16, frames: 8 },
   jump: { src: '/assets/sprites/player/platformer_jump.png', frameWidth: 16, frameHeight: 16, frames: 1 },
 };
+
+const DEFAULT_BIOME = 'forest';
+const BIOME_OVERLAY_RULES = Object.freeze({
+  forest: Object.freeze({ solid: 'forest', hazard: 'forest-hazard' }),
+  cavern: Object.freeze({ solid: 'cavern', hazard: 'cavern-hazard' }),
+  industrial: Object.freeze({ solid: 'industrial', hazard: 'industrial-hazard' }),
+  default: Object.freeze({ solid: 'default', hazard: 'default-hazard' }),
+});
 
 const GOAL_SPRITE = tiles['3']?.sprite ?? null;
 function normKey(key) {
@@ -814,6 +827,151 @@ export async function boot() {
   const titleControls = overlayElements?.title;
   const pauseControls = overlayElements?.pause;
   const gameoverControls = overlayElements?.gameover;
+  const soundHud = document.getElementById('soundHud');
+  const soundSlider = document.getElementById('soundVolume');
+  const soundToggle = document.getElementById('soundToggle');
+  const soundStatus = document.getElementById('soundStatus');
+  const debugHud = document.getElementById('debugHud');
+  const debugHudList = document.getElementById('debugHudList');
+  const debugHudLog = document.getElementById('debugHudLog');
+  const audioPauseReasons = { game: false, shell: false, user: false };
+  let debugHudLastUpdate = 0;
+
+  function syncAudioPause() {
+    const shouldPause = Object.values(audioPauseReasons).some(Boolean);
+    setAudioPaused(shouldPause);
+    updateSoundHud();
+  }
+
+  function setAudioPauseReason(reason, value) {
+    if (!(reason in audioPauseReasons)) return;
+    const next = !!value;
+    if (audioPauseReasons[reason] === next) return;
+    audioPauseReasons[reason] = next;
+    syncAudioPause();
+  }
+
+  function updateSoundHud() {
+    if (!soundHud) return;
+    const volume = Math.round((typeof getAudioVolume === 'function' ? getAudioVolume() : 1) * 100);
+    const pausedByUser = audioPauseReasons.user;
+    const pausedByShell = audioPauseReasons.shell && !pausedByUser;
+    const pausedByGame = audioPauseReasons.game && !pausedByUser && !pausedByShell;
+    if (soundSlider && document.activeElement !== soundSlider) {
+      soundSlider.value = String(volume);
+    }
+    soundSlider?.setAttribute?.('aria-valuenow', String(volume));
+    if (soundStatus) {
+      if (pausedByUser) {
+        soundStatus.textContent = 'Muted';
+      } else if (pausedByShell) {
+        soundStatus.textContent = 'Shell Pause';
+      } else if (pausedByGame) {
+        soundStatus.textContent = 'Game Pause';
+      } else {
+        soundStatus.textContent = `${volume}%`;
+      }
+    }
+    if (soundToggle) {
+      soundToggle.textContent = pausedByUser ? 'Resume Audio' : 'Pause Audio';
+      soundToggle.setAttribute('aria-pressed', pausedByUser ? 'true' : 'false');
+    }
+  }
+
+  function renderDebugHud(now = (typeof performance !== 'undefined' ? performance.now() : Date.now())) {
+    if (!debugHud || !debugHudList) return;
+    if (now < debugHudLastUpdate + 250) return;
+    debugHudLastUpdate = now;
+    const record = ensureBootRecord();
+    const snapshot = buildBootSnapshot(record);
+    const level = determineBootLevel(record);
+    debugHud.classList.toggle('debugHud--warn', level === 'warn');
+    debugHud.classList.toggle('debugHud--error', level === 'error');
+
+    const entries = [];
+    const rafInfo = snapshot.raf || null;
+    if (rafInfo) {
+      let severity = 'info';
+      let value;
+      if (rafInfo.noTickLogged) {
+        value = 'No frames';
+        severity = 'error';
+      } else if (rafInfo.stalled) {
+        const gap = Math.round(rafInfo.sinceLastTick ?? rafInfo.lastDelta ?? 0);
+        value = `Stall ${Math.max(0, gap)}ms`;
+        severity = 'warn';
+      } else {
+        const gap = Math.round(rafInfo.sinceLastTick ?? rafInfo.lastDelta ?? 0);
+        value = gap > 0 ? `${gap}ms` : 'OK';
+      }
+      entries.push({ label: 'rAF', value, severity });
+    } else {
+      entries.push({ label: 'rAF', value: 'Booting', severity: 'info' });
+    }
+
+    const watchdog = snapshot.watchdogs || null;
+    if (watchdog) {
+      let value = watchdog.active ? 'Active' : 'Idle';
+      let severity = 'info';
+      if (watchdog.active) {
+        const armedAt = typeof watchdog.armedAt === 'number' ? watchdog.armedAt : null;
+        if (armedAt != null && Number.isFinite(armedAt)) {
+          const elapsed = Math.max(0, Math.round((now - armedAt) / 1000));
+          value = elapsed > 0 ? `Active • ${elapsed}s` : 'Active';
+        }
+        if (rafInfo?.stalled) {
+          severity = 'warn';
+        }
+      }
+      entries.push({ label: 'Watchdog', value, severity });
+    }
+
+    const canvasInfo = snapshot.canvas || null;
+    if (canvasInfo) {
+      const attached = canvasInfo.attached !== false;
+      const width = Number.isFinite(canvasInfo.width) ? canvasInfo.width : '—';
+      const height = Number.isFinite(canvasInfo.height) ? canvasInfo.height : '—';
+      const value = attached ? `${width}×${height}` : 'Detached';
+      const severity = attached ? 'info' : 'error';
+      entries.push({ label: 'Canvas', value, severity });
+    }
+
+    const phases = Array.isArray(snapshot.phases) ? snapshot.phases : [];
+    const latestPhase = phases.length ? phases[phases.length - 1] : null;
+    if (latestPhase) {
+      const phaseName = typeof latestPhase.name === 'string' ? latestPhase.name : 'phase';
+      entries.push({ label: 'Phase', value: phaseName, severity: 'info' });
+    }
+
+    while (debugHudList.firstChild) debugHudList.removeChild(debugHudList.firstChild);
+    for (const entry of entries) {
+      if (!entry) continue;
+      const item = document.createElement('li');
+      item.className = 'debugHud__row';
+      const label = document.createElement('span');
+      label.className = 'debugHud__label';
+      label.textContent = entry.label;
+      const value = document.createElement('span');
+      value.className = `debugHud__value debugHud__value--${entry.severity || 'info'}`;
+      value.textContent = entry.value;
+      item.append(label, value);
+      debugHudList.append(item);
+    }
+
+    if (debugHudLog) {
+      const logs = Array.isArray(snapshot.logs) ? snapshot.logs : [];
+      const latestLog = logs.length ? logs[logs.length - 1] : null;
+      if (latestLog) {
+        const levelName = (latestLog.level || 'info').toLowerCase();
+        const message = typeof latestLog.message === 'string' ? latestLog.message : '';
+        debugHudLog.textContent = `${levelName.toUpperCase()} • ${message}`;
+        debugHudLog.className = `debugHud__log debugHud__log--${levelName}`;
+      } else {
+        debugHudLog.textContent = 'Logs clear';
+        debugHudLog.className = 'debugHud__log';
+      }
+    }
+  }
 
   function setOverlayScene(kind) {
     if (!overlayRoot) return;
@@ -919,11 +1077,31 @@ export async function boot() {
   gameoverControls?.shareBtn?.addEventListener('click', () => shareRun());
   const defaultCoopLabel = startCoopBtn?.textContent?.trim() ?? 'Start Co-op';
 
+  soundSlider?.addEventListener('input', (event) => {
+    const value = Number.parseInt(event?.target?.value, 10);
+    if (!Number.isFinite(value)) return;
+    const normalized = Math.min(100, Math.max(0, value)) / 100;
+    setAudioVolume(normalized);
+    if (event?.target?.setAttribute) {
+      event.target.setAttribute('aria-valuenow', String(Math.round(normalized * 100)));
+    }
+    updateSoundHud();
+  });
+
+  soundToggle?.addEventListener('click', () => {
+    const next = !audioPauseReasons.user;
+    setAudioPauseReason('user', next);
+    updateSoundHud();
+  });
+
+  updateSoundHud();
+
   function applyPause(reason = 'user', opts = {}) {
     const { emitEvent = true } = opts || {};
     pauseReason = reason;
     paused = true;
-    setAudioPaused(true);
+    setAudioPauseReason('game', true);
+    setAudioPauseReason('shell', reason === 'shell');
     if (net.isConnected()) sendState();
     if (emitEvent) emitState('paused', { reason });
   }
@@ -932,7 +1110,8 @@ export async function boot() {
     const { emitEvent = true } = opts || {};
     paused = false;
     pauseReason = 'user';
-    setAudioPaused(false);
+    setAudioPauseReason('shell', false);
+    setAudioPauseReason('game', false);
     lastFrame = performance.now();
     if (net.isConnected()) sendState();
     if (emitEvent) emitState('running');
@@ -1060,7 +1239,8 @@ export async function boot() {
         applyResume();
       },
       onExit() {
-        setAudioPaused(true);
+        setAudioPauseReason('shell', false);
+        setAudioPauseReason('game', true);
       },
     };
   }
@@ -1212,6 +1392,7 @@ export async function boot() {
   let enemies = [];
   let currentLevelIndex = 0;
   let currentLevel = null;
+  let activeBiome = DEFAULT_BIOME;
   const camera = {
     x: 0,
     y: 0,
@@ -1525,6 +1706,9 @@ export async function boot() {
     }
     currentLevelIndex = index;
     currentLevel = data;
+    activeBiome = typeof data.biome === 'string' && data.biome
+      ? data.biome.toLowerCase()
+      : DEFAULT_BIOME;
     worldBounds.width = data.width * data.tileSize;
     worldBounds.height = data.height * data.tileSize;
     coins = data.coins.map((coin) => ({ ...coin, collected: false }));
@@ -1544,6 +1728,7 @@ export async function boot() {
     if (platformerApi) {
       platformerApi.coins = coins;
       platformerApi.goal = goal;
+      platformerApi.biome = activeBiome;
     }
     applySpawnPosition(localPlayer, data.spawn);
     applySpawnPosition(remotePlayer, data.spawn);
@@ -1566,6 +1751,21 @@ export async function boot() {
     const row = currentLevel.grid[ty];
     if (!row) return '0';
     return row[tx] ?? '0';
+  }
+
+  function overlayKeyForTile(biomeKey, def) {
+    if (!def) return null;
+    const normalized = typeof biomeKey === 'string' && biomeKey
+      ? biomeKey.toLowerCase()
+      : DEFAULT_BIOME;
+    const rules = BIOME_OVERLAY_RULES[normalized] || BIOME_OVERLAY_RULES.default;
+    if (def.name === 'lava' || def.texture === 'lava') {
+      return rules.hazard || rules.solid || null;
+    }
+    if (def.solid) {
+      return rules.solid || null;
+    }
+    return null;
   }
 
   function findTileCollision(entity) {
@@ -1900,7 +2100,8 @@ export async function boot() {
     gameOver = false;
     paused = !autoStart;
     pauseReason = autoStart ? 'user' : 'menu';
-    setAudioPaused(!autoStart ? true : false);
+    setAudioPauseReason('shell', false);
+    setAudioPauseReason('game', !autoStart);
     finalTime = null;
     runStart = performance.now();
     keys.clear();
@@ -1957,7 +2158,8 @@ export async function boot() {
     gameOver = true;
     paused = true;
     pauseReason = 'gameover';
-    setAudioPaused(true);
+    setAudioPauseReason('shell', false);
+    setAudioPauseReason('game', true);
     finalTime = performance.now();
     lastGameOver.title = title;
     lastGameOver.info = info;
@@ -2332,6 +2534,8 @@ export async function boot() {
     ctx.translate(renderOffsetX, renderOffsetY);
     ctx.scale(renderScale, renderScale);
 
+    renderDebugHud(now);
+
     const gradient = ctx.createLinearGradient(0, 0, 0, H);
     gradient.addColorStop(0, '#0d1a2b');
     gradient.addColorStop(1, '#0b1020');
@@ -2365,6 +2569,12 @@ export async function boot() {
           if (fillStyle) {
             ctx.fillStyle = fillStyle;
             ctx.fillRect(tx * tileSize, ty * tileSize, tileSize, tileSize);
+          }
+          const overlayKey = overlayKeyForTile(activeBiome, def);
+          if (overlayKey) {
+            const topCode = tileCodeAt(tx, ty - 1);
+            const topExposed = !isSolid(topCode);
+            drawTileOverlay(ctx, overlayKey, tx * tileSize, ty * tileSize, tileSize, { topExposed });
           }
         }
       }
@@ -2467,6 +2677,7 @@ export async function boot() {
     rafInfo.lastTick = now;
     rafInfo.tickCount = (rafInfo.tickCount || 0) + 1;
     rafInfo.lastDelta = dtMs;
+    rafInfo.sinceLastTick = dtMs;
     if (!rafInfo.firstTickAt) {
       rafInfo.firstTickAt = now;
       markPhase('raf:first-tick', { at: now });

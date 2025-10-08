@@ -16,6 +16,7 @@ const pendingPlays = [];
 
 let muted = false;
 let paused = false;
+let masterVolume = 1;
 
 const audioUnsupportedByEnv = (() => {
   if (!AudioCtor) return true;
@@ -94,9 +95,11 @@ function stopAll() {
 
 function performPlay(audio, options) {
   if (!AudioCtor || !(audio instanceof AudioCtor)) return false;
-  if (typeof options.volume === 'number') {
-    audio.volume = clampVolume(options.volume);
-  }
+  const baseVolume = typeof options.volume === 'number'
+    ? clampVolume(options.volume)
+    : 1;
+  audio.__ggBaseVolume = baseVolume;
+  audio.volume = clampVolume(baseVolume * masterVolume);
   if (options.restart !== false) {
     try { audio.currentTime = 0; } catch (_) {}
   }
@@ -176,6 +179,22 @@ function setPaused(value) {
   if (paused) stopAll();
 }
 
+function setVolume(value) {
+  const next = clampVolume(value);
+  if (next === masterVolume) return;
+  masterVolume = next;
+  if (!AudioCtor || audioDisabled) return;
+  for (const audio of Object.values(cache)) {
+    if (!(audio instanceof AudioCtor)) continue;
+    const base = typeof audio.__ggBaseVolume === 'number' ? audio.__ggBaseVolume : 1;
+    audio.volume = clampVolume(base * masterVolume);
+  }
+}
+
+function getVolume() {
+  return masterVolume;
+}
+
 function isMuted() {
   return muted;
 }
@@ -202,4 +221,15 @@ preload();
 requestUnlock();
 
 export const SFX = cache;
-export { preload, play, stopAll, setMuted, setPaused, isMuted, isPaused, unlock };
+export {
+  preload,
+  play,
+  stopAll,
+  setMuted,
+  setPaused,
+  setVolume,
+  getVolume,
+  isMuted,
+  isPaused,
+  unlock,
+};
