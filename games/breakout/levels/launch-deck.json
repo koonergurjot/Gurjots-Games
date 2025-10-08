@@ -1,0 +1,19 @@
+{
+  "name": "Launch Deck",
+  "speedRamp": 0.15,
+  "dropTable": {
+    "chance": 0.25
+  },
+  "materials": {
+    "A": { "hp": 1, "variant": 0, "score": 10, "powerMultiplier": 1 },
+    "B": { "hp": 2, "variant": 1, "score": 15, "powerMultiplier": 1.15 },
+    "C": { "hp": 3, "variant": 2, "score": 25, "powerMultiplier": 0.85 }
+  },
+  "rows": [
+    "AAAAAAAAAA",
+    "ABABABABAB",
+    "BBBBBBBBBB",
+    "ACACACACAC",
+    "CCCCCCCCCC"
+  ]
+}

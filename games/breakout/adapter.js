@@ -46,7 +46,8 @@ function snapshot(game) {
       w: brick.w,
       h: brick.h,
       hp: brick.hp,
-      power: brick.pu || null,
+      maxHp: brick.maxHp ?? brick.hp,
+      material: brick.materialKey || null,
     })),
   };
 }
