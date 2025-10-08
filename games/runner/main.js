@@ -59,51 +59,223 @@ function createSeededRng(seedValue = Math.random() * 0xffffffff) {
   };
 }
 
-const PARALLAX_LAYER_CONFIGS = Object.freeze([
-  Object.freeze({ src: '/assets/backgrounds/parallax/city_layer1.png', speed: 0.25, alpha: 0.65 }),
-  Object.freeze({ src: '/assets/backgrounds/parallax/city_layer2.png', speed: 0.45, alpha: 0.85 }),
-]);
-
 preloadTileTextures().catch(() => null);
 let postedReady = false;
 
 const globalScope = typeof window !== 'undefined' ? window : null;
 
-const parallaxAssets = (() => {
-  if (!globalScope || typeof globalScope.Image !== 'function') return [];
-  return PARALLAX_LAYER_CONFIGS.map(config => {
-    const img = new globalScope.Image();
-    const entry = {
-      image: img,
-      speed: typeof config.speed === 'number' ? config.speed : 0.25,
-      alpha: typeof config.alpha === 'number' ? clamp(config.alpha, 0, 1) : 1,
-      loaded: false,
-      width: 0,
-      height: 0,
-    };
+const SKYLINE_LAYER_SETTINGS = Object.freeze([
+  Object.freeze({
+    id: 'far',
+    speed: 0.2,
+    alpha: 0.65,
+    color: '#475569',
+    accentColor: '#64748b',
+    widthRange: [120, 260],
+    heightRange: [60, 140],
+    baseOffsetRange: [56, 84],
+    stackRange: [1, 2],
+    windowLights: false,
+  }),
+  Object.freeze({
+    id: 'mid',
+    speed: 0.5,
+    alpha: 0.82,
+    color: '#334155',
+    accentColor: '#475569',
+    widthRange: [70, 180],
+    heightRange: [80, 190],
+    baseOffsetRange: [34, 60],
+    stackRange: [2, 3],
+    windowLights: true,
+  }),
+  Object.freeze({
+    id: 'foreground',
+    speed: 1.0,
+    alpha: 1,
+    color: '#1e293b',
+    accentColor: '#2b3a56',
+    widthRange: [40, 120],
+    heightRange: [110, 220],
+    baseOffsetRange: [18, 32],
+    stackRange: [2, 4],
+    windowLights: true,
+  }),
+]);
+
+function randomRangeFrom(rng, min, max) {
+  const random = typeof rng === 'function' ? rng : Math.random;
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return random();
+  }
+  if (max <= min) {
+    return min;
+  }
+  return min + (max - min) * random();
+}
+
+function createLayerCanvas(width, height) {
+  if (!globalScope) return null;
+  if (typeof globalScope.OffscreenCanvas === 'function') {
     try {
-      img.decoding = 'async';
-    } catch (_) {
-      /* noop */
+      return new globalScope.OffscreenCanvas(width, height);
+    } catch (err) {
+      /* ignore construction errors */
     }
-    if ('loading' in img) {
-      img.loading = 'eager';
+  }
+  if (globalScope.document && typeof globalScope.document.createElement === 'function') {
+    const canvas = globalScope.document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    return canvas;
+  }
+  return null;
+}
+
+function addWindowLights(target, ctx, building, rng, options = {}) {
+  const { x, y, w, h } = building;
+  if (h < 24 || w < 18) return;
+  const chance = clamp(options.chance ?? 0.45, 0, 1);
+  if (rng() > chance) return;
+  const lightColor = options.color || 'rgba(253, 224, 71, 0.28)';
+  const spacingX = clamp(Math.round(randomRangeFrom(rng, 6, 9)), 4, 12);
+  const spacingY = clamp(Math.round(randomRangeFrom(rng, 9, 12)), 6, 16);
+  const windowW = clamp(Math.round(randomRangeFrom(rng, 2, 3)), 2, 4);
+  const windowH = clamp(Math.round(randomRangeFrom(rng, 4, 5)), 3, 6);
+  const startX = x + 4;
+  const endX = x + w - 4;
+  const startY = y + 6;
+  const endY = y + h - 6;
+  for (let px = startX; px < endX - windowW; px += spacingX) {
+    for (let py = startY; py < endY - windowH; py += spacingY) {
+      if (rng() > 0.55) continue;
+      if (ctx) {
+        ctx.fillStyle = lightColor;
+        ctx.fillRect(px, py, windowW, windowH);
+      }
+      target.push({ x: px, y: py, w: windowW, h: windowH, color: lightColor });
     }
-    img.addEventListener('load', () => {
-      entry.loaded = true;
-      entry.width = img.naturalWidth || img.width || 0;
-      entry.height = img.naturalHeight || img.height || 0;
+  }
+}
+
+function drawStackedBuilding(ctx, target, config, base) {
+  const {
+    left,
+    baseWidth,
+    baseHeight,
+    baseY,
+    color,
+    accentColor,
+    rng,
+    stackRange,
+  } = base;
+  const stacks = Math.max(1, Math.round(clamp(randomRangeFrom(rng, stackRange[0], stackRange[1]), stackRange[0], stackRange[1])));
+  let currentWidth = baseWidth;
+  let currentLeft = left;
+  let currentBase = baseY;
+  for (let level = 0; level < stacks; level++) {
+    const shrink = level === 0 ? 1 : clamp(randomRangeFrom(rng, 0.45, 0.82), 0.35, 0.9);
+    const segmentWidth = clamp(currentWidth * shrink, Math.max(12, baseWidth * 0.35), currentWidth);
+    const minHeight = level === 0 ? baseHeight : baseHeight * clamp(randomRangeFrom(rng, 0.25, 0.45), 0.22, 0.6);
+    const segmentHeight = clamp(minHeight, 12, currentBase);
+    const segmentLeft = currentLeft + (currentWidth - segmentWidth) / 2;
+    const segmentTop = Math.max(0, currentBase - segmentHeight);
+    const fill = level === 0 ? color : accentColor;
+    if (ctx) {
+      ctx.fillStyle = fill;
+      ctx.fillRect(segmentLeft, segmentTop, segmentWidth, segmentHeight);
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.15)';
+      ctx.fillRect(segmentLeft, segmentTop, Math.max(2, segmentWidth * 0.14), segmentHeight);
+    }
+    target.push({ x: segmentLeft, y: segmentTop, w: segmentWidth, h: segmentHeight, color: fill });
+    target.push({
+      x: segmentLeft,
+      y: segmentTop,
+      w: Math.max(2, segmentWidth * 0.14),
+      h: segmentHeight,
+      color: 'rgba(15, 23, 42, 0.15)',
     });
-    img.addEventListener('error', () => {
-      entry.loaded = false;
-    });
-    img.src = config.src;
-    if (typeof img.decode === 'function') {
-      img.decode().catch(() => null);
+    if (level === 0 && config.windowLights) {
+      addWindowLights(target, ctx, { x: segmentLeft, y: segmentTop, w: segmentWidth, h: segmentHeight }, rng, {
+        chance: 0.55,
+        color: config.id === 'foreground'
+          ? 'rgba(250, 204, 21, 0.35)'
+          : 'rgba(148, 163, 184, 0.25)',
+      });
     }
-    return entry;
-  });
-})();
+    currentBase = segmentTop;
+    currentLeft = segmentLeft;
+    currentWidth = segmentWidth;
+    if (currentBase <= 8) break;
+  }
+  if (ctx) {
+    ctx.fillStyle = 'rgba(148, 163, 184, 0.12)';
+    ctx.fillRect(left, baseY - baseHeight, baseWidth, 2);
+  }
+  target.push({ x: left, y: baseY - baseHeight, w: baseWidth, h: 2, color: 'rgba(148, 163, 184, 0.12)' });
+}
+
+function generateSkylineLayer(config, options = {}) {
+  const width = Math.max(1, Math.floor(options.width ?? VIRTUAL_WIDTH));
+  const ground = Math.max(1, Math.floor(options.ground ?? VIRTUAL_HEIGHT));
+  const rng = typeof options.rng === 'function' ? options.rng : Math.random;
+  const repeatScale = clamp(options.repeatScale ?? 2.4, 1.5, 3.5);
+  const repeatWidth = Math.max(width * repeatScale, width + (config.widthRange?.[1] ?? 120));
+  const canvasWidth = Math.ceil(repeatWidth);
+  const canvasHeight = ground;
+  const canvas = createLayerCanvas(canvasWidth, canvasHeight);
+  if (canvas) {
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+  }
+  const ctx = canvas ? canvas.getContext('2d') : null;
+  if (ctx) {
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+  }
+  const shapes = [];
+  const [minWidth, maxWidth] = config.widthRange || [80, 160];
+  const [minHeight, maxHeight] = config.heightRange || [80, 180];
+  const [minBaseOffset, maxBaseOffset] = config.baseOffsetRange || [20, 48];
+  const stackRange = config.stackRange || [1, 3];
+  const gapRange = config.gapRange || [12, 38];
+  const baseJitter = config.baseJitter ?? 6;
+  const baseOffset = clamp(randomRangeFrom(rng, minBaseOffset, maxBaseOffset), 0, ground - 12);
+  const baseY = clamp(ground - baseOffset, 40, ground);
+  let cursor = -randomRangeFrom(rng, 0, maxWidth);
+  while (cursor < canvasWidth + maxWidth) {
+    const baseWidth = clamp(randomRangeFrom(rng, minWidth, maxWidth), minWidth, maxWidth);
+    const jitter = randomRangeFrom(rng, -baseJitter, baseJitter);
+    const layerBase = clamp(baseY + jitter, 20, ground);
+    const maxSegmentHeight = clamp(maxHeight, 16, layerBase - 4);
+    const baseHeight = clamp(randomRangeFrom(rng, minHeight, maxSegmentHeight), 16, maxSegmentHeight);
+    drawStackedBuilding(ctx, shapes, config, {
+      left: cursor,
+      baseWidth,
+      baseHeight,
+      baseY: layerBase,
+      color: config.color,
+      accentColor: config.accentColor || config.color,
+      rng,
+      stackRange,
+    });
+    cursor += baseWidth + clamp(randomRangeFrom(rng, gapRange[0], gapRange[1]), 6, 72);
+  }
+  return {
+    id: config.id,
+    canvas: ctx ? canvas : null,
+    shapes,
+    repeatWidth: canvasWidth,
+    baseY,
+    speed: config.speed,
+    alpha: clamp(config.alpha ?? 1, 0, 1),
+    offset: 0,
+  };
+}
+
+function createProceduralSkyline(options = {}) {
+  if (!Array.isArray(SKYLINE_LAYER_SETTINGS) || !SKYLINE_LAYER_SETTINGS.length) return [];
+  return SKYLINE_LAYER_SETTINGS.map(config => generateSkylineLayer(config, options));
+}
 
 const runnerBridge = (() => {
   if (!globalScope) return null;
@@ -326,6 +498,7 @@ class RunnerGame {
     this.setSeed(this.seed);
 
     this.background = this.buildBackground(DEFAULT_LEVEL.background);
+    this.parallaxLayers = this.createSkylineLayers();
     this.distance = 0;
     this.elapsedSeconds = 0;
     this.spawnTimer = 160;
@@ -340,7 +513,6 @@ class RunnerGame {
     this.spawnRange = [...this.spawnRangeBase];
     this.difficultyProgress = 0;
     this.levelName = '';
-    this.parallaxLayers = parallaxAssets.map(asset => ({ asset, offset: 0 }));
 
     this.input = {
       jumpHeld: false,
@@ -974,6 +1146,16 @@ class RunnerGame {
     };
   }
 
+  createSkylineLayers() {
+    const layers = createProceduralSkyline({
+      width: VIRTUAL_WIDTH,
+      ground: this.groundY(),
+      rng: () => this.rand(),
+    });
+    if (!Array.isArray(layers)) return [];
+    return layers.map(layer => ({ ...layer, offset: layer?.offset ?? 0 }));
+  }
+
   sanitizeLevel(level = {}) {
     const rawObstacles = Array.isArray(level.obstacles) ? level.obstacles : [];
     const ground = this.groundY();
@@ -1003,11 +1185,7 @@ class RunnerGame {
     this.manualIndex = 0;
     this.clearActiveEntities();
     this.background = this.buildBackground(prepared.background);
-    if (Array.isArray(this.parallaxLayers)) {
-      for (const layer of this.parallaxLayers) {
-        if (layer) layer.offset = 0;
-      }
-    }
+    this.parallaxLayers = this.createSkylineLayers();
     this.spawnTimer = 120;
     this.coinTimer = this.randRange(240, 420);
     this.elapsedSeconds = 0;
@@ -1207,18 +1385,17 @@ class RunnerGame {
 
   updateParallax(travel) {
     if (!Array.isArray(this.parallaxLayers) || !this.parallaxLayers.length) return;
-    const ground = this.groundY();
     for (const layer of this.parallaxLayers) {
-      const asset = layer?.asset;
-      if (!asset) continue;
-      const baseWidth = asset.width || VIRTUAL_WIDTH;
-      const baseHeight = asset.height || ground;
-      if (baseWidth <= 0 || baseHeight <= 0) continue;
-      const scale = ground / baseHeight;
-      const destWidth = baseWidth * scale || VIRTUAL_WIDTH;
-      if (!Number.isFinite(destWidth) || destWidth <= 0) continue;
-      layer.offset = (layer.offset + travel * asset.speed) % destWidth;
-      if (layer.offset < 0) layer.offset += destWidth;
+      if (!layer) continue;
+      const scrollWidth = Math.max(1, Math.floor(layer.repeatWidth || layer.canvas?.width || VIRTUAL_WIDTH));
+      const speed = Number.isFinite(layer.speed) ? layer.speed : 1;
+      if (!Number.isFinite(scrollWidth) || scrollWidth <= 0) continue;
+      const delta = travel * speed;
+      if (!Number.isFinite(delta)) continue;
+      let offset = (layer.offset ?? 0) + delta;
+      offset %= scrollWidth;
+      if (offset < 0) offset += scrollWidth;
+      layer.offset = offset;
     }
   }
 
@@ -2060,24 +2237,29 @@ class RunnerGame {
 
   drawParallax(ctx) {
     if (!Array.isArray(this.parallaxLayers) || !this.parallaxLayers.length) return;
-    const ground = this.groundY();
     for (const layer of this.parallaxLayers) {
-      const asset = layer?.asset;
-      if (!asset || !asset.loaded || !asset.image) continue;
-      const baseWidth = asset.width || VIRTUAL_WIDTH;
-      const baseHeight = asset.height || ground;
-      if (baseWidth <= 0 || baseHeight <= 0) continue;
-      const scale = ground / baseHeight;
-      const destWidth = baseWidth * scale || VIRTUAL_WIDTH;
-      const destHeight = ground;
-      if (!Number.isFinite(destWidth) || destWidth <= 0) continue;
-      let startX = -layer.offset;
+      if (!layer) continue;
+      const repeatWidth = Math.max(1, Math.floor(layer.repeatWidth || layer.canvas?.width || VIRTUAL_WIDTH));
+      if (!Number.isFinite(repeatWidth) || repeatWidth <= 0) continue;
+      let startX = -(layer.offset ?? 0);
       if (!Number.isFinite(startX)) startX = 0;
-      while (startX > -destWidth) startX -= destWidth;
+      while (startX > -repeatWidth) startX -= repeatWidth;
       ctx.save();
-      ctx.globalAlpha = asset.alpha ?? 1;
-      for (let x = startX; x < VIRTUAL_WIDTH; x += destWidth) {
-        ctx.drawImage(asset.image, x, ground - destHeight, destWidth, destHeight);
+      ctx.globalAlpha = clamp(layer.alpha ?? 1, 0, 1);
+      if (layer.canvas && layer.canvas.width > 0 && layer.canvas.height > 0) {
+        const tileWidth = layer.canvas.width;
+        const tileHeight = layer.canvas.height;
+        for (let x = startX; x < VIRTUAL_WIDTH; x += repeatWidth) {
+          ctx.drawImage(layer.canvas, x, 0, tileWidth, tileHeight);
+        }
+      } else if (Array.isArray(layer.shapes) && layer.shapes.length) {
+        for (let x = startX; x < VIRTUAL_WIDTH; x += repeatWidth) {
+          for (const shape of layer.shapes) {
+            if (!shape) continue;
+            ctx.fillStyle = shape.color || '#1e293b';
+            ctx.fillRect(x + shape.x, shape.y, shape.w, shape.h);
+          }
+        }
       }
       ctx.restore();
     }
