@@ -11,6 +11,128 @@
   const existingQueue = Array.isArray(global.__GG_DIAG_QUEUE) ? global.__GG_DIAG_QUEUE.splice(0) : [];
   global.__GG_DIAG_OPTS = Object.assign({}, { suppressButton: false }, global.__GG_DIAG_OPTS || {});
 
+  const ADAPTER_READY_TIMEOUT_MS = 5000;
+  const ADAPTER_READY_POLL_INTERVAL_MS = 50;
+  const adapterReadyWaiters = [];
+  let adapterReadyTimer = null;
+  let adapterReadyDeadline = 0;
+
+  function ensureDiagnosticsAdapterModule(){
+    const resolved = resolveDiagnosticsAdapterModule();
+    if (resolved) return resolved;
+    const required = loadDiagnosticsAdapterModule();
+    const normalized = normalizeDiagnosticsAdapterModule(required);
+    if (normalized) {
+      const attached = attachDiagnosticsAdapterModule(normalized);
+      notifyDiagnosticsAdapterReady(attached);
+      return attached;
+    }
+    requestDiagnosticsAdapterScript();
+    return resolveDiagnosticsAdapterModule();
+  }
+
+  function resolveDiagnosticsAdapterModule(){
+    return normalizeDiagnosticsAdapterModule(global.GGDiagAdapters);
+  }
+
+  function normalizeDiagnosticsAdapterModule(candidate){
+    if (!candidate) return null;
+    if (typeof candidate === "object") {
+      if (typeof candidate.registerGameDiagnostics === "function" && typeof candidate.getGameDiagnostics === "function") {
+        return candidate;
+      }
+      if (candidate.default && candidate.default !== candidate) {
+        return normalizeDiagnosticsAdapterModule(candidate.default);
+      }
+    }
+    return null;
+  }
+
+  function attachDiagnosticsAdapterModule(moduleApi){
+    if (!moduleApi) return null;
+    const existing = normalizeDiagnosticsAdapterModule(global.GGDiagAdapters);
+    if (existing === moduleApi) return moduleApi;
+    const merged = Object.assign({}, existing || {}, moduleApi);
+    global.GGDiagAdapters = merged;
+    return merged;
+  }
+
+  function loadDiagnosticsAdapterModule(){
+    let required = null;
+    if (typeof module === "object" && module && typeof module.require === "function") {
+      try { required = module.require("./diagnostics/adapter.js"); } catch (_) {}
+    }
+    if (!required && typeof require === "function") {
+      try { required = require("./diagnostics/adapter.js"); } catch (_) {}
+    }
+    if (!required) {
+      requestDiagnosticsAdapterScript();
+    }
+    return required;
+  }
+
+  function requestDiagnosticsAdapterScript(){
+    if (typeof document === "undefined") return;
+    try {
+      const doc = document;
+      if (!doc) return;
+      if (doc.querySelector('script[data-gg-diag-adapter]')) return;
+      const script = doc.createElement("script");
+      script.type = "module";
+      script.src = "/games/common/diagnostics/adapter.js";
+      script.setAttribute("data-gg-diag-adapter", "true");
+      script.setAttribute("data-origin", "diag-core");
+      const parent = doc.head || doc.documentElement || doc.body;
+      parent?.appendChild(script);
+    } catch (_) {}
+  }
+
+  function whenDiagnosticsAdapterReady(callback){
+    if (typeof callback !== "function") return;
+    const resolved = resolveDiagnosticsAdapterModule();
+    if (resolved) {
+      callback(resolved);
+      return;
+    }
+    adapterReadyWaiters.push(callback);
+    requestDiagnosticsAdapterScript();
+    scheduleDiagnosticsAdapterPoll();
+  }
+
+  function scheduleDiagnosticsAdapterPoll(){
+    if (!adapterReadyWaiters.length) return;
+    if (adapterReadyTimer) return;
+    const scheduler = typeof global.setTimeout === "function" ? global.setTimeout : (typeof setTimeout === "function" ? setTimeout : null);
+    if (!scheduler) return;
+    if (!adapterReadyDeadline) adapterReadyDeadline = Date.now() + ADAPTER_READY_TIMEOUT_MS;
+    adapterReadyTimer = scheduler(() => {
+      adapterReadyTimer = null;
+      const moduleApi = resolveDiagnosticsAdapterModule();
+      if (moduleApi) {
+        notifyDiagnosticsAdapterReady(moduleApi);
+        return;
+      }
+      if (adapterReadyDeadline && Date.now() >= adapterReadyDeadline) {
+        adapterReadyWaiters.length = 0;
+        adapterReadyDeadline = 0;
+        return;
+      }
+      scheduleDiagnosticsAdapterPoll();
+    }, ADAPTER_READY_POLL_INTERVAL_MS);
+  }
+
+  function notifyDiagnosticsAdapterReady(moduleApi){
+    const resolved = normalizeDiagnosticsAdapterModule(moduleApi);
+    if (!resolved) return;
+    attachDiagnosticsAdapterModule(resolved);
+    if (!adapterReadyWaiters.length) return;
+    const waiters = adapterReadyWaiters.splice(0);
+    adapterReadyDeadline = 0;
+    for (const waiter of waiters){
+      try { waiter(resolved); } catch (err) { console.warn("[gg-diag] adapter waiter failed", err); }
+    }
+  }
+
   const reportStoreModule = ensureReportStoreModule();
   const reportStore = reportStoreModule.createReportStore({
     maxEntries: 500,
@@ -27,6 +149,12 @@
     { id: "network", label: "Network" },
     { id: "env", label: "Env" },
   ];
+
+  const ADAPTER_READY_TIMEOUT_MS = 5000;
+  const ADAPTER_READY_POLL_INTERVAL_MS = 50;
+  const adapterReadyWaiters = [];
+  let adapterReadyTimer = null;
+  let adapterReadyDeadline = 0;
 
   const state = {
     store: reportStore,
@@ -295,12 +423,6 @@
       return "";
     }
   }
-
-  const ADAPTER_READY_TIMEOUT_MS = 5000;
-  const ADAPTER_READY_POLL_INTERVAL_MS = 50;
-  const adapterReadyWaiters = [];
-  let adapterReadyTimer = null;
-  let adapterReadyDeadline = 0;
 
   function ensureDiagnosticsAdapterModule(){
     const resolved = resolveDiagnosticsAdapterModule();

@@ -30,6 +30,35 @@ const DEFAULT_LEVEL = {
 
 const SKY_GRADIENT = ['#1e293b', '#0f172a'];
 
+function lerp(a, b, t) {
+  return a + (b - a) * clamp(t, 0, 1);
+}
+
+function hashSeed(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value >>> 0;
+  }
+  if (typeof value === 'string') {
+    let hash = 2166136261;
+    for (let i = 0; i < value.length; i++) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+  return (Math.random() * 0xffffffff) >>> 0;
+}
+
+function createSeededRng(seedValue = Math.random() * 0xffffffff) {
+  let state = hashSeed(seedValue) || 0x6d2b79f5;
+  return () => {
+    state |= 0;
+    state = Math.imul(state ^ (state >>> 15), state | 1);
+    state ^= state + Math.imul(state ^ (state >>> 7), state | 61);
+    return ((state ^ (state >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 const PARALLAX_LAYER_CONFIGS = Object.freeze([
   Object.freeze({ src: '/assets/backgrounds/parallax/city_layer1.png', speed: 0.25, alpha: 0.65 }),
   Object.freeze({ src: '/assets/backgrounds/parallax/city_layer2.png', speed: 0.45, alpha: 0.85 }),
@@ -285,17 +314,31 @@ class RunnerGame {
 
     this.player = this.createPlayer();
     this.obstacles = [];
+    this.obstaclePool = [];
+    this.coins = [];
+    this.coinPool = [];
+    this.particles = [];
+    this.particlePool = [];
     this.manualObstacles = [];
     this.manualIndex = 0;
+
+    this.seed = this.resolveSeed(context);
+    this.setSeed(this.seed);
+
     this.background = this.buildBackground(DEFAULT_LEVEL.background);
     this.distance = 0;
+    this.elapsedSeconds = 0;
     this.spawnTimer = 160;
+    this.coinTimer = 280;
     this.score = 0;
     this.lastDrawnScore = -1;
     this.bestScore = 0;
     this.difficulty = 'med';
-    this.speed = DIFFICULTY_SETTINGS.med.speed;
-    this.spawnRange = [...DIFFICULTY_SETTINGS.med.spawnRange];
+    this.baseSpeed = DIFFICULTY_SETTINGS.med.speed;
+    this.spawnRangeBase = [...DIFFICULTY_SETTINGS.med.spawnRange];
+    this.speed = this.baseSpeed;
+    this.spawnRange = [...this.spawnRangeBase];
+    this.difficultyProgress = 0;
     this.levelName = '';
     this.parallaxLayers = parallaxAssets.map(asset => ({ asset, offset: 0 }));
 
@@ -305,6 +348,15 @@ class RunnerGame {
       slideHeld: false,
     };
 
+    this.analytics = {
+      nearMisses: 0,
+      perfects: 0,
+      coins: 0,
+      lastNearMisses: -1,
+      lastPerfects: -1,
+      lastDistance: -1,
+    };
+
     this.hud = {
       score: document.getElementById('score'),
       mission: document.getElementById('mission'),
@@ -312,6 +364,21 @@ class RunnerGame {
       restartBtn: document.getElementById('restartBtn'),
       shareBtn: document.getElementById('shareBtn'),
       diffSel: document.getElementById('diffSel'),
+      distance: document.getElementById('distanceStat'),
+      nearMisses: document.getElementById('nearMisses'),
+      perfects: document.getElementById('perfects'),
+    };
+
+    this.touchState = {
+      active: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      lastX: 0,
+      lastY: 0,
+      handled: false,
+      intent: null,
+      startTime: 0,
     };
 
     this.overlay = buildRunnerOverlay();
@@ -322,6 +389,7 @@ class RunnerGame {
     this.onKeyUp = this.handleKeyUp.bind(this);
     this.onPointerDown = this.handlePointerDown.bind(this);
     this.onPointerUp = this.handlePointerUp.bind(this);
+    this.onPointerMove = this.handlePointerMove.bind(this);
     this.onVisibilityChange = this.handleVisibilityChange.bind(this);
     this.onShellPause = this.handleShellPause.bind(this);
     this.onShellResume = this.handleShellResume.bind(this);
@@ -353,6 +421,7 @@ class RunnerGame {
     document.addEventListener('keydown', this.onKeyDown, { passive: false });
     document.addEventListener('keyup', this.onKeyUp, { passive: false });
     this.canvas.addEventListener('pointerdown', this.onPointerDown, { passive: false });
+    this.canvas.addEventListener('pointermove', this.onPointerMove, { passive: false });
     this.canvas.addEventListener('pointerup', this.onPointerUp, { passive: false });
     this.canvas.addEventListener('pointercancel', this.onPointerUp, { passive: false });
     document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -374,6 +443,7 @@ class RunnerGame {
     document.removeEventListener('keydown', this.onKeyDown);
     document.removeEventListener('keyup', this.onKeyUp);
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvas.removeEventListener('pointermove', this.onPointerMove);
     this.canvas.removeEventListener('pointerup', this.onPointerUp);
     this.canvas.removeEventListener('pointercancel', this.onPointerUp);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
@@ -818,6 +888,43 @@ class RunnerGame {
     return VIRTUAL_HEIGHT - GROUND_HEIGHT;
   }
 
+  resolveSeed(context = {}) {
+    const contextSeed = context?.meta?.seed ?? context?.seed;
+    if (contextSeed !== undefined && contextSeed !== null && contextSeed !== '') {
+      return hashSeed(contextSeed);
+    }
+    if (typeof URLSearchParams === 'function' && typeof location === 'object') {
+      try {
+        const params = new URLSearchParams(location.search || '');
+        const querySeed = params.get('seed');
+        if (querySeed) return hashSeed(querySeed);
+      } catch (_) {
+        /* ignore malformed URLs */
+      }
+    }
+    return hashSeed(Date.now());
+  }
+
+  setSeed(seedValue) {
+    this.seed = hashSeed(seedValue);
+    this.rng = createSeededRng(this.seed);
+    return this.seed;
+  }
+
+  rand() {
+    if (!this.rng) {
+      this.setSeed(this.seed ?? Date.now());
+    }
+    return this.rng();
+  }
+
+  randRange(min, max) {
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+      return this.rand();
+    }
+    return min + (max - min) * this.rand();
+  }
+
   createPlayer() {
     const baseHeight = 50;
     return {
@@ -841,20 +948,20 @@ class RunnerGame {
     const buildings = Array.isArray(source.buildings) ? source.buildings : [];
     const foreground = Array.isArray(source.foreground) ? source.foreground : [];
     const makeCloud = cloud => ({
-      x: numberOr(cloud.x, Math.random() * VIRTUAL_WIDTH),
-      y: numberOr(cloud.y, clamp(Math.random() * 140 + 20, 40, 160)),
-      w: clamp(numberOr(cloud.w, 120), 60, 220),
-      h: clamp(numberOr(cloud.h, 44), 28, 80),
+      x: numberOr(cloud.x, this.randRange(0, VIRTUAL_WIDTH)),
+      y: numberOr(cloud.y, clamp(this.randRange(0, 1) * 140 + 20, 40, 160)),
+      w: clamp(numberOr(cloud.w, this.randRange(60, 220)), 60, 220),
+      h: clamp(numberOr(cloud.h, this.randRange(28, 80)), 28, 80),
     });
     const makeBuilding = building => ({
-      x: numberOr(building.x, Math.random() * (VIRTUAL_WIDTH + 200)),
-      w: clamp(numberOr(building.w, 120), 60, 240),
-      h: clamp(numberOr(building.h, 180), 120, this.groundY() - 40),
+      x: numberOr(building.x, this.randRange(0, VIRTUAL_WIDTH + 200)),
+      w: clamp(numberOr(building.w, this.randRange(60, 240)), 60, 240),
+      h: clamp(numberOr(building.h, this.randRange(140, this.groundY() - 40)), 120, this.groundY() - 40),
     });
     const makeForeground = item => ({
-      x: numberOr(item.x, Math.random() * (VIRTUAL_WIDTH + 200)),
-      w: clamp(numberOr(item.w, 60), 40, 140),
-      h: clamp(numberOr(item.h, 32), 20, 60),
+      x: numberOr(item.x, this.randRange(0, VIRTUAL_WIDTH + 200)),
+      w: clamp(numberOr(item.w, this.randRange(40, 140)), 40, 140),
+      h: clamp(numberOr(item.h, this.randRange(20, 60)), 20, 60),
     });
     const ensureCount = (arr, maker, fallbackCount) => {
       if (arr.length > 0) return arr.map(maker);
@@ -876,7 +983,8 @@ class RunnerGame {
       const distance = Math.max(0, numberOr(ob.x, 0));
       const rawY = numberOr(ob.y, NaN);
       const top = rawY > 0 ? clamp(rawY, 0, ground - height) : ground - height;
-      return { distance, y: top, w: width, h: height };
+      const type = typeof ob.type === 'string' ? ob.type : 'block';
+      return { distance, y: top, w: width, h: height, type };
     });
     sanitized.sort((a, b) => a.distance - b.distance);
     return {
@@ -893,7 +1001,7 @@ class RunnerGame {
     this.levelName = name || prepared.name || this.levelName || '';
     this.manualObstacles = prepared.obstacles;
     this.manualIndex = 0;
-    this.obstacles = [];
+    this.clearActiveEntities();
     this.background = this.buildBackground(prepared.background);
     if (Array.isArray(this.parallaxLayers)) {
       for (const layer of this.parallaxLayers) {
@@ -901,6 +1009,11 @@ class RunnerGame {
       }
     }
     this.spawnTimer = 120;
+    this.coinTimer = this.randRange(240, 420);
+    this.elapsedSeconds = 0;
+    this.difficultyProgress = 0;
+    this.speed = this.baseSpeed;
+    this.spawnRange = [...this.spawnRangeBase];
     if (resetScore) {
       this.distance = 0;
       this.score = 0;
@@ -914,6 +1027,13 @@ class RunnerGame {
       this.paused = !autoStart;
       if (this.hud.shareBtn) this.hud.shareBtn.hidden = true;
       this.updateScoreDisplay(true);
+      this.analytics.nearMisses = 0;
+      this.analytics.perfects = 0;
+      this.analytics.coins = 0;
+      this.analytics.lastNearMisses = -1;
+      this.analytics.lastPerfects = -1;
+      this.analytics.lastDistance = -1;
+      this.updateAnalyticsDisplay(true);
     }
     if (!silent) {
       this.updateMission();
@@ -965,8 +1085,12 @@ class RunnerGame {
     const key = entry ? difficulty : 'med';
     const settings = entry || DIFFICULTY_SETTINGS.med;
     this.difficulty = key;
-    this.speed = settings.speed;
-    this.spawnRange = [...settings.spawnRange];
+    this.baseSpeed = settings.speed;
+    this.spawnRangeBase = [...settings.spawnRange];
+    this.speed = this.baseSpeed;
+    this.spawnRange = [...this.spawnRangeBase];
+    this.elapsedSeconds = 0;
+    this.difficultyProgress = 0;
     if (this.hud.diffSel) this.hud.diffSel.value = key;
     try {
       localStorage.setItem('runner:difficulty', key);
@@ -1099,19 +1223,44 @@ class RunnerGame {
   }
 
   advanceStep(step) {
+    this.elapsedSeconds += step / 60;
+    this.updateDifficultyCurve();
     const travel = this.speed * step;
     this.distance += travel;
     this.updateParallax(travel);
     this.spawnTimer -= travel;
+    this.coinTimer -= travel;
     this.spawnManualObstacles();
     if (this.spawnTimer <= 0) {
       this.spawnRandomObstacle();
     }
-    this.updateObstacles(travel);
+    if (this.coinTimer <= 0) {
+      this.spawnCoinPattern();
+    }
     this.updatePlayer(step);
+    this.updateObstacles(travel);
+    this.updateCoins(travel, step);
+    this.updateParticles(step);
     this.updateBackground(travel);
     this.updateScoreDisplay();
+    this.updateAnalyticsDisplay();
     this.checkCollisions();
+  }
+
+  updateDifficultyCurve() {
+    const settings = DIFFICULTY_SETTINGS[this.difficulty] || DIFFICULTY_SETTINGS.med;
+    const [baseMinGap, baseMaxGap] = this.spawnRangeBase;
+    const baseSpeed = settings.speed;
+    const timeProgress = clamp(this.elapsedSeconds / 90, 0, 1);
+    const distanceProgress = clamp(this.distance / 3200, 0, 1);
+    const combined = clamp(timeProgress * 0.6 + distanceProgress * 0.4, 0, 1.25);
+    this.difficultyProgress = combined;
+    const targetSpeed = baseSpeed + combined * 3.4;
+    this.speed = lerp(this.speed, targetSpeed, 0.02);
+    const minGap = baseMinGap * clamp(1 - combined * 0.55, 0.45, 1);
+    const maxGap = baseMaxGap * clamp(1 - combined * 0.35, 0.55, 1);
+    this.spawnRange[0] = Math.max(60, minGap);
+    this.spawnRange[1] = Math.max(this.spawnRange[0] + 20, maxGap);
   }
 
   spawnManualObstacles() {
@@ -1120,13 +1269,15 @@ class RunnerGame {
       const next = this.manualObstacles[this.manualIndex];
       const distanceAhead = Math.max(0, next.distance - this.distance);
       if (distanceAhead <= windowAhead) {
-        this.obstacles.push({
+        const obstacle = this.acquireObstacle({
           x: PLAYER_X + distanceAhead,
           y: next.y,
           w: next.w,
           h: next.h,
+          type: next.type || 'block',
           fromLevel: true,
         });
+        this.obstacles.push(obstacle);
         this.manualIndex++;
       } else {
         break;
@@ -1136,30 +1287,377 @@ class RunnerGame {
 
   spawnRandomObstacle() {
     const [minGap, maxGap] = this.spawnRange;
-    this.spawnTimer = minGap + Math.random() * (maxGap - minGap);
-    const roll = Math.random();
-    const baseX = VIRTUAL_WIDTH + 80 + Math.random() * 60;
-    if (roll < 0.28) {
-      const width = 70 + Math.random() * 40;
-      const height = 20 + Math.random() * 12;
-      const clearance = this.player.baseHeight - this.player.slideHeight + 12;
-      const top = clamp(this.groundY() - this.player.baseHeight - clearance, 60, this.groundY() - height - 10);
-      this.obstacles.push({ x: baseX, y: top, w: width, h: height, type: 'bar' });
+    this.spawnTimer = this.randRange(minGap, maxGap);
+    const difficulty = clamp(this.difficultyProgress, 0, 1.25);
+    const baseX = VIRTUAL_WIDTH + this.randRange(80, 140);
+    const roll = this.rand();
+    if (roll < 0.25 + difficulty * 0.35) {
+      this.spawnBarPattern(baseX, difficulty);
+    } else if (roll > 0.72 && difficulty > 0.4) {
+      this.spawnBlockCombo(baseX, difficulty);
     } else {
-      const width = 26 + Math.random() * 26;
-      const height = 34 + Math.random() * 36;
-      const top = this.groundY() - height;
-      this.obstacles.push({ x: baseX, y: top, w: width, h: height, type: 'block' });
+      this.spawnGroundBlock(baseX, difficulty);
     }
   }
 
+  spawnGroundBlock(baseX, difficulty) {
+    const width = clamp(this.randRange(26, 42 + difficulty * 26), 20, 120);
+    const height = clamp(this.randRange(34, 60 + difficulty * 36), 24, 160);
+    const top = this.groundY() - height;
+    const block = this.acquireObstacle({ x: baseX, y: top, w: width, h: height, type: 'block' });
+    this.obstacles.push(block);
+    if (difficulty > 0.55 && this.rand() < 0.2 + difficulty * 0.2) {
+      const offset = this.randRange(110, 180);
+      const width2 = clamp(width * (0.7 + this.rand() * 0.5), 20, 110);
+      const height2 = clamp(height + this.randRange(-18, 28), 24, 150);
+      const top2 = this.groundY() - height2;
+      const follow = this.acquireObstacle({
+        x: baseX + offset,
+        y: top2,
+        w: width2,
+        h: height2,
+        type: 'block',
+      });
+      this.obstacles.push(follow);
+    }
+  }
+
+  spawnBlockCombo(baseX, difficulty) {
+    const width = clamp(this.randRange(22, 36 + difficulty * 22), 18, 110);
+    const height = clamp(this.randRange(40, 62 + difficulty * 34), 24, 160);
+    const top = this.groundY() - height;
+    const first = this.acquireObstacle({ x: baseX, y: top, w: width, h: height, type: 'block' });
+    this.obstacles.push(first);
+    const gap = clamp(this.randRange(70, 120 - difficulty * 30), 48, 140);
+    const width2 = clamp(width * (0.75 + this.rand() * 0.45), 18, 110);
+    const height2 = clamp(height + this.randRange(-16, 32), 24, 160);
+    const top2 = this.groundY() - height2;
+    const second = this.acquireObstacle({
+      x: baseX + width + gap,
+      y: top2,
+      w: width2,
+      h: height2,
+      type: 'block',
+    });
+    this.obstacles.push(second);
+    if (difficulty > 0.75 && this.rand() < 0.35) {
+      const width3 = clamp(this.randRange(60, 110), 40, 150);
+      const height3 = clamp(this.randRange(18, 26 + difficulty * 16), 14, 60);
+      const clearance = this.player.baseHeight - this.player.slideHeight + 12;
+      const verticalOffset = clamp(clearance + this.randRange(10, 26 + difficulty * 8), clearance + 6, 120);
+      const top3 = clamp(this.groundY() - this.player.baseHeight - verticalOffset, 48, this.groundY() - height3 - 12);
+      const bar = this.acquireObstacle({
+        x: second.x + this.randRange(-20, 30),
+        y: top3,
+        w: width3,
+        h: height3,
+        type: 'bar',
+      });
+      this.obstacles.push(bar);
+    }
+  }
+
+  spawnBarPattern(baseX, difficulty) {
+    const width = clamp(this.randRange(70, 110 + difficulty * 60), 60, 210);
+    const height = clamp(this.randRange(18, 28 + difficulty * 10), 14, 60);
+    const clearance = this.player.baseHeight - this.player.slideHeight + 12;
+    const offset = clamp(clearance + this.randRange(8, 26 + difficulty * 18), clearance + 6, 140);
+    const top = clamp(this.groundY() - this.player.baseHeight - offset, 48, this.groundY() - height - 12);
+    const bar = this.acquireObstacle({ x: baseX, y: top, w: width, h: height, type: 'bar' });
+    this.obstacles.push(bar);
+    if (difficulty > 0.65 && this.rand() < 0.45) {
+      const width2 = clamp(this.randRange(26, 42 + difficulty * 28), 20, 120);
+      const height2 = clamp(this.randRange(32, 54 + difficulty * 30), 20, 130);
+      const top2 = this.groundY() - height2;
+      const block = this.acquireObstacle({
+        x: baseX + this.randRange(-46, 30),
+        y: top2,
+        w: width2,
+        h: height2,
+        type: 'block',
+      });
+      this.obstacles.push(block);
+    }
+  }
+
+  acquireObstacle(props = {}) {
+    const obstacle = this.obstaclePool.pop() || {
+      x: 0,
+      y: 0,
+      w: 0,
+      h: 0,
+      type: 'block',
+      fromLevel: false,
+      passed: false,
+      justPassed: false,
+      active: false,
+    };
+    obstacle.x = Number.isFinite(props.x) ? props.x : 0;
+    obstacle.y = Number.isFinite(props.y) ? props.y : 0;
+    obstacle.w = Number.isFinite(props.w) ? props.w : 20;
+    obstacle.h = Number.isFinite(props.h) ? props.h : 20;
+    obstacle.type = props.type || 'block';
+    obstacle.fromLevel = !!props.fromLevel;
+    obstacle.passed = false;
+    obstacle.justPassed = false;
+    obstacle.active = true;
+    return obstacle;
+  }
+
+  recycleObstacle(obstacle) {
+    if (!obstacle) return;
+    obstacle.active = false;
+    obstacle.fromLevel = false;
+    obstacle.passed = false;
+    obstacle.justPassed = false;
+    this.obstaclePool.push(obstacle);
+  }
+
+  releaseObstacleAtIndex(index) {
+    const obstacle = this.obstacles[index];
+    if (!obstacle) return;
+    this.obstacles.splice(index, 1);
+    this.recycleObstacle(obstacle);
+  }
+
+  clearActiveEntities() {
+    for (const obstacle of this.obstacles) {
+      this.recycleObstacle(obstacle);
+    }
+    this.obstacles.length = 0;
+    for (const coin of this.coins) {
+      this.recycleCoin(coin);
+    }
+    this.coins.length = 0;
+    for (const particle of this.particles) {
+      this.recycleParticle(particle);
+    }
+    this.particles.length = 0;
+  }
+
+  acquireCoin() {
+    const coin = this.coinPool.pop() || {
+      x: 0,
+      y: 0,
+      baseY: 0,
+      radius: 12,
+      phase: 0,
+      oscAmp: 10,
+      oscSpeed: 0.12,
+      collected: false,
+      fade: 1,
+      active: false,
+    };
+    coin.collected = false;
+    coin.fade = 1;
+    coin.active = true;
+    return coin;
+  }
+
+  recycleCoin(coin) {
+    if (!coin) return;
+    coin.active = false;
+    coin.collected = false;
+    this.coinPool.push(coin);
+  }
+
+  acquireParticle() {
+    const particle = this.particlePool.pop() || {
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      life: 0,
+      maxLife: 0,
+      size: 2,
+      color: 'rgba(255,255,255,1)',
+      gravity: 0.4,
+      active: false,
+    };
+    particle.active = true;
+    return particle;
+  }
+
+  recycleParticle(particle) {
+    if (!particle) return;
+    particle.active = false;
+    this.particlePool.push(particle);
+  }
+
+  spawnCoinPattern() {
+    const count = 3 + Math.floor(this.randRange(0, 4));
+    const baseX = VIRTUAL_WIDTH + this.randRange(80, 160);
+    const baseHeight = clamp(this.groundY() - this.randRange(60, 180), 80, this.groundY() - 40);
+    const spacing = this.randRange(42, 58);
+    const amplitude = this.randRange(8, 18);
+    const oscSpeed = this.randRange(0.08, 0.16);
+    for (let i = 0; i < count; i++) {
+      const coin = this.acquireCoin();
+      coin.x = baseX + spacing * i;
+      coin.baseY = baseHeight + Math.sin(i * 0.55) * amplitude;
+      coin.y = coin.baseY;
+      coin.radius = 12;
+      coin.phase = this.randRange(0, Math.PI * 2);
+      coin.oscAmp = amplitude;
+      coin.oscSpeed = oscSpeed + this.randRange(-0.02, 0.02);
+      coin.collected = false;
+      this.coins.push(coin);
+    }
+    const nextDelay = clamp(this.randRange(260, 420 - this.difficultyProgress * 80), 200, 420);
+    this.coinTimer = nextDelay;
+  }
+
+  updateCoins(travel, step) {
+    const player = this.player;
+    for (let i = this.coins.length - 1; i >= 0; i--) {
+      const coin = this.coins[i];
+      coin.x -= travel;
+      coin.phase += step * coin.oscSpeed * 6;
+      coin.y = coin.baseY + Math.sin(coin.phase) * coin.oscAmp;
+      if (!coin.collected && this.checkCoinPickup(coin, player)) {
+        this.collectCoin(coin);
+      }
+      if (coin.collected) {
+        coin.fade -= step * 0.35;
+      }
+      if (coin.x + coin.radius < -160 || coin.fade <= 0) {
+        this.releaseCoinAtIndex(i);
+      }
+    }
+  }
+
+  releaseCoinAtIndex(index) {
+    const coin = this.coins[index];
+    if (!coin) return;
+    this.coins.splice(index, 1);
+    this.recycleCoin(coin);
+  }
+
+  checkCoinPickup(coin, player) {
+    const cx = coin.x;
+    const cy = coin.y;
+    const nearestX = clamp(cx, player.x, player.x + player.width);
+    const nearestY = clamp(cy, player.y, player.y + player.height);
+    const dx = cx - nearestX;
+    const dy = cy - nearestY;
+    return dx * dx + dy * dy <= (coin.radius * coin.radius);
+  }
+
+  collectCoin(coin) {
+    coin.collected = true;
+    playSfx('powerup');
+    this.analytics.coins += 1;
+    this.triggerHaptic();
+    this.spawnCoinBurst(coin.x, coin.y);
+  }
+
+  triggerHaptic(duration = 14) {
+    try {
+      if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(duration);
+      }
+    } catch (_) {
+      /* ignore haptic errors */
+    }
+  }
+
+  spawnCoinBurst(x, y) {
+    const particles = 6 + Math.floor(this.randRange(0, 4));
+    for (let i = 0; i < particles; i++) {
+      const particle = this.acquireParticle();
+      const angle = this.randRange(0, Math.PI * 2);
+      const speed = this.randRange(1.5, 2.8);
+      particle.x = x;
+      particle.y = y;
+      particle.vx = Math.cos(angle) * speed * 6;
+      particle.vy = Math.sin(angle) * speed * 6;
+      particle.life = this.randRange(10, 18);
+      particle.maxLife = particle.life;
+      particle.size = this.randRange(2, 4.2);
+      particle.color = 'rgba(250,204,21,1)';
+      particle.gravity = 0.45;
+      this.particles.push(particle);
+    }
+  }
+
+  updateParticles(step) {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const particle = this.particles[i];
+      particle.life -= step;
+      if (particle.life <= 0) {
+        this.releaseParticleAtIndex(i);
+        continue;
+      }
+      particle.x += particle.vx * step;
+      particle.y += particle.vy * step;
+      particle.vy += particle.gravity * step;
+    }
+  }
+
+  releaseParticleAtIndex(index) {
+    const particle = this.particles[index];
+    if (!particle) return;
+    this.particles.splice(index, 1);
+    this.recycleParticle(particle);
+  }
+
   updateObstacles(travel) {
+    const playerFront = this.player.x;
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
       const obs = this.obstacles[i];
+      const prevX = obs.x;
       obs.x -= travel;
-      if (obs.x + obs.w < -120) {
-        this.obstacles.splice(i, 1);
+      if (!obs.passed && prevX + obs.w >= playerFront && obs.x + obs.w < playerFront) {
+        this.handleObstaclePassed(obs, prevX);
       }
+      if (obs.x + obs.w < -160) {
+        this.releaseObstacleAtIndex(i);
+      }
+    }
+  }
+
+  handleObstaclePassed(obs, prevX) {
+    if (!obs) return;
+    obs.passed = true;
+    obs.justPassed = false;
+    const p = this.player;
+    const prevRight = prevX + obs.w;
+    const overlapped = prevX < p.x + p.width && prevRight > p.x;
+    if (!overlapped) return;
+    const playerBottom = p.y + p.height;
+    let verticalGap = 0;
+    if (playerBottom <= obs.y) {
+      verticalGap = obs.y - playerBottom;
+    } else if (p.y >= obs.y + obs.h) {
+      verticalGap = p.y - (obs.y + obs.h);
+    } else {
+      verticalGap = 0;
+    }
+    if (verticalGap <= 18) {
+      this.analytics.nearMisses += 1;
+      if (verticalGap <= 8) {
+        const perfectBar = obs.type === 'bar' && (p.sliding || p.height === p.slideHeight);
+        const perfectJump = obs.type !== 'bar' && !p.grounded;
+        if (perfectBar || perfectJump) {
+          this.analytics.perfects += 1;
+        }
+      }
+    }
+  }
+
+  updateAnalyticsDisplay(force = false) {
+    const distanceStat = Math.max(0, Math.floor(this.distance));
+    if ((force || distanceStat !== this.analytics.lastDistance) && this.hud.distance) {
+      this.hud.distance.textContent = String(distanceStat);
+      this.analytics.lastDistance = distanceStat;
+    }
+    if ((force || this.analytics.nearMisses !== this.analytics.lastNearMisses) && this.hud.nearMisses) {
+      this.hud.nearMisses.textContent = String(this.analytics.nearMisses);
+      this.analytics.lastNearMisses = this.analytics.nearMisses;
+    }
+    if ((force || this.analytics.perfects !== this.analytics.lastPerfects) && this.hud.perfects) {
+      this.hud.perfects.textContent = String(this.analytics.perfects);
+      this.analytics.lastPerfects = this.analytics.perfects;
     }
   }
 
@@ -1172,24 +1670,24 @@ class RunnerGame {
     for (const cloud of this.background.clouds) {
       cloud.x -= cloudsSpeed;
       if (cloud.x + cloud.w < -200) {
-        cloud.x = VIRTUAL_WIDTH + Math.random() * 240;
-        cloud.y = clamp(Math.random() * 140 + 20, 40, 160);
+        cloud.x = VIRTUAL_WIDTH + this.randRange(0, 240);
+        cloud.y = clamp(this.randRange(0, 1) * 140 + 20, 40, 160);
       }
     }
     for (const building of this.background.buildings) {
       building.x -= buildingSpeed;
       if (building.x + building.w < -220) {
-        building.x = VIRTUAL_WIDTH + Math.random() * 320;
-        building.w = clamp(80 + Math.random() * 140, 60, 240);
-        building.h = clamp(120 + Math.random() * 140, 120, ground - 40);
+        building.x = VIRTUAL_WIDTH + this.randRange(0, 320);
+        building.w = clamp(80 + this.randRange(0, 140), 60, 240);
+        building.h = clamp(120 + this.randRange(0, 140), 120, ground - 40);
       }
     }
     for (const fg of this.background.foreground) {
       fg.x -= foregroundSpeed;
       if (fg.x + fg.w < -140) {
-        fg.x = VIRTUAL_WIDTH + Math.random() * 200;
-        fg.w = clamp(40 + Math.random() * 80, 40, 140);
-        fg.h = clamp(20 + Math.random() * 30, 20, 60);
+        fg.x = VIRTUAL_WIDTH + this.randRange(0, 200);
+        fg.w = clamp(40 + this.randRange(0, 80), 40, 140);
+        fg.h = clamp(20 + this.randRange(0, 30), 20, 60);
       }
     }
   }
@@ -1242,7 +1740,12 @@ class RunnerGame {
       p.y = groundTop - p.height;
     }
 
-    p.vy = clamp(p.vy + this.gravity * step, -this.jumpImpulse, this.maxFallSpeed);
+    const gliding = this.input.jumpHeld && !p.grounded && p.vy >= 0;
+    const gravityScale = gliding ? 0.55 : 1;
+    p.vy = clamp(p.vy + this.gravity * gravityScale * step, -this.jumpImpulse, this.maxFallSpeed);
+    if (gliding) {
+      p.vy = Math.min(p.vy, this.maxFallSpeed * 0.65);
+    }
     p.y += p.vy * step;
 
     const maxY = groundTop - p.height;
@@ -1269,7 +1772,12 @@ class RunnerGame {
         // Shell observer expects the score attribute to stay in sync.
         this.hud.score.dataset.gameScore = String(newScore);
       }
-      emitRunnerScore(this, newScore);
+      emitRunnerScore(this, newScore, {
+        distance: Math.floor(this.distance),
+        nearMisses: this.analytics.nearMisses,
+        perfects: this.analytics.perfects,
+        coins: this.analytics.coins,
+      });
     }
   }
 
@@ -1298,9 +1806,14 @@ class RunnerGame {
     }
     this.updateMission();
     emitStateEvent(this, 'game-over');
+    this.updateAnalyticsDisplay(true);
     emitRunnerScore(this, this.score, {
       bestScore: this.bestScore,
       status: 'game-over',
+      distance: Math.floor(this.distance),
+      nearMisses: this.analytics.nearMisses,
+      perfects: this.analytics.perfects,
+      coins: this.analytics.coins,
     });
     if (this.scenes) {
       const payload = {
@@ -1386,13 +1899,50 @@ class RunnerGame {
     if (typeof this.canvas.setPointerCapture === 'function') {
       try { this.canvas.setPointerCapture(e.pointerId); } catch (err) {}
     }
-    const rect = this.canvas.getBoundingClientRect();
-    const relX = e.clientX - rect.left;
-    if (relX < rect.width / 2) {
-      this.input.slideHeld = true;
-    } else {
-      this.queueJump();
+    const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+    this.touchState.active = true;
+    this.touchState.pointerId = e.pointerId;
+    this.touchState.startX = e.clientX;
+    this.touchState.startY = e.clientY;
+    this.touchState.lastX = e.clientX;
+    this.touchState.lastY = e.clientY;
+    this.touchState.handled = false;
+    this.touchState.intent = null;
+    this.touchState.startTime = now;
+    this.input.slideHeld = false;
+    this.input.jumpHeld = false;
+    e.preventDefault();
+  }
+
+  handlePointerMove(e) {
+    if (!this.touchState.active || (this.touchState.pointerId !== null && e.pointerId !== this.touchState.pointerId)) {
+      return;
+    }
+    const dx = e.clientX - this.touchState.startX;
+    const dy = e.clientY - this.touchState.startY;
+    this.touchState.lastX = e.clientX;
+    this.touchState.lastY = e.clientY;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    const threshold = 24;
+    if (!this.touchState.handled) {
+      if (absY > threshold && absY > absX) {
+        this.touchState.handled = true;
+        if (dy < 0) {
+          this.queueJump();
+          this.input.jumpHeld = true;
+          this.touchState.intent = 'jump';
+        } else {
+          this.input.slideHeld = true;
+          this.touchState.intent = 'slide';
+        }
+      }
+    } else if (this.touchState.intent === 'jump') {
       this.input.jumpHeld = true;
+    } else if (this.touchState.intent === 'slide') {
+      this.input.slideHeld = dy > -threshold * 0.6;
     }
     e.preventDefault();
   }
@@ -1405,8 +1955,37 @@ class RunnerGame {
     if (typeof this.canvas.releasePointerCapture === 'function') {
       try { this.canvas.releasePointerCapture(e.pointerId); } catch (err) {}
     }
+    if (!this.touchState.active || (this.touchState.pointerId !== null && e.pointerId !== this.touchState.pointerId)) {
+      return;
+    }
+    const now = typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+    const duration = now - this.touchState.startTime;
+    const totalDx = (this.touchState.lastX ?? e.clientX) - this.touchState.startX;
+    const totalDy = (this.touchState.lastY ?? e.clientY) - this.touchState.startY;
+    const absDx = Math.abs(totalDx);
+    const absDy = Math.abs(totalDy);
+    const threshold = 24;
+    if (!this.touchState.handled) {
+      if (absDy > threshold && absDy > absDx) {
+        if (totalDy < 0) {
+          this.queueJump();
+          this.input.jumpHeld = true;
+        } else {
+          this.input.slideHeld = true;
+        }
+      } else if (absDx < threshold && absDy < threshold && duration < 220) {
+        this.queueJump();
+        this.input.jumpHeld = true;
+      }
+    }
     this.input.slideHeld = false;
     this.input.jumpHeld = false;
+    this.touchState.active = false;
+    this.touchState.pointerId = null;
+    this.touchState.intent = null;
+    this.touchState.handled = false;
     e.preventDefault();
   }
 
@@ -1470,7 +2049,9 @@ class RunnerGame {
     this.drawBackground(ctx);
     this.drawGround(ctx);
     this.drawObstacles(ctx);
+    this.drawCoins(ctx);
     this.drawPlayer(ctx);
+    this.drawParticles(ctx);
     if (this.gameOver) {
       this.drawGameOver(ctx);
     }
@@ -1658,6 +2239,39 @@ class RunnerGame {
     }
   }
 
+  drawCoins(ctx) {
+    if (!this.coins.length) return;
+    ctx.save();
+    for (const coin of this.coins) {
+      const alpha = coin.collected ? clamp(coin.fade, 0, 1) : 1;
+      if (alpha <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      const radius = coin.radius;
+      let gradient = null;
+      if (typeof ctx.createRadialGradient === 'function') {
+        gradient = ctx.createRadialGradient(coin.x, coin.y, radius * 0.15, coin.x, coin.y, radius);
+        gradient.addColorStop(0, 'rgba(253,224,71,1)');
+        gradient.addColorStop(1, 'rgba(234,179,8,0.9)');
+        ctx.fillStyle = gradient;
+      } else {
+        ctx.fillStyle = 'rgba(253,224,71,0.95)';
+      }
+      ctx.beginPath();
+      ctx.arc(coin.x, coin.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(251,191,36,0.85)';
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.beginPath();
+      ctx.arc(coin.x - radius * 0.35, coin.y - radius * 0.3, radius * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   drawPlayer(ctx) {
     const p = this.player;
     const bodyHeight = Math.max(18, p.height - 12);
@@ -1717,6 +2331,23 @@ class RunnerGame {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(p.x + p.width * 0.65, p.y + p.height * 0.2, 6, 6);
     ctx.fillRect(p.x + p.width * 0.65, p.y + p.height * 0.45, 6, 6);
+    ctx.restore();
+  }
+
+  drawParticles(ctx) {
+    if (!this.particles.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const particle of this.particles) {
+      const lifeRatio = particle.maxLife ? clamp(particle.life / particle.maxLife, 0, 1) : 0;
+      const alpha = lifeRatio * 0.85;
+      if (alpha <= 0) continue;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = particle.color || 'rgba(255,255,255,0.9)';
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y, Math.max(1.2, particle.size || 2), 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 

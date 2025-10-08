@@ -63,11 +63,23 @@
       text-align: center;
       flex: 0 1 auto;
     }
+    .hud .hud-metric {
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      border-radius: 14px;
+    }
     .hud .hud-stat {
       display: inline-flex;
       align-items: baseline;
       gap: 4px;
       font-weight: 700;
+    }
+    .hud .hud-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.72;
     }
     .hud .hud-unit {
       font-size: 0.85em;
@@ -276,6 +288,25 @@
     <div class="hud-section hud-mission">
       <img class="hud-icon" src="../../assets/powerups/multi.png" alt="" />
       <span id="mission"></span>
+    </div>
+    <div class="hud-section hud-metric hud-distance">
+      <span class="hud-label">Distance</span>
+      <div class="hud-stat">
+        <span id="distanceStat">0</span>
+        <span class="hud-unit">m</span>
+      </div>
+    </div>
+    <div class="hud-section hud-metric hud-near">
+      <span class="hud-label">Near Misses</span>
+      <div class="hud-stat">
+        <span id="nearMisses">0</span>
+      </div>
+    </div>
+    <div class="hud-section hud-metric hud-perfect">
+      <span class="hud-label">Perfect Timing</span>
+      <div class="hud-stat">
+        <span id="perfects">0</span>
+      </div>
     </div>
     <button id="pauseBtn">⏸️</button>
     <button id="restartBtn">⟲</button>

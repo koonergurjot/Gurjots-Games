@@ -1,6 +1,6 @@
 
 import { GameEngine } from '../../shared/gameEngine.js';
-import { copyGrid, computeMove, undo as undoState, getHint as engineHint, canMove } from './engine.js';
+import { copyGrid, computeMove, getHint as engineHint, canMove, createHistoryManager, confirmNoMoves } from './engine.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 
 // Feature Configuration (all feature-flagged)
@@ -79,15 +79,22 @@ function updateScoreDisplay() {
 function updateUndoDisplay() {
   const undoCountEl = document.getElementById('undoCount');
   const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
   if(undoCountEl) {
     undoCountEl.textContent = undoLeft;
     undoCountEl.setAttribute('aria-label', `Undo moves remaining: ${undoLeft}`);
   }
   if(undoBtn) {
-    const isDisabled = undoLeft <= 0;
-    undoBtn.disabled = isDisabled;
-    undoBtn.textContent = undoLeft > 0 ? `Undo (${undoLeft})` : 'No Undo';
-    undoBtn.setAttribute('aria-label', isDisabled ? 'No undo moves available' : `Undo last move, ${undoLeft} remaining`);
+    const canUndoMove = undoLeft > 0 && historyManager.canUndo() && !anim;
+    undoBtn.disabled = !canUndoMove;
+    undoBtn.textContent = canUndoMove ? `Undo (${undoLeft})` : 'No Undo';
+    undoBtn.setAttribute('aria-label', canUndoMove ? `Undo last move, ${undoLeft} remaining` : 'No undo moves available');
+  }
+  if(redoBtn){
+    const canRedoMove = historyManager.canRedo() && !anim;
+    redoBtn.disabled = !canRedoMove;
+    redoBtn.textContent = canRedoMove ? 'Redo Move' : 'No Redo';
+    redoBtn.setAttribute('aria-label', canRedoMove ? 'Redo last undone move' : 'No redo moves available');
   }
 }
 
@@ -110,6 +117,84 @@ let gameOverShown=false;
 const MAX_UNDO = FEATURES.oneStepUndo ? 1 : 3;
 const LS_UNDO='g2048.undo', LS_BEST='g2048.best', LS_THEME='g2048.theme';
 const ANIM_TIME=120;
+
+class DeterministicRng {
+  constructor(seed, state){
+    const fallback = DeterministicRng.randomSeed();
+    this.seed = (typeof seed === 'number' ? seed : fallback) >>> 0;
+    this.state = (typeof state === 'number' ? state : this.seed) >>> 0;
+  }
+
+  next(){
+    let t = this.state += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    t ^= t >>> 14;
+    return (t >>> 0) / 4294967296;
+  }
+
+  clone(){
+    return new DeterministicRng(this.seed, this.state);
+  }
+
+  serialize(){
+    return { seed: this.seed, state: this.state };
+  }
+
+  static from(serialized){
+    if(!serialized || typeof serialized.seed !== 'number' || typeof serialized.state !== 'number'){
+      return new DeterministicRng(DeterministicRng.randomSeed());
+    }
+    return new DeterministicRng(serialized.seed, serialized.state);
+  }
+
+  static randomSeed(){
+    try {
+      if(typeof window !== 'undefined' && window.crypto?.getRandomValues){
+        const arr = new Uint32Array(1);
+        window.crypto.getRandomValues(arr);
+        return (arr[0] || Date.now()) >>> 0;
+      }
+    } catch {}
+    return ((Math.random()*0xffffffff)>>>0) || (Date.now()>>>0);
+  }
+}
+
+class AnimationClock {
+  constructor(baseDuration){
+    this.baseDuration = baseDuration;
+    this.elapsed = 0;
+    this.root = (typeof document !== 'undefined') ? document.documentElement : null;
+    this.applyBaseDuration();
+  }
+
+  applyBaseDuration(){
+    if(this.root){
+      this.root.style.setProperty('--g2048-transition', `${this.baseDuration}ms`);
+    }
+  }
+
+  reset(){
+    this.elapsed = 0;
+    if(this.root){
+      this.root.style.setProperty('--g2048-clock', '0ms');
+      this.root.style.setProperty('--g2048-frame', '0ms');
+    }
+  }
+
+  tick(dt){
+    this.elapsed += dt*1000;
+    if(this.root){
+      this.root.style.setProperty('--g2048-clock', `${this.elapsed.toFixed(2)}ms`);
+      this.root.style.setProperty('--g2048-frame', `${(dt*1000).toFixed(2)}ms`);
+    }
+  }
+}
+
+const animationClock = new AnimationClock(ANIM_TIME);
+let rng = new DeterministicRng(DeterministicRng.randomSeed());
+let pendingHistoryCommit = false;
+let undoSpendStack = [];
 
 const themes={
   light:{
@@ -161,7 +246,6 @@ const themes={
 let currentTheme=localStorage.getItem(LS_THEME) || 'dark';
 
 let grid, score=0, over=false, won=false, hintDir=null;
-let history=[];
 let undoLeft=parseInt(localStorage.getItem(LS_UNDO) ?? MAX_UNDO);
 let best=parseInt(localStorage.getItem(LS_BEST) ?? 0);
 if(isNaN(undoLeft)) undoLeft=MAX_UNDO;
@@ -256,6 +340,7 @@ let renderCache = {
 
 // History size limit for memory management
 const MAX_HISTORY_SIZE = 50;
+const historyManager = createHistoryManager({ maxSize: MAX_HISTORY_SIZE });
 
 function updateStatus(){
   const el=document.getElementById('status');
@@ -352,20 +437,31 @@ function applyTheme(){
 function reset(keepUndo=false, reasonOverride){
   const previousScore = score || 0;
   updateCanvas();
+  animationClock.reset();
   grid=Array.from({length:N},()=>Array(N).fill(0));
   score=0; over=false; won=false; hintDir=null; anim=null;
   lastAnnouncedScore = 0;
-  
+
+  rng = new DeterministicRng(DeterministicRng.randomSeed());
+  pendingHistoryCommit = false;
+  undoSpendStack = [];
+
   // Clean up animation state
   newTileAnim = null;
   mergedAnim.clear();
-  
+
   // Reset merge-streak system
   mergeStreak = 1;
   lastMoveHadMerge = false;
-  
-  addTile(); addTile();
-  history=[{grid:copyGrid(grid), score:0}];
+
+  addTile();
+  addTile();
+  historyManager.init({
+    grid,
+    score,
+    rngState: rng.serialize(),
+    meta: { mergeStreak, lastMoveHadMerge }
+  });
   if(!keepUndo){ undoLeft=MAX_UNDO; localStorage.setItem(LS_UNDO,undoLeft); updateUI(); }
   applyTheme();
   updateUI();
@@ -385,11 +481,17 @@ function reset(keepUndo=false, reasonOverride){
 
 function addTile(options = {}){
   const { skipAnimation = false } = options || {};
+  if(!rng){
+    rng = new DeterministicRng(DeterministicRng.randomSeed());
+  }
   const empty=[];
   for(let y=0;y<N;y++) for(let x=0;x<N;x++) if(!grid[y][x]) empty.push([x,y]);
   if(!empty.length) return;
-  const [x,y]=empty[(Math.random()*empty.length)|0];
-  const value = Math.random()<0.9?2:4;
+
+  const randomSource = rng ? () => rng.next() : () => Math.random();
+  const index = Math.floor(randomSource()*empty.length);
+  const [x,y]=empty[index];
+  const value = randomSource()<0.9?2:4;
   grid[y][x] = value;
 
   if(skipAnimation || reduceMotion){
@@ -406,45 +508,86 @@ function addTile(options = {}){
 }
 
 function undoMove(){
-  if(anim) return;
-  if(undoLeft>0){
-    const res=undoState(history);
-    if(res){
-      const previousScore = score;
-      ({grid,score,history}=res);
-      undoLeft--; localStorage.setItem(LS_UNDO,undoLeft); updateUI();
-      over=false; won=false; hintDir=null;
-      
-      // Clean up animation state on undo
-      newTileAnim = null;
-      mergedAnim.clear();
-      
-      // Reset merge-streak system on undo
-      mergeStreak = 1;
-      lastMoveHadMerge = false;
+  if(anim) return false;
+  if(undoLeft<=0) return false;
+  if(!historyManager.canUndo()) return false;
 
-      hideGameOverModal();
-      net?.send('move',{grid,score});
-      recordScoreEvent('undo', { delta: score - previousScore });
+  const previousScore = score;
+  const state=historyManager.undo();
+  if(!state) return false;
 
-      if(reduceMotion){
-        draw();
-      }
-    }
+  undoLeft--; localStorage.setItem(LS_UNDO,undoLeft);
+  undoSpendStack.push(1);
+
+  grid=copyGrid(state.grid);
+  score=state.score;
+  rng=DeterministicRng.from(state.rngState);
+  mergeStreak = state.meta?.mergeStreak ?? 1;
+  lastMoveHadMerge = state.meta?.lastMoveHadMerge ?? false;
+  over=false; won=false; hintDir=null;
+  pendingHistoryCommit=false;
+
+  newTileAnim = null;
+  mergedAnim.clear();
+  anim=null;
+
+  hideGameOverModal();
+  check();
+  updateUI();
+  net?.send('move',{grid,score});
+  recordScoreEvent('undo', { delta: score - previousScore });
+
+  draw();
+  return true;
+}
+
+function redoMove(){
+  if(anim) return false;
+  if(!historyManager.canRedo()) return false;
+
+  const previousScore = score;
+  const state=historyManager.redo();
+  if(!state) return false;
+
+  const restored = undoSpendStack.length ? undoSpendStack.pop() : 0;
+  if(restored>0){
+    undoLeft = Math.min(MAX_UNDO, undoLeft + restored);
+    localStorage.setItem(LS_UNDO,undoLeft);
   }
+
+  grid=copyGrid(state.grid);
+  score=state.score;
+  rng=DeterministicRng.from(state.rngState);
+  mergeStreak = state.meta?.mergeStreak ?? 1;
+  lastMoveHadMerge = state.meta?.lastMoveHadMerge ?? false;
+  over=false; won=false; hintDir=null;
+  pendingHistoryCommit=false;
+
+  newTileAnim = null;
+  mergedAnim.clear();
+  anim=null;
+
+  hideGameOverModal();
+  check();
+  updateUI();
+  net?.send('move',{grid,score});
+  recordScoreEvent('redo', { delta: score - previousScore });
+
+  draw();
+  return true;
 }
 
 function move(dir){
   if(over||won||anim) return;
   const previousScore = score;
-  // Limit history size for memory management
-  history.push({grid: grid.map(row => [...row]), score});
-  if (history.length > MAX_HISTORY_SIZE) {
-    history = history.slice(-MAX_HISTORY_SIZE);
-  }
   const {after, animations, moved, gained}=computeMove(grid,dir);
-  if(!moved){ history = history.slice(0,-1); return; }
-  
+  if(!moved){ return; }
+
+  historyManager.pushCurrent();
+  historyManager.clearFuture();
+  undoSpendStack = [];
+  pendingHistoryCommit = true;
+
   // Track merged tiles for animation
   mergedAnim.clear();
   if(!reduceMotion){
@@ -485,13 +628,22 @@ function move(dir){
     grid = after;
     anim = null;
     addTile({ skipAnimation: true });
+    historyManager.commit({
+      grid,
+      score,
+      rngState: rng.serialize(),
+      meta: { mergeStreak, lastMoveHadMerge }
+    });
+    pendingHistoryCommit = false;
     check();
     net?.send('move',{grid,score});
+    updateUndoDisplay();
     draw();
     return;
   }
 
   anim={base, tiles:animations, after, p:0};
+  updateUndoDisplay();
 }
 
 function hideGameOverModal(){
@@ -543,7 +695,12 @@ function showGameOverModal(title,message){
 
 function check(){
   won = won || grid.flat().some(v=>v>=2048);
-  over = !won && !canMove(grid);
+  if(won){
+    over = false;
+  }else{
+    const quickNoMoves = !canMove(grid);
+    over = quickNoMoves ? confirmNoMoves(grid) : false;
+  }
   if((won||over) && !gameOverShown){
     showGameOverModal(won?'2048!':'Game over', won?'You made 2048! Want to go again?':'No moves left. Try again?');
   }
@@ -556,18 +713,35 @@ addEventListener('keydown', e=>{
     hideGameOverModal();
     return;
   }
-  
+
   // Only handle game keys when game canvas is focused or no form elements are focused
   const activeEl = document.activeElement;
   const isFormElement = activeEl && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(activeEl.tagName);
   const gameCanvas = document.getElementById('board');
   const isGameFocused = activeEl === gameCanvas || activeEl === document.body;
-  
+
   // Don't steal arrow keys from form controls
   if(isFormElement && !isGameFocused) {
     return;
   }
-  
+
+  const keyLower = e.key.toLowerCase();
+  const ctrlLike = e.ctrlKey || e.metaKey;
+
+  if(ctrlLike && !e.shiftKey && keyLower === 'z'){
+    e.preventDefault();
+    const undone = undoMove();
+    announceToScreenReader(undone ? 'Move undone.' : 'No moves to undo.');
+    return;
+  }
+
+  if(ctrlLike && (keyLower === 'y' || (keyLower === 'z' && e.shiftKey))){
+    e.preventDefault();
+    const redone = redoMove();
+    announceToScreenReader(redone ? 'Move redone.' : 'No moves to redo.');
+    return;
+  }
+
   if(e.key==='ArrowLeft') {
     e.preventDefault();
     move(0);
@@ -592,13 +766,14 @@ addEventListener('keydown', e=>{
     reset();
     announceToScreenReader('Game restarted. New game board ready.');
   }
-  if(e.key.toLowerCase()==='u') {
-    const beforeUndo = undoLeft;
-    undoMove();
-    if(undoLeft !== beforeUndo) {
-      announceToScreenReader('Move undone.');
-    } else {
-      announceToScreenReader('No moves to undo.');
+  if(keyLower==='u') {
+    const undone = undoMove();
+    announceToScreenReader(undone ? 'Move undone.' : 'No moves to undo.');
+  }
+  if(keyLower==='y') {
+    const redone = redoMove();
+    if(redone){
+      announceToScreenReader('Move redone.');
     }
   }
   if(e.key==='h'||e.key==='H') {
@@ -839,6 +1014,7 @@ function hideHint(){
 
 const gameLoop=new GameEngine();
 gameLoop.update=dt=>{
+  animationClock.tick(dt);
   if(reduceMotion){
     return;
   }
@@ -851,16 +1027,26 @@ gameLoop.update=dt=>{
     if(anim.p>=1){
       grid=anim.after;
       anim=null;
-      
+
       // Reset merge animations to start the pulse effect now that slide is complete
       for(const [key, mergeAnim] of mergedAnim.entries()) {
         mergeAnim.p = 0;
         mergeAnim.scale = 1.1;
       }
-      
+
       addTile();
       check();
       net?.send('move',{grid,score});
+      if(pendingHistoryCommit){
+        historyManager.commit({
+          grid,
+          score,
+          rngState: rng.serialize(),
+          meta: { mergeStreak, lastMoveHadMerge }
+        });
+        pendingHistoryCommit = false;
+        updateUndoDisplay();
+      }
     }
   }
   
@@ -918,6 +1104,16 @@ const handleReduceMotionChange = (eventMatches) => {
       addTile({ skipAnimation: true });
       check();
       net?.send('move',{grid,score});
+      if(pendingHistoryCommit){
+        historyManager.commit({
+          grid,
+          score,
+          rngState: rng.serialize(),
+          meta: { mergeStreak, lastMoveHadMerge }
+        });
+        pendingHistoryCommit = false;
+        updateUndoDisplay();
+      }
     }
     newTileAnim = null;
     mergedAnim.clear();
@@ -997,7 +1193,12 @@ document.getElementById('themeToggle')?.addEventListener('click',()=>{
 
 // Add undo button functionality
 document.getElementById('undoBtn')?.addEventListener('click',()=>{
-  if(undoLeft > 0) undoMove();
+  const undone = undoMove();
+  announceToScreenReader(undone ? 'Move undone.' : 'No moves to undo.');
+});
+document.getElementById('redoBtn')?.addEventListener('click',()=>{
+  const redone = redoMove();
+  announceToScreenReader(redone ? 'Move redone.' : 'No moves to redo.');
 });
 
 overlayRestartBtn?.addEventListener('click',()=>{

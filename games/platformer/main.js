@@ -1,10 +1,10 @@
 import * as net from './net.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
-import { drawTileSprite, getTilePattern, getSpriteFrame, preloadTileTextures } from '../../shared/render/tileTextures.js';
+import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
 import { loadStrip } from '../../shared/assets.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
-import { tiles } from './tiles.js';
-import { createSceneManager } from '../../src/engine/scenes.js';
+import { tiles, TILE } from './tiles.js';
+import { loadLevelByIndex } from './level-loader.js';
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 const GAME_ID = 'platformer';
@@ -370,8 +370,14 @@ function startWatchdogs(canvas) {
 }
 
 const GRAVITY = 0.7;
+const TERMINAL_VELOCITY = 18;
 const MOVE_SPEED = 4;
 const JUMP_FORCE = 13;
+const COYOTE_TIME = 0.14;
+const JUMP_BUFFER_TIME = 0.14;
+const CAMERA_DEADZONE_WIDTH = 240;
+const CAMERA_DEADZONE_HEIGHT = 160;
+const CAMERA_LERP = 6;
 const STATE_INTERVAL = 90; // ms
 
 const KEY_LEFT = ['arrowleft', 'a'];
@@ -391,23 +397,7 @@ const PLAYER_SPRITE_SPECS = {
   jump: { src: '/assets/sprites/player/platformer_jump.png', frameWidth: 16, frameHeight: 16, frames: 1 },
 };
 
-const COIN_SPRITE = tiles['2']?.sprite ?? null;
 const GOAL_SPRITE = tiles['3']?.sprite ?? null;
-const COIN_FRAME = COIN_SPRITE?.frame ?? getSpriteFrame('coin');
-const GOAL_FRAME = GOAL_SPRITE?.frame ?? getSpriteFrame('goal');
-const CHECKPOINT_FRAME = getSpriteFrame('checkpoint');
-const CHECKPOINT_SPRITE = CHECKPOINT_FRAME
-  ? { key: 'checkpoint', frame: CHECKPOINT_FRAME }
-  : null;
-
-const LEGACY_COIN_SIZE = 18;
-const COIN_LAYOUT = [
-  { id: 'coin-0', cx: 259, centerOffset: 163 },
-  { id: 'coin-1', cx: 579, centerOffset: 223 },
-  { id: 'coin-2', cx: 649, centerOffset: 53 },
-  { id: 'coin-3', cx: 799, centerOffset: 113 },
-];
-
 function normKey(key) {
   if (key === ' ') return 'space';
   return key.toLowerCase();
@@ -417,67 +407,42 @@ function aabb(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
-function createPlatforms(width, groundY) {
-  return [
-    { x: 0, y: groundY, w: 260, h: 60 },
-    { x: 340, y: groundY, w: width - 340, h: 60 },
-    { x: 220, y: groundY - 140, w: 130, h: 16 },
-    { x: 520, y: groundY - 210, w: 160, h: 16 },
-    { x: 720, y: groundY - 90, w: 140, h: 16 },
-    { x: 600, y: groundY - 40, w: 70, h: 12 }
-  ];
-}
-
-function createCoins(groundY) {
-  const width = COIN_FRAME?.sw ?? LEGACY_COIN_SIZE;
-  const height = COIN_FRAME?.sh ?? LEGACY_COIN_SIZE;
-  return COIN_LAYOUT.map(({ id, cx, centerOffset }) => {
-    const centerY = groundY - centerOffset;
-    return {
-      id,
-      x: cx - width / 2,
-      y: centerY - height / 2,
-      w: width,
-      h: height,
-      collected: false,
-      sprite: COIN_SPRITE,
-    };
-  });
-}
-
-function createGoal(groundY, width) {
-  const goalWidth = GOAL_FRAME?.sw ?? 50;
-  const goalHeight = GOAL_FRAME?.sh ?? 120;
-  const goalCenterX = width - 65;
-  const goal = {
-    x: goalCenterX - goalWidth / 2,
-    y: groundY - goalHeight,
-    w: goalWidth,
-    h: goalHeight,
-  };
-  if (GOAL_SPRITE) goal.sprite = GOAL_SPRITE;
-  return goal;
-}
-
-function createCheckpoint(groundY) {
-  if (!CHECKPOINT_SPRITE) return null;
-  const width = CHECKPOINT_FRAME?.sw ?? 32;
-  const height = CHECKPOINT_FRAME?.sh ?? 48;
-  const centerX = 140;
-  return {
-    x: centerX - width / 2,
-    y: groundY - height,
-    w: width,
-    h: height,
-    sprite: CHECKPOINT_SPRITE,
-  };
-}
-
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
 
-export function boot() {
+function createStateMachine(states, initialState, initialContext = null) {
+  const machine = {
+    current: null,
+    states,
+    transition(next, context) {
+      if (!next || !states[next] || machine.current === next) {
+        return machine.current;
+      }
+      const prev = machine.current;
+      if (prev && states[prev]?.exit) {
+        states[prev].exit(context, machine);
+      }
+      machine.current = next;
+      if (states[next]?.enter) {
+        states[next].enter(context, machine);
+      }
+      return machine.current;
+    },
+    update(context, dt) {
+      const state = states[machine.current];
+      if (state?.update) {
+        state.update(context, dt, machine);
+      }
+    },
+  };
+  if (initialState) {
+    machine.transition(initialState, initialContext);
+  }
+  return machine;
+}
+
+export async function boot() {
   const record = ensureBootRecord();
   record.bootInvokedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
   if (bootStarted) {
@@ -664,7 +629,6 @@ export function boot() {
 
   const W = VIRTUAL_WIDTH;
   const H = VIRTUAL_HEIGHT;
-  const groundY = H - 60;
   let postedReady = false;
 
   const OVERLAY_FADE_MS = 220;
@@ -1163,26 +1127,41 @@ export function boot() {
     hud.appendChild(extra);
   }
 
-  const platforms = createPlatforms(W, groundY);
-  let coins = createCoins(groundY);
-  const goal = createGoal(groundY, W);
-  const checkpoint = createCheckpoint(groundY);
+  let coins = [];
+  let goal = null;
+  let enemies = [];
+  let currentLevelIndex = 0;
+  let currentLevel = null;
+  const camera = {
+    x: 0,
+    y: 0,
+    width: W,
+    height: H,
+  };
+  const worldBounds = {
+    width: W,
+    height: H,
+  };
 
   const localPlayer = {
     x: 100,
-    y: groundY - 40,
+    y: H - 120,
     w: 28,
     h: 40,
     vx: 0,
     vy: 0,
-    onGround: true,
+    onGround: false,
     facing: 1,
     collected: 0,
+    coyoteTimer: 0,
+    jumpBuffer: 0,
+    attackTimer: 0,
+    hitTimer: 0,
   };
 
   const remotePlayer = {
     x: 100,
-    y: groundY - 40,
+    y: H - 120,
     w: 28,
     h: 40,
     facing: 1,
@@ -1193,7 +1172,510 @@ export function boot() {
     lastSeen: 0,
     active: false,
     gameOver: false,
+    attackTimer: 0,
+    hitTimer: 0,
   };
+
+  function createPlayerStateMachine(player) {
+    return createStateMachine(
+      {
+        idle: {
+          enter(context) {
+            if (context) context.animation = 'idle';
+          },
+          update(context, dt, machine) {
+            if (!context) return;
+            if (context.hitTimer > 0) {
+              machine.transition('hit', context);
+              return;
+            }
+            if (!context.onGround) {
+              machine.transition(context.vy < 0 ? 'jump' : 'fall', context);
+              return;
+            }
+            if (Math.abs(context.vx) > PLAYER_MOVE_EPSILON) {
+              machine.transition('run', context);
+            }
+          },
+        },
+        run: {
+          enter(context) {
+            if (context) context.animation = 'run';
+          },
+          update(context, dt, machine) {
+            if (!context) return;
+            if (context.hitTimer > 0) {
+              machine.transition('hit', context);
+              return;
+            }
+            if (!context.onGround) {
+              machine.transition(context.vy < 0 ? 'jump' : 'fall', context);
+              return;
+            }
+            if (Math.abs(context.vx) <= PLAYER_MOVE_EPSILON) {
+              machine.transition('idle', context);
+            }
+          },
+        },
+        jump: {
+          enter(context) {
+            if (context) context.animation = 'jump';
+          },
+          update(context, dt, machine) {
+            if (!context) return;
+            if (context.hitTimer > 0) {
+              machine.transition('hit', context);
+              return;
+            }
+            if (context.vy >= 0) {
+              machine.transition('fall', context);
+            }
+          },
+        },
+        fall: {
+          enter(context) {
+            if (context) context.animation = 'jump';
+          },
+          update(context, dt, machine) {
+            if (!context) return;
+            if (context.hitTimer > 0) {
+              machine.transition('hit', context);
+              return;
+            }
+            if (context.onGround) {
+              machine.transition(Math.abs(context.vx) > PLAYER_MOVE_EPSILON ? 'run' : 'idle', context);
+            }
+          },
+        },
+        attack: {
+          enter(context) {
+            if (context) {
+              context.animation = 'jump';
+              context.attackTimer = Math.max(context.attackTimer ?? 0.25, 0.25);
+            }
+          },
+          update(context, dt, machine) {
+            if (!context) return;
+            context.attackTimer = Math.max(0, (context.attackTimer ?? 0) - dt / 60);
+            if (context.attackTimer <= 0) {
+              machine.transition(context.onGround ? (Math.abs(context.vx) > PLAYER_MOVE_EPSILON ? 'run' : 'idle') : 'fall', context);
+            }
+          },
+        },
+        hit: {
+          enter(context) {
+            if (context) {
+              context.animation = 'hit';
+              context.hitTimer = Math.max(context.hitTimer ?? 0.45, 0.45);
+            }
+          },
+          update(context, dt, machine) {
+            if (!context) return;
+            context.hitTimer = Math.max(0, (context.hitTimer ?? 0) - dt / 60);
+            if (context.hitTimer <= 0) {
+              machine.transition(context.onGround ? (Math.abs(context.vx) > PLAYER_MOVE_EPSILON ? 'run' : 'idle') : 'fall', context);
+            }
+          },
+        },
+      },
+      'idle',
+      player,
+    );
+  }
+
+  localPlayer.stateMachine = createPlayerStateMachine(localPlayer);
+  remotePlayer.stateMachine = createPlayerStateMachine(remotePlayer);
+
+  function createEnemyStateMachine(enemy) {
+    return createStateMachine(
+      {
+        idle: {
+          enter(context) {
+            if (context) {
+              context.animation = 'idle';
+              context.timer = 0.4;
+              context.vx = 0;
+            }
+          },
+          update(context, dt, machine) {
+            if (!context) return;
+            context.timer = Math.max(0, (context.timer ?? 0) - dt / 60);
+            if (context.timer <= 0) {
+              machine.transition('patrol', context);
+            }
+          },
+        },
+        patrol: {
+          enter(context) {
+            if (!context) return;
+            context.animation = 'run';
+            context.vx = (context.speed ?? 1.8) * (context.direction ?? 1);
+          },
+          update(context, dt, machine) {
+            if (!context) return;
+            if (context.hitTimer > 0) {
+              machine.transition('hit', context);
+              return;
+            }
+            if (!context.onGround) {
+              return;
+            }
+            const range = context.patrolRadius ?? TILE * 3;
+            if (Math.abs(context.x - context.spawnX) > range) {
+              context.direction = (context.x - context.spawnX) > 0 ? -1 : 1;
+              context.vx = (context.speed ?? 1.8) * context.direction;
+            }
+            const distanceToPlayer = Math.abs((context.target?.x ?? 0) - context.x);
+            if (distanceToPlayer < TILE * 3) {
+              machine.transition('attack', context);
+            }
+          },
+        },
+        attack: {
+          enter(context) {
+            if (!context) return;
+            context.animation = 'attack';
+            const direction = (context.target?.x ?? context.x) >= context.x ? 1 : -1;
+            context.direction = direction;
+            context.attackTimer = 0.45;
+            context.vx = (context.speed ?? 1.8) * 1.6 * direction;
+          },
+          update(context, dt, machine) {
+            if (!context) return;
+            if (context.hitTimer > 0) {
+              machine.transition('hit', context);
+              return;
+            }
+            context.attackTimer = Math.max(0, (context.attackTimer ?? 0) - dt / 60);
+            if (context.attackTimer <= 0) {
+              machine.transition('patrol', context);
+            }
+          },
+        },
+        hit: {
+          enter(context) {
+            if (!context) return;
+            context.animation = 'hit';
+            context.hitTimer = Math.max(context.hitTimer ?? 0.5, 0.5);
+            context.vx = 0;
+          },
+          update(context, dt) {
+            if (!context) return;
+            context.hitTimer = Math.max(0, (context.hitTimer ?? 0) - dt / 60);
+            if (context.hitTimer <= 0) {
+              context.defeated = true;
+            }
+          },
+        },
+      },
+      'idle',
+      enemy,
+    );
+  }
+
+  function createEnemyFromLevel(entry, index) {
+    const width = entry?.width ?? 32;
+    const height = entry?.height ?? 32;
+    const enemy = {
+      id: entry?.id ?? `enemy-${index}`,
+      type: entry?.type ?? 'enemy',
+      x: (entry?.x ?? 0) - width / 2,
+      y: (entry?.y ?? 0) - height,
+      w: width,
+      h: height,
+      vx: 0,
+      vy: 0,
+      onGround: false,
+      direction: Math.random() < 0.5 ? -1 : 1,
+      speed: entry?.speed ?? 1.9,
+      patrolRadius: entry?.radius ?? TILE * 3,
+      attackTimer: 0,
+      hitTimer: 0,
+      defeated: false,
+      target: localPlayer,
+    };
+    enemy.spawnX = enemy.x;
+    enemy.spawnY = enemy.y;
+    if (Array.isArray(entry?.properties)) {
+      for (const prop of entry.properties) {
+        if (!prop || typeof prop !== 'object') continue;
+        const name = (prop.name || prop.identifier || '').toLowerCase();
+        if (name === 'speed' && Number.isFinite(prop.value)) {
+          enemy.speed = prop.value;
+        }
+        if (name === 'radius' && Number.isFinite(prop.value)) {
+          enemy.patrolRadius = prop.value;
+        }
+        if (name === 'behavior' && typeof prop.value === 'string') {
+          enemy.behavior = prop.value.toLowerCase();
+        }
+      }
+    }
+    enemy.stateMachine = createEnemyStateMachine(enemy);
+    return enemy;
+  }
+
+  function applySpawnPosition(player, spawn) {
+    const spawnX = Number.isFinite(spawn?.x) ? spawn.x : TILE * 2;
+    const spawnY = Number.isFinite(spawn?.y) ? spawn.y : TILE * 6;
+    player.x = spawnX - player.w / 2;
+    player.y = spawnY - player.h;
+    player.vx = 0;
+    player.vy = 0;
+    player.onGround = false;
+  }
+
+  function snapCameraToPlayer() {
+    const centerX = localPlayer.x + localPlayer.w / 2;
+    const centerY = localPlayer.y + localPlayer.h / 2;
+    const maxX = Math.max(0, worldBounds.width - camera.width);
+    const maxY = Math.max(0, worldBounds.height - camera.height);
+    camera.x = clamp(centerX - camera.width / 2, 0, maxX);
+    camera.y = clamp(centerY - camera.height / 2, 0, maxY);
+  }
+
+  async function loadLevel(index, { preserveProgress = false } = {}) {
+    markPhase('level:load-start', { index });
+    let data;
+    try {
+      data = await loadLevelByIndex(index);
+    } catch (error) {
+      logBoot('error', 'Failed to load level', { index, error: error?.message ?? error });
+      return;
+    }
+    currentLevelIndex = index;
+    currentLevel = data;
+    worldBounds.width = data.width * data.tileSize;
+    worldBounds.height = data.height * data.tileSize;
+    coins = data.coins.map((coin) => ({ ...coin, collected: false }));
+    goal = data.goal
+      ? { ...data.goal }
+      : {
+          x: worldBounds.width - 120,
+          y: Math.max(0, worldBounds.height - 200),
+          w: 60,
+          h: 120,
+          sprite: GOAL_SPRITE,
+        };
+    enemies = data.enemies.map((entry, idx) => createEnemyFromLevel(entry, idx));
+    if (!preserveProgress) {
+      localPlayer.collected = 0;
+    }
+    if (platformerApi) {
+      platformerApi.coins = coins;
+      platformerApi.goal = goal;
+    }
+    applySpawnPosition(localPlayer, data.spawn);
+    applySpawnPosition(remotePlayer, data.spawn);
+    snapCameraToPlayer();
+    markPhase('level:load-complete', {
+      index,
+      width: data.width,
+      height: data.height,
+      tileSize: data.tileSize,
+      coins: coins.length,
+      enemies: enemies.length,
+    });
+  }
+
+  await loadLevel(currentLevelIndex);
+
+  function tileCodeAt(tx, ty) {
+    if (!currentLevel) return '0';
+    if (ty < 0 || tx < 0) return '0';
+    const row = currentLevel.grid[ty];
+    if (!row) return '0';
+    return row[tx] ?? '0';
+  }
+
+  function findTileCollision(entity) {
+    if (!currentLevel) return null;
+    const tileSize = currentLevel.tileSize;
+    const left = Math.floor(entity.x / tileSize);
+    const right = Math.floor((entity.x + entity.w - 1) / tileSize);
+    const top = Math.floor(entity.y / tileSize);
+    const bottom = Math.floor((entity.y + entity.h - 1) / tileSize);
+    for (let ty = top; ty <= bottom; ty += 1) {
+      for (let tx = left; tx <= right; tx += 1) {
+        const code = tileCodeAt(tx, ty);
+        const def = tiles[code];
+        if (!def?.solid) continue;
+        if (Array.isArray(def.mask) && def.mask.length > 0) {
+          const localStart = Math.max(0, Math.floor(entity.x - tx * tileSize));
+          const localEnd = Math.min(tileSize - 1, Math.ceil(entity.x + entity.w - tx * tileSize) - 1);
+          let intersects = false;
+          for (let lx = localStart; lx <= localEnd; lx += 1) {
+            const surface = ty * tileSize + def.mask[lx];
+            if (entity.y + entity.h > surface && entity.y < surface + tileSize) {
+              intersects = true;
+              break;
+            }
+          }
+          if (!intersects) continue;
+        }
+        return { code, def, tx, ty };
+      }
+    }
+    return null;
+  }
+
+  function moveAxis(entity, axis, distance) {
+    let remaining = distance;
+    const step = Math.sign(distance) || 1;
+    while (Math.abs(remaining) > 0) {
+      const delta = Math.abs(remaining) > 1 ? step : remaining;
+      if (axis === 'x') {
+        entity.x += delta;
+      } else {
+        entity.y += delta;
+      }
+      remaining -= delta;
+      const collision = findTileCollision(entity);
+      if (collision) {
+        if (axis === 'x') {
+          entity.x -= delta;
+          entity.vx = 0;
+        } else {
+          entity.y -= delta;
+          entity.vy = 0;
+          if (delta > 0) {
+            entity.onGround = true;
+          }
+        }
+        break;
+      }
+      if (Math.abs(remaining) <= 0.0001) {
+        break;
+      }
+    }
+  }
+
+  function resolveSlopeSnap(entity) {
+    if (!currentLevel) return;
+    const tileSize = currentLevel.tileSize;
+    const samples = [entity.x + entity.w * 0.2, entity.x + entity.w * 0.8];
+    let grounded = entity.onGround;
+    let targetY = entity.y;
+    for (const sampleX of samples) {
+      const tx = Math.floor(sampleX / tileSize);
+      const ty = Math.floor((entity.y + entity.h) / tileSize);
+      const code = tileCodeAt(tx, ty);
+      const def = tiles[code];
+      if (!def?.solid || !Array.isArray(def.mask)) continue;
+      const localX = clamp(Math.floor(sampleX - tx * tileSize), 0, tileSize - 1);
+      const surface = ty * tileSize + def.mask[localX];
+      const desiredY = surface - entity.h;
+      if (entity.y > desiredY - 4 && entity.y < desiredY + 12) {
+        targetY = Math.min(targetY, desiredY);
+        grounded = true;
+      }
+    }
+    if (grounded) {
+      entity.y = targetY;
+      entity.onGround = true;
+      if (entity.vy > 0) entity.vy = 0;
+    }
+  }
+
+  function integrateEntity(entity, dt, { applyGravity = true } = {}) {
+    if (applyGravity) {
+      entity.vy = clamp(entity.vy + GRAVITY * dt, -TERMINAL_VELOCITY, TERMINAL_VELOCITY);
+    }
+    const dx = entity.vx * dt;
+    const dy = entity.vy * dt;
+    entity.onGround = false;
+    if (dx) moveAxis(entity, 'x', dx);
+    if (dy) moveAxis(entity, 'y', dy);
+    resolveSlopeSnap(entity);
+  }
+
+  function detectHazards(entity) {
+    if (!currentLevel) return null;
+    const tileSize = currentLevel.tileSize;
+    const footY = entity.y + entity.h - 1;
+    const row = Math.floor(footY / tileSize);
+    const left = Math.floor(entity.x / tileSize);
+    const right = Math.floor((entity.x + entity.w - 1) / tileSize);
+    for (let tx = left; tx <= right; tx += 1) {
+      const code = tileCodeAt(tx, row);
+      const def = tiles[code];
+      if (def?.name === 'lava') {
+        return { tx, ty: row, code };
+      }
+    }
+    return null;
+  }
+
+  function updateEnemies(dt) {
+    for (const enemy of enemies) {
+      enemy.target = localPlayer;
+      enemy.stateMachine?.update(enemy, dt);
+      integrateEntity(enemy, dt);
+      if (enemy.defeated && enemy.stateMachine?.current !== 'hit') {
+        enemy.stateMachine.transition('hit', enemy);
+      }
+    }
+    enemies = enemies.filter((enemy) => !enemy.defeated);
+  }
+
+  function handleEnemyInteractions() {
+    for (const enemy of enemies) {
+      if (!enemy || enemy.defeated) continue;
+      if (!aabb(localPlayer, enemy)) continue;
+      const stompWindow = enemy.h * 0.5;
+      const fromAbove = localPlayer.vy > 0 && localPlayer.y + localPlayer.h - enemy.y < stompWindow;
+      if (fromAbove) {
+        playSfx('jump');
+        localPlayer.vy = -JUMP_FORCE * 0.55;
+        localPlayer.onGround = false;
+        enemy.hitTimer = 0.35;
+        enemy.stateMachine?.transition('hit', enemy);
+      } else {
+        playerTookHit(enemy);
+        break;
+      }
+    }
+  }
+
+  function playerTookHit(enemy) {
+    if (gameOver) return;
+    localPlayer.hitTimer = Math.max(localPlayer.hitTimer ?? 0, 0.5);
+    localPlayer.stateMachine?.transition('hit', localPlayer);
+    localPlayer.vx = (enemy?.x ?? localPlayer.x) < localPlayer.x ? MOVE_SPEED * 0.6 : -MOVE_SPEED * 0.6;
+    localPlayer.vy = -JUMP_FORCE * 0.4;
+    localPlayer.onGround = false;
+    localPlayer.coyoteTimer = 0;
+    triggerGameOver('Knocked Out', 'An enemy ambush sent you flying. Press R to retry the level.');
+  }
+
+  function updateCamera(dt) {
+    const deltaSeconds = dt / 60;
+    const centerX = localPlayer.x + localPlayer.w / 2;
+    const centerY = localPlayer.y + localPlayer.h / 2;
+    const deadLeft = camera.x + (camera.width - CAMERA_DEADZONE_WIDTH) / 2;
+    const deadRight = deadLeft + CAMERA_DEADZONE_WIDTH;
+    const deadTop = camera.y + (camera.height - CAMERA_DEADZONE_HEIGHT) / 2;
+    const deadBottom = deadTop + CAMERA_DEADZONE_HEIGHT;
+    let targetX = camera.x;
+    let targetY = camera.y;
+    if (centerX < deadLeft) {
+      targetX -= deadLeft - centerX;
+    } else if (centerX > deadRight) {
+      targetX += centerX - deadRight;
+    }
+    if (centerY < deadTop) {
+      targetY -= deadTop - centerY;
+    } else if (centerY > deadBottom) {
+      targetY += centerY - deadBottom;
+    }
+    const maxX = Math.max(0, worldBounds.width - camera.width);
+    const maxY = Math.max(0, worldBounds.height - camera.height);
+    targetX = clamp(targetX, 0, maxX);
+    targetY = clamp(targetY, 0, maxY);
+    const lerpFactor = Math.min(1, deltaSeconds * CAMERA_LERP);
+    camera.x += (targetX - camera.x) * lerpFactor;
+    camera.y += (targetY - camera.y) * lerpFactor;
+  }
 
   function imageForSpec(spec) {
     if (!spec) return null;
@@ -1220,12 +1702,20 @@ export function boot() {
   }
 
   function drawPlayerCharacter(player, trackKey, now, fallbackColor) {
-    const moving = Math.abs(player.vx ?? 0) > PLAYER_MOVE_EPSILON;
-    const airborne = !player.onGround;
+    const state = player.stateMachine?.current;
+    const animationKey = player.animation || state;
     let spriteKey = 'idle';
-    if (airborne) {
+    if (animationKey === 'run') {
+      spriteKey = 'run';
+    } else if (
+      animationKey === 'jump' ||
+      animationKey === 'fall' ||
+      animationKey === 'attack' ||
+      animationKey === 'hit' ||
+      (!player.onGround && state)
+    ) {
       spriteKey = 'jump';
-    } else if (moving) {
+    } else if (Math.abs(player.vx ?? 0) > PLAYER_MOVE_EPSILON && player.onGround) {
       spriteKey = 'run';
     }
     const spec = playerSprites[spriteKey];
@@ -1234,6 +1724,7 @@ export function boot() {
     const frameWidth = strip?.frameWidth ?? spec?.frameWidth ?? player.w;
     const frameHeight = strip?.frameHeight ?? spec?.frameHeight ?? player.h;
     let sx = 0;
+    const moving = Math.abs(player.vx ?? 0) > PLAYER_MOVE_EPSILON;
     if (spriteKey === 'run') {
       const frameIndex = advanceRunAnimation(trackKey, now, spec, moving);
       sx = frameIndex * frameWidth;
@@ -1268,7 +1759,7 @@ export function boot() {
       const drawWidth = sourceWidth * scale;
       const drawHeight = sourceHeight * scale;
       if (!drawWidth || !drawHeight) continue;
-      let offset = (localPlayer.x * layer.factor) % drawWidth;
+      let offset = (camera.x * layer.factor) % drawWidth;
       if (offset < 0) offset += drawWidth;
       let drawX = -offset;
       const drawY = H - drawHeight;
@@ -1283,7 +1774,6 @@ export function boot() {
     platformerApi.localPlayer = localPlayer;
     platformerApi.coins = coins;
     platformerApi.goal = goal;
-    platformerApi.checkpoint = checkpoint;
   }
 
   let paused = false;
@@ -1301,19 +1791,31 @@ export function boot() {
 
   const keys = new Set();
 
-  function resetState(opts = {}) {
-    const { autoStart = true } = opts || {};
-    localPlayer.x = 100;
-    localPlayer.y = groundY - localPlayer.h;
+  function resetState() {
+    if (currentLevel) {
+      coins = currentLevel.coins.map((coin) => ({ ...coin, collected: false }));
+      goal = currentLevel.goal ? { ...currentLevel.goal } : goal;
+      enemies = currentLevel.enemies.map((entry, idx) => createEnemyFromLevel(entry, idx));
+      applySpawnPosition(localPlayer, currentLevel.spawn);
+      applySpawnPosition(remotePlayer, currentLevel.spawn);
+      snapCameraToPlayer();
+      if (platformerApi) {
+        platformerApi.coins = coins;
+        platformerApi.goal = goal;
+      }
+    } else {
+      coins = [];
+      enemies = [];
+    }
     localPlayer.vx = 0;
     localPlayer.vy = 0;
-    localPlayer.onGround = true;
+    localPlayer.onGround = false;
     localPlayer.facing = 1;
     localPlayer.collected = 0;
-    coins = createCoins(groundY);
-    if (platformerApi) {
-      platformerApi.coins = coins;
-    }
+    localPlayer.coyoteTimer = 0;
+    localPlayer.jumpBuffer = 0;
+    localPlayer.stateMachine?.transition('idle', localPlayer);
+    remotePlayer.stateMachine?.transition('idle', remotePlayer);
     const now = performance.now();
     playerRunState.local.frame = 0;
     playerRunState.local.lastAdvance = now;
@@ -1646,23 +2148,9 @@ export function boot() {
     }
 
     keys.add(key);
-    if (KEY_JUMP.includes(key)) {
-      if (sceneId !== 'gameplay') {
-        if (sceneId === 'title') {
-          event.preventDefault();
-          dispatchAction('start', { source: 'keyboard' });
-        } else if (sceneId === 'pause' && pauseReason !== 'shell') {
-          event.preventDefault();
-          dispatchAction('resume', { source: 'keyboard' });
-        }
-        return;
-      }
-    }
-
-    if (KEY_JUMP.includes(key) && localPlayer.onGround && !paused && !gameOver) {
+    if (KEY_JUMP.includes(key) && !paused && !gameOver) {
       event.preventDefault();
-      localPlayer.vy = -JUMP_FORCE;
-      localPlayer.onGround = false;
+      localPlayer.jumpBuffer = JUMP_BUFFER_TIME;
     }
   }
 
@@ -1671,18 +2159,19 @@ export function boot() {
   }
 
   function updatePhysics(dt) {
+    const deltaSeconds = dt / 60;
+    localPlayer.coyoteTimer = Math.max(0, localPlayer.coyoteTimer - deltaSeconds);
+    localPlayer.jumpBuffer = Math.max(0, localPlayer.jumpBuffer - deltaSeconds);
+
     localPlayer.vx = 0;
     if (!paused && !gameOver) {
-      if (KEY_LEFT.some(k => keys.has(k))) {
+      if (KEY_LEFT.some((k) => keys.has(k))) {
         localPlayer.vx = -MOVE_SPEED;
         localPlayer.facing = -1;
       }
-      if (KEY_RIGHT.some(k => keys.has(k))) {
+      if (KEY_RIGHT.some((k) => keys.has(k))) {
         localPlayer.vx = MOVE_SPEED;
         localPlayer.facing = 1;
-      }
-      if (!localPlayer.onGround) {
-        localPlayer.vy += GRAVITY * dt;
       }
     }
 
@@ -1690,34 +2179,39 @@ export function boot() {
       return;
     }
 
-    localPlayer.x += localPlayer.vx * dt;
-    localPlayer.y += localPlayer.vy * dt;
-
-    localPlayer.onGround = false;
-    for (const platform of platforms) {
-      if (!aabb(localPlayer, platform)) continue;
-      const prevY = localPlayer.y - localPlayer.vy * dt;
-      if (prevY + localPlayer.h <= platform.y && localPlayer.vy > 0) {
-        localPlayer.y = platform.y - localPlayer.h;
-        localPlayer.vy = 0;
-        localPlayer.onGround = true;
-      } else if (prevY >= platform.y + platform.h && localPlayer.vy < 0) {
-        localPlayer.y = platform.y + platform.h;
-        localPlayer.vy = 0;
-      } else {
-        if (localPlayer.vx > 0) localPlayer.x = platform.x - localPlayer.w;
-        if (localPlayer.vx < 0) localPlayer.x = platform.x + platform.w;
-      }
-    }
-
-    localPlayer.x = clamp(localPlayer.x, -40, W - localPlayer.w + 40);
-
-    if (localPlayer.y > H + 120) {
-      triggerGameOver('Game Over', `You fell after collecting ${localPlayer.collected}/${coins.length} coins in ${secondsElapsed().toFixed(1)}s.`);
-    }
-
     if (localPlayer.onGround) {
-      localPlayer.vy = 0;
+      localPlayer.coyoteTimer = COYOTE_TIME;
+    }
+
+    if (localPlayer.jumpBuffer > 0 && (localPlayer.onGround || localPlayer.coyoteTimer > 0)) {
+      localPlayer.vy = -JUMP_FORCE;
+      localPlayer.onGround = false;
+      localPlayer.coyoteTimer = 0;
+      localPlayer.jumpBuffer = 0;
+      playSfx('jump');
+      localPlayer.stateMachine?.transition('jump', localPlayer);
+    }
+
+    integrateEntity(localPlayer, dt);
+
+    localPlayer.x = clamp(localPlayer.x, -TILE, worldBounds.width - localPlayer.w + TILE);
+    localPlayer.y = Math.min(localPlayer.y, worldBounds.height + TILE * 4);
+
+    const hazard = detectHazards(localPlayer);
+    if (hazard) {
+      triggerGameOver(
+        'Game Over',
+        `The lava was unforgiving after ${secondsElapsed().toFixed(1)}s.`,
+      );
+      return;
+    }
+
+    if (localPlayer.y > worldBounds.height + TILE * 4) {
+      triggerGameOver(
+        'Game Over',
+        `You fell after collecting ${localPlayer.collected}/${coins.length} coins in ${secondsElapsed().toFixed(1)}s.`,
+      );
+      return;
     }
 
     for (const coin of coins) {
@@ -1733,23 +2227,35 @@ export function boot() {
       }
     }
 
-    if (localPlayer.collected >= coins.length && aabb(localPlayer, goal)) {
-      triggerGameOver('Level Clear!', `Collected ${localPlayer.collected}/${coins.length} coins in ${secondsElapsed().toFixed(1)}s.`);
+    updateEnemies(dt);
+    handleEnemyInteractions();
+    updateCamera(dt);
+
+    if (goal && localPlayer.collected >= coins.length && aabb(localPlayer, goal)) {
+      triggerGameOver(
+        'Level Clear!',
+        `Collected ${localPlayer.collected}/${coins.length} coins in ${secondsElapsed().toFixed(1)}s.`,
+      );
+    }
+
+    localPlayer.stateMachine?.update(localPlayer, dt);
+    if (remotePlayer.active) {
+      remotePlayer.stateMachine?.update(remotePlayer, dt);
     }
   }
 
   function drawScene(now) {
-    if(!postedReady){
+    if (!postedReady) {
       postedReady = true;
       markPhase('boot:ready-signal');
       logBoot('info', 'Posted GAME_READY to shell');
-      try { window.parent?.postMessage({ type:'GAME_READY', slug:'platformer' }, '*'); } catch {}
+      try { window.parent?.postMessage({ type: 'GAME_READY', slug: 'platformer' }, '*'); } catch {}
     }
     ctx.clearRect(0, 0, cssWidth, cssHeight);
     ctx.save();
     ctx.translate(renderOffsetX, renderOffsetY);
     ctx.scale(renderScale, renderScale);
-    // Letterbox using the precomputed offsets so both axes keep the same scale while centering the playfield.
+
     const gradient = ctx.createLinearGradient(0, 0, 0, H);
     gradient.addColorStop(0, '#0d1a2b');
     gradient.addColorStop(1, '#0b1020');
@@ -1758,33 +2264,33 @@ export function boot() {
 
     drawParallaxBackground();
 
+    ctx.save();
+    ctx.translate(-Math.floor(camera.x), -Math.floor(camera.y));
+
     hydratePatterns();
 
-    const lavaFill = lavaPattern ?? '#223757';
-    ctx.fillStyle = lavaFill;
-    ctx.fillRect(0, groundY + 30, W, H - groundY - 30);
-
-    const blockFill = blockPattern ?? '#385a88';
-    ctx.fillStyle = blockFill;
-    for (const platform of platforms) {
-      ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
-    }
-
-    if (checkpoint) {
-      const spriteKey = checkpoint.sprite?.key ?? 'checkpoint';
-      const spriteFrame = checkpoint.sprite?.frame;
-      const checkpointDrawn = drawTileSprite(ctx, spriteKey, checkpoint.x, checkpoint.y, checkpoint.w, checkpoint.h, spriteFrame);
-      if (!checkpointDrawn) {
-        const poleX = checkpoint.x + checkpoint.w * 0.45;
-        ctx.fillStyle = '#f25f5c';
-        ctx.fillRect(poleX, checkpoint.y, Math.max(3, checkpoint.w * 0.12), checkpoint.h);
-        ctx.fillStyle = '#ffe066';
-        ctx.beginPath();
-        ctx.moveTo(poleX + checkpoint.w * 0.12, checkpoint.y + checkpoint.h * 0.15);
-        ctx.lineTo(checkpoint.x + checkpoint.w - checkpoint.w * 0.15, checkpoint.y + checkpoint.h * 0.35);
-        ctx.lineTo(poleX + checkpoint.w * 0.12, checkpoint.y + checkpoint.h * 0.55);
-        ctx.closePath();
-        ctx.fill();
+    if (currentLevel) {
+      const tileSize = currentLevel.tileSize;
+      const startX = Math.max(0, Math.floor(camera.x / tileSize));
+      const endX = Math.min(currentLevel.width - 1, Math.ceil((camera.x + camera.width) / tileSize));
+      const startY = Math.max(0, Math.floor(camera.y / tileSize));
+      const endY = Math.min(currentLevel.height - 1, Math.ceil((camera.y + camera.height) / tileSize));
+      for (let ty = startY; ty <= endY; ty += 1) {
+        for (let tx = startX; tx <= endX; tx += 1) {
+          const code = tileCodeAt(tx, ty);
+          const def = tiles[code];
+          if (!def) continue;
+          let fillStyle = null;
+          if (def.texture === 'lava' || def.name === 'lava') {
+            fillStyle = lavaPattern ?? '#8d2a43';
+          } else if (def.texture === 'block' || def.solid) {
+            fillStyle = blockPattern ?? '#385a88';
+          }
+          if (fillStyle) {
+            ctx.fillStyle = fillStyle;
+            ctx.fillRect(tx * tileSize, ty * tileSize, tileSize, tileSize);
+          }
+        }
       }
     }
 
@@ -1808,20 +2314,28 @@ export function boot() {
       }
     }
 
-    const goalSpriteKey = goal.sprite?.key ?? 'goal';
-    const goalFrame = goal.sprite?.frame;
-    const goalDrawn = drawTileSprite(ctx, goalSpriteKey, goal.x, goal.y, goal.w, goal.h, goalFrame);
-    if (!goalDrawn) {
-      ctx.fillStyle = '#98c1ff';
-      ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
-      ctx.fillStyle = '#0e1422';
-      const doorInsetX = goal.w * 0.25;
-      const doorInsetY = goal.h * 0.2;
-      ctx.fillRect(goal.x + doorInsetX, goal.y + doorInsetY, goal.w - doorInsetX * 2, goal.h - doorInsetY - goal.h * 0.1);
-      ctx.fillStyle = '#f5f7ff';
-      ctx.beginPath();
-      ctx.arc(goal.x + goal.w * 0.65, goal.y + goal.h * 0.6, Math.min(goal.w, goal.h) * 0.08, 0, Math.PI * 2);
-      ctx.fill();
+    if (goal) {
+      const goalSpriteKey = goal.sprite?.key ?? 'goal';
+      const goalFrame = goal.sprite?.frame;
+      const goalDrawn = drawTileSprite(ctx, goalSpriteKey, goal.x, goal.y, goal.w, goal.h, goalFrame);
+      if (!goalDrawn) {
+        ctx.fillStyle = '#98c1ff';
+        ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+        ctx.fillStyle = '#0e1422';
+        const doorInsetX = goal.w * 0.25;
+        const doorInsetY = goal.h * 0.2;
+        ctx.fillRect(goal.x + doorInsetX, goal.y + doorInsetY, goal.w - doorInsetX * 2, goal.h - doorInsetY - goal.h * 0.1);
+        ctx.fillStyle = '#f5f7ff';
+        ctx.beginPath();
+        ctx.arc(goal.x + goal.w * 0.65, goal.y + goal.h * 0.6, Math.min(goal.w, goal.h) * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    for (const enemy of enemies) {
+      const state = enemy.stateMachine?.current;
+      ctx.fillStyle = state === 'attack' ? '#f25f5c' : '#577590';
+      ctx.fillRect(enemy.x, enemy.y, enemy.w, enemy.h);
     }
 
     if (remotePlayer.active && now - remotePlayer.lastSeen < 1200) {
@@ -1832,6 +2346,14 @@ export function boot() {
     }
 
     drawPlayerCharacter(localPlayer, 'local', now, '#1c1c1c');
+
+    if (!gameOver && goal && localPlayer.collected < coins.length && aabb(localPlayer, goal)) {
+      ctx.fillStyle = '#ffd166';
+      ctx.font = '14px system-ui';
+      ctx.fillText('Collect the remaining coins!', goal.x - 60, goal.y - 12);
+    }
+
+    ctx.restore();
 
     ctx.fillStyle = '#f5f7ff';
     ctx.font = '14px system-ui';
@@ -1856,11 +2378,6 @@ export function boot() {
       ctx.fillText('Click "Start Co-op" in the HUD to link another tab.', 16, 64);
     }
 
-    if (!gameOver && localPlayer.collected < coins.length && aabb(localPlayer, goal)) {
-      ctx.fillStyle = '#ffd166';
-      ctx.font = '14px system-ui';
-      ctx.fillText('Collect the remaining coins!', goal.x - 60, goal.y - 12);
-    }
     ctx.restore();
   }
 

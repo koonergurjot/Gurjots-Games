@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import { execFile } from 'child_process';
 import path from 'path';
 import process from 'process';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import Ajv from 'ajv';
 import { promisify } from 'util';
 
@@ -152,6 +152,34 @@ const ISSUE_TAXONOMY = new Map(
       category: 'placeholder-art',
       severity: ISSUE_SEVERITY_LEVEL.MINOR,
     },
+    'Platformer level manifest unavailable': {
+      category: 'level-data',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Platformer level file missing': {
+      category: 'level-data',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Platformer level JSON invalid': {
+      category: 'level-data',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Platformer level format unsupported': {
+      category: 'level-data',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Platformer level tile size mismatch': {
+      category: 'level-data',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Platformer level missing tile layer': {
+      category: 'level-data',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Platformer level missing spawn point': {
+      category: 'level-data',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
     'firstFrame.sprites is not an array': {
       category: 'catalog-data',
       severity: ISSUE_SEVERITY_LEVEL.MAJOR,
@@ -224,6 +252,200 @@ function summarizeIssueTotals(games) {
   );
 
   return { total, bySeverity, byCategory };
+}
+
+async function validatePlatformerLevels() {
+  const issues = [];
+  const tilesPath = path.join(ROOT, 'games', 'platformer', 'tiles.js');
+  let manifest;
+  try {
+    manifest = await import(pathToFileURL(tilesPath));
+  } catch (error) {
+    issues.push(
+      formatIssue('Platformer level manifest unavailable', {
+        path: relativeFromRoot(tilesPath),
+        error: error?.message ?? String(error),
+      }),
+    );
+    return issues;
+  }
+
+  const levelList = Array.isArray(manifest?.levels) ? manifest.levels : [];
+  const tileSize = manifest?.TILE ?? 50;
+
+  if (levelList.length === 0) {
+    issues.push(
+      formatIssue('Platformer level manifest unavailable', {
+        path: relativeFromRoot(tilesPath),
+        reason: 'no levels defined',
+      }),
+    );
+    return issues;
+  }
+
+  for (const relativeLevelPath of levelList) {
+    if (typeof relativeLevelPath !== 'string' || !relativeLevelPath.trim()) {
+      continue;
+    }
+    const resolvedPath = path.join(ROOT, 'games', 'platformer', relativeLevelPath);
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await pathExists(resolvedPath))) {
+      issues.push(
+        formatIssue('Platformer level file missing', {
+          level: relativeLevelPath,
+          expected: relativeFromRoot(resolvedPath),
+        }),
+      );
+      continue;
+    }
+    let parsed;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const raw = await fs.readFile(resolvedPath, 'utf8');
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      issues.push(
+        formatIssue('Platformer level JSON invalid', {
+          level: relativeLevelPath,
+          error: error?.message ?? String(error),
+        }),
+      );
+      continue;
+    }
+
+    const format = detectPlatformerLevelFormat(parsed);
+    if (format === 'tiled') {
+      issues.push(
+        ...validateTiledLevel(parsed, {
+          level: relativeLevelPath,
+          tileSize,
+        }),
+      );
+    } else if (format === 'ldtk') {
+      issues.push(
+        ...validateLDtkLevel(parsed, {
+          level: relativeLevelPath,
+          tileSize,
+        }),
+      );
+    } else {
+      issues.push(
+        formatIssue('Platformer level format unsupported', {
+          level: relativeLevelPath,
+        }),
+      );
+    }
+  }
+
+  return issues;
+}
+
+function detectPlatformerLevelFormat(json) {
+  if (json && typeof json === 'object') {
+    if (json.type === 'map' && Array.isArray(json.layers)) {
+      return 'tiled';
+    }
+    if (Array.isArray(json.levels) && json.__header__?.app) {
+      return 'ldtk';
+    }
+  }
+  return null;
+}
+
+function validateTiledLevel(json, context) {
+  const issues = [];
+  const level = context?.level ?? '(unknown)';
+  const tileSize = context?.tileSize ?? 50;
+  const width = Number.isFinite(json.width) ? json.width : null;
+  const height = Number.isFinite(json.height) ? json.height : null;
+  if (json.tilewidth !== tileSize || json.tileheight !== tileSize) {
+    issues.push(
+      formatIssue('Platformer level tile size mismatch', {
+        level,
+        tilewidth: json.tilewidth,
+        tileheight: json.tileheight,
+        expected: tileSize,
+      }),
+    );
+  }
+  const layers = Array.isArray(json.layers) ? json.layers : [];
+  const tileLayer = layers.find((layer) => layer && layer.type === 'tilelayer');
+  if (!tileLayer) {
+    issues.push(
+      formatIssue('Platformer level missing tile layer', {
+        level,
+      }),
+    );
+  } else if (Array.isArray(tileLayer.data) && width && height) {
+    if (tileLayer.data.length !== width * height) {
+      issues.push(
+        formatIssue('Platformer level JSON invalid', {
+          level,
+          reason: 'tile data length mismatch',
+          expected: width * height,
+          actual: tileLayer.data.length,
+        }),
+      );
+    }
+  }
+  const objectLayer = layers.find((layer) => layer && layer.type === 'objectgroup');
+  let spawnFound = false;
+  if (objectLayer && Array.isArray(objectLayer.objects)) {
+    spawnFound = objectLayer.objects.some((object) => {
+      const type = (object?.type || object?.name || '').toLowerCase();
+      return type.includes('player');
+    });
+  }
+  if (!spawnFound) {
+    issues.push(
+      formatIssue('Platformer level missing spawn point', {
+        level,
+        hint: 'Add an object with type "player" to the entities layer.',
+      }),
+    );
+  }
+  return issues;
+}
+
+function validateLDtkLevel(json, context) {
+  const issues = [];
+  const level = context?.level ?? '(unknown)';
+  const tileSize = context?.tileSize ?? 50;
+  const levelEntry = Array.isArray(json.levels) ? json.levels[0] : null;
+  if (!levelEntry || !Array.isArray(levelEntry.layerInstances)) {
+    issues.push(formatIssue('Platformer level JSON invalid', { level, reason: 'missing layerInstances' }));
+    return issues;
+  }
+  const terrainLayer = levelEntry.layerInstances.find((layer) => layer && layer.__type === 'IntGrid');
+  if (!terrainLayer) {
+    issues.push(formatIssue('Platformer level missing tile layer', { level }));
+  } else if (terrainLayer.gridSize !== tileSize) {
+    issues.push(
+      formatIssue('Platformer level tile size mismatch', {
+        level,
+        tilewidth: terrainLayer.gridSize,
+        tileheight: terrainLayer.gridSize,
+        expected: tileSize,
+      }),
+    );
+  }
+  const entityLayer = levelEntry.layerInstances.find((layer) => layer && layer.__type === 'Entities');
+  let spawnFound = false;
+  if (entityLayer && Array.isArray(entityLayer.entityInstances)) {
+    spawnFound = entityLayer.entityInstances.some((entity) => {
+      const identifier = (entity?.__identifier || entity?.identifier || '').toLowerCase();
+      return identifier.includes('player');
+    });
+  }
+  if (!spawnFound) {
+    issues.push(
+      formatIssue('Platformer level missing spawn point', {
+        level,
+        hint: 'Add an entity with identifier containing "Player" to the level.',
+      }),
+    );
+  }
+  return issues;
 }
 
 const MANIFEST_PATH = path.join(ROOT, 'tools', 'reporters', 'game-doctor-manifest.json');
@@ -1524,6 +1746,11 @@ async function main() {
           }),
         );
       }
+    }
+
+    if (slug === 'platformer') {
+      const levelIssues = await validatePlatformerLevels();
+      issues.push(...levelIssues);
     }
 
     const firstFrame = game.firstFrame ?? {};

@@ -1,18 +1,24 @@
 (function(){
   let recording=false;
   let startTime=0;
-  let data={pieces:[],actions:[]};
+  let data={seed:null,pieces:[],actions:[]};
   let player=null;
 
   function reset(){
-    data={pieces:[],actions:[]};
+    data={seed:null,pieces:[],actions:[]};
     startTime=0;
   }
 
-  function start(){
+  function start(seed=null){
     reset();
+    if(Number.isInteger(seed)) data.seed=seed>>>0;
     recording=true;
     startTime=performance.now();
+  }
+
+  function setSeed(seed){
+    if(!Number.isInteger(seed)) return;
+    data.seed=seed>>>0;
   }
 
   function stop(){
@@ -49,6 +55,7 @@
       this.t=0;
       this.ai=0;
       this.pi=0;
+      this.seed=Number.isInteger(d.seed)?d.seed>>>0:null;
     }
     nextPiece(){
       return this.pieces[this.pi++];
@@ -89,5 +96,5 @@
     return player?player.tick(dt):[];
   }
 
-  window.Replay={start,stop,recordPiece,recordAction,exportData,download,load,nextPiece,tick,Player};
+  window.Replay={start,stop,recordPiece,recordAction,exportData,download,load,nextPiece,tick,Player,setSeed};
 })();

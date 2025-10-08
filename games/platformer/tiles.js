@@ -4,13 +4,15 @@ export const TILE = 50;
 
 // Collision masks describe the ground height for each x coordinate within a tile.
 // The array value is the y position (0 at top) of the solid surface.
+const SLOPE_RANGE = TILE - 1;
+
 export const tileMasks = {
-  '1': Array(TILE).fill(TILE), // full solid block
+  '1': Array(TILE).fill(0),
   // Slope rising to the right: ground goes from bottom-left to top-right
-  '4': Array.from({ length: TILE }, (_, x) => TILE - x),
+  '4': Array.from({ length: TILE }, (_, x) => Math.round(SLOPE_RANGE - (SLOPE_RANGE * x) / SLOPE_RANGE)),
   // Slope rising to the left: ground goes from top-left to bottom-right
-  '5': Array.from({ length: TILE }, (_, x) => x + 1),
-  '6': Array(TILE).fill(TILE), // lava top, treated as solid surface for collisions
+  '5': Array.from({ length: TILE }, (_, x) => Math.round((SLOPE_RANGE * x) / SLOPE_RANGE)),
+  '6': Array(TILE).fill(0),
 };
 
 export const tiles = {

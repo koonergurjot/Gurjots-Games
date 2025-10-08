@@ -214,6 +214,7 @@ hud.innerHTML = `Arrows/WASD or swipe • R restart • P pause
       <option value="1">Wrap</option>
       <option value="0">No Wrap</option>
     </select></label>
+  <div id="debugPanel" aria-live="polite" aria-label="Debug info" style="margin-left:8px;padding:4px 8px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:12px;line-height:1.4;min-width:140px;"></div>
 `;
 
 const storageState = {
@@ -359,7 +360,11 @@ let snake = [
   { x: 3, y: 16 }
 ];
 let lastSnake = snake.map(s => ({ ...s }));
-let speedMs = 120;
+const SPEED_BASE_MS = 120;
+const SPEED_MIN_MS = 60;
+const SPEEDUP_INTERVAL = 4;
+const SPEED_STEP_MS = 6;
+let speedMs = SPEED_BASE_MS;
 let score = 0;
 const storedBest = safeStorageGetItem('snake:best');
 let bestScore = storedBest != null ? Number(storedBest) : 0;
@@ -440,6 +445,48 @@ let won = false;
 let winHandled = false;
 const spriteEffects = [];
 
+const CellType = {
+  Empty: 0,
+  Snake: 1,
+  Obstacle: 2,
+  Food: 3,
+  Portal: 4,
+  Shrink: 5
+};
+
+let boardState = new Uint8Array(N * N);
+let lastFoodCandidateCount = 0;
+
+function toIndex(x, y) {
+  return y * N + x;
+}
+
+function fromIndex(idx) {
+  return { x: idx % N, y: Math.floor(idx / N) };
+}
+
+function cellTypeFromPickup(pickup) {
+  if (!pickup) return CellType.Empty;
+  if (pickup.effect === 'portal') return CellType.Portal;
+  if (pickup.effect === 'shrink') return CellType.Shrink;
+  return CellType.Food;
+}
+
+function buildBoard(nextFood = null) {
+  const next = new Uint8Array(N * N);
+  for (const obstacle of obstacles) {
+    next[toIndex(obstacle.x, obstacle.y)] = CellType.Obstacle;
+  }
+  for (const segment of snake) {
+    next[toIndex(segment.x, segment.y)] = CellType.Snake;
+  }
+  if (nextFood) {
+    next[toIndex(nextFood.x, nextFood.y)] = cellTypeFromPickup(nextFood);
+  }
+  boardState = next;
+  return boardState;
+}
+
 function spawnSpriteEffect(type, gridX, gridY, options = {}) {
   spriteEffects.push({
     type,
@@ -480,8 +527,10 @@ function triggerDeathEffect(head) {
   spawnSpriteEffect('explosion', clampedX, clampedY, { duration: 600, scale: 1.6 });
 }
 const SPECIAL_FOOD = [
-  { icon: '⭐', color: '#fbbf24', points: 5, chance: 0.1 },
-  { icon: '💎', color: '#60a5fa', points: 10, chance: 0.03 }
+  { icon: '⭐', color: '#fbbf24', points: 5, chance: 0.08, effect: 'score' },
+  { icon: '💎', color: '#60a5fa', points: 10, chance: 0.02, effect: 'score' },
+  { icon: '🌀', color: '#38bdf8', points: 0, chance: 0.04, effect: 'portal' },
+  { icon: '🪄', color: '#c084fc', points: 0, chance: 0.04, effect: 'shrink' }
 ];
 function applySkin() {
   const s = SNAKE_SKINS.find(t => t.id === snakeSkinId);
@@ -532,32 +581,123 @@ let level = 1;
 
 let engine = null;
 
-let rand = Math.random;
-if (DAILY_MODE) {
-  let s = 0;
-  for (let i = 0; i < DAILY_SEED.length; i++) s = (s * 31 + DAILY_SEED.charCodeAt(i)) >>> 0;
-  rand = function () {
-    s |= 0; s = s + 0x6D2B79F5 | 0;
+function hashSeedString(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h >>> 0;
+}
+
+function createSeededRng(seed) {
+  let s = seed >>> 0;
+  return function seededRandom() {
+    s |= 0; s = (s + 0x6D2B79F5) | 0;
     let t = Math.imul(s ^ s >>> 15, 1 | s);
     t ^= t + Math.imul(t ^ t >>> 7, 61 | t);
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
-  window.SNAKE_SEED = DAILY_SEED;
+}
+
+function randomSeed() {
+  if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+    const arr = new Uint32Array(1);
+    window.crypto.getRandomValues(arr);
+    return arr[0] >>> 0;
+  }
+  return Math.floor(Math.random() * 0xffffffff) >>> 0;
+}
+
+function resolveSeed(seedOverride) {
+  if (typeof seedOverride === 'number' && Number.isFinite(seedOverride)) return seedOverride >>> 0;
+  if (typeof seedOverride === 'string' && seedOverride) return hashSeedString(seedOverride);
+  const base = randomSeed();
+  if (DAILY_MODE) return base ^ hashSeedString(DAILY_SEED);
+  return base;
+}
+
+function startRng(seedOverride) {
+  const seed = resolveSeed(seedOverride);
+  currentSeed = seed >>> 0;
+  rand = createSeededRng(currentSeed);
+  window.SNAKE_SEED = DAILY_MODE ? `${DAILY_SEED}:${currentSeed.toString(16)}` : currentSeed.toString(16);
+  return currentSeed;
+}
+
+const REPLAY_STORAGE_KEY = 'snake:lastReplay';
+let currentSeed = 0;
+let rand = Math.random;
+let replayState = null;
+let activeReplay = null;
+let capturingReplay = true;
+let tickCounter = 0;
+let foodsEaten = 0;
+let lastReplayRecord = parseJSONSafe(safeStorageGetItem(REPLAY_STORAGE_KEY), null);
+
+const debugPanel = document.getElementById('debugPanel');
+
+function updateDebugPanel() {
+  if (!debugPanel) return;
+  debugPanel.innerHTML = `Tick <strong>${tickCounter}</strong><br/>Length <strong>${snake.length}</strong><br/>Food slots <strong>${lastFoodCandidateCount}</strong>`;
+}
+
+function saveReplayRecord(record) {
+  if (record) {
+    lastReplayRecord = JSON.parse(JSON.stringify(record));
+    safeStorageSetItem(REPLAY_STORAGE_KEY, JSON.stringify(record));
+  } else {
+    lastReplayRecord = null;
+    safeStorageSetItem(REPLAY_STORAGE_KEY, '');
+  }
+}
+
+function recordReplayInput(dir) {
+  if (!capturingReplay || !replayState) return;
+  replayState.inputs.push({ tick: tickCounter, dir: { x: dir.x, y: dir.y } });
+}
+
+function finalizeReplay(reason) {
+  if (!capturingReplay || !replayState) return;
+  if (replayState.reason) return;
+  replayState.reason = reason;
+  replayState.seed = currentSeed;
+  replayState.finalTick = tickCounter;
+  replayState.daily = DAILY_MODE ? DAILY_SEED : null;
+  saveReplayRecord(replayState);
+}
+
+function startReplay(recording) {
+  if (!recording || typeof recording.seed !== 'number' || !Array.isArray(recording.inputs)) return false;
+  const mapped = recording.inputs.map((entry, idx) => ({
+    tick: Number(entry.tick) || 0,
+    dir: { x: Number(entry.dir?.x) || 0, y: Number(entry.dir?.y) || 0 },
+    order: idx
+  }));
+  mapped.sort((a, b) => a.tick === b.tick ? a.order - b.order : a.tick - b.tick);
+  activeReplay = {
+    inputs: mapped,
+    index: 0
+  };
+  capturingReplay = false;
+  replayState = null;
+  resetGame('replay', { seed: recording.seed, captureReplay: false, skipProgress: true });
+  return true;
 }
 
 applySkin();
 populateSkinSelects();
 
-let food = spawnFood();
+let food = null;
 let fruitSpawnTime = performance.now();
 let turnBuffer = [];
 const MAX_TURN_BUFFER = 2;
 
-function enqueueTurn(nd) {
+function enqueueTurn(nd, source = 'player') {
   if (!nd) return;
   const lastQueued = turnBuffer.length ? turnBuffer[turnBuffer.length - 1] : dir;
   if (nd.x === -lastQueued.x && nd.y === -lastQueued.y) return;
-  if (turnBuffer.length < MAX_TURN_BUFFER) turnBuffer.push(nd);
+  if (turnBuffer.length < MAX_TURN_BUFFER) {
+    turnBuffer.push(nd);
+    if (source === 'player') recordReplayInput(nd);
+  }
 }
 
 function pauseGame(reason = 'manual') {
@@ -577,7 +717,10 @@ function togglePause(reason = 'toggle') {
   else pauseGame(reason);
 }
 
-function resetGame(reason = 'manual') {
+function resetGame(reason = 'manual', options = {}) {
+  const opts = (options && typeof options === 'object') ? options : {};
+  const captureReplay = opts.captureReplay !== false;
+  const skipProgress = opts.skipProgress === true;
   dir = { x: 1, y: 0 };
   lastDir = { x: 1, y: 0 };
   turnBuffer = [];
@@ -585,23 +728,43 @@ function resetGame(reason = 'manual') {
   lastSnake = snake.map(s => ({ ...s }));
   won = false;
   winHandled = false;
-  food = spawnFood();
-  fruitSpawnTime = performance.now();
-  speedMs = 120;
-  score = 0;
+  obstacles = [];
   dead = false;
   deadHandled = false;
-  level = 1;
-  moveAcc = 0;
   paused = false;
+  moveAcc = 0;
+  level = 1;
+  tickCounter = 0;
+  foodsEaten = 0;
   spriteEffects.length = 0;
-  lastTickTime = performance.now();
-  progress.plays++;
-  saveProgress();
+  speedMs = SPEED_BASE_MS;
+  score = 0;
+  const now = performance.now();
+  lastTickTime = now;
+  fruitSpawnTime = now;
+  capturingReplay = captureReplay;
+  if (captureReplay) {
+    replayState = { seed: null, inputs: [], startedAt: Date.now(), daily: DAILY_MODE ? DAILY_SEED : null };
+    activeReplay = null;
+  } else if (activeReplay) {
+    activeReplay.index = 0;
+  }
+  const seed = startRng(opts.seed);
+  if (captureReplay && replayState) replayState.seed = seed;
+  if (!skipProgress) {
+    progress.plays++;
+    saveProgress();
+  }
   populateSkinSelects();
-  bootLog('game:reset', { reason });
+  buildBoard(null);
+  food = spawnFood();
+  fruitSpawnTime = performance.now();
+  bootLog('game:reset', { reason, seed });
   if (engine && !engine.running) engine.start();
+  updateDebugPanel();
 }
+
+resetGame('boot');
 
 document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') togglePause('keyboard'); });
 
@@ -624,38 +787,29 @@ document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') tog
   c.addEventListener('touchend', () => start = null);
 })();
 
+function pickBaseFruit() {
+  let art = FRUIT_ART.length ? FRUIT_ART[Math.floor(rand() * FRUIT_ART.length)] : { icon: '🍎', label: '🍎', spriteKey: 'fruit' };
+  if (fruitSkinId === 'gems' && FRUIT_ART.length) {
+    art = FRUIT_ART[gemSpriteIndex % FRUIT_ART.length];
+    gemSpriteIndex = (gemSpriteIndex + 1) % FRUIT_ART.length;
+  }
+  return {
+    icon: art.icon,
+    label: art.label ?? art.icon,
+    spriteKey: art.spriteKey || 'fruit',
+    color: fruitColor,
+    points: 1,
+    effect: 'score'
+  };
+}
+
 function spawnFood() {
-  const r = rand();
-  let type = null;
-  let acc = 0;
-  for (const t of SPECIAL_FOOD) {
-    acc += t.chance;
-    if (r < acc) { type = t; break; }
-  }
-  if (!type) {
-    let art = FRUIT_ART.length ? FRUIT_ART[Math.floor(rand() * FRUIT_ART.length)] : { icon: '🍎', label: '🍎', spriteKey: 'fruit' };
-    if (fruitSkinId === 'gems' && FRUIT_ART.length) {
-      art = FRUIT_ART[gemSpriteIndex % FRUIT_ART.length];
-      gemSpriteIndex = (gemSpriteIndex + 1) % FRUIT_ART.length;
-    }
-    type = {
-      icon: art.icon,
-      label: art.label ?? art.icon,
-      spriteKey: art.spriteKey || 'fruit',
-      color: fruitColor,
-      points: 1
-    };
-  }
-  const occupied = new Set();
-  for (const segment of snake) occupied.add(`${segment.x},${segment.y}`);
-  for (const obstacle of obstacles) occupied.add(`${obstacle.x},${obstacle.y}`);
+  const boardForSpawn = buildBoard(null);
   const freeCells = [];
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      const key = `${x},${y}`;
-      if (!occupied.has(key)) freeCells.push({ x, y });
-    }
+  for (let i = 0; i < boardForSpawn.length; i++) {
+    if (boardForSpawn[i] === CellType.Empty) freeCells.push(i);
   }
+  lastFoodCandidateCount = freeCells.length;
   if (!freeCells.length) {
     if (!won) {
       won = true;
@@ -665,17 +819,32 @@ function spawnFood() {
         try { engine.stop(); } catch (err) { bootLog('game:win-stop-error', { message: err?.message || String(err) }); }
       }
     }
+    updateDebugPanel();
     return null;
   }
-  const f = freeCells[(rand() * freeCells.length) | 0];
-  const fruit = { ...f, ...type };
+
+  const r = rand();
+  let type = null;
+  let acc = 0;
+  for (const t of SPECIAL_FOOD) {
+    acc += t.chance;
+    if (r < acc) { type = t; break; }
+  }
+  if (!type) type = pickBaseFruit();
+  const idx = freeCells[(rand() * freeCells.length) | 0];
+  const coords = fromIndex(idx);
+  const fruit = { ...type, x: coords.x, y: coords.y, index: idx };
   playSfx('click');
+  buildBoard(fruit);
+  updateDebugPanel();
   return fruit;
 }
 
 function addObstacleRow() {
   const y = Math.floor(rand() * N);
   for (let x = 4; x < N - 4; x++) obstacles.push({ x, y });
+  buildBoard(food);
+  updateDebugPanel();
 }
 
 function maybeLevelUp() {
@@ -689,7 +858,71 @@ function maybeLevelUp() {
 let lastTickTime = performance.now();
 let moveAcc = 0;
 
+function pumpReplayInputs() {
+  if (!activeReplay) return;
+  while (activeReplay.index < activeReplay.inputs.length) {
+    const entry = activeReplay.inputs[activeReplay.index];
+    if (!entry || typeof entry.tick !== 'number') {
+      activeReplay.index++;
+      continue;
+    }
+    if (entry.tick > tickCounter) break;
+    activeReplay.index++;
+    if (entry.dir && typeof entry.dir.x === 'number' && typeof entry.dir.y === 'number') {
+      enqueueTurn({ x: entry.dir.x, y: entry.dir.y }, 'replay');
+    }
+  }
+}
+
+function applySpeedCurve() {
+  if (foodsEaten > 0 && foodsEaten % SPEEDUP_INTERVAL === 0) {
+    speedMs = Math.max(SPEED_MIN_MS, speedMs - SPEED_STEP_MS);
+  }
+}
+
+function applyPickupEffect(pickup, head) {
+  const result = { grow: true, extraTailRemoval: 0 };
+  foodsEaten++;
+  const points = Number(pickup.points) || 0;
+  if (points > 0) {
+    score += points;
+    GG.addXP(points);
+  }
+  playSfx('power');
+  spawnSpriteEffect('spark', head.x, head.y, { duration: 500, scale: pickup.effect === 'shrink' ? 1 : 1.25 });
+  applySpeedCurve();
+  switch (pickup.effect) {
+    case 'portal': {
+      result.grow = false;
+      const snapshot = buildBoard(null);
+      const empties = [];
+      for (let i = 0; i < snapshot.length; i++) {
+        if (snapshot[i] === CellType.Empty) empties.push(i);
+      }
+      if (empties.length) {
+        const idx = empties[(rand() * empties.length) | 0];
+        const dest = fromIndex(idx);
+        head.x = dest.x;
+        head.y = dest.y;
+        snake[0].x = dest.x;
+        snake[0].y = dest.y;
+      }
+      break;
+    }
+    case 'shrink': {
+      result.grow = false;
+      result.extraTailRemoval = Math.min(2, Math.max(0, snake.length - 1));
+      break;
+    }
+    default:
+      break;
+  }
+  maybeLevelUp();
+  return result;
+}
+
 function step() {
+  pumpReplayInputs();
   if (turnBuffer.length) {
     const next = turnBuffer.shift();
     if (!(next.x === -lastDir.x && next.y === -lastDir.y)) dir = next;
@@ -709,27 +942,43 @@ function step() {
       triggerDeathEffect(head);
     }
   }
-  if (!dead && (obstacles.some(o => o.x === head.x && o.y === head.y) ||
-      snake.some((s, i) => i > 0 && s.x === head.x && s.y === head.y))) {
-    dead = true;
-    deadHandled = false;
-    triggerDeathEffect(head);
+  if (!dead) {
+    const idx = toIndex(head.x, head.y);
+    const occupant = boardState[idx];
+    if (occupant === CellType.Snake || occupant === CellType.Obstacle) {
+      dead = true;
+      deadHandled = false;
+      triggerDeathEffect(head);
+    }
   }
-  if (dead || won) return;
+  if (dead || won) {
+    if (dead) finalizeReplay('death');
+    activeReplay = null;
+    return;
+  }
   snake.unshift(head);
-  if (head.x === food.x && head.y === food.y) {
-    score += food.points;
-    GG.addXP(food.points);
-    playSfx('power');
-    spawnSpriteEffect('spark', food.x, food.y, { duration: 500, scale: 1.25 });
-    speedMs = Math.max(60, speedMs - food.points * 2);
-    food = spawnFood();
-    fruitSpawnTime = performance.now();
-    maybeLevelUp();
-  } else {
+  let consumed = null;
+  let effectResult = { grow: false, extraTailRemoval: 0 };
+  if (food && head.x === food.x && head.y === food.y) {
+    consumed = food;
+    effectResult = applyPickupEffect(consumed, head);
+    food = null;
+  }
+  if (!effectResult.grow) {
     snake.pop();
   }
+  let extra = effectResult.extraTailRemoval || 0;
+  while (extra-- > 0 && snake.length > 1) {
+    snake.pop();
+  }
+  if (consumed) {
+    food = spawnFood();
+    fruitSpawnTime = performance.now();
+  }
+  buildBoard(food);
+  tickCounter++;
   lastTickTime = performance.now();
+  updateDebugPanel();
 }
 
 function draw() {
@@ -805,8 +1054,8 @@ function draw() {
   // fruit with spawn animation
   if (food) {
     const ft = Math.min((time - fruitSpawnTime) / 300, 1);
-    const fruitSpriteKey = food.spriteKey || 'fruit';
-    const fruitImg = ensureSprite(fruitSpriteKey);
+    const fruitSpriteKey = food.spriteKey || null;
+    const fruitImg = fruitSpriteKey ? ensureSprite(fruitSpriteKey) : null;
     const size = CELL * (0.6 + 0.4 * ft);
     const drawX = (food.x + 0.5) * CELL - size / 2;
     const drawY = (food.y + 0.5) * CELL - size / 2;
@@ -814,8 +1063,14 @@ function draw() {
     ctx.globalAlpha = ft;
     if (fruitImg && !Array.isArray(fruitImg) && fruitImg.complete && fruitImg.naturalWidth) {
       ctx.drawImage(fruitImg, drawX, drawY, size, size);
+    } else if (typeof food.icon === 'string') {
+      ctx.fillStyle = food.color || '#f87171';
+      ctx.font = `${Math.floor(size * 0.8)}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(food.icon, drawX + size / 2, drawY + size / 2);
     } else {
-      ctx.fillStyle = food.color;
+      ctx.fillStyle = food.color || '#f87171';
       ctx.fillRect(drawX, drawY, size, size);
     }
     ctx.restore();
@@ -907,6 +1162,7 @@ function draw() {
     ctx.fillText('You crashed! Press R', c.width / 2, c.height / 2);
   }
 
+  updateDebugPanel();
 }
 
 function saveScore(s) {
@@ -969,9 +1225,14 @@ const snakeApi = {
   get turnBuffer() { return turnBuffer; },
   get cellSize() { return CELL; },
   get boardOffset() { return { x: boardOffsetX, y: boardOffsetY }; },
+  get seed() { return currentSeed; },
+  get tick() { return tickCounter; },
+  get lastReplay() { return lastReplayRecord ? JSON.parse(JSON.stringify(lastReplayRecord)) : null; },
   pause: (reason = 'external') => pauseGame(reason),
   resume: (reason = 'external') => resumeGame(reason),
-  reset: (reason = 'external') => resetGame(reason),
+  reset: (reason = 'external', options) => resetGame(reason, options),
+  playReplay(recording) { return startReplay(recording || lastReplayRecord || undefined); },
+  clearLastReplay() { saveReplayRecord(null); },
   onReady: []
 };
 

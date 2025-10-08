@@ -2,7 +2,7 @@
 import { pushEvent } from "/games/common/diag-adapter.js";
 import { preloadFirstFrameAssets } from "../../shared/game-asset-preloader.js";
 import { play as playSfx } from "../../shared/juice/audio.js";
-import { createSceneManager } from "../../src/engine/scenes.js";
+import "./pauseOverlay.js";
 
 (function(){
   "use strict";
@@ -13,9 +13,21 @@ import { createSceneManager } from "../../src/engine/scenes.js";
   const STEP = 1/60;
   const MAX_FRAME_DELTA = 0.1;
 
+  const AI_LEVELS = ["Easy","Medium","Hard"];
+  const AI_SETTINGS = {
+    Easy:   { speed: 460, reaction: 0.26, offset: 90, noise: 18 },
+    Medium: { speed: 560, reaction: 0.16, offset: 42, noise: 10 },
+    Hard:   { speed: 720, reaction: 0.08, offset: 14, noise: 4 },
+  };
+  const SPIN_ACCEL = 22;
+  const SPIN_DECAY = 0.985;
+  const TOUCH_DEBOUNCE_MS = 18;
+  const TOUCH_MIN_DELTA = 2.5;
+  const TOUCH_SCALE = 88;
+
   const DFLT = {
     mode:"1P",            // 1P, 2P, Endless, Mayhem
-    ai:"Normal",          // Easy, Normal, Hard, Insane
+    ai:"Medium",          // Easy, Medium, Hard
     toScore:11,
     winByTwo:true,
     powerups:true,
@@ -35,11 +47,25 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     shellPaused:false,
     images:{ powerups:{}, effects:{} },
     backgroundLayers:null,
-    overlay:null,
+    pauseOverlay:null,
+    debugHud:null,
+    debugVisible:false,
+    debugData:{ ballSpeed:0, dt:0, lastNormal:{x:0,y:0} },
+    axes:{
+      keyboard:{p1:0,p2:0},
+      touch:{p1:0,p2:0},
+      ai:{p1:0,p2:0},
+      combined:{p1:0,p2:0},
+    },
+    touchBuffer:[],
+    aiBrain:{ targetY:H/2, timer:0 },
   };
 
-  const scenes = createSceneManager({ id: `${SLUG}-scenes` });
-  state.scenes = scenes;
+  if(!AI_LEVELS.includes(state.ai)){
+    if(state.ai === "Normal") state.ai = "Medium";
+    else if(state.ai === "Insane") state.ai = "Hard";
+    else state.ai = "Medium";
+  }
 
   const globalScope = typeof window !== "undefined" ? window : undefined;
   const pongReadyQueue = (() => {
@@ -344,6 +370,18 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     state.p2 = {x:W-50, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
     spawnBall(Math.random()<0.5? -1 : 1);
     state.over=false; state.paused=false;
+    hidePauseOverlay();
+    state.shellPaused=false;
+    state.touches = {};
+    state.touchBuffer.length = 0;
+    Object.assign(state.axes.keyboard, {p1:0,p2:0});
+    Object.assign(state.axes.touch, {p1:0,p2:0});
+    Object.assign(state.axes.ai, {p1:0,p2:0});
+    Object.assign(state.axes.combined, {p1:0,p2:0});
+    state.aiBrain = { targetY:H/2, timer:0 };
+    state.debugData.ballSpeed = 0;
+    state.debugData.lastNormal = {x:0,y:0};
+    resolveMovementAxes();
     if(Array.isArray(state.backgroundLayers)){
       for(const layer of state.backgroundLayers){
         if(layer) layer.offset = 0;
@@ -396,10 +434,56 @@ import { createSceneManager } from "../../src/engine/scenes.js";
 
   // ---------- Input ----------
   const pressed = new Set();
+
+  function resolveMovementAxes(){
+    const sources = state.axes;
+    const sum = (side)=>{
+      return clamp(
+        (sources.keyboard?.[side] || 0) +
+        (sources.touch?.[side] || 0) +
+        (sources.ai?.[side] || 0),
+        -1,
+        1
+      );
+    };
+    const p1Axis = sum("p1");
+    const p2Axis = sum("p2");
+    sources.combined.p1 = p1Axis;
+    sources.combined.p2 = p2Axis;
+    if(state.p1) state.p1.dy = p1Axis;
+    if(state.p2) state.p2.dy = p2Axis;
+  }
+
   function bindMove(){
-    state.p1.dy = (pressed.has(state.keys.p1Down)? 1:0) - (pressed.has(state.keys.p1Up)? 1:0);
+    state.axes.keyboard.p1 = (pressed.has(state.keys.p1Down)? 1:0) - (pressed.has(state.keys.p1Up)? 1:0);
     if(state.mode==="2P"){
-      state.p2.dy = (pressed.has(state.keys.p2Down)? 1:0) - (pressed.has(state.keys.p2Up)? 1:0);
+      state.axes.keyboard.p2 = (pressed.has(state.keys.p2Down)? 1:0) - (pressed.has(state.keys.p2Up)? 1:0);
+    } else {
+      state.axes.keyboard.p2 = 0;
+    }
+    resolveMovementAxes();
+  }
+
+  function queueTouchImpulse(side, deltaX, timestamp){
+    if(side==="p2" && state.mode!=="2P") return;
+    const direction = deltaX > 0 ? 1 : -1;
+    const magnitude = Math.min(1.25, Math.abs(deltaX) / TOUCH_SCALE);
+    state.touchBuffer.push({ side, value: direction * magnitude, time: timestamp });
+  }
+
+  function consumeTouchBuffer(dt){
+    const buffer = state.touchBuffer;
+    if(buffer.length){
+      for(const item of buffer){
+        const side = item.side;
+        state.axes.touch[side] = clamp((state.axes.touch[side] || 0) + item.value, -1.5, 1.5);
+      }
+      buffer.length = 0;
+    }
+    const decay = Math.exp(-dt * 6);
+    for(const side of ["p1","p2"]){
+      state.axes.touch[side] = (state.axes.touch[side] || 0) * decay;
+      if(Math.abs(state.axes.touch[side]) < 0.01) state.axes.touch[side] = 0;
     }
   }
 
@@ -410,37 +494,102 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     return { x, y };
   }
 
-  function onPointer(e){
-    const { y } = pointerToGame(e);
-    state.p1.y = clamp(y - state.p1.h/2, 0, H - state.p1.h);
+  function inputSideFromX(x){
+    return x < W/2 ? "p1" : "p2";
+  }
+
+  function directMovePaddle(side, y){
+    if(side==="p2" && state.mode!=="2P") return;
+    const paddle = side==="p1" ? state.p1 : state.p2;
+    if(!paddle) return;
+    paddle.y = clamp(y - paddle.h/2, 0, H - paddle.h);
+  }
+
+  function trackTouch(id, data){
+    state.touches[id] = data;
+  }
+
+  function forgetTouch(id){
+    delete state.touches[id];
+  }
+
+  function onPointerDown(e){
+    const id = e.pointerId ?? `ptr-${Math.random()}`;
+    const pos = pointerToGame(e);
+    const side = inputSideFromX(pos.x);
+    if(e.pointerType === "mouse"){
+      directMovePaddle(side, pos.y);
+      state.canvas.setPointerCapture?.(e.pointerId);
+    }
+    trackTouch(id, {
+      id,
+      side,
+      pointerType: e.pointerType || "mouse",
+      lastX: pos.x,
+      lastY: pos.y,
+      lastEmit: performance.now(),
+    });
+  }
+
+  function onPointerMove(e){
+    const id = e.pointerId ?? "mouse";
+    const touch = state.touches[id];
+    if(!touch) return;
+    const pos = pointerToGame(e);
+    if(touch.pointerType === "mouse"){
+      directMovePaddle(touch.side, pos.y);
+      touch.lastX = pos.x;
+      touch.lastY = pos.y;
+      return;
+    }
+    const now = performance.now();
+    const deltaX = pos.x - touch.lastX;
+    if(Math.abs(deltaX) >= TOUCH_MIN_DELTA && (now - touch.lastEmit) >= TOUCH_DEBOUNCE_MS){
+      queueTouchImpulse(touch.side, deltaX, now);
+      touch.lastEmit = now;
+    }
+    touch.lastX = pos.x;
+    touch.lastY = pos.y;
+  }
+
+  function onPointerUp(e){
+    const id = e.pointerId ?? "mouse";
+    forgetTouch(id);
   }
 
   // ---------- AI ----------
-  function aiSpeed(){
-    return {Easy:420, Normal:560, Hard:700, Insane:900}[state.ai] || 560;
-  }
   function moveAI(dt){
     if(state.mode==="2P") return;
-    // Predict next Y (simple extrapolation with bounce prediction)
-    let targetY = H/2;
-    let nearest = state.balls[0];
-    if(!nearest) return;
-    // If ball moving towards AI
-    if(nearest.dx > 0){
-      targetY = predictY(nearest);
-    } else {
-      // recentre
-      targetY = H/2;
+    const config = AI_SETTINGS[state.ai] || AI_SETTINGS.Medium;
+    state.p2.speed = config.speed;
+    const brain = state.aiBrain;
+    brain.timer = Math.max(0, brain.timer - dt);
+    const nearest = state.balls[0];
+    if(nearest && nearest.dx > 0){
+      if(brain.timer <= 0){
+        const predicted = predictY(nearest, config.reaction);
+        const offset = (Math.random()*2 - 1) * config.offset;
+        const target = clamp(predicted + offset, state.p2.h/2, H - state.p2.h/2);
+        brain.targetY = target;
+        brain.timer = config.reaction;
+      }
+    } else if(brain.timer <= 0){
+      brain.targetY = H/2;
+      brain.timer = config.reaction * 0.75;
     }
-    const sp = aiSpeed();
-    if(Math.abs((state.p2.y + state.p2.h/2) - targetY) < 8) return;
-    const dir = (state.p2.y + state.p2.h/2) < targetY ? 1 : -1;
-    state.p2.y = clamp(state.p2.y + dir*sp*dt, 0, H - state.p2.h);
+    const aim = brain.targetY ?? H/2;
+    const noisy = clamp(aim + rand(-config.noise, config.noise), state.p2.h/2, H - state.p2.h/2);
+    const center = state.p2.y + state.p2.h/2;
+    const diff = noisy - center;
+    const axis = clamp(diff / (state.p2.h * 0.5), -1, 1);
+    state.axes.ai.p2 = axis;
   }
 
-  function predictY(ball){
+  function predictY(ball, delay=0){
     // simulate bounces on vertical walls
-    let x=ball.x, y=ball.y, dx=ball.dx, dy=ball.dy;
+    let x=ball.x + ball.dx * delay;
+    let y=ball.y + ball.dy * delay;
+    let dx=ball.dx, dy=ball.dy;
     const steps = 240; // rough
     for(let i=0;i<steps;i++){
       const t=1/120;
@@ -449,7 +598,7 @@ import { createSceneManager } from "../../src/engine/scenes.js";
       if(y > H-ball.r && dy>0){ dy = -dy; y = H-ball.r; }
       if(dx>0 && x>=state.p2.x) break;
     }
-    return y;
+    return clamp(y, ball.r, H - ball.r);
   }
 
   // ---------- Physics ----------
@@ -458,49 +607,147 @@ import { createSceneManager } from "../../src/engine/scenes.js";
   }
 
   function updateBall(b, dt){
-    // Spin: Magnus-like effect
-    b.dy += b.spin * 18 * dt;
+    let remaining = dt;
+    let guard = 0;
+    while(remaining > 0.00001 && guard++ < 8){
+      const collision = findEarliestCollision(b, remaining);
+      const slice = collision ? Math.max(0, Math.min(collision.time, remaining)) : remaining;
+      if(slice > 0){
+        const spinAccel = b.spin * SPIN_ACCEL;
+        b.dy += spinAccel * slice;
+        b.x += b.dx * slice;
+        b.y += b.dy * slice;
+        b.spin *= SPIN_DECAY;
+      }
+      remaining -= slice;
 
-    b.x += b.dx * dt;
-    b.y += b.dy * dt;
+      if(!collision || collision.time > slice + 1e-6) continue;
 
-    // Wall bounce
-    if(b.y < b.r && b.dy < 0){ b.y=b.r; b.dy = -b.dy; spawnEffect("spark", b.x, b.y, {scale:0.6, duration:0.3}); playSound("hit"); }
-    if(b.y > H-b.r && b.dy > 0){ b.y=H-b.r; b.dy = -b.dy; spawnEffect("spark", b.x, b.y, {scale:0.6, duration:0.3}); playSound("hit"); }
-
-    // Paddle collisions
-    // P1
-    if(b.dx < 0 && b.x - b.r <= state.p1.x + state.p1.w && b.x >= state.p1.x){
-      if(circleRectOverlap(b, state.p1)){
-        if(!useGhost(state.p1, b, -1)){
-          b.x = state.p1.x + state.p1.w + b.r;
-          collidePaddle(b, state.p1, 1);
+      switch(collision.type){
+        case "wall":{
+          const normal = collision.normal || {x:0,y:1};
+          state.debugData.lastNormal = {x:normal.x, y:normal.y};
+          if(normal.y > 0){
+            b.y = Math.max(b.r, b.y);
+            b.dy = Math.abs(b.dy);
+          } else if(normal.y < 0){
+            b.y = Math.min(H - b.r, b.y);
+            b.dy = -Math.abs(b.dy);
+          }
+          spawnEffect("spark", b.x, b.y, {scale:0.6, duration:0.3});
+          playSound("hit");
+          break;
+        }
+        case "paddle":{
+          const paddle = collision.paddle;
+          const dir = collision.dir;
+          if(useGhost(paddle, b, -dir)){
+            if(dir < 0){
+              b.x = paddle.x - b.r - 0.2;
+            } else {
+              b.x = paddle.x + paddle.w + b.r + 0.2;
+            }
+            state.debugData.lastNormal = {x:0,y:0};
+          } else {
+            collidePaddle(b, paddle, dir, collision.point);
+          }
+          break;
+        }
+        case "score":{
+          award(collision.side);
+          respawn(b, collision.side === "p1" ? -1 : 1);
+          state.debugData.lastNormal = {x:0,y:0};
+          return;
         }
       }
     }
-    // P2
-    if(b.dx > 0 && b.x + b.r >= state.p2.x && b.x <= state.p2.x + state.p2.w){
-      if(circleRectOverlap(b, state.p2)){
-        if(!useGhost(state.p2, b, 1)){
-          b.x = state.p2.x - b.r;
-          collidePaddle(b, state.p2, -1);
-        }
-      }
-    }
-
-    // Score
-    if(b.x < -40){ award("p2"); respawn(b, 1); }
-    if(b.x > W+40){ award("p1"); respawn(b, -1); }
   }
 
-  function respawn(b, dir){ Object.assign(b, {x:W/2, y:H/2, dx:dir*rand(340,420), dy:rand(-220,220), spin:0, lastHit:null}); }
+  function respawn(b, dir){
+    Object.assign(b, {x:W/2, y:H/2, dx:dir*rand(340,420), dy:rand(-220,220), spin:0, lastHit:null});
+  }
 
-  function circleRectOverlap(ball, paddle){
-    const px = clamp(ball.x, paddle.x, paddle.x + paddle.w);
-    const py = clamp(ball.y, paddle.y, paddle.y + paddle.h);
-    const dx = ball.x - px;
-    const dy = ball.y - py;
-    return (dx*dx + dy*dy) <= ball.r * ball.r;
+  function findEarliestCollision(ball, dt){
+    let result = null;
+    const record = (candidate)=>{
+      if(!candidate) return;
+      if(candidate.time < 0 || candidate.time > dt) return;
+      if(!result || candidate.time < result.time){
+        result = candidate;
+      }
+    };
+
+    // Top & bottom walls
+    if(ball.dy < 0){
+      const time = (ball.r - ball.y) / ball.dy;
+      record({ time, type:"wall", normal:{x:0,y:1} });
+    } else if(ball.dy > 0){
+      const time = ((H - ball.r) - ball.y) / ball.dy;
+      record({ time, type:"wall", normal:{x:0,y:-1} });
+    }
+
+    if(ball.dx < 0){
+      const paddleHit = sweptCircleRect(ball, state.p1, dt);
+      if(paddleHit){
+        record({ time:paddleHit.time, type:"paddle", paddle:state.p1, dir:1, point:paddleHit.point });
+      }
+      const scoreTime = ((-40) - ball.x) / ball.dx;
+      record({ time:scoreTime, type:"score", side:"p2" });
+    } else if(ball.dx > 0){
+      const paddleHit = sweptCircleRect(ball, state.p2, dt);
+      if(paddleHit){
+        record({ time:paddleHit.time, type:"paddle", paddle:state.p2, dir:-1, point:paddleHit.point });
+      }
+      const scoreTime = ((W + 40) - ball.x) / ball.dx;
+      record({ time:scoreTime, type:"score", side:"p1" });
+    }
+
+    return result;
+  }
+
+  function sweptCircleRect(ball, paddle, dt){
+    if(!paddle) return null;
+    const expanded = {
+      minX: paddle.x - ball.r,
+      maxX: paddle.x + paddle.w + ball.r,
+      minY: paddle.y - ball.r,
+      maxY: paddle.y + paddle.h + ball.r,
+    };
+    let tEnter = 0;
+    let tExit = dt;
+
+    const vx = ball.dx;
+    const vy = ball.dy;
+
+    if(vx === 0){
+      if(ball.x < expanded.minX || ball.x > expanded.maxX) return null;
+    } else {
+      let tx1 = (expanded.minX - ball.x) / vx;
+      let tx2 = (expanded.maxX - ball.x) / vx;
+      if(tx1 > tx2) [tx1, tx2] = [tx2, tx1];
+      tEnter = Math.max(tEnter, tx1);
+      tExit = Math.min(tExit, tx2);
+    }
+
+    if(vy === 0){
+      if(ball.y < expanded.minY || ball.y > expanded.maxY) return null;
+    } else {
+      let ty1 = (expanded.minY - ball.y) / vy;
+      let ty2 = (expanded.maxY - ball.y) / vy;
+      if(ty1 > ty2) [ty1, ty2] = [ty2, ty1];
+      tEnter = Math.max(tEnter, ty1);
+      tExit = Math.min(tExit, ty2);
+    }
+
+    if(tEnter > tExit || tExit < 0) return null;
+    const time = Math.max(0, tEnter);
+    if(time > dt) return null;
+
+    const point = {
+      x: ball.x + ball.dx * time,
+      y: ball.y + ball.dy * time,
+    };
+    return { time, point };
   }
 
   function useGhost(p, ball, approach){
@@ -517,21 +764,69 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     return false;
   }
 
-  function collidePaddle(b, p, dir){
-    // hit offset (-1..1)
-    const rel = clamp((b.y - (p.y + p.h/2)) / (p.h/2), -1, 1);
-    const speed = Math.hypot(b.dx, b.dy);
-    const add = rel * 280;
-    b.dx = Math.sign(dir) * Math.max(240, speed*0.92);
-    b.dy = clamp(b.dy + add, -640, 640);
-    // Spin depends on paddle movement and offset
-    b.spin = clamp((p.dy*0.8) + rel*2.0, -6, 6);
+  function collidePaddle(b, p, dir, point){
+    const contact = computeContactData(b, p, dir, point);
+    const normal = contact.normal;
+    state.debugData.lastNormal = {x:normal.x, y:normal.y};
+    const velocity = { x: b.dx, y: b.dy };
+    const dot = velocity.x * normal.x + velocity.y * normal.y;
+    let rx = velocity.x - 2 * dot * normal.x;
+    let ry = velocity.y - 2 * dot * normal.y;
+    let mag = Math.hypot(rx, ry);
+    if(mag === 0){
+      rx = dir;
+      ry = 0;
+      mag = 1;
+    }
+    const targetSpeed = Math.max(260, Math.min(Math.hypot(velocity.x, velocity.y) * 1.05, 900));
+    rx = (rx / mag) * targetSpeed;
+    ry = (ry / mag) * targetSpeed;
+
+    const tangent = { x: -normal.y, y: normal.x };
+    const paddleVelocity = (p.dy || 0) * (p.speed || 0);
+    const tangentAdjust = paddleVelocity * 0.35 + contact.offset * 340;
+    rx += tangent.x * tangentAdjust;
+    ry += tangent.y * tangentAdjust;
+
+    b.dx = rx;
+    b.dy = clamp(ry, -900, 900);
+    b.spin = clamp((paddleVelocity / Math.max(1, p.speed || 1)) * 4 + contact.offset * 5, -8, 8);
     b.lastHit = p===state.p1 ? "p1" : "p2";
 
-    // Add FX
+    const pushPoint = contact.point;
+    b.x = pushPoint.x + normal.x * (b.r + 0.5);
+    b.y = clamp(pushPoint.y + normal.y * (b.r + 0.5), b.r, H - b.r);
+
     spawnEffect("spark", b.x, b.y, {scale:0.8, duration:0.35});
     shake(6);
     playSound("hit");
+  }
+
+  function computeContactData(ball, paddle, dir, point){
+    const cx = point?.x ?? ball.x;
+    const cy = point?.y ?? ball.y;
+    const px = clamp(cx, paddle.x, paddle.x + paddle.w);
+    const py = clamp(cy, paddle.y, paddle.y + paddle.h);
+    let nx = cx - px;
+    let ny = cy - py;
+    const dist = Math.hypot(nx, ny);
+    if(dist === 0){
+      nx = dir;
+      ny = 0;
+    } else {
+      nx /= dist;
+      ny /= dist;
+    }
+    const offset = clamp((py - (paddle.y + paddle.h/2)) / (paddle.h/2), -1, 1);
+    const pointOnSurface = {
+      x: dist === 0 ? (dir < 0 ? paddle.x : paddle.x + paddle.w) : px,
+      y: py,
+    };
+    return {
+      normal: { x: nx, y: ny },
+      offset,
+      point: pointOnSurface,
+    };
   }
 
   // ---------- Screen shake ----------
@@ -598,6 +893,7 @@ import { createSceneManager } from "../../src/engine/scenes.js";
   // ---------- Frame ----------
   function update(dt){
     state.dt = dt;
+    state.debugData.dt = dt;
 
     for(const flag of ["p1_ghost","p2_ghost"]){
       if(state[flag] && state[flag] > 0){
@@ -605,14 +901,22 @@ import { createSceneManager } from "../../src/engine/scenes.js";
       }
     }
 
+    consumeTouchBuffer(dt);
+    state.axes.ai.p1 = 0;
+    state.axes.ai.p2 = 0;
+    if(state.mode!=="2P") moveAI(dt);
+    else state.p2.speed = state.p1?.speed || state.p2.speed;
+    resolveMovementAxes();
+
     updatePaddle(state.p1, dt);
     updatePaddle(state.p2, dt);
-    if(state.mode!=="2P") moveAI(dt);
 
     maybeSpawnPowerup(dt);
     updatePowerups(dt);
 
     for(const b of state.balls){ updateBall(b, dt); }
+    const firstBall = state.balls[0];
+    state.debugData.ballSpeed = firstBall ? Math.hypot(firstBall.dx, firstBall.dy) : 0;
     checkPowerupCollisions();
     updateEffects(dt);
 
@@ -657,6 +961,47 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     drawEffects();
     endShake();
     ctx.restore();
+
+    updateDebugHud();
+  }
+
+  function ensureDebugHud(){
+    if(state.debugHud) return state.debugHud;
+    if(typeof document === "undefined") return null;
+    const root = document.createElement("div");
+    root.className = "pong-debug";
+    root.setAttribute("aria-live", "polite");
+    const title = document.createElement("div");
+    title.className = "pong-debug__title";
+    title.textContent = "Debug HUD";
+    const body = document.createElement("pre");
+    body.className = "pong-debug__body";
+    root.append(title, body);
+    (document.body || document.documentElement).appendChild(root);
+    state.debugHud = { root, body };
+    return state.debugHud;
+  }
+
+  function toggleDebugHud(force){
+    const next = force===undefined ? !state.debugVisible : !!force;
+    state.debugVisible = next;
+    const hud = ensureDebugHud();
+    if(!hud) return;
+    hud.root.classList.toggle("show", next);
+    if(next) updateDebugHud();
+  }
+
+  function updateDebugHud(){
+    if(!state.debugVisible) return;
+    const hud = ensureDebugHud();
+    if(!hud) return;
+    const { ballSpeed, dt, lastNormal } = state.debugData || {};
+    const nx = lastNormal?.x ?? 0;
+    const ny = lastNormal?.y ?? 0;
+    hud.body.textContent = `ball: ${(ballSpeed||0).toFixed(1)} px/s\n` +
+      `dt: ${(dt||0).toFixed(4)} s\n` +
+      `normal: (${nx.toFixed(2)}, ${ny.toFixed(2)})`;
+    hud.root.classList.add("show");
   }
 
   function frame(t){
@@ -669,6 +1014,7 @@ import { createSceneManager } from "../../src/engine/scenes.js";
 
     if(!state.running){
       state.dt = 0;
+      state.debugData.dt = 0;
       render();
       return;
     }
@@ -676,6 +1022,7 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     if(state.paused){
       state.acc = 0;
       state.dt = 0;
+      state.debugData.dt = 0;
       render();
       return;
     }
@@ -756,7 +1103,7 @@ import { createSceneManager } from "../../src/engine/scenes.js";
       h("div",{class:"pong-score", id:"score-p1"},"0"),
       h("div",{class:"pong-mid"},"—"),
       h("div",{class:"pong-score", id:"score-p2"},"0"),
-      h("span",{class:"touch-hint"}," • Drag the left side to move")
+      h("span",{class:"touch-hint"}," • Swipe left/right to move")
     );
 
     const menu = h("div",{class:"pong-menu"},
@@ -766,7 +1113,7 @@ import { createSceneManager } from "../../src/engine/scenes.js";
       ),
       h("div",{class:"pong-row"},
         h("label",{},"AI:"),
-        select(["Easy","Normal","Hard","Insane"], state.ai, v=>{state.ai=v; saveLS(); emitStateChange("difficulty", v);})
+        select(["Easy","Medium","Hard"], state.ai, v=>{state.ai=v; saveLS(); emitStateChange("difficulty", v);})
       ),
       h("div",{class:"pong-row"},
         h("label",{},"To Score:"),
@@ -860,357 +1207,83 @@ import { createSceneManager } from "../../src/engine/scenes.js";
   function toggle(value, on){ const b=h("button",{class:"pong-btn", "aria-pressed":String(!!value)}, value?"On":"Off"); b.addEventListener("click", ()=>{ value=!value; b.setAttribute("aria-pressed", String(!!value)); b.textContent=value?"On":"Off"; on(value); }); return b; }
   function number(value, on){ const i=h("input",{class:"pong-input", type:"number", value:String(value), min:"1", max:"99", style:"width:5rem"}); i.addEventListener("change", ()=>on(parseInt(i.value||"0")||11)); return i; }
 
-  function dispatchAction(action, payload) {
-    try {
-      return scenes.handle(action, payload);
-    } catch (err) {
-      console.error('[pong] dispatch action failed', err);
-      return false;
-    }
+  function isTouchPreferred(){
+    if(typeof window === "undefined") return false;
+    if(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) return true;
+    return "ontouchstart" in window;
   }
 
-  function setOverlayScene(kind) {
-    const overlay = state.overlay;
-    if (!overlay?.root) return;
-    overlay.current = kind || null;
-    overlay.root.dataset.scene = kind || '';
-    overlay.root.setAttribute('aria-hidden', kind ? 'false' : 'true');
-  }
-
-  function animateOverlayVisibility(kind, immediate = false) {
-    const overlay = state.overlay;
-    if (!overlay?.root) return Promise.resolve();
-    const root = overlay.root;
-    if (immediate) {
-      if (kind) root.classList.add('show');
-      else root.classList.remove('show');
-      return Promise.resolve();
-    }
-    return new Promise(resolve => {
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        root.removeEventListener('transitionend', onEnd);
-        resolve();
-      };
-      const onEnd = event => {
-        if (event.target === root) finish();
-      };
-      root.addEventListener('transitionend', onEnd);
-      requestAnimationFrame(() => {
-        if (kind) root.classList.add('show');
-        else root.classList.remove('show');
-      });
-      setTimeout(finish, OVERLAY_FADE_MS + 120);
+  function ensurePauseOverlay(){
+    if(state.pauseOverlay) return state.pauseOverlay;
+    if(!globalScope?.PongPauseOverlay?.create) return null;
+    state.pauseOverlay = globalScope.PongPauseOverlay.create({
+      onResume: ()=>{ setPaused(false, "manual"); },
+      onRestart: ()=>{ reset(); setPaused(false, "manual"); },
+      hint: isTouchPreferred() ? "Tap resume to continue" : "Press Space to resume",
     });
+    return state.pauseOverlay;
   }
 
-  function showOverlay(kind, data = {}, immediate = false) {
-    if (kind === 'title') updateTitleOverlay();
-    if (kind === 'pause') updatePauseOverlay(data.reason);
-    if (kind === 'gameover') updateGameOverOverlay(data);
-    setOverlayScene(kind);
-    return animateOverlayVisibility(kind, immediate);
-  }
-
-  function hideOverlay(immediate = false) {
-    setOverlayScene(null);
-    return animateOverlayVisibility(null, immediate);
-  }
-
-  function updateTitleOverlay() {
-    const overlay = state.overlay;
-    if (!overlay?.title?.message) return;
-    const parts = [];
-    const target = state.toScore ?? 0;
-    parts.push(`First to ${target}` + (state.winByTwo ? ' (win by two)' : ''));
-    if (state.mode) parts.push(`Mode: ${state.mode}`);
-    overlay.title.message.textContent = parts.join(' • ');
-  }
-
-  function updatePauseOverlay(reason = 'user') {
-    const overlay = state.overlay;
-    if (!overlay?.pause?.message) return;
-    overlay.pause.message.textContent = reason === 'shell'
-      ? 'Paused by system overlay. Return to resume.'
-      : 'Game paused';
-    if (overlay.pause.resumeBtn) overlay.pause.resumeBtn.disabled = reason === 'shell';
-  }
-
-  function updateGameOverOverlay(info = {}) {
-    const overlay = state.overlay;
-    if (!overlay?.gameover) return;
-    const left = info.left ?? state.score?.p1 ?? 0;
-    const right = info.right ?? state.score?.p2 ?? 0;
-    const winner = info.winner ?? (left === right ? null : left > right ? 'p1' : 'p2');
-    if (overlay.gameover.heading) {
-      overlay.gameover.heading.textContent = winner === 'p1'
-        ? 'Player 1 Wins!'
-        : winner === 'p2'
-          ? 'Player 2 Wins!'
-          : 'Match Over';
+  function showPauseOverlay(message){
+    const overlay = ensurePauseOverlay();
+    if(!overlay) return;
+    if(typeof message === "string" && message){
+      overlay.setHint?.(message);
     }
-    if (overlay.gameover.detail) {
-      overlay.gameover.detail.textContent = `Mode: ${state.mode}`;
-    }
-    if (overlay.gameover.score) {
-      overlay.gameover.score.textContent = `Score ${left} – ${right}`;
+    overlay.show?.();
+  }
+
+  function hidePauseOverlay(){
+    if(state.pauseOverlay && typeof state.pauseOverlay.hide === "function"){
+      state.pauseOverlay.hide();
     }
   }
 
-  function togglePause(opts = {}) {
-    dispatchAction('pause', { ...opts, source: opts.source || 'legacy', reason: opts.reason || 'user' });
+  function pauseHint(reason){
+    if(reason === "shell") return "Paused by host – switch back or press resume";
+    return isTouchPreferred() ? "Tap resume to continue" : "Press Space to resume";
+  }
+
+  function setPaused(next, reason){
+    if(next){
+      state.paused = true;
+      state.shellPaused = reason === "shell";
+      showPauseOverlay(pauseHint(reason));
+    } else {
+      state.paused = false;
+      state.shellPaused = false;
+      hidePauseOverlay();
+      state.last = performance.now();
+    }
+  }
+
+  function togglePause(force){
+    const target = force === undefined ? !state.paused : !!force;
+    if(target === state.paused){
+      if(!target){
+        state.shellPaused = false;
+        state.last = performance.now();
+        hidePauseOverlay();
+      } else if(state.shellPaused){
+        showPauseOverlay(pauseHint("shell"));
+      } else {
+        showPauseOverlay(pauseHint("manual"));
+      }
+      return;
+    }
+    setPaused(target, "manual");
   }
 
   function pauseForShell(){
-    const top = scenes.currentId;
-    if (top !== 'gameplay' && top !== 'pause') return;
-    dispatchAction('pause', { source: 'shell', reason: 'shell' });
+    if(state.over) return;
+    setPaused(true, "shell");
   }
 
   function resumeFromShell(){
-    const top = scenes.currentId;
-    if (top === 'pause') {
-      dispatchAction('resume', { source: 'shell' });
+    if(state.over || !state.paused) return;
+    if(state.shellPaused){
+      setPaused(false, "shell");
     }
-  }
-
-  function createTitleScene() {
-    return {
-      id: 'title',
-      transition: {
-        enter: () => showOverlay('title'),
-        exit: () => hideOverlay(),
-      },
-      onEnter(ctx) {
-        state.running = false;
-        state.over = false;
-        state.paused = false;
-        state.shellPaused = false;
-        reset();
-        ctx.setInputs({
-          async start(currentCtx) {
-            try {
-              await currentCtx.manager.replace(createGameScene);
-            } catch (err) {
-              console.error('[pong] start match failed', err);
-            }
-          },
-          async pause(currentCtx, info) {
-            if (info?.reason === 'shell') return;
-            try {
-              await currentCtx.manager.replace(createGameScene);
-            } catch (err) {
-              console.error('[pong] start match failed', err);
-            }
-          },
-          resume() {},
-          async restart(currentCtx) {
-            try {
-              await currentCtx.manager.replace(createGameScene);
-            } catch (err) {
-              console.error('[pong] start match failed', err);
-            }
-          },
-          menu() {},
-        });
-      },
-    };
-  }
-
-  function createGameScene() {
-    return {
-      id: 'gameplay',
-      transition: {
-        enter: () => hideOverlay(),
-        resume: () => hideOverlay(),
-      },
-      onEnter(ctx) {
-        reset();
-        state.running = true;
-        state.over = false;
-        state.shellPaused = false;
-        state.paused = false;
-        state.last = performance.now();
-        ctx.setInputs({
-          async pause(currentCtx, info) {
-            const reason = info?.reason === 'shell' ? 'shell' : 'user';
-            try {
-              await currentCtx.manager.push(() => createPauseScene({ reason }));
-            } catch (err) {
-              console.error('[pong] pause scene failed', err);
-            }
-          },
-          resume() {},
-          async restart(currentCtx) {
-            try {
-              await currentCtx.manager.replace(createGameScene);
-            } catch (err) {
-              console.error('[pong] restart failed', err);
-            }
-          },
-          async menu(currentCtx) {
-            try {
-              await currentCtx.manager.replace(createTitleScene);
-            } catch (err) {
-              console.error('[pong] return to menu failed', err);
-            }
-          },
-          async start(currentCtx, info) {
-            const reason = info?.reason === 'shell' ? 'shell' : 'user';
-            try {
-              await currentCtx.manager.push(() => createPauseScene({ reason }));
-            } catch (err) {
-              console.error('[pong] pause scene failed', err);
-            }
-          },
-        });
-      },
-      onPause() {
-        state.paused = true;
-      },
-      onResume() {
-        state.paused = false;
-        state.shellPaused = false;
-        state.last = performance.now();
-      },
-      onExit() {
-        state.running = false;
-      },
-    };
-  }
-
-  function createPauseScene({ reason = 'user' } = {}) {
-    let currentReason = reason;
-    const scene = {
-      id: 'pause',
-      setReason(nextReason) {
-        currentReason = nextReason || 'user';
-        state.shellPaused = currentReason === 'shell';
-        updatePauseOverlay(currentReason);
-      },
-      transition: {
-        enter: () => showOverlay('pause', { reason: currentReason }),
-        exit: () => hideOverlay(),
-      },
-      onEnter(ctx) {
-        state.paused = true;
-        state.shellPaused = currentReason === 'shell';
-        updatePauseOverlay(currentReason);
-        ctx.setInputs({
-          async pause(currentCtx, info) {
-            if (info?.reason === 'shell') {
-              scene.setReason('shell');
-              return;
-            }
-            try {
-              await currentCtx.manager.pop();
-            } catch (err) {
-              console.error('[pong] resume failed', err);
-            }
-          },
-          async resume(currentCtx, info) {
-            if (currentReason === 'shell' && info?.source !== 'shell') return;
-            try {
-              await currentCtx.manager.pop();
-            } catch (err) {
-              console.error('[pong] resume failed', err);
-            }
-          },
-          async start(currentCtx, info) {
-            if (currentReason === 'shell' && info?.source !== 'shell') return;
-            try {
-              await currentCtx.manager.pop();
-            } catch (err) {
-              console.error('[pong] resume failed', err);
-            }
-          },
-          async restart(currentCtx) {
-            try {
-              await currentCtx.manager.pop({ resume: false });
-              await currentCtx.manager.replace(createGameScene);
-            } catch (err) {
-              console.error('[pong] restart failed', err);
-            }
-          },
-          async menu(currentCtx) {
-            try {
-              await currentCtx.manager.pop({ resume: false });
-              await currentCtx.manager.replace(createTitleScene);
-            } catch (err) {
-              console.error('[pong] menu failed', err);
-            }
-          },
-        });
-      },
-      onExit() {
-        state.shellPaused = false;
-        state.last = performance.now();
-      },
-    };
-    return scene;
-  }
-
-  function createGameOverScene(details = {}) {
-    const payload = { ...details };
-    const scene = {
-      id: 'gameover',
-      transition: {
-        enter: () => showOverlay('gameover', payload),
-        exit: () => hideOverlay(),
-      },
-      onEnter(ctx) {
-        state.paused = true;
-        state.over = true;
-        updateGameOverOverlay(payload);
-        ctx.setInputs({
-          async start(currentCtx) {
-            try {
-              await currentCtx.manager.pop({ resume: false });
-              await currentCtx.manager.replace(createGameScene);
-            } catch (err) {
-              console.error('[pong] restart failed', err);
-            }
-          },
-          async restart(currentCtx) {
-            try {
-              await currentCtx.manager.pop({ resume: false });
-              await currentCtx.manager.replace(createGameScene);
-            } catch (err) {
-              console.error('[pong] restart failed', err);
-            }
-          },
-          async pause(currentCtx) {
-            try {
-              await currentCtx.manager.pop({ resume: false });
-              await currentCtx.manager.replace(createGameScene);
-            } catch (err) {
-              console.error('[pong] restart failed', err);
-            }
-          },
-          async resume(currentCtx) {
-            try {
-              await currentCtx.manager.pop({ resume: false });
-            } catch (err) {
-              console.error('[pong] dismiss failed', err);
-            }
-          },
-          async menu(currentCtx) {
-            try {
-              await currentCtx.manager.pop({ resume: false });
-              await currentCtx.manager.replace(createTitleScene);
-            } catch (err) {
-              console.error('[pong] menu failed', err);
-            }
-          },
-        });
-      },
-      onExit() {
-        hideOverlay();
-      },
-    };
-    return scene;
   }
   // Replay
   function playReplay(){
@@ -1328,9 +1401,9 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     }
   }
 
-  function pauseGame(reason = 'user'){
-    if (scenes.currentId !== 'gameplay') return;
-    dispatchAction('pause', { source: 'api', reason });
+  function pauseGame(){
+    if(state.over || state.paused) return;
+    setPaused(true, "manual");
   }
 
   function resumeGame(){
@@ -1338,6 +1411,7 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     if (top === 'pause' || top === 'gameover') {
       dispatchAction('resume', { source: 'api' });
     }
+    setPaused(false, "manual");
   }
 
   if(globalScope){
@@ -1431,6 +1505,11 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("message", onMessage, {passive:true});
     window.addEventListener("keydown", e=>{
+      if(e.key === "?" || (e.key === "/" && e.shiftKey)){
+        toggleDebugHud();
+        e.preventDefault();
+        return;
+      }
       pressed.add(e.code);
       let handled = false;
       if(e.code===state.keys.pause){
@@ -1441,9 +1520,13 @@ import { createSceneManager } from "../../src/engine/scenes.js";
     }, {passive:false});
     window.addEventListener("keyup", e=>{ pressed.delete(e.code); bindMove(); });
 
-    // Touch (left half controls P1)
-    state.canvas.addEventListener("pointerdown", onPointer, {passive:true});
-    state.canvas.addEventListener("pointermove", onPointer, {passive:true});
+    // Touch / pointer controls
+    state.canvas.addEventListener("pointerdown", onPointerDown, {passive:true});
+    state.canvas.addEventListener("pointermove", onPointerMove, {passive:true});
+    state.canvas.addEventListener("pointerup", onPointerUp, {passive:true});
+    state.canvas.addEventListener("pointercancel", onPointerUp, {passive:true});
+    state.canvas.addEventListener("pointerleave", onPointerUp, {passive:true});
+    state.canvas.addEventListener("pointerout", onPointerUp, {passive:true});
 
     window.addEventListener("gamepadconnected", (e)=>{ state.gamepad = e.gamepad; });
     window.addEventListener("gamepaddisconnected", ()=>{ state.gamepad = null; });

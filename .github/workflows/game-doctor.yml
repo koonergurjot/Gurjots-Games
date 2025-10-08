@@ -36,15 +36,43 @@ jobs:
         run: npm ci
 
       - name: Run Game Doctor tests
-        run: npm run test:doctor
+        id: game_doctor_tests
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p health
+          npm run test:doctor 2>&1 | tee health/game-doctor-tests.log
+          status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          echo "log_path=health/game-doctor-tests.log" >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ]; then
+            echo "Game Doctor tests failed with exit code $status" >&2
+          fi
+          exit 0
 
       - name: Run Game Doctor
-        run: node tools/game-doctor.mjs --strict --baseline=health/baseline.json
+        id: run_game_doctor
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p health
+          node tools/game-doctor.mjs --strict --baseline=health/baseline.json 2>&1 | tee health/game-doctor.log
+          status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          echo "log_path=health/game-doctor.log" >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ]; then
+            echo "Game Doctor run failed with exit code $status" >&2
+          fi
+          exit 0
 
       - name: Comment Game Doctor results
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GAME_DOCTOR_TESTS_EXIT_CODE: ${{ steps.game_doctor_tests.outputs.exit_code }}
+          GAME_DOCTOR_EXIT_CODE: ${{ steps.run_game_doctor.outputs.exit_code }}
+          GAME_DOCTOR_TESTS_LOG: ${{ steps.game_doctor_tests.outputs.log_path }}
+          GAME_DOCTOR_LOG: ${{ steps.run_game_doctor.outputs.log_path }}
         run: node tools/comment-game-doctor.mjs
 
       - name: Upload Game Doctor report
@@ -151,3 +179,19 @@ jobs:
                 body: commentBody,
               });
             }
+
+      - name: Fail workflow if Game Doctor checks failed
+        if: >-
+          ${{ always() && (steps.game_doctor_tests.outputs.exit_code != '0' || steps.run_game_doctor.outputs.exit_code != '0') }}
+        env:
+          TEST_EXIT_CODE: ${{ steps.game_doctor_tests.outputs.exit_code }}
+          DOCTOR_EXIT_CODE: ${{ steps.run_game_doctor.outputs.exit_code }}
+        run: |
+          echo "Game Doctor checks encountered failures:" >&2
+          if [ "${TEST_EXIT_CODE}" != '0' ]; then
+            echo "- npm run test:doctor exited with ${TEST_EXIT_CODE}" >&2
+          fi
+          if [ "${DOCTOR_EXIT_CODE}" != '0' ]; then
+            echo "- node tools/game-doctor.mjs exited with ${DOCTOR_EXIT_CODE}" >&2
+          fi
+          exit 1

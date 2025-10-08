@@ -1,15 +1,14 @@
 import { createBoard } from "./board.js";
-import * as rules from "../chess/engine/rules.js";
 import { mountInputWrapper } from "./input.js";
-import { createPieces, placeInitialPosition, movePieceByUci } from "./pieces.js";
+import { createPieces, applySnapshot, animateMove, update as updatePieces } from "./pieces.js";
 import { mountHUD } from "./ui/hud.js";
-import { bestMove, evaluate, cancel } from "./ai/simpleEngine.js";
 import { mountThemePicker } from "./ui/themePicker.js";
 import { mountCameraPresets } from "./ui/cameraPresets.js";
 import { envDataUrl } from "./textures/env.js";
 import { log, warn } from '../../tools/reporters/console-signature.js';
 import { injectHelpButton } from '../../shared/ui.js';
 import { pushEvent } from "/games/common/diag-adapter.js";
+import * as logic from "./logic.js";
 
 async function loadCatalog() {
   const urls = ['/games.json', '/public/games.json'];
@@ -121,6 +120,7 @@ let autoRotate = localStorage.getItem('chess3d.rotate') === '1';
 let postedReady=false;
 let lastEvaluation = null;
 let evaluationToken = 0;
+let gameState = null;
 let startRenderLoopImpl = () => {};
 let stopRenderLoopImpl = () => {};
 let currentState = 'menu';
@@ -187,22 +187,25 @@ if (globalScope) {
 notifyStateChange('menu', { reason: 'boot:init', initial: true, force: true });
 
 function handlePostMove(){
-  try{ moveList?.refresh(); moveList?.setIndex(rules.historySAN().length); }catch(_){ }
-  try{ if (clockPaused){ clocks?.resume(); clockPaused = false; } clocks?.startTurn(rules.turn()); }catch(_){ }
+  try{ moveList?.refresh(); moveList?.setIndex(logic.historySAN().length); }catch(_){ }
   try{
-    const fen = rules.fen();
+    if (clockPaused){ clocks?.resume(); clockPaused = false; }
+    clocks?.startTurn?.(logic.turn());
+  }catch(_){ }
+  try{
     const depth = getDepth();
     const token = ++evaluationToken;
-    evaluate(fen, { depth }).then(({ cp, mate, pv })=>{
-      if (token !== evaluationToken) return;
-      const line = mate ? `Mate in ${mate}` : pv || '';
+    logic.requestEvaluation(depth).then((result)=>{
+      if (token !== evaluationToken || !result) return;
+      const { cp, mate, pv } = result;
+      const line = mate ? `Mate in ${mate}` : (pv || '');
       try{ evalBar?.update(cp, line); }catch(_){ }
       lastEvaluation = {
         cp: typeof cp === 'number' ? cp : null,
         mate: typeof mate === 'number' ? mate : null,
         pv: pv || '',
         depth,
-        fen,
+        fen: logic.fen(),
         timestamp: Date.now(),
       };
     }).catch((err) => {
@@ -211,8 +214,8 @@ function handlePostMove(){
       }
     });
   }catch(_){ }
-  if (rules.inCheckmate()) endGame(`${rules.turn()==='w'?'Black':'White'} wins by checkmate`);
-  else if (rules.inStalemate()) endGame('Draw by stalemate');
+  if (gameState?.inCheckmate) endGame(`${gameState.turn === 'w' ? 'Black' : 'White'} wins by checkmate`);
+  else if (gameState?.inStalemate) endGame('Draw by stalemate');
   if (autoRotate) flipCamera();
 }
 
@@ -268,9 +271,10 @@ function toggleCoords(show) {
 }
 
 function updateStatus() {
-  const side = rules.turn() === 'w' ? 'White' : 'Black';
+  if (!gameState) return;
+  const side = gameState.turn === 'w' ? 'White' : 'Black';
   let text = `${side} to move`;
-  if (rules.inCheck()) text += ' — Check';
+  if (gameState.inCheck) text += ' — Check';
   statusEl.textContent = text;
 }
 
@@ -313,29 +317,15 @@ function setAIDepth(value) {
 }
 
 async function maybeAIMove(){
-  const turn = rules.turn();
-  if (turn !== 'b') return; // AI plays black
+  if (!gameState || gameState.turn !== 'b') return;
+  if (gameOver) return;
   const token = ++searchToken;
   thinkingEl.hidden = false;
   const depth = getDepth();
   const startTime = now();
   try {
-    const { uci } = await bestMove(rules.fen(), depth);
-    if (token !== searchToken || !uci) return;
-    const from = uci.slice(0,2);
-    const to = uci.slice(2,4);
-    let promotion;
-    if (uci.length > 4) {
-      promotion = uci.slice(4).toLowerCase();
-    }
-    const res = rules.move({ from, to, promotion });
-    if (res?.ok) {
-      const uciMove = from + to + (promotion ? '=' + promotion : '');
-      await movePieceByUci(uciMove);
-      updateStatus();
-      try{ lastMoveHelper?.show(from,to); }catch(_){ }
-      handlePostMove();
-    }
+    const res = await logic.playAIMove(depth);
+    if (token !== searchToken || !res?.ok) return;
   } finally {
     thinkingEl.hidden = true;
     const duration = Math.max(0, now() - startTime);
@@ -372,10 +362,10 @@ mountHUD({
         victorySound.currentTime = 0;
       } catch (_) {}
     }
-    rules.loadFEN(null);
-    placeInitialPosition();
+    gameOver = false;
+    stage.style.pointerEvents = 'auto';
+    logic.startNewGame();
     updateStatus();
-    cancel();
     searchToken++;
     thinkingEl.hidden = true;
     lastEvaluation = null;
@@ -389,7 +379,7 @@ mountHUD({
 });
 
 difficultyEl?.addEventListener('change', () => {
-  cancel();
+  logic.stopSearch();
   searchToken++;
   thinkingEl.hidden = true;
   maybeAIMove();
@@ -455,6 +445,12 @@ async function boot(){
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minPolarAngle = Math.PI * 0.18;
+  controls.minDistance = 6;
+  controls.maxDistance = 16;
+  controls.enablePan = false;
+  controls.target.set(0, 0, 0);
+  controls.update();
 
   mountCameraPresets(document.getElementById('hud'), camera, controls);
 
@@ -495,9 +491,7 @@ async function boot(){
   if (savedCoords !== null) toggleCoords(savedCoords === '1');
   statusEl.textContent = 'Board ready';
 
-  await rules.init();
   await createPieces(scene, THREE, helpers);
-  await placeInitialPosition();
   mountThemePicker(document.getElementById('hud'));
   // Eval bar
   import('./ui/evalBar.js').then(({ mountEvalBar })=>{
@@ -507,6 +501,11 @@ async function boot(){
   import('./ui/lastMove.js').then(({ initLastMove })=>{
     lastMoveHelper = initLastMove(scene, helpers, THREE);
   });
+  const rulesBridge = {
+    getLegalMoves: (square) => logic.getLegalMoves(square),
+    move: ({ from, to, promotion }) => logic.applyMove({ from, to, promotion }),
+    turn: () => logic.turn(),
+  };
   mountInputWrapper({
     THREE,
     scene,
@@ -514,26 +513,38 @@ async function boot(){
     renderer,
     controls,
     boardHelpers: helpers,
-    rulesApi: rules,
-    onMove: async ({ from, to, promotion }) => {
-      await movePieceByUci(from + to + (promotion ? '=' + promotion : ''));
+    rulesApi: rulesBridge,
+  });
+
+  const handleLogicUpdate = (snapshot) => {
+    const previous = gameState;
+    gameState = snapshot;
+    const reason = typeof snapshot.reason === 'string' ? snapshot.reason : '';
+    const shouldReset = !previous || ['init', 'new-game', 'load-fen', 'undo'].includes(reason);
+    if (shouldReset) {
+      applySnapshot(snapshot.pieces);
+      try { lastMoveHelper?.clear?.(); } catch (_) {}
+    }
+    updateStatus();
+    if (reason === 'move' && snapshot.lastMove) {
+      animateMove(snapshot.lastMove);
+      try { lastMoveHelper?.show(snapshot.lastMove.from, snapshot.lastMove.to); } catch (_) {}
       try {
-        const inCheck = rules.inCheck();
-        if (inCheck) {
+        if (snapshot.inCheck) {
           window.SFX?.seq?.([[880,0.08,0.25],[440,0.10,0.25]]);
         } else {
           window.SFX?.beep?.({ freq: 660, dur: 0.06, vol: 0.2 });
         }
-      } catch(_){}
-      updateStatus();
-      // show last move arrow if helper ready
-      try{ lastMoveHelper?.show(from,to); }catch(_){ }
+      } catch (_) {}
       handlePostMove();
       maybeAIMove();
-    },
-  });
-  updateStatus();
-  maybeAIMove();
+    } else if (shouldReset) {
+      handlePostMove();
+    }
+  };
+
+  logic.onUpdate(handleLogicUpdate);
+  await logic.init();
   notifyStateChange('play', { reason: 'boot:ready' });
 
   const renderFrame = () => {
@@ -546,6 +557,7 @@ async function boot(){
       postedReady=true;
       try { window.parent?.postMessage({ type:'GAME_READY', slug:'chess3d' }, '*'); } catch {}
     }
+    updatePieces(performance.now());
     renderer.render(scene, camera);
     renderLoopId = requestAnimationFrame(renderFrame);
   };
@@ -611,7 +623,7 @@ let moveList;
 function endGame(text){
   gameOver = true;
   stage.style.pointerEvents = 'none';
-  cancel();
+  logic.stopSearch();
   searchToken++;
   thinkingEl.hidden = true;
   if (text) {
@@ -636,7 +648,7 @@ const origMaybeAIMove = maybeAIMove;
 maybeAIMove = async function(){
   if (gameOver) return;
   await origMaybeAIMove();
-  moveList?.setIndex(rules.historySAN().length);
+  moveList?.setIndex(logic.historySAN().length);
 };
 
 // Do not mutate ESM exports; call handlePostMove() at call sites instead
@@ -644,7 +656,7 @@ maybeAIMove = async function(){
 async function jumpToPly(ply){
   clockPaused = true;
   clocks?.pause();
-  cancel();
+  logic.stopSearch();
   searchToken++;
   thinkingEl.hidden = true;
   evaluationToken++;
@@ -652,15 +664,16 @@ async function jumpToPly(ply){
   const mod = await import('../chess/engine/chess.min.js');
   const ChessCtor = mod.default || mod.Chess || mod;
   const temp = new ChessCtor();
-  const moves = rules.historySAN();
-  rules.loadFEN(null);
-  await placeInitialPosition();
-  for (let i = 0; i < ply; i++) {
-    const m = temp.move(moves[i]);
-    if (!m) break;
-    rules.move({ from: m.from, to: m.to, promotion: m.promotion });
-    await movePieceByUci(m.from + m.to + (m.promotion || ''));
+  const moves = logic.historySAN();
+  const limit = Math.min(ply, moves.length);
+  for (let i = 0; i < limit; i += 1) {
+    const san = moves[i];
+    if (!san) break;
+    const move = temp.move(san);
+    if (!move) break;
   }
+  const targetFen = temp.fen();
+  logic.loadFEN(targetFen);
   updateStatus();
   moveList?.setIndex(ply);
   moveList?.refresh();
@@ -687,7 +700,7 @@ import('./ui/movelist.js').then(({ mountMoveList }) => {
 import('./ui/hud.js').then(({ addGameButtons }) => {
   addGameButtons({
     onResign: () => {
-      const loser = rules.turn();
+      const loser = logic.turn();
       const winner = loser === 'w' ? 'Black' : 'White';
       endGame(`${winner} wins by resignation`);
     },
@@ -701,7 +714,7 @@ import('./ui/hud.js').then(({ addGameButtons }) => {
       stage.style.pointerEvents = 'auto';
       clocks?.reset();
       moveList?.refresh();
-      moveList?.setIndex(rules.historySAN().length);
+      moveList?.setIndex(logic.historySAN().length);
       victoryPlayed = false;
       if (victorySound) {
         try {

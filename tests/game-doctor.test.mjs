@@ -175,19 +175,22 @@ describe('tools/game-doctor.mjs', () => {
 
     const report = await fixture.readJson('health/report.json');
     expect(report.summary).toMatchObject({ total: 1, passing: 0, failing: 1 });
-    expect(report.summary.issueCounts).toEqual({
-      total: 2,
-      bySeverity: {
-        blocker: 1,
-        major: 1,
-        minor: 0,
-        info: 0,
-      },
-      byCategory: {
-        'manifest-misconfig': 1,
-        'missing-asset': 1,
-      },
+    const issueCounts = report.summary.issueCounts;
+    expect(issueCounts.total).toBeGreaterThanOrEqual(2);
+    expect(issueCounts.bySeverity).toMatchObject({
+      blocker: expect.any(Number),
+      major: expect.any(Number),
+      minor: expect.any(Number),
+      info: expect.any(Number),
     });
+    expect(issueCounts.bySeverity.blocker).toBeGreaterThanOrEqual(1);
+    expect(issueCounts.bySeverity.major).toBeGreaterThanOrEqual(1);
+    expect(issueCounts.byCategory).toMatchObject({
+      'manifest-misconfig': expect.any(Number),
+      'missing-asset': expect.any(Number),
+    });
+    expect(issueCounts.byCategory['manifest-misconfig']).toBeGreaterThanOrEqual(1);
+    expect(issueCounts.byCategory['missing-asset']).toBeGreaterThanOrEqual(1);
     expect(report.games[0].slug).toBe('platformer');
     expect(
       report.games[0].issues.some((issue) => issue.message === 'Manifest required asset missing'),

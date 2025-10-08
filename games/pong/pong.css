@@ -87,6 +87,11 @@
 .pong-diag.show{display:block}
 .pong-diag pre{white-space:pre-wrap;}
 
+.pong-debug{position:fixed;left:12px;bottom:12px;min-width:200px;padding:0.65rem 0.8rem;border-radius:12px;border:1px solid #243043;background:rgba(8,12,20,0.82);box-shadow:0 12px 30px rgba(0,0,0,.4);font:600 .85rem/1.45 "Inter",system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--pong-fg);display:none;pointer-events:none;white-space:pre-wrap;backdrop-filter:blur(6px);}
+.pong-debug.show{display:block}
+.pong-debug__title{font-weight:700;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;margin:0 0 .25rem;color:var(--pong-muted);}
+.pong-debug__body{margin:0;font:inherit;white-space:pre-wrap;}
+
 .touch-hint{display:none}
 @media (pointer: coarse) {
   .touch-hint{display:inline; color:var(--pong-muted); font-size:.9rem}
