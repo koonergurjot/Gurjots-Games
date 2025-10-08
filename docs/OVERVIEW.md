@@ -14,8 +14,19 @@ The client-side interface communicates with modular game logic. State is saved l
 ## Updating Game Data
 
 Game metadata displayed on the landing page lives in the repository root `games.json` file.
-The deployed site now consumes `/games.json` directly (with a compatibility fallback to `/public/games.json` for older builds). Pages can boot straight from that raw catalog data — the runtime normalizes entries so games with only an `id` still expose their tags for quests.
+The deployed site now consumes `/games.json` directly (with a compatibility fallback to `/public/games.json` for older builds).
+Pages can boot straight from that raw catalog data — the runtime normalizes entries so games with only an `id` still expose their tags for quests.
 Treat `games.json` as the source of truth and re-run the sync script when entries change.
+
+### Why the registry matters
+
+`games.json` acts as a single registry that powers both build-time tooling and runtime experiences:
+
+- **Runtime rendering.** The shell fetches the registry on demand through [`shared/game-catalog.js`](../shared/game-catalog.js), normalizes each record, and exposes helpers such as `getGameById` so every surface (home grid, category filters, detail pages) can render from the same hydrated data set.
+- **Offline and health tooling.** Running `npm run sync:games` executes [`tools/sync-game-catalog.mjs`](../tools/sync-game-catalog.mjs), which validates the registry and emits `data/games-offline.js` so workers and tests can fall back to a baked copy if the network is unavailable.
+- **SEO and discovery.** The sitemap generator (`npm run sitemap`) loads the same registry to enumerate canonical play URLs and produce `sitemap.xml`, keeping search engines in sync with the catalog without bespoke curation.
+
+Because these tasks read the same source, any new game automatically flows to listings, offline caches, SEO artifacts, and other automation as soon as the registry is updated.
 
 To add a new entry:
 
