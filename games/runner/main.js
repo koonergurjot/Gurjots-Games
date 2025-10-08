@@ -835,7 +835,7 @@ class RunnerGame {
           async menu(currentCtx) {
             try {
               await currentCtx.manager.pop({ resume: false });
-              await currentCtx.manager.replace(() => this.createTitleScene());
+              await currentCtx.manager.replace(() => game.createTitleScene());
             } catch (err) {
               console.error('[runner] return to menu failed', err);
             }
