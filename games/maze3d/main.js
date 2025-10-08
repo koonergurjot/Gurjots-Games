@@ -86,9 +86,6 @@ scene.background = new THREE.Color(0x0e0f12);
 scene.fog = new THREE.Fog(0x0e0f12, 10, 60);
 
 const texLoader = new THREE.TextureLoader();
-const wallTexture = texLoader.load('../../assets/sprites/maze3d/wall.png');
-wallTexture.wrapS = wallTexture.wrapT = THREE.RepeatWrapping;
-wallTexture.repeat.set(1, 1);
 
 const floorTexture = texLoader.load('../../assets/sprites/maze3d/floor.png');
 floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
@@ -1133,6 +1130,7 @@ let exitBox = null;
 let floor = null;
 let exitMesh = null;
 const wallHeight = 4;
+const wallNoiseAmplitude = 0.08;
 const BASE_CELLS = 8;
 const BASE_CELL_SIZE = 4;
 let MAZE_CELLS = BASE_CELLS;
@@ -1471,16 +1469,39 @@ function buildMaze(seed) {
   });
   rebuildAssistVisuals();
 
-  const wallTilesX = Math.max(1, Math.round(cellSize / BASE_CELL_SIZE));
-  const wallTilesY = Math.max(1, Math.round(wallHeight / cellSize));
-  wallTexture.repeat.set(wallTilesX, wallTilesY);
-  wallTexture.needsUpdate = true;
-
   const wallGeo = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
   const wallMat = new THREE.MeshStandardMaterial({
-    map: wallTexture,
+    color: 0x7e8894,
+    roughness: 0.85,
+    metalness: 0.05,
     side: THREE.FrontSide
   });
+  wallMat.onBeforeCompile = (shader) => {
+    shader.uniforms.wallNoiseAmplitude = { value: wallNoiseAmplitude };
+    shader.uniforms.wallHeight = { value: wallHeight };
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      '#include <common>\nvarying vec3 vWallWorldPosition;'
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <worldpos_vertex>',
+      '#include <worldpos_vertex>\nvWallWorldPosition = worldPosition.xyz;'
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      '#include <common>\nvarying vec3 vWallWorldPosition;\nuniform float wallNoiseAmplitude;\nuniform float wallHeight;'
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      'vec4 diffuseColor = vec4( diffuse, opacity );',
+      `vec4 diffuseColor = vec4( diffuse, opacity );\n` +
+      `float noise = fract(sin(dot(vWallWorldPosition.xz, vec2(12.9898, 78.233))) * 43758.5453);\n` +
+      `float grain = (noise - 0.5) * 2.0 * wallNoiseAmplitude;\n` +
+      `diffuseColor.rgb = clamp(diffuseColor.rgb * (1.0 + grain), 0.0, 1.0);\n` +
+      `float heightNorm = clamp(vWallWorldPosition.y / wallHeight, 0.0, 1.0);\n` +
+      `float darken = mix(0.65, 1.0, pow(heightNorm, 0.75));\n` +
+      `diffuseColor.rgb *= darken;\n`
+    );
+  };
   const wallMatrix = new THREE.Matrix4();
   const wallSize = new THREE.Vector3(cellSize, wallHeight, cellSize);
   const wallCenters = [];
