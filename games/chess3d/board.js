@@ -1,3 +1,4 @@
+import { createToonRampMaterial, updateToonRampMaterial } from "./materials/toonRampMaterial.js";
 
 /**
  * Creates an 8x8 board at y=0. Provides helpers to map algebraic squares to positions.
@@ -7,57 +8,6 @@ let tiles = [];
 let rim;
 let THREERef;
 let materials = { light: null, dark: null, rim: null };
-let texturesPromise;
-let loadedTextures;
-
-const TEXTURE_PATHS = {
-  wood: {
-    light: new URL("../../assets/sprites/chess3d/wood_light.png", import.meta.url).href,
-    dark: new URL("../../assets/sprites/chess3d/wood_dark.png", import.meta.url).href,
-  },
-  marble: {
-    light: new URL("../../assets/sprites/chess3d/marble_white.png", import.meta.url).href,
-    dark: new URL("../../assets/sprites/chess3d/marble_black.png", import.meta.url).href,
-  }
-};
-
-async function ensureTextures(THREE){
-  if (loadedTextures) return loadedTextures;
-  if (!texturesPromise){
-    const loader = new THREE.TextureLoader();
-    const configureTexture = (texture)=>{
-      if (!texture) return null;
-      try {
-        texture.colorSpace = THREE.SRGBColorSpace;
-      } catch(_){
-        try { texture.encoding = THREE.sRGBEncoding; } catch(__){}
-      }
-      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(1, 1);
-      return texture;
-    };
-    const loadTexture = async (path)=>{
-      try {
-        const tex = await loader.loadAsync(path);
-        return configureTexture(tex);
-      } catch (err) {
-        console.warn("Failed to load board texture", path, err);
-        return null;
-      }
-    };
-    texturesPromise = Promise.all([
-      loadTexture(TEXTURE_PATHS.wood.light),
-      loadTexture(TEXTURE_PATHS.wood.dark),
-      loadTexture(TEXTURE_PATHS.marble.light),
-      loadTexture(TEXTURE_PATHS.marble.dark),
-    ]).then(([woodLight, woodDark, marbleLight, marbleDark])=>({
-      wood: { light: woodLight, dark: woodDark },
-      marble: { light: marbleLight, dark: marbleDark },
-    }));
-  }
-  loadedTextures = await texturesPromise;
-  return loadedTextures;
-}
 
 export async function createBoard(scene, THREE){
   THREERef = THREE;
@@ -66,10 +16,20 @@ export async function createBoard(scene, THREE){
   const tileSize = 1;
   const half = 4 * tileSize;
 
-  loadedTextures = await ensureTextures(THREE);
-
-  materials.light = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2, roughness: 0.8 });
-  materials.dark = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.2, roughness: 0.8 });
+  materials.light = createToonRampMaterial(THREE, {
+    baseColor: 0xffffff,
+    bandCount: 3,
+    ambient: 0.28,
+    specIntensity: 0.12,
+    shininess: 40,
+  });
+  materials.dark = createToonRampMaterial(THREE, {
+    baseColor: 0xffffff,
+    bandCount: 3,
+    ambient: 0.28,
+    specIntensity: 0.12,
+    shininess: 40,
+  });
 
   const geom = new THREE.BoxGeometry(tileSize, 0.1, tileSize);
   for (let r=0;r<8;r++){
@@ -87,7 +47,13 @@ export async function createBoard(scene, THREE){
 
   // simple rim
   const rimGeom = new THREE.BoxGeometry(8*tileSize+0.6, 0.12, 8*tileSize+0.6);
-  materials.rim = new THREE.MeshStandardMaterial({ color: 0x2b3140, metalness: 0.35, roughness: 0.35 });
+  materials.rim = createToonRampMaterial(THREE, {
+    baseColor: 0x2b3140,
+    bandCount: 4,
+    ambient: 0.3,
+    specIntensity: 0.1,
+    shininess: 48,
+  });
   rim = new THREE.Mesh(rimGeom, materials.rim);
   rim.position.y = -0.07;
   rim.receiveShadow = true;
@@ -125,51 +91,52 @@ export function setBoardTheme(theme){
       light: 0xdab893,
       dark: 0x8b5a2b,
       rim: 0x5a3a22,
-      metalness: 0.2,
-      roughness: 0.8,
-      lightMap: loadedTextures?.wood?.light,
-      darkMap: loadedTextures?.wood?.dark,
+      ambient: 0.26,
+      bandCount: 3,
+      specIntensity: 0.15,
+      shininess: 44,
     },
     marble: {
-      light: 0xffffff,
-      dark: 0xaaaaaa,
-      rim: 0x666666,
-      metalness: 0.1,
-      roughness: 0.5,
-      lightMap: loadedTextures?.marble?.light,
-      darkMap: loadedTextures?.marble?.dark,
+      light: 0xf2f5ff,
+      dark: 0x9aa3c1,
+      rim: 0x657098,
+      ambient: 0.3,
+      bandCount: 4,
+      specIntensity: 0.18,
+      shininess: 54,
     },
     neon: {
       light: 0x00ffcc,
       dark: 0x003366,
       rim: 0x000000,
-      metalness: 0.6,
-      roughness: 0.3,
-    }
+      ambient: 0.22,
+      bandCount: 3,
+      specIntensity: 0.22,
+      shininess: 60,
+    },
   };
   const cfg = themes[theme] || themes.wood;
-  const applyMaterialConfig = (material, colorHex, textureMap)=>{
-    material.metalness = cfg.metalness;
-    material.roughness = cfg.roughness;
-    if (textureMap){
-      material.map = textureMap;
-      material.color.set(0xffffff);
-    } else {
-      material.map = null;
-      material.color.setHex(colorHex);
-    }
-    material.needsUpdate = true;
+  const apply = (material, colorHex) => {
+    updateToonRampMaterial(material, {
+      baseColor: colorHex,
+      ambient: cfg.ambient,
+      bandCount: cfg.bandCount,
+      specIntensity: cfg.specIntensity,
+      shininess: cfg.shininess,
+    });
   };
 
-  applyMaterialConfig(materials.light, cfg.light, cfg.lightMap);
-  applyMaterialConfig(materials.dark, cfg.dark, cfg.darkMap);
+  apply(materials.light, cfg.light);
+  apply(materials.dark, cfg.dark);
 
-  if (materials.rim){
-    materials.rim.metalness = cfg.metalness;
-    materials.rim.roughness = cfg.roughness;
-    materials.rim.map = null;
-    materials.rim.color.setHex(cfg.rim);
-    materials.rim.needsUpdate = true;
+  if (materials.rim) {
+    updateToonRampMaterial(materials.rim, {
+      baseColor: cfg.rim,
+      ambient: Math.min(cfg.ambient + 0.05, 0.45),
+      bandCount: Math.max(2, cfg.bandCount - 1),
+      specIntensity: cfg.specIntensity * 0.6,
+      shininess: cfg.shininess + 6,
+    });
   }
 }
 
