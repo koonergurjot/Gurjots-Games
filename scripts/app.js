@@ -15,7 +15,7 @@ router.register('/game/:id', () => import('./pages/game.js'), async ({ id }) => 
   return Boolean(game);
 });
 
-router.resolve(location.pathname);
+router.resolve(location.pathname + location.search + location.hash);
 
 window.addEventListener('DOMContentLoaded', () => {
   document.body.classList.add('loaded');

@@ -2,7 +2,12 @@ export class Router {
   constructor(outlet) {
     this.outlet = outlet;
     this.routes = [];
-    window.addEventListener('popstate', () => this.resolve(location.pathname, { mode: 'pop', visited: new Set() }));
+    window.addEventListener('popstate', () =>
+      this.resolve(this.buildFullPath(location.pathname + location.search + location.hash), {
+        mode: 'pop',
+        visited: new Set(),
+      })
+    );
     document.addEventListener('click', e => {
       if (e.defaultPrevented) {
         return;
@@ -62,21 +67,24 @@ export class Router {
   }
 
   async resolve(path, context) {
+    const { url, fullPath } = this.parsePath(path);
     const resolveContext = {
       mode: (context == null ? void 0 : context.mode) ?? 'pop',
       visited: (context == null ? void 0 : context.visited) ?? new Set(),
+      url,
+      path: fullPath,
     };
 
-    if (resolveContext.visited.has(path)) {
-      await this.renderNotFound(resolveContext.mode, path);
+    if (resolveContext.visited.has(fullPath)) {
+      await this.renderNotFound(fullPath, resolveContext);
       return;
     }
 
-    resolveContext.visited.add(path);
+    resolveContext.visited.add(fullPath);
 
-    const match = this.match(path);
+    const match = this.match(url.pathname);
     if (!match) {
-      await this.renderNotFound(resolveContext.mode, path);
+      await this.renderNotFound(fullPath, resolveContext);
       return;
     }
 
@@ -87,8 +95,7 @@ export class Router {
     }
 
     if (guardResult === true) {
-      await this.renderRoute(route, params);
-      this.commitHistory(path, resolveContext.mode);
+      await this.renderRoute(route, params, resolveContext);
       return;
     }
 
@@ -102,7 +109,7 @@ export class Router {
       return;
     }
 
-    await this.renderNotFound(resolveContext.mode, path);
+    await this.renderNotFound(fullPath, resolveContext);
   }
 
   match(path) {
@@ -120,19 +127,20 @@ export class Router {
     return void 0;
   }
 
-  async renderRoute(route, params) {
+  async renderRoute(route, params, context) {
     const mod = await route.loader(params);
     this.outlet.innerHTML = '';
     if (typeof mod.default === 'function') {
-      mod.default(this.outlet, params);
+      mod.default(this.outlet, params, context);
     }
+    this.commitHistory(context.path, context.mode);
   }
 
-  async renderNotFound(mode, path) {
+  async renderNotFound(path, context) {
     const mod = await import('./pages/not-found.js');
     this.outlet.innerHTML = '';
     mod.default(this.outlet);
-    this.commitHistory(path, mode);
+    this.commitHistory(path, context.mode);
   }
 
   commitHistory(path, mode) {
@@ -141,6 +149,20 @@ export class Router {
     } else if (mode === 'replace') {
       history.replaceState({}, '', path);
     }
+  }
+
+  parsePath(input) {
+    let target = input || '/';
+    if (!target.startsWith('/')) {
+      target = '/' + target.replace(/^#+/, '');
+    }
+    const url = new URL(target, location.origin);
+    const fullPath = this.buildFullPath(url.pathname + url.search + url.hash);
+    return { url, fullPath };
+  }
+
+  buildFullPath(path) {
+    return path || '/';
   }
 }
 
