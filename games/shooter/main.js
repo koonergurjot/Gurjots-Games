@@ -1105,7 +1105,7 @@ export function boot() {
         spawnEnemy(wave.boss.type || 'overseer', { x: W - 120, y: H / 2 });
         wave.boss.spawned = true;
       }
-      if (!wave.boss && wave.spawns.every(spawn => spawn.spawned >= Math.max(1, Math.floor(spawn.config.count || 1)))) {
+      if (!wave.boss && wave.spawns.every(spawn => spawn.spawned >= Math.max(1, Math.floor(spawn.config.count || 1))))) {
         if (!enemies.some(enemy => !enemy.dead)) {
           finished = true;
         } else {
