@@ -31,6 +31,17 @@
       "pulseInterval": 0.28,
       "weight": 1.5,
       "sprite": "/assets/powerups/lightning.png"
+    },
+    {
+      "id": "LASER_MULTI",
+      "type": "combo",
+      "grants": ["LASER", "MULTI"],
+      "duration": 5,
+      "weight": 0.8,
+      "sprite": [
+        "/assets/powerups/lightning.png",
+        "/assets/powerups/multi.png"
+      ]
     }
   ]
 }
