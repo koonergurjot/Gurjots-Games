@@ -208,7 +208,27 @@ export function attachHelpOverlay({ gameId, steps = [], objective = '', controls
         <span class="pixel-panel__icon pixel-panel__icon--shield" aria-hidden="true"></span>
       </div>
       <div class="pixel-panel__body">
-        <div class="step-content"></div>
+        <div class="step-wrapper">
+          <div class="walkthrough" aria-hidden="true">
+            <div class="walkthrough__viewport">
+              <div class="walkthrough__board">
+                <div class="walkthrough__grid"></div>
+                <div class="walkthrough__glow"></div>
+                <div class="walkthrough__piece walkthrough__piece--white"></div>
+                <div class="walkthrough__piece walkthrough__piece--black"></div>
+              </div>
+              <div class="walkthrough__camera"></div>
+              <div class="walkthrough__difficulty">
+                <div class="walkthrough__difficulty-track">
+                  <div class="walkthrough__difficulty-fill"></div>
+                  <div class="walkthrough__difficulty-thumb"></div>
+                </div>
+              </div>
+            </div>
+            <div class="walkthrough__progress"><span></span></div>
+          </div>
+          <div class="step-content"></div>
+        </div>
         <div class="footer">
           <span class="step-indicator"></span>
           <div class="actions">
@@ -220,16 +240,146 @@ export function attachHelpOverlay({ gameId, steps = [], objective = '', controls
     </div>`;
   document.body.appendChild(overlay);
 
+  const normalizedSteps = Array.isArray(steps)
+    ? steps.map((step, idx) => normalizeStep(step, idx))
+    : [];
+
+  const progressEl = overlay.querySelector('.walkthrough__progress span');
+  const walkthroughEl = overlay.querySelector('.walkthrough');
+  const boardEl = overlay.querySelector('.walkthrough__board');
+  const glowEl = overlay.querySelector('.walkthrough__glow');
+  const whitePieceEl = overlay.querySelector('.walkthrough__piece--white');
+  const blackPieceEl = overlay.querySelector('.walkthrough__piece--black');
+  const cameraEl = overlay.querySelector('.walkthrough__camera');
+  const difficultyFillEl = overlay.querySelector('.walkthrough__difficulty-fill');
+  const difficultyThumbEl = overlay.querySelector('.walkthrough__difficulty-thumb');
+
   let index = 0;
+  let autoplayTimer = null;
+
+  const resetWalkthrough = () => {
+    if (boardEl) boardEl.style.transform = 'rotateX(16deg) rotateZ(-10deg)';
+    if (glowEl) {
+      glowEl.style.opacity = '0.18';
+      glowEl.style.transform = 'scale(0.7)';
+    }
+    if (whitePieceEl) whitePieceEl.style.transform = 'translate(14px, 74px) scale(1)';
+    if (blackPieceEl) blackPieceEl.style.transform = 'translate(78px, 24px) scale(1)';
+    if (cameraEl) cameraEl.style.transform = 'rotate(0deg)';
+    if (difficultyFillEl) {
+      difficultyFillEl.style.transformOrigin = 'left center';
+      difficultyFillEl.style.transform = 'scaleX(0.35)';
+    }
+    if (difficultyThumbEl) difficultyThumbEl.style.transform = 'translateX(0)';
+  };
+
+  const activeAnimations = [];
+  const clearAnimations = () => {
+    while (activeAnimations.length) {
+      const anim = activeAnimations.pop();
+      try { anim.cancel?.(); } catch {}
+    }
+  };
+
+  const animateElement = (el, keyframes, options) => {
+    if (!el?.animate) return null;
+    const animation = el.animate(keyframes, options);
+    activeAnimations.push(animation);
+    return animation;
+  };
+
+  const applyScene = (scene) => {
+    resetWalkthrough();
+    clearAnimations();
+    if (!walkthroughEl) return;
+    const sceneKey = scene || 'summary';
+    walkthroughEl.setAttribute('data-scene', sceneKey);
+    switch (sceneKey) {
+      case 'difficulty': {
+        animateElement(difficultyFillEl, [
+          { transform: 'scaleX(0.3)' },
+          { transform: 'scaleX(0.95)', offset: 0.65 },
+          { transform: 'scaleX(0.6)' }
+        ], { duration: 2200, fill: 'forwards', easing: 'ease-in-out' });
+        animateElement(difficultyThumbEl, [
+          { transform: 'translateX(0)' },
+          { transform: 'translateX(68px)', offset: 0.65 },
+          { transform: 'translateX(32px)' }
+        ], { duration: 2200, fill: 'forwards', easing: 'ease-in-out' });
+        animateElement(glowEl, [
+          { opacity: 0.2, transform: 'scale(0.7)' },
+          { opacity: 0.35, transform: 'scale(0.9)' },
+          { opacity: 0.18, transform: 'scale(0.7)' }
+        ], { duration: 2000, fill: 'forwards' });
+        break;
+      }
+      case 'camera': {
+        animateElement(boardEl, [
+          { transform: 'rotateX(14deg) rotateZ(-14deg)' },
+          { transform: 'rotateX(24deg) rotateZ(12deg)', offset: 0.55 },
+          { transform: 'rotateX(18deg) rotateZ(-6deg)' }
+        ], { duration: 2400, fill: 'forwards', easing: 'ease-in-out' });
+        animateElement(cameraEl, [
+          { transform: 'rotate(0deg)' },
+          { transform: 'rotate(360deg)' }
+        ], { duration: 2400, fill: 'forwards', easing: 'ease-in-out' });
+        animateElement(glowEl, [
+          { opacity: 0.16, transform: 'scale(0.6)' },
+          { opacity: 0.3, transform: 'scale(1)' },
+          { opacity: 0.2, transform: 'scale(0.7)' }
+        ], { duration: 2200, fill: 'forwards' });
+        break;
+      }
+      case 'move':
+      default: {
+        animateElement(whitePieceEl, [
+          { transform: 'translate(14px, 74px) scale(1)' },
+          { transform: 'translate(60px, 30px) scale(1.15)', offset: 0.55 },
+          { transform: 'translate(86px, 8px) scale(1)' }
+        ], { duration: 2200, fill: 'forwards', easing: 'ease-in-out' });
+        animateElement(blackPieceEl, [
+          { transform: 'translate(78px, 24px) scale(1)' },
+          { transform: 'translate(78px, 20px) scale(1.1)', offset: 0.5 },
+          { transform: 'translate(78px, 24px) scale(1)' }
+        ], { duration: 1800, fill: 'forwards', easing: 'ease-out' });
+        animateElement(glowEl, [
+          { opacity: 0.16, transform: 'scale(0.6)' },
+          { opacity: 0.45, transform: 'scale(1)', offset: 0.55 },
+          { opacity: 0.18, transform: 'scale(0.7)' }
+        ], { duration: 2200, fill: 'forwards' });
+        break;
+      }
+    }
+  };
+
+  const scheduleAutoplay = () => {
+    clearTimeout(autoplayTimer);
+    if (normalizedSteps.length < 2) return;
+    autoplayTimer = setTimeout(() => {
+      if (overlay.classList.contains('hidden')) return;
+      index = (index + 1) % normalizedSteps.length;
+      render();
+    }, 4800);
+  };
 
   const render = () => {
-    const step = steps[index] || '';
+    const step = normalizedSteps[index]?.text || '';
     overlay.querySelector('.step-content').innerHTML = `
       ${objective ? `<section><h4>${t('objective')}</h4><p>${objective}</p></section>` : ''}
       ${controls ? `<section><h4>${t('controls')}</h4><p>${controls}</p></section>` : ''}
       ${tips && tips.length ? `<section><h4>${t('tips')}</h4><ul>${tips.map(tip => `<li>${tip}</li>`).join('')}</ul></section>` : ''}
       ${step ? `<section><p>${step}</p></section>` : ''}`;
-    overlay.querySelector('.step-indicator').textContent = steps.length ? `${index + 1}/${steps.length}` : '';
+    overlay.querySelector('.step-indicator').textContent = normalizedSteps.length ? `${index + 1}/${normalizedSteps.length}` : '';
+    if (progressEl) {
+      if (normalizedSteps.length) {
+        const ratio = ((index + 1) / normalizedSteps.length) * 100;
+        progressEl.style.width = `${ratio}%`;
+      } else {
+        progressEl.style.width = '0%';
+      }
+    }
+    applyScene(normalizedSteps[index]?.scene || null);
+    scheduleAutoplay();
   };
 
   const onKeyDown = e => { if (e.key === 'Escape') hide(); };
@@ -237,12 +387,15 @@ export function attachHelpOverlay({ gameId, steps = [], objective = '', controls
     overlay.classList.add('hidden');
     document.removeEventListener('keydown', onKeyDown);
     document.querySelector('.help-btn')?.focus();
+    clearTimeout(autoplayTimer);
+    clearAnimations();
   };
   const show = () => {
     index = 0;
     render();
     overlay.classList.remove('hidden');
     document.addEventListener('keydown', onKeyDown);
+    scheduleAutoplay();
     try {
       const raw = localStorage.getItem('seenHints') || '{}';
       const obj = JSON.parse(raw);
@@ -253,7 +406,7 @@ export function attachHelpOverlay({ gameId, steps = [], objective = '', controls
 
   overlay.addEventListener('click', e => { if (e.target === overlay) hide(); });
   overlay.querySelector('.next-btn').onclick = () => {
-    if (index < steps.length - 1) {
+    if (index < normalizedSteps.length - 1) {
       index++;
       render();
     } else {
@@ -272,6 +425,26 @@ export function attachHelpOverlay({ gameId, steps = [], objective = '', controls
   if (!seen && hasContent) show();
 
   return { show, hide };
+}
+
+function normalizeStep(step, index) {
+  if (step && typeof step === 'object') {
+    const text = typeof step.text === 'string' ? step.text : '';
+    const scene = typeof step.scene === 'string' ? step.scene : inferScene(text, index);
+    return { text, scene };
+  }
+  const text = typeof step === 'string' ? step : '';
+  return { text, scene: inferScene(text, index) };
+}
+
+function inferScene(text, index) {
+  const value = (text || '').toLowerCase();
+  if (value.includes('difficult') || value.includes('level') || value.includes('depth')) return 'difficulty';
+  if (value.includes('camera') || value.includes('rotate') || value.includes('view')) return 'camera';
+  if (value.includes('move') || value.includes('piece') || value.includes('checkmate') || value.includes('attack')) return 'move';
+  if (index === 0) return 'difficulty';
+  if (index === 1) return 'camera';
+  return 'move';
 }
 
 export function toggleFullscreen(el = document.documentElement) {

@@ -41,6 +41,24 @@
       overflow: hidden;
       box-shadow: 0 0 0 4px rgba(10, 16, 34, 0.6), 0 16px 40px rgba(4, 8, 18, 0.45);
       background: rgba(5, 9, 20, 0.75);
+      --eval-tilt: 0deg;
+      --eval-roll: 0deg;
+      --eval-shift: 0px;
+      --eval-glow-strength: 0;
+      transform: translateY(calc(var(--eval-shift) * 0.08));
+      transition: transform 300ms ease, box-shadow 320ms ease, filter 320ms ease;
+      filter: brightness(calc(1 + var(--eval-glow-strength)));
+    }
+    #stage .eval-mood {
+      position: absolute;
+      inset: -14%;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 80%, rgba(255, 220, 140, 0.45) 0%, rgba(6, 10, 22, 0) 70%);
+      opacity: 0;
+      transition: opacity 260ms ease, background 260ms ease, transform 260ms ease;
+      transform: translateY(var(--eval-shift)) rotateX(var(--eval-tilt)) rotateZ(var(--eval-roll));
+      transform-origin: center;
+      filter: blur(28px);
     }
     #stage canvas {
       display: block;
