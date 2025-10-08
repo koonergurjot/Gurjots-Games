@@ -33,8 +33,8 @@ export const tiles = {
 
 // Level JSON files to be loaded at runtime.
 export const levels = [
-  'levels/level1.json',
-  'levels/level2.json',
+  { path: 'levels/level1.json', biome: 'forest' },
+  { path: 'levels/level2.json', biome: 'cavern' },
 ];
 
 export function isSolid(t){

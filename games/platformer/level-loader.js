@@ -46,6 +46,18 @@ function tileToWorld(tileX, tileY, tileSize) {
   return { x: tileX * tileSize, y: tileY * tileSize };
 }
 
+function findTiledProperty(properties, name) {
+  if (!Array.isArray(properties)) return undefined;
+  const target = name.toLowerCase();
+  for (const prop of properties) {
+    if (!prop || typeof prop !== 'object') continue;
+    const propName = (prop.name || prop.identifier || '').toLowerCase();
+    if (!propName) continue;
+    if (propName === target) return prop.value;
+  }
+  return undefined;
+}
+
 function extractCoins(grid, tileSize, levelId) {
   const coins = [];
   const { w: spriteW, h: spriteH } = spriteSizeFor('2');
@@ -119,7 +131,7 @@ function extractEntities(objects = []) {
   return { spawn, enemies };
 }
 
-function parseTiledMap(json, source) {
+function parseTiledMap(json, source, meta = {}) {
   if (!json || typeof json !== 'object') {
     throw new Error('Level JSON is not an object');
   }
@@ -157,6 +169,7 @@ function parseTiledMap(json, source) {
     ? json.layers.find((entry) => entry && entry.type === 'objectgroup')
     : null;
   const entities = extractEntities(objectLayer?.objects);
+  const biome = meta.biome ?? findTiledProperty(json.properties, 'biome');
   return {
     id: json.name || source,
     width,
@@ -167,6 +180,7 @@ function parseTiledMap(json, source) {
     goal: extractGoal(grid, tilewidth),
     spawn: entities.spawn,
     enemies: entities.enemies,
+    biome: typeof biome === 'string' && biome ? biome : undefined,
   };
 }
 
@@ -193,7 +207,19 @@ function parseEntityInstance(instance) {
   return null;
 }
 
-function parseLDtkProject(json, source) {
+function findLDtkField(fields, name) {
+  if (!Array.isArray(fields)) return undefined;
+  const target = name.toLowerCase();
+  for (const field of fields) {
+    if (!field || typeof field !== 'object') continue;
+    const identifier = (field.__identifier || field.identifier || '').toLowerCase();
+    if (!identifier) continue;
+    if (identifier === target) return field.__value;
+  }
+  return undefined;
+}
+
+function parseLDtkProject(json, source, meta = {}) {
   if (!json || typeof json !== 'object' || !Array.isArray(json.levels)) {
     throw new Error('LDtk project missing levels array');
   }
@@ -244,6 +270,7 @@ function parseLDtkProject(json, source) {
       }
     }
   }
+  const biome = meta.biome ?? findLDtkField(level.fieldInstances, 'biome');
   return {
     id: level.identifier || source,
     width: cWid,
@@ -254,6 +281,7 @@ function parseLDtkProject(json, source) {
     goal: extractGoal(grid, gridSize),
     spawn,
     enemies,
+    biome: typeof biome === 'string' && biome ? biome : undefined,
   };
 }
 
@@ -271,26 +299,29 @@ function detectFormat(json) {
 
 export async function loadLevelByIndex(index = 0) {
   const levelIndex = ((index % levelManifest.length) + levelManifest.length) % levelManifest.length;
-  const relativePath = levelManifest[levelIndex];
+  const entry = levelManifest[levelIndex];
+  const meta = entry && typeof entry === 'object' ? entry : {};
+  const relativePath = typeof entry === 'string' ? entry : meta.path;
+  if (!relativePath || typeof relativePath !== 'string') {
+    throw new Error('Invalid level manifest entry');
+  }
   const response = await fetch(relativePath);
   if (!response.ok) {
     throw new Error(`Failed to load level at ${relativePath}`);
   }
   const json = await response.json();
   const format = detectFormat(json);
+  let parsed;
   if (format === 'tiled') {
-    return parseTiledMap(json, relativePath);
-  }
-  if (format === 'ldtk') {
-    return parseLDtkProject(json, relativePath);
-  }
-  // Legacy fallback: interpret { tiles: [ ... ] }
-  if (Array.isArray(json.tiles)) {
+    parsed = parseTiledMap(json, relativePath, meta);
+  } else if (format === 'ldtk') {
+    parsed = parseLDtkProject(json, relativePath, meta);
+  } else if (Array.isArray(json.tiles)) {
     const rows = json.tiles.map((line) => line.split('').map((char) => Number.parseInt(char, 10) || 0));
     const height = rows.length;
     const width = rows[0]?.length ?? 0;
     const grid = normalizeGrid(rows, width, height);
-    return {
+    parsed = {
       id: relativePath,
       width,
       height,
@@ -301,11 +332,18 @@ export async function loadLevelByIndex(index = 0) {
       spawn: { x: TILE * 2, y: TILE * 6 },
       enemies: [],
     };
+  } else {
+    throw new Error(`Unsupported level format for ${relativePath}`);
   }
-  throw new Error(`Unsupported level format for ${relativePath}`);
+  if (parsed && typeof meta.biome === 'string' && meta.biome && !parsed.biome) {
+    parsed.biome = meta.biome;
+  }
+  return parsed;
 }
 
 export function listLevels() {
-  return levelManifest.slice();
+  return levelManifest
+    .map((entry) => (typeof entry === 'string' ? entry : entry?.path))
+    .filter((value) => typeof value === 'string');
 }
 
