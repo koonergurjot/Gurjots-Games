@@ -1,22 +1,6 @@
 import { Controls } from '../../src/runtime/controls.js';
-import { loadStrip } from '../../shared/assets.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
-import { emitEvent } from '../../shared/achievements.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
-import {
-  connect as netConnect,
-  disconnect as netDisconnect,
-  sendShip,
-  sendShot,
-  sendRocks,
-  sendStats,
-  onShip,
-  onShot,
-  onRocks,
-  onEnemy,
-  onPlayers,
-  players as netPlayers,
-} from './net.js';
 
 const SLUG = 'asteroids';
 const TWO_PI = Math.PI * 2;
@@ -28,7 +12,6 @@ const ASTEROID_SIZES = [0, 14, 26, 40]; // index by size tier (1-3)
 const ASTEROID_SEGMENTS = 8;
 const ASTEROID_SPEED = [0, 120, 90, 70];
 const ASTEROID_SCORE = [0, 100, 50, 20];
-const WAVE_ASTEROID_COUNT = [0, 4, 6, 8];
 const STORAGE_KEYS = {
   best: `${SLUG}:best`,
 };
@@ -486,12 +469,179 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function wrap(value, max) {
-  if (value < -50) return max + value + 50;
-  if (value > max + 50) return value - max - 50;
-  if (value < 0) return value + max;
-  if (value > max) return value - max;
-  return value;
+const COMPONENT_FLAGS = {
+  position: 1 << 0,
+  velocity: 1 << 1,
+  rotation: 1 << 2,
+  collider: 1 << 3,
+  lifetime: 1 << 4,
+  ship: 1 << 5,
+  rock: 1 << 6,
+  bullet: 1 << 7,
+  particle: 1 << 8,
+};
+
+function createWorld(width, height) {
+  return {
+    width,
+    height,
+    nextId: 0,
+    freeIds: [],
+    alive: [],
+    signatures: [],
+    components: {
+      position: [],
+      velocity: [],
+      rotation: [],
+      collider: [],
+      lifetime: [],
+      ship: [],
+      rock: [],
+      bullet: [],
+      particle: [],
+    },
+  };
+}
+
+function createEntity(world) {
+  const id = world.freeIds.length ? world.freeIds.pop() : world.nextId++;
+  world.alive[id] = true;
+  world.signatures[id] = 0;
+  return id;
+}
+
+function addComponent(world, name, entity, values) {
+  const store = world.components[name];
+  if (!store) return null;
+  let component = store[entity];
+  if (!component) {
+    component = store[entity] = { ...values };
+  } else {
+    Object.assign(component, values);
+  }
+  const flag = COMPONENT_FLAGS[name];
+  if (typeof flag === 'number') {
+    world.signatures[entity] = (world.signatures[entity] || 0) | flag;
+  }
+  return component;
+}
+
+function getComponent(world, name, entity) {
+  const store = world.components[name];
+  return store ? store[entity] : undefined;
+}
+
+function destroyEntity(world, entity) {
+  world.alive[entity] = false;
+  world.signatures[entity] = 0;
+  world.freeIds.push(entity);
+}
+
+function queryEntities(world, mask) {
+  const result = [];
+  const { signatures, alive } = world;
+  for (let i = 0; i < signatures.length; i++) {
+    if (!alive[i]) continue;
+    if ((signatures[i] & mask) === mask) {
+      result.push(i);
+    }
+  }
+  return result;
+}
+
+function wrapValue(value, max) {
+  if (max <= 0) return 0;
+  return ((value % max) + max) % max;
+}
+
+function wrapVector(position, world) {
+  position.x = wrapValue(position.x, world.width);
+  position.y = wrapValue(position.y, world.height);
+}
+
+function distanceSquared(x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  return dx * dx + dy * dy;
+}
+
+function physicsSystem(world, dt) {
+  const entities = queryEntities(world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.velocity);
+  for (const entity of entities) {
+    const position = getComponent(world, 'position', entity);
+    const velocity = getComponent(world, 'velocity', entity);
+    position.x += velocity.x * dt;
+    position.y += velocity.y * dt;
+    wrapVector(position, world);
+  }
+}
+
+function lifetimeSystem(world, dt, onExpire) {
+  const entities = queryEntities(world, COMPONENT_FLAGS.lifetime);
+  for (const entity of entities) {
+    const lifetime = getComponent(world, 'lifetime', entity);
+    lifetime.remaining -= dt;
+    if (lifetime.remaining <= 0) {
+      const payload = lifetime.payload;
+      if (typeof onExpire === 'function') {
+        onExpire(entity, payload);
+      }
+      destroyEntity(world, entity);
+    }
+  }
+}
+
+const DEFAULT_WAVE_CONFIG = {
+  waves: [
+    { rocks: [ { size: 3, count: 2 } ] },
+    { rocks: [ { size: 3, count: 3 } ] },
+    { rocks: [ { size: 3, count: 3 }, { size: 2, count: 1 } ] },
+    { rocks: [ { size: 3, count: 4 }, { size: 2, count: 1 } ] },
+    { rocks: [ { size: 3, count: 4 }, { size: 2, count: 2 } ] },
+    { rocks: [ { size: 3, count: 4 }, { size: 2, count: 2 }, { size: 1, count: 1 } ] },
+    { rocks: [ { size: 3, count: 5 }, { size: 2, count: 2 }, { size: 1, count: 1 } ] },
+    { rocks: [ { size: 3, count: 5 }, { size: 2, count: 3 }, { size: 1, count: 1 } ] },
+    { rocks: [ { size: 3, count: 6 }, { size: 2, count: 3 }, { size: 1, count: 2 } ] },
+    { rocks: [ { size: 3, count: 6 }, { size: 2, count: 4 }, { size: 1, count: 2 } ] },
+  ],
+  splits: {
+    '3': [2, 2],
+    '2': [1, 1],
+    '1': [],
+  },
+};
+
+async function loadWaveConfig() {
+  if (typeof fetch !== 'function') {
+    return DEFAULT_WAVE_CONFIG;
+  }
+  try {
+    const response = await fetch(new URL('./waves.json', import.meta.url));
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    return {
+      waves: Array.isArray(data?.waves) ? data.waves : DEFAULT_WAVE_CONFIG.waves,
+      splits: typeof data?.splits === 'object' ? data.splits : DEFAULT_WAVE_CONFIG.splits,
+    };
+  } catch (error) {
+    pushEvent('diagnostics', {
+      level: 'warn',
+      message: '[asteroids] failed to load wave config, using defaults',
+      details: sanitizeForLog(error),
+    });
+    return DEFAULT_WAVE_CONFIG;
+  }
+}
+
+function resolveWaveConfig(config, wave) {
+  if (!config?.waves?.length) return DEFAULT_WAVE_CONFIG.waves[0];
+  const index = Math.min(config.waves.length - 1, Math.max(0, wave - 1));
+  return config.waves[index];
+}
+
+function resolveSplitRules(config, size) {
+  const table = config?.splits || DEFAULT_WAVE_CONFIG.splits;
+  return Array.isArray(table?.[String(size)]) ? table[String(size)] : [];
 }
 
 function angleTo(x1, y1, x2, y2) {
@@ -563,6 +713,7 @@ class AsteroidsGame {
   constructor(canvas, context = {}) {
     recordMilestone('game:constructor:start');
     captureCanvasSnapshot('constructor:before-init', canvas);
+
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     if (!this.ctx) throw new Error('[asteroids] Canvas 2D context unavailable');
@@ -574,221 +725,161 @@ class AsteroidsGame {
         right: ['ArrowRight', 'KeyD'],
         up: ['ArrowUp', 'KeyW'],
         a: ['Space', 'Enter', 'KeyJ'],
-        b: ['ShiftLeft', 'KeyK'],
         pause: ['KeyP', 'Escape'],
         restart: ['KeyR'],
       },
     });
+    this.controls.on('pause', () => {
+      if (this.gameOver) return;
+      if (this.paused) this.resume();
+      else this.pause();
+    });
+    this.controls.on('restart', () => this.restart());
 
-    this.sounds = {
-      laser: createAudio('../../assets/audio/laser.wav', 0.45),
-      explode: createAudio('../../assets/audio/explode.wav', 0.6),
-      power: createAudio('../../assets/audio/powerup.wav', 0.5),
-      gameover: createAudio('../../assets/audio/gameover.wav', 0.6),
-    };
-
-    this.images = {
-      spaceLayer1: loadImage('../../assets/backgrounds/parallax/space_layer1.png'),
-      spaceLayer2: loadImage('../../assets/backgrounds/parallax/space_layer2.png'),
-      portal: loadImage('../../assets/effects/portal.png'),
-      hudPanel: loadImage('../../assets/sprites/maze3d/floor.png'),
-      bullet: loadImage('../../assets/sprites/bullet.png'),
-      enemyBullet: loadImage('../../assets/sprites/laser.png'),
-      explosion: loadImage('../../assets/effects/explosion.png'),
-      shield: loadImage('../../assets/effects/shield.png'),
-    };
-    this.backgroundLayers = [
-      { image: this.images.spaceLayer1, offsetX: 0, offsetY: 0, speedX: -8, speedY: 0, opacity: 0.45 },
-      { image: this.images.spaceLayer2, offsetX: 0, offsetY: 0, speedX: -18, speedY: -10, opacity: 0.75 },
-    ];
-    this.bulletSprites = {
-      player: this.images.bullet,
-      remote: null,
-      enemy: this.images.enemyBullet,
-    };
-    this.explosionSprite = {
-      frameSize: 0,
-      framesPerRow: 1,
-      totalFrames: 16,
-      frameDuration: 0.045,
-    };
-    this.explosions = [];
-    this.portalSprite = {
-      frameWidth: 0,
-      frameHeight: 0,
-      framesPerRow: 1,
-      totalFrames: 4,
-      frameDuration: 0.08,
-    };
-    this.portalEffects = [];
-    this.hudPatternUrl = null;
+    this.loop = this.loop.bind(this);
+    this.handleVisibility = this.handleVisibility.bind(this);
+    this.handleResize = this.handleResize.bind(this);
 
     this.width = BASE_WIDTH;
     this.height = BASE_HEIGHT;
     this.dpr = 1;
 
-    this.lastTime = performance.now();
-    this.rafId = 0;
-    this.paused = false;
-    this.gameOver = false;
-    this.started = false;
-    this.postedReady = false;
-    this.netSyncTimer = 0;
+    this.world = createWorld(this.width, this.height);
+    this.shipEntity = null;
 
-    this.ship = this.createShip();
-    this.asteroids = [];
-    this.bullets = [];
-    this.enemyBullets = [];
-    this.particles = [];
-    this.remoteShips = new Map();
-    this.remoteShots = [];
-    this.remoteEnemy = null;
-    this.remoteRocks = [];
+    this.bulletCooldown = 0;
+    this.thrustTimer = 0;
+    this.postedReady = false;
 
     this.wave = 1;
-    this.weaponMode = 'single';
-    this.fireCooldown = 0;
-    this.waveTimer = 0;
-    this.waveClearTimer = 0;
+    this.waveConfig = DEFAULT_WAVE_CONFIG;
+    this.wavePromise = loadWaveConfig().then((config) => {
+      this.waveConfig = config;
+      if (!this.asteroidsRemaining()) {
+        this.spawnWave();
+      }
+    });
 
     this.score = 0;
-    this.lastEmittedScore = -1;
-    this.lastAchievementScore = -1;
-    this.lives = 3;
     this.bestScore = this.restoreBestScore();
-
+    this.lives = 3;
+    this.paused = true;
+    this.gameOver = false;
+    this.started = false;
     this.sessionActive = false;
+
+    this.waveSpawnDelay = 0;
 
     this.starfield = this.createStars(120);
 
-    if (this.images.bullet) {
-      if (this.isSpriteReady(this.images.bullet)) this.prepareBulletVariants();
-      else this.images.bullet.addEventListener('load', () => this.prepareBulletVariants());
-    }
-    if (this.images.explosion) {
-      if (this.isSpriteReady(this.images.explosion)) this.prepareExplosionSprite();
-      else this.images.explosion.addEventListener('load', () => this.prepareExplosionSprite());
-    }
-    if (this.images.portal) {
-      if (this.isSpriteReady(this.images.portal)) this.preparePortalSprite();
-      else {
-        const handlePortalLoad = () => {
-          this.preparePortalSprite();
-          this.images.portal?.removeEventListener?.('load', handlePortalLoad);
-        };
-        this.images.portal.addEventListener('load', handlePortalLoad);
-      }
-    }
-    if (this.images.hudPanel) {
-      if (this.isSpriteReady(this.images.hudPanel)) this.prepareHudTextures();
-      else {
-        const handleHudLoad = () => {
-          this.prepareHudTextures();
-          this.images.hudPanel?.removeEventListener?.('load', handleHudLoad);
-        };
-        this.images.hudPanel.addEventListener('load', handleHudLoad);
-      }
-    }
-
-    this.events = {
-      onVisibility: () => this.handleVisibilityChange(),
-      onShellPause: () => this.pause(true),
-      onShellResume: () => this.resume(true),
-      onShellMessage: (event) => this.handleShellMessage(event),
+    this.sounds = {
+      laser: createAudio('../../assets/audio/laser.wav', 0.45),
+      explode: createAudio('../../assets/audio/explode.wav', 0.6),
     };
 
-    this.resize = this.resize.bind(this);
-    this.loop = this.loop.bind(this);
+    this.hud = this.createHud();
+    if (this.hud?.best) this.hud.best.textContent = String(this.bestScore);
+    if (this.hud?.score) this.hud.score.textContent = '0';
+    if (this.hud?.wave) this.hud.wave.textContent = String(this.wave);
 
-    this.controls.on('pause', () => this.togglePause());
-    this.controls.on('restart', () => this.restart());
-    this.controls.on('b', () => this.hyperspace());
+    this.resizeCanvas();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', this.handleResize);
+      document.addEventListener('visibilitychange', this.handleVisibility);
+    }
 
-    window.addEventListener('resize', this.resize);
-    document.addEventListener('visibilitychange', this.events.onVisibility);
-    window.addEventListener('ggshell:pause', this.events.onShellPause);
-    window.addEventListener('ggshell:resume', this.events.onShellResume);
-    window.addEventListener('message', this.events.onShellMessage, { passive: true });
-
-    this.hud = this.buildHud();
+    this.shipEntity = this.spawnShip();
     this.updateLivesDisplay();
-    this.prepareHudTextures();
+    this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Press Start to play.');
 
-    this.resize();
-    this.spawnWave();
-    this.applyWavePowerups();
+    this.lastTime = performance.now();
+    this.rafId = requestAnimationFrame(this.loop);
 
-    this.setupNet();
-
-    this.startSession();
-    emitEvent({ type: 'play', slug: SLUG });
-    this.paused = true;
-    this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Press start to begin!', false);
-    recordMilestone('game:constructor:ready');
-    captureCanvasSnapshot('constructor:after-init', canvas, {
-      canvasWidth: canvas.width,
-      canvasHeight: canvas.height,
-    });
-    this.start();
+    recordMilestone('game:constructor:end');
   }
 
-  buildHud() {
-    if (!document.getElementById('asteroids-hud-style')) {
-      const style = document.createElement('style');
-      style.id = 'asteroids-hud-style';
-      style.textContent = `
-        .asteroids-hud{position:absolute;top:16px;left:16px;z-index:10;color:var(--fg,#f8fafc);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:16px 20px;border-radius:14px;background-color:rgba(2,6,23,0.88);background-image:var(--asteroids-panel-image,url("../../assets/sprites/maze3d/floor.png"));background-size:128px 128px;background-blend-mode:soft-light;border:1px solid rgba(148,163,184,0.35);box-shadow:0 18px 48px rgba(2,6,23,0.45);backdrop-filter:blur(8px);min-width:190px;}
-        .asteroids-hud__row{display:flex;gap:12px;align-items:center;margin-bottom:6px;}
-        .asteroids-hud__label{opacity:0.82;text-transform:uppercase;font-size:12px;letter-spacing:0.1em;text-shadow:0 2px 4px rgba(2,6,23,0.85);}
-        .asteroids-hud__value{font-size:20px;font-weight:600;min-width:60px;text-shadow:0 2px 6px rgba(2,6,23,0.9);}
-        .asteroids-hud__lives{display:flex;gap:6px;}
-        .asteroids-hud__life{width:18px;height:18px;border:2px solid rgba(148,233,215,0.9);transform:rotate(45deg);border-radius:4px;opacity:0.9;background:rgba(45,212,191,0.14);box-shadow:0 2px 6px rgba(15,118,110,0.4);}
-        .asteroids-overlay{position:absolute;inset:0;background-color:rgba(2,6,23,0.9);background-image:var(--asteroids-panel-image,url("../../assets/sprites/maze3d/floor.png"));background-size:180px 180px;background-blend-mode:soft-light;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--fg,#f8fafc);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;opacity:0;pointer-events:none;transition:opacity 0.25s;z-index:20;text-align:center;padding:24px;text-shadow:0 3px 8px rgba(2,6,23,0.85);}
-        .asteroids-overlay.is-active{opacity:1;pointer-events:auto;}
-        .asteroids-overlay h1{font-size:42px;margin:0 0 12px;text-shadow:0 6px 16px rgba(2,6,23,0.85);}
-        .asteroids-overlay p{margin:6px 0;font-size:16px;max-width:480px;}
-        .asteroids-overlay__actions{margin-top:20px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
-        .asteroids-overlay button{background:var(--accent,#6ee7b7);color:#021016;border:none;border-radius:999px;font-size:16px;font-weight:600;padding:10px 20px;cursor:pointer;box-shadow:0 12px 24px rgba(110,231,183,0.35);}
-        .asteroids-players{position:absolute;top:16px;right:16px;z-index:10;color:var(--muted,#d0d6e5);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;text-align:right;padding:16px 18px;border-radius:14px;background-color:rgba(2,6,23,0.82);background-image:var(--asteroids-panel-image,url("../../assets/sprites/maze3d/floor.png"));background-size:120px 120px;background-blend-mode:soft-light;border:1px solid rgba(148,163,184,0.3);box-shadow:0 18px 48px rgba(2,6,23,0.45);backdrop-filter:blur(6px);}
-        .asteroids-players h2{margin:0 0 6px;font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--fg,#f8faf2);text-shadow:0 2px 5px rgba(2,6,23,0.8);}
-        .asteroids-players ul{list-style:none;margin:0;padding:0;font-size:14px;}
-        .asteroids-players li{margin-bottom:2px;text-shadow:0 1px 3px rgba(2,6,23,0.8);}
-      `;
-      document.head.appendChild(style);
+  destroy() {
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.controls?.dispose?.();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', this.handleResize);
+      document.removeEventListener('visibilitychange', this.handleVisibility);
     }
+    this.endSession();
+    this.hud?.root?.remove?.();
+    this.hud?.overlay?.remove?.();
+    this.hud?.players?.remove?.();
+  }
+
+  handleVisibility() {
+    if (document.visibilityState === 'hidden') {
+      this.pause();
+    }
+  }
+
+  handleResize() {
+    this.resizeCanvas();
+  }
+
+  resizeCanvas() {
+    if (!this.canvas) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    this.dpr = dpr;
+    const width = rect.width || BASE_WIDTH;
+    const height = rect.height || BASE_HEIGHT;
+    this.canvas.width = Math.round(width * dpr);
+    this.canvas.height = Math.round(height * dpr);
+    this.width = width;
+    this.height = height;
+    this.world.width = this.width;
+    this.world.height = this.height;
+  }
+
+  createHud() {
+    if (typeof document === 'undefined') {
+      return {
+        root: null,
+        overlay: { style: {}, classList: { add() {}, remove() {} } },
+        players: null,
+        score: { textContent: '0' },
+        best: { textContent: '0' },
+        wave: { textContent: '1' },
+        lives: { innerHTML: '' },
+        overlayTitle: { textContent: '' },
+        overlayMessage: { textContent: '' },
+      };
+    }
+
+    const surface = document.querySelector('.game-shell__surface') || document.body;
 
     const hud = document.createElement('div');
     hud.className = 'asteroids-hud';
     hud.innerHTML = `
       <div class="asteroids-hud__row">
         <span class="asteroids-hud__label">Score</span>
-        <span class="asteroids-hud__value" id="asteroids-score" data-game-score="0">0</span>
+        <span class="asteroids-hud__value" id="asteroids-score">0</span>
       </div>
       <div class="asteroids-hud__row">
         <span class="asteroids-hud__label">Best</span>
-        <span class="asteroids-hud__value" id="asteroids-best">${this.bestScore}</span>
+        <span class="asteroids-hud__value" id="asteroids-best">0</span>
       </div>
       <div class="asteroids-hud__row">
         <span class="asteroids-hud__label">Wave</span>
-        <span class="asteroids-hud__value" id="asteroids-wave">${this.wave}</span>
-      </div>
-      <div class="asteroids-hud__row">
-        <span class="asteroids-hud__label">Mode</span>
-        <span class="asteroids-hud__value" id="asteroids-mode">${this.weaponMode}</span>
+        <span class="asteroids-hud__value" id="asteroids-wave">1</span>
       </div>
       <div class="asteroids-hud__row">
         <span class="asteroids-hud__label">Lives</span>
         <span class="asteroids-hud__lives" id="asteroids-lives"></span>
       </div>
     `;
-    const surface = document.querySelector('.game-shell__surface') || document.body;
     surface.appendChild(hud);
 
     const overlay = document.createElement('div');
     overlay.className = 'asteroids-overlay';
     overlay.innerHTML = `
       <h1 id="asteroids-overlay-title">Asteroids</h1>
-      <p id="asteroids-overlay-message">Rotate with ←/→, thrust with ↑, fire with Space/Enter. Survive the waves!</p>
+      <p id="asteroids-overlay-message"></p>
       <div class="asteroids-overlay__actions">
         <button type="button" data-action="resume">Start</button>
         <button type="button" data-action="restart">Restart</button>
@@ -796,35 +887,22 @@ class AsteroidsGame {
     `;
     surface.appendChild(overlay);
 
-    const players = document.createElement('div');
-    players.className = 'asteroids-players';
-    players.innerHTML = `
-      <h2>Co-op</h2>
-      <ul id="asteroids-players-list"></ul>
-    `;
-    surface.appendChild(players);
-
     overlay.querySelector('[data-action="resume"]').addEventListener('click', () => {
-      if (this.gameOver) {
-        this.restart();
-      } else {
-        this.resume();
-      }
+      if (this.gameOver) this.restart();
+      else this.start();
     });
     overlay.querySelector('[data-action="restart"]').addEventListener('click', () => this.restart());
 
     return {
       root: hud,
       overlay,
-      players,
+      players: null,
       score: hud.querySelector('#asteroids-score'),
       best: hud.querySelector('#asteroids-best'),
       wave: hud.querySelector('#asteroids-wave'),
-      mode: hud.querySelector('#asteroids-mode'),
       lives: hud.querySelector('#asteroids-lives'),
       overlayTitle: overlay.querySelector('#asteroids-overlay-title'),
       overlayMessage: overlay.querySelector('#asteroids-overlay-message'),
-      playersList: players.querySelector('#asteroids-players-list'),
     };
   }
 
@@ -834,278 +912,142 @@ class AsteroidsGame {
       stars.push({
         x: Math.random(),
         y: Math.random(),
-        r: Math.random() * 1.5 + 0.5,
-        twinkle: Math.random() * TWO_PI,
-        speed: 0.2 + Math.random() * 0.6,
+        speed: 0.15 + Math.random() * 0.3,
+        phase: Math.random() * TWO_PI,
       });
     }
     return stars;
   }
 
-  isSpriteReady(sprite) {
-    if (!sprite) return false;
-    if ('naturalWidth' in sprite) {
-      return sprite.complete && sprite.naturalWidth > 0 && sprite.naturalHeight > 0;
-    }
-    if ('width' in sprite && 'height' in sprite) {
-      return sprite.width > 0 && sprite.height > 0;
-    }
-    return false;
-  }
-
-  prepareHudTextures() {
-    if (typeof document === 'undefined') return;
-    const image = this.images?.hudPanel;
-    if (!image) return;
-    if (!this.isSpriteReady(image)) {
-      if (this.hudPatternUrl) this.applyHudTexture();
-      return;
-    }
-
-    const width = image.naturalWidth || image.width || 0;
-    const height = image.naturalHeight || image.height || 0;
-    if (!width || !height) return;
-
-    const baseCanvas = document.createElement('canvas');
-    baseCanvas.width = width;
-    baseCanvas.height = height;
-    const ctx = baseCanvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.fillStyle = '#020617';
-    ctx.fillRect(0, 0, width, height);
-
-    const patternSource = document.createElement('canvas');
-    patternSource.width = width;
-    patternSource.height = height;
-    const patternCtx = patternSource.getContext('2d');
-    if (!patternCtx) return;
-    patternCtx.drawImage(image, 0, 0, width, height);
-
-    const pattern = ctx.createPattern(patternSource, 'repeat');
-    if (pattern) {
-      ctx.globalAlpha = 0.68;
-      ctx.fillStyle = pattern;
-      ctx.fillRect(0, 0, width, height);
-    }
-    ctx.globalAlpha = 1;
-
-    const overlay = ctx.createLinearGradient(0, 0, width, height);
-    overlay.addColorStop(0, 'rgba(148, 163, 184, 0.1)');
-    overlay.addColorStop(1, 'rgba(15, 23, 42, 0.18)');
-    ctx.fillStyle = overlay;
-    ctx.fillRect(0, 0, width, height);
-
-    this.hudPatternUrl = baseCanvas.toDataURL('image/png');
-    this.applyHudTexture();
-  }
-
-  applyHudTexture() {
-    if (typeof document === 'undefined') return;
-    if (!this.hudPatternUrl) return;
-    const imageValue = `url(${this.hudPatternUrl})`;
-    document.documentElement?.style?.setProperty('--asteroids-panel-image', imageValue);
-    this.hud?.root?.style?.setProperty('--asteroids-panel-image', imageValue);
-    this.hud?.overlay?.style?.setProperty('--asteroids-panel-image', imageValue);
-    this.hud?.players?.style?.setProperty('--asteroids-panel-image', imageValue);
-  }
-
-  preparePortalSprite() {
-    const image = this.images?.portal;
-    if (!image) return;
-    if (!this.isSpriteReady(image)) return;
-
-    loadStrip('../../assets/effects/portal.png', this.portalSprite.frameWidth, this.portalSprite.frameHeight, {
-      slug: SLUG,
-      image,
-    }).then((strip) => {
-      this.images.portal = strip.image;
-      this.portalSprite.frameWidth = strip.frameWidth;
-      this.portalSprite.frameHeight = strip.frameHeight;
-      this.portalSprite.framesPerRow = strip.framesPerRow;
-      this.portalSprite.totalFrames = strip.frameCount;
-    }).catch(() => {});
-  }
-
-  prepareBulletVariants() {
-    if (!this.images?.bullet) return;
-    if (!this.isSpriteReady(this.images.bullet)) return;
-    this.bulletSprites.player = this.images.bullet;
-    const tinted = createTintedSprite(this.images.bullet, '#5eead4');
-    this.bulletSprites.remote = tinted || this.images.bullet;
-  }
-
-  prepareExplosionSprite() {
-    if (!this.images?.explosion) return;
-    if (!this.isSpriteReady(this.images.explosion)) return;
-    const image = this.images.explosion;
-    const framesPerRow = Math.max(1, this.explosionSprite.framesPerRow || 8);
-    loadStrip('../../assets/effects/explosion.png', this.explosionSprite.frameSize, this.explosionSprite.frameSize, {
-      slug: SLUG,
-      image,
-      framesPerRow,
-    }).then((strip) => {
-      this.images.explosion = strip.image;
-      this.explosionSprite.frameSize = strip.frameWidth;
-      this.explosionSprite.framesPerRow = strip.framesPerRow;
-      this.explosionSprite.totalFrames = strip.frameCount;
-    }).catch(() => {});
-  }
-
-  createShip() {
-    return {
-      x: this.width / 2,
-      y: this.height / 2,
-      vx: 0,
-      vy: 0,
-      angle: -Math.PI / 2,
-      thrust: 260,
-      turnSpeed: Math.PI * 2,
-      radius: SHIP_RADIUS,
+  spawnShip() {
+    const entity = createEntity(this.world);
+    addComponent(this.world, 'position', entity, { x: this.width / 2, y: this.height / 2 });
+    addComponent(this.world, 'velocity', entity, { x: 0, y: 0 });
+    addComponent(this.world, 'rotation', entity, { angle: -Math.PI / 2 });
+    addComponent(this.world, 'collider', entity, { radius: SHIP_RADIUS });
+    addComponent(this.world, 'ship', entity, {
       alive: true,
-      invulnerable: 2.5,
-      respawnTimer: 0,
-    };
+      thrust: 520,
+      turnSpeed: 3.6,
+      invulnerable: 2.4,
+      respawn: 0,
+    });
+    return entity;
   }
 
-  restoreBestScore() {
-    try {
-      const stored = Number.parseInt(localStorage.getItem(STORAGE_KEYS.best) || '0', 10);
-      return Number.isFinite(stored) ? stored : 0;
-    } catch (err) {
-      return 0;
+  spawnWave() {
+    const config = resolveWaveConfig(this.waveConfig, this.wave);
+    const entries = Array.isArray(config?.rocks) ? config.rocks : [];
+    const shipPos = getComponent(this.world, 'position', this.shipEntity);
+    const originX = shipPos?.x ?? this.width / 2;
+    const originY = shipPos?.y ?? this.height / 2;
+    const safeRadius = (getComponent(this.world, 'collider', this.shipEntity)?.radius || SHIP_RADIUS) * 6;
+
+    for (const entry of entries) {
+      for (let i = 0; i < entry.count; i++) {
+        let attempts = 0;
+        let spawnX = 0;
+        let spawnY = 0;
+        do {
+          const edge = Math.floor(Math.random() * 4);
+          if (edge === 0) { spawnX = Math.random() * this.width; spawnY = -40; }
+          else if (edge === 1) { spawnX = this.width + 40; spawnY = Math.random() * this.height; }
+          else if (edge === 2) { spawnX = Math.random() * this.width; spawnY = this.height + 40; }
+          else { spawnX = -40; spawnY = Math.random() * this.height; }
+          spawnX = wrapValue(spawnX, this.width);
+          spawnY = wrapValue(spawnY, this.height);
+          attempts++;
+          if (attempts > 8) break;
+        } while (distanceSquared(spawnX, spawnY, originX, originY) < safeRadius * safeRadius);
+
+        const angle = angleTo(spawnX, spawnY, originX, originY) + randomRange(-0.4, 0.4);
+        const speed = ASTEROID_SPEED[entry.size] * randomRange(0.7, 1.1);
+        this.spawnAsteroid(entry.size, {
+          x: spawnX,
+          y: spawnY,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+        });
+      }
     }
+
+    this.waveSpawnDelay = 0;
+    this.hud.wave.textContent = String(this.wave);
   }
 
-  persistBestScore() {
-    try {
-      localStorage.setItem(STORAGE_KEYS.best, String(this.bestScore));
-    } catch (err) {
-      /* ignore storage failures */
+  spawnAsteroid(size, { x, y, vx = 0, vy = 0 }) {
+    const entity = createEntity(this.world);
+    const radius = ASTEROID_SIZES[size];
+    addComponent(this.world, 'position', entity, { x, y });
+    addComponent(this.world, 'velocity', entity, { x: vx, y: vy });
+    addComponent(this.world, 'rotation', entity, { angle: Math.random() * TWO_PI });
+    addComponent(this.world, 'collider', entity, { radius });
+    addComponent(this.world, 'rock', entity, {
+      size,
+      spin: randomRange(-0.9, 0.9),
+      shape: makeAsteroidShape(radius),
+    });
+    return entity;
+  }
+
+  start() {
+    if (this.started && !this.paused) return;
+    if (!this.started) {
+      this.started = true;
+      this.score = 0;
+      this.hud.score.textContent = '0';
+      this.hideOverlay();
+      this.startSession();
+      if (!this.asteroidsRemaining()) {
+        this.spawnWave();
+      }
     }
+    this.paused = false;
+    this.hideOverlay();
+  }
+
+  pause() {
+    if (this.paused || this.gameOver) return;
+    this.paused = true;
+    this.showOverlay('Paused', 'Press Resume or Space to continue.');
+  }
+
+  resume() {
+    if (!this.paused || this.gameOver) return;
+    this.paused = false;
+    this.hideOverlay();
+  }
+
+  restart() {
+    this.world = createWorld(this.width, this.height);
+    this.shipEntity = this.spawnShip();
+    this.score = 0;
+    this.hud.score.textContent = '0';
+    this.wave = 1;
+    this.lives = 3;
+    this.gameOver = false;
+    this.paused = true;
+    this.started = false;
+    this.bulletCooldown = 0;
+    this.waveSpawnDelay = 0;
+    this.updateLivesDisplay();
+    if (this.hud?.wave) this.hud.wave.textContent = String(this.wave);
+    if (this.hud?.score) this.hud.score.textContent = '0';
+    this.hideOverlay();
+    this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Press Start to play.');
+    this.endSession();
   }
 
   startSession() {
     if (this.sessionActive) return;
-    startSessionTimer(SLUG);
     this.sessionActive = true;
+    startSessionTimer(SLUG);
   }
 
   endSession() {
     if (!this.sessionActive) return;
-    endSessionTimer(SLUG);
     this.sessionActive = false;
-  }
-
-  setupNet() {
-    try {
-      netConnect();
-      onShip((id, ship) => {
-        this.remoteShips.set(id, { ...ship, lastSeen: performance.now() });
-      });
-      onShot((id, bullet) => {
-        this.remoteShots.push({ id, life: bullet.life ?? 0.9, ...bullet });
-      });
-      onRocks((rocks) => {
-        this.remoteEnemy = null;
-        this.remoteRocks = Array.isArray(rocks) ? rocks : [];
-      });
-      onEnemy((enemy) => {
-        this.remoteEnemy = enemy;
-      });
-      onPlayers((map) => {
-        this.updatePlayersList(map);
-      });
-      this.updatePlayersList(netPlayers);
-    } catch (err) {
-      console.warn('[asteroids] network sync unavailable', err);
-    }
-  }
-
-  updatePlayersList(map) {
-    if (!this.hud?.playersList) return;
-    const rows = Object.entries(map || {}).map(([id, stats]) => ({ id, ...stats }));
-    rows.sort((a, b) => (b.score || 0) - (a.score || 0));
-    const parts = rows.map((row) => `<li>${row.id.slice(0, 4)} • ${row.score ?? 0} pts • ${row.lives ?? 0} lives</li>`);
-    this.hud.playersList.innerHTML = parts.join('');
-    this.hud.players.style.display = rows.length ? '' : 'none';
-  }
-
-  resize() {
-    const rect = this.canvas.getBoundingClientRect();
-    this.width = rect.width || BASE_WIDTH;
-    this.height = rect.height || BASE_HEIGHT;
-    this.dpr = window.devicePixelRatio || 1;
-    this.canvas.width = Math.round(this.width * this.dpr);
-    this.canvas.height = Math.round(this.height * this.dpr);
-    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.ctx.imageSmoothingEnabled = false;
-    captureCanvasSnapshot('resize', this.canvas, {
-      rectWidth: rect.width,
-      rectHeight: rect.height,
-      computedWidth: this.width,
-      computedHeight: this.height,
-      canvasWidth: this.canvas.width,
-      canvasHeight: this.canvas.height,
-    });
-  }
-
-  start() {
-    this.started = true;
-    this.lastTime = performance.now();
-    if (!this.rafId) {
-      recordMilestone('game:start');
-      setRafActive(true, 'start');
-      this.rafId = requestAnimationFrame(this.loop);
-    }
-  }
-
-  getScore() {
-    return this.score;
-  }
-
-  getBestScore() {
-    return this.bestScore;
-  }
-
-  getWave() {
-    return this.wave;
-  }
-
-  isPaused() {
-    return this.paused;
-  }
-
-  isGameOver() {
-    return this.gameOver;
-  }
-
-  getShipState() {
-    const ship = this.ship || {};
-    return {
-      alive: !!ship.alive,
-      x: typeof ship.x === 'number' ? ship.x : null,
-      y: typeof ship.y === 'number' ? ship.y : null,
-      vx: typeof ship.vx === 'number' ? ship.vx : null,
-      vy: typeof ship.vy === 'number' ? ship.vy : null,
-      angle: typeof ship.angle === 'number' ? ship.angle : null,
-      invulnerable: typeof ship.invulnerable === 'number' ? ship.invulnerable : 0,
-      radius: typeof ship.radius === 'number' ? ship.radius : SHIP_RADIUS,
-      lives: this.lives,
-    };
-  }
-
-  getRockState() {
-    if (!Array.isArray(this.asteroids)) return [];
-    return this.asteroids.map((asteroid) => ({
-      x: typeof asteroid.x === 'number' ? asteroid.x : null,
-      y: typeof asteroid.y === 'number' ? asteroid.y : null,
-      vx: typeof asteroid.vx === 'number' ? asteroid.vx : null,
-      vy: typeof asteroid.vy === 'number' ? asteroid.vy : null,
-      radius: typeof asteroid.radius === 'number' ? asteroid.radius : null,
-      size: typeof asteroid.size === 'number' ? asteroid.size : null,
-      spin: typeof asteroid.spin === 'number' ? asteroid.spin : null,
-    }));
+    endSessionTimer(SLUG);
   }
 
   loop(now) {
@@ -1114,9 +1056,10 @@ class AsteroidsGame {
     this.lastTime = now;
 
     if (!this.paused && !this.gameOver) {
-      this.update(dt);
+      this.step(dt);
     }
-    this.draw(dt);
+
+    this.render(dt);
 
     if (!this.postedReady) {
       this.postedReady = true;
@@ -1130,908 +1073,405 @@ class AsteroidsGame {
     this.rafId = requestAnimationFrame(this.loop);
   }
 
-  update(dt) {
-    this.updatePortals(dt);
-    if (!this.ship.alive) {
-      this.updateExplosions(dt);
-      this.updateParticles(dt);
-      this.ship.respawnTimer -= dt;
-      if (this.ship.respawnTimer <= 0) {
-        this.respawnShip();
+  step(dt) {
+    const ship = getComponent(this.world, 'ship', this.shipEntity);
+    const shipPos = getComponent(this.world, 'position', this.shipEntity);
+    const shipVel = getComponent(this.world, 'velocity', this.shipEntity);
+    const shipRot = getComponent(this.world, 'rotation', this.shipEntity);
+
+    if (!ship.alive) {
+      ship.respawn -= dt;
+      if (ship.respawn <= 0) {
+        ship.alive = true;
+        ship.invulnerable = 2.4;
+        ship.respawn = 0;
+        shipPos.x = this.width / 2;
+        shipPos.y = this.height / 2;
+        shipVel.x = 0;
+        shipVel.y = 0;
       }
+      this.systems(dt);
       return;
     }
 
-    this.waveTimer += dt;
-
-    this.updateShip(dt);
-    this.updateBullets(dt);
-    this.updateAsteroids(dt);
-    this.updateEnemyBullets(dt);
-    this.updateParticles(dt);
-    this.updateExplosions(dt);
-    this.updateRemote(dt);
-
-    if (!this.asteroids.length && !this.waveClearTimer) {
-      this.waveClearTimer = 1.5;
-      this.showOverlay('Wave Cleared', 'Prepare for the next onslaught. Press resume to continue!', true);
-      this.paused = true;
-      setTimeout(() => {
-        if (!this.gameOver) {
-          this.wave++;
-          this.hud.wave.textContent = String(this.wave);
-          this.applyWavePowerups();
-          this.spawnWave();
-          this.hideOverlay();
-          this.paused = false;
-        }
-        this.waveClearTimer = 0;
-      }, 900);
-    }
-
-    if (this.waveClearTimer) {
-      this.waveClearTimer = Math.max(0, this.waveClearTimer - dt);
-    }
-
-    this.netSyncTimer += dt;
-    if (this.netSyncTimer >= 0.12) {
-      this.netSyncTimer = 0;
-      try {
-        sendShip({
-          x: this.ship.x,
-          y: this.ship.y,
-          angle: this.ship.angle,
-          vx: this.ship.vx,
-          vy: this.ship.vy,
-          lives: this.lives,
-        });
-        sendStats(this.score, this.lives);
-      } catch (err) {
-        /* ignore network errors */
-      }
-    }
-  }
-
-  updateShip(dt) {
-    if (this.ship.invulnerable > 0) {
-      this.ship.invulnerable = Math.max(0, this.ship.invulnerable - dt);
+    if (ship.invulnerable > 0) {
+      ship.invulnerable = Math.max(0, ship.invulnerable - dt);
     }
 
     let turn = 0;
     if (this.controls.isDown('left')) turn -= 1;
     if (this.controls.isDown('right')) turn += 1;
-    this.ship.angle += turn * this.ship.turnSpeed * dt;
+    shipRot.angle += turn * ship.turnSpeed * dt;
 
-    if (this.controls.isDown('up')) {
-      const ax = Math.cos(this.ship.angle) * this.ship.thrust * dt;
-      const ay = Math.sin(this.ship.angle) * this.ship.thrust * dt;
-      this.ship.vx = clamp(this.ship.vx + ax, -MAX_SPEED, MAX_SPEED);
-      this.ship.vy = clamp(this.ship.vy + ay, -MAX_SPEED, MAX_SPEED);
-      this.spawnThrusterParticles();
-    } else {
-      this.ship.vx *= 1 - Math.min(1, dt * 0.6);
-      this.ship.vy *= 1 - Math.min(1, dt * 0.6);
-    }
-
-    this.fireCooldown = Math.max(0, this.fireCooldown - dt);
-    if (this.controls.isDown('a') && this.fireCooldown <= 0) {
-      this.fireWeapon();
-    }
-
-    this.ship.x += this.ship.vx * dt;
-    this.ship.y += this.ship.vy * dt;
-    this.ship.x = wrap(this.ship.x, this.width);
-    this.ship.y = wrap(this.ship.y, this.height);
-  }
-
-  spawnThrusterParticles() {
-    const angle = this.ship.angle + Math.PI;
-    for (let i = 0; i < 2; i++) {
-      this.particles.push({
-        x: this.ship.x + Math.cos(angle) * 12,
-        y: this.ship.y + Math.sin(angle) * 12,
-        vx: Math.cos(angle + randomRange(-0.3, 0.3)) * randomRange(40, 80),
-        vy: Math.sin(angle + randomRange(-0.3, 0.3)) * randomRange(40, 80),
-        life: 0.25,
-        color: 'rgba(110, 231, 183, 0.4)',
-      });
-    }
-  }
-
-  fireWeapon() {
-    const baseAngle = this.ship.angle;
-    const baseSpeed = 420;
-    const muzzleX = this.ship.x + Math.cos(baseAngle) * (this.ship.radius + 4);
-    const muzzleY = this.ship.y + Math.sin(baseAngle) * (this.ship.radius + 4);
-
-    if (this.weaponMode === 'single') {
-      this.spawnBullet(muzzleX, muzzleY, baseAngle, baseSpeed);
-      this.fireCooldown = 0.32;
-    } else if (this.weaponMode === 'burst') {
-      const spread = 0.12;
-      this.spawnBullet(muzzleX, muzzleY, baseAngle, baseSpeed);
-      this.spawnBullet(muzzleX, muzzleY, baseAngle - spread, baseSpeed * 0.95);
-      this.spawnBullet(muzzleX, muzzleY, baseAngle + spread, baseSpeed * 0.95);
-      this.fireCooldown = 0.5;
-    } else {
-      this.spawnBullet(muzzleX, muzzleY, baseAngle, baseSpeed * 1.1);
-      this.fireCooldown = 0.12;
-    }
-
-    this.sounds.laser();
-  }
-
-  spawnBullet(x, y, angle, speed) {
-    const vx = Math.cos(angle) * speed + this.ship.vx;
-    const vy = Math.sin(angle) * speed + this.ship.vy;
-    const bullet = { x, y, vx, vy, life: 0.9, r: 3 };
-    this.bullets.push(bullet);
-    try {
-      sendShot({ x, y, vx, vy, life: bullet.life });
-    } catch (err) {
-      /* ignore */
-    }
-  }
-
-  updateBullets(dt) {
-    for (let i = this.bullets.length - 1; i >= 0; i--) {
-      const bullet = this.bullets[i];
-      bullet.life -= dt;
-      bullet.x += bullet.vx * dt;
-      bullet.y += bullet.vy * dt;
-      bullet.x = wrap(bullet.x, this.width);
-      bullet.y = wrap(bullet.y, this.height);
-      if (bullet.life <= 0) {
-        this.bullets.splice(i, 1);
-        continue;
+    const thrusting = this.controls.isDown('up');
+    if (thrusting) {
+      const ax = Math.cos(shipRot.angle) * ship.thrust * dt;
+      const ay = Math.sin(shipRot.angle) * ship.thrust * dt;
+      shipVel.x = clamp(shipVel.x + ax, -MAX_SPEED, MAX_SPEED);
+      shipVel.y = clamp(shipVel.y + ay, -MAX_SPEED, MAX_SPEED);
+      this.thrustTimer += dt;
+      if (this.thrustTimer > 0.02) {
+        this.spawnThrusterParticles(shipPos, shipRot.angle, shipVel);
+        this.thrustTimer = 0;
       }
+    } else {
+      shipVel.x *= 1 - Math.min(1, dt * 0.6);
+      shipVel.y *= 1 - Math.min(1, dt * 0.6);
+      this.thrustTimer = 0;
+    }
 
-      for (let j = this.asteroids.length - 1; j >= 0; j--) {
-        const asteroid = this.asteroids[j];
-        const dx = asteroid.x - bullet.x;
-        const dy = asteroid.y - bullet.y;
-        if (dx * dx + dy * dy < asteroid.radius * asteroid.radius) {
-          this.asteroids.splice(j, 1);
-          this.bullets.splice(i, 1);
-          this.destroyAsteroid(asteroid, bullet);
+    this.bulletCooldown = Math.max(0, this.bulletCooldown - dt);
+    if (this.controls.isDown('a') && this.bulletCooldown <= 0) {
+      this.firePrimary(shipPos, shipVel, shipRot.angle);
+    }
+
+    this.systems(dt);
+    this.resolveCollisions();
+    this.advanceWave(dt);
+  }
+
+  systems(dt) {
+    physicsSystem(this.world, dt);
+    lifetimeSystem(this.world, dt);
+  }
+
+  resolveCollisions() {
+    const bullets = queryEntities(this.world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.collider | COMPONENT_FLAGS.bullet);
+    const rocks = queryEntities(this.world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.collider | COMPONENT_FLAGS.rock);
+
+    for (const bullet of bullets) {
+      const bulletPos = getComponent(this.world, 'position', bullet);
+      const bulletCol = getComponent(this.world, 'collider', bullet);
+      let hit = false;
+      for (const rock of rocks) {
+        if (!this.world.alive[rock]) continue;
+        const rockPos = getComponent(this.world, 'position', rock);
+        const rockCol = getComponent(this.world, 'collider', rock);
+        if (distanceSquared(bulletPos.x, bulletPos.y, rockPos.x, rockPos.y) < (bulletCol.radius + rockCol.radius) ** 2) {
+          hit = true;
+          this.handleAsteroidHit(rock);
           break;
         }
       }
-    }
-  }
-
-  updateEnemyBullets(dt) {
-    for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
-      const bullet = this.enemyBullets[i];
-      bullet.life -= dt;
-      bullet.x += bullet.vx * dt;
-      bullet.y += bullet.vy * dt;
-      if (bullet.life <= 0) {
-        this.enemyBullets.splice(i, 1);
-        continue;
+      if (hit) {
+        destroyEntity(this.world, bullet);
       }
-      bullet.x = wrap(bullet.x, this.width);
-      bullet.y = wrap(bullet.y, this.height);
-      if (this.ship.alive && this.ship.invulnerable <= 0) {
-        const dx = bullet.x - this.ship.x;
-        const dy = bullet.y - this.ship.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < this.ship.radius) {
-          this.enemyBullets.splice(i, 1);
-          this.hitShip();
-        }
+    }
+
+    const ship = getComponent(this.world, 'ship', this.shipEntity);
+    if (!ship.alive || ship.invulnerable > 0) return;
+    const shipPos = getComponent(this.world, 'position', this.shipEntity);
+    const shipCol = getComponent(this.world, 'collider', this.shipEntity);
+    for (const rock of rocks) {
+      if (!this.world.alive[rock]) continue;
+      const rockPos = getComponent(this.world, 'position', rock);
+      const rockCol = getComponent(this.world, 'collider', rock);
+      if (distanceSquared(shipPos.x, shipPos.y, rockPos.x, rockPos.y) < (shipCol.radius + rockCol.radius) ** 2) {
+        this.shipDestroyed();
+        this.handleAsteroidHit(rock);
+        break;
       }
     }
   }
 
-  updateAsteroids(dt) {
-    for (let i = this.asteroids.length - 1; i >= 0; i--) {
-      const asteroid = this.asteroids[i];
-      asteroid.x += asteroid.vx * dt;
-      asteroid.y += asteroid.vy * dt;
-      asteroid.rotation += asteroid.spin * dt;
-      asteroid.x = wrap(asteroid.x, this.width);
-      asteroid.y = wrap(asteroid.y, this.height);
+  handleAsteroidHit(entity) {
+    const rock = getComponent(this.world, 'rock', entity);
+    const pos = getComponent(this.world, 'position', entity);
+    const vel = getComponent(this.world, 'velocity', entity);
+    this.addScore(ASTEROID_SCORE[rock.size] || 20);
+    this.spawnExplosion(pos.x, pos.y, rock.size);
+    destroyEntity(this.world, entity);
 
-      if (this.ship.alive && this.ship.invulnerable <= 0) {
-        const dx = asteroid.x - this.ship.x;
-        const dy = asteroid.y - this.ship.y;
-        const r = asteroid.radius + this.ship.radius * 0.75;
-        if (dx * dx + dy * dy < r * r) {
-          this.hitShip();
-          this.asteroids.splice(i, 1);
-          this.destroyAsteroid(asteroid);
-        }
-      }
-    }
-  }
-
-  destroyAsteroid(asteroid, source) {
-    this.spawnExplosion(asteroid.x, asteroid.y, asteroid.radius);
-    const nextSize = asteroid.size - 1;
-    if (nextSize >= 1) {
-      for (let n = 0; n < 2; n++) {
-        const angle = randomRange(0, TWO_PI);
-        const speed = ASTEROID_SPEED[nextSize] * randomRange(0.7, 1.2);
-        const radius = ASTEROID_SIZES[nextSize];
-        this.asteroids.push({
-          x: asteroid.x,
-          y: asteroid.y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          size: nextSize,
-          radius,
-          shape: makeAsteroidShape(radius),
-          rotation: randomRange(0, TWO_PI),
-          spin: randomRange(-1, 1),
-        });
-      }
-    }
-
-    this.addScore(ASTEROID_SCORE[asteroid.size]);
-    this.sounds.explode();
-
-    if (source && source.enemy) {
-      this.addScore(50);
-    }
-
-    try {
-      sendRocks(this.asteroids.map((rock) => ({
-        x: rock.x,
-        y: rock.y,
-        vx: rock.vx,
-        vy: rock.vy,
-        size: rock.size,
-      })));
-    } catch (err) {
-      /* ignore */
-    }
-  }
-
-  spawnExplosion(x, y, radius) {
-    const baseSize = this.explosionSprite.frameSize || radius * 2;
-    const size = Math.max(radius * 2, baseSize);
-    this.explosions.push({
-      x,
-      y,
-      size,
-      frameIndex: 0,
-      frameTimer: 0,
-    });
-  }
-
-  spawnPortalEffect(x, y, options = {}) {
-    const frameWidth = this.portalSprite.frameWidth || this.portalSprite.frameHeight || 0;
-    const referenceSize = frameWidth || (this.images?.portal?.naturalHeight || this.images?.portal?.height || 64);
-    const baseScale = referenceSize ? ((this.ship?.radius || SHIP_RADIUS) * (options.followShip ? 2.4 : 2.1)) / referenceSize : 1;
-    const effect = {
-      x,
-      y,
-      followShip: !!options.followShip,
-      frameIndex: 0,
-      frameTimer: 0,
-      scale: options.scale ?? baseScale,
-      rotation: options.rotation ?? randomRange(0, TWO_PI),
-      rotationSpeed: options.rotationSpeed ?? randomRange(-0.9, 0.9),
-      opacity: options.opacity ?? 1,
-    };
-    this.portalEffects.push(effect);
-  }
-
-  updateParticles(dt) {
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i];
-      p.life -= dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.vx *= 1 - dt * 0.8;
-      p.vy *= 1 - dt * 0.8;
-      if (p.life <= 0) this.particles.splice(i, 1);
-    }
-  }
-
-  updateExplosions(dt) {
-    if (!this.explosions.length) return;
-    const frameDuration = this.explosionSprite.frameDuration || 0.05;
-    const totalFrames = Math.max(1, this.explosionSprite.totalFrames || 1);
-    for (let i = this.explosions.length - 1; i >= 0; i--) {
-      const explosion = this.explosions[i];
-      explosion.frameTimer = (explosion.frameTimer || 0) + dt;
-      while (explosion.frameTimer >= frameDuration) {
-        explosion.frameTimer -= frameDuration;
-        explosion.frameIndex = (explosion.frameIndex || 0) + 1;
-      }
-      if ((explosion.frameIndex || 0) >= totalFrames) {
-        this.explosions.splice(i, 1);
-      }
-    }
-  }
-
-  updatePortals(dt) {
-    if (!this.portalEffects.length) return;
-    const frameDuration = Math.max(0.02, this.portalSprite.frameDuration || 0.08);
-    const totalFrames = Math.max(1, this.portalSprite.totalFrames || 1);
-    for (let i = this.portalEffects.length - 1; i >= 0; i--) {
-      const effect = this.portalEffects[i];
-      if (effect.followShip && this.ship) {
-        effect.x = this.ship.x;
-        effect.y = this.ship.y;
-      }
-
-      effect.frameTimer = (effect.frameTimer || 0) + dt;
-      while (effect.frameTimer >= frameDuration) {
-        effect.frameTimer -= frameDuration;
-        effect.frameIndex = (effect.frameIndex || 0) + 1;
-      }
-
-      effect.rotation = (effect.rotation || 0) + (effect.rotationSpeed || 0) * dt;
-      const denom = Math.max(1, totalFrames - 1);
-      const progress = Math.min(1, (effect.frameIndex || 0) / denom);
-      const fade = effect.followShip ? 0.35 : 0.65;
-      effect.opacity = Math.max(0, 1 - progress * fade);
-
-      if ((effect.frameIndex || 0) >= totalFrames) {
-        this.portalEffects.splice(i, 1);
-      }
-    }
-  }
-
-  updateRemote(dt) {
-    const now = performance.now();
-    for (const [id, ship] of this.remoteShips.entries()) {
-      if (now - ship.lastSeen > 2000) this.remoteShips.delete(id);
-    }
-
-    for (let i = this.remoteShots.length - 1; i >= 0; i--) {
-      const bullet = this.remoteShots[i];
-      bullet.life -= dt;
-      bullet.x += bullet.vx * dt;
-      bullet.y += bullet.vy * dt;
-      if (bullet.life <= 0) {
-        this.remoteShots.splice(i, 1);
-      }
-    }
-  }
-
-  spawnWave() {
-    const count = WAVE_ASTEROID_COUNT[Math.min(3, Math.ceil(this.wave / 2))] + Math.max(0, this.wave - 3);
-    const rocks = [];
-    for (let i = 0; i < count; i++) {
-      const edge = Math.floor(Math.random() * 4);
-      const size = 3;
-      let x = 0;
-      let y = 0;
-      if (edge === 0) { x = Math.random() * this.width; y = -60; }
-      if (edge === 1) { x = this.width + 60; y = Math.random() * this.height; }
-      if (edge === 2) { x = Math.random() * this.width; y = this.height + 60; }
-      if (edge === 3) { x = -60; y = Math.random() * this.height; }
-      const angle = angleTo(x, y, this.width / 2, this.height / 2) + randomRange(-0.5, 0.5);
-      const speed = ASTEROID_SPEED[size] * randomRange(0.6, 1.1);
-      const radius = ASTEROID_SIZES[size];
-      rocks.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        size,
-        radius,
-        shape: makeAsteroidShape(radius),
-        rotation: randomRange(0, TWO_PI),
-        spin: randomRange(-0.5, 0.5),
+    const splits = resolveSplitRules(this.waveConfig, rock.size);
+    if (!splits.length) return;
+    const baseSpeed = ASTEROID_SPEED[Math.max(1, rock.size - 1)];
+    for (const childSize of splits) {
+      const angle = Math.random() * TWO_PI;
+      const speed = baseSpeed * randomRange(0.8, 1.2);
+      this.spawnAsteroid(childSize, {
+        x: pos.x,
+        y: pos.y,
+        vx: vel.x * 0.3 + Math.cos(angle) * speed,
+        vy: vel.y * 0.3 + Math.sin(angle) * speed,
       });
     }
-    this.asteroids = rocks;
-    try {
-      sendRocks(rocks.map((rock) => ({ x: rock.x, y: rock.y, vx: rock.vx, vy: rock.vy, size: rock.size })));
-    } catch (err) {
-      /* ignore */
-    }
   }
 
-  applyWavePowerups() {
-    const prevMode = this.weaponMode;
-    if (this.wave >= 7) this.weaponMode = 'rapid';
-    else if (this.wave >= 4) this.weaponMode = 'burst';
-    else this.weaponMode = 'single';
-    this.hud.mode.textContent = this.weaponMode;
-    if (prevMode !== this.weaponMode) {
-      this.sounds.power();
-      this.showOverlay('Weapon Upgrade', `Your ship unlocked ${this.weaponMode.toUpperCase()} fire!`, true);
-      setTimeout(() => this.hideOverlay(), 1400);
-    }
+  advanceWave(dt) {
+    if (this.asteroidsRemaining() > 0) return;
+    this.waveSpawnDelay += dt;
+    if (this.waveSpawnDelay < 1.5) return;
+    this.wave++;
+    this.spawnWave();
   }
 
-  draw(dt) {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.clearRect(0, 0, this.width, this.height);
-
-    this.drawBackground(dt);
-
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
-    for (const star of this.starfield) {
-      star.twinkle += dt * star.speed;
-      const alpha = 0.3 + Math.sin(star.twinkle) * 0.2;
-      ctx.globalAlpha = alpha;
-      ctx.beginPath();
-      ctx.arc(star.x * this.width, star.y * this.height, star.r, 0, TWO_PI);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-
-    for (const particle of this.particles) {
-      ctx.fillStyle = particle.color;
-      ctx.globalAlpha = Math.max(0, particle.life / 0.6);
-      ctx.beginPath();
-      ctx.arc(particle.x, particle.y, 2.2, 0, TWO_PI);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-
-    this.drawPlayerBullets();
-    this.drawEnemyBullets();
-
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 2;
-    for (const asteroid of this.asteroids) {
-      this.drawAsteroid(asteroid);
-    }
-
-    this.drawExplosions();
-
-    for (const ship of this.remoteShips.values()) {
-      this.drawShipModel(ship.x, ship.y, ship.angle ?? -Math.PI / 2, 'rgba(94, 234, 212, 0.6)', 0.8);
-    }
-
-    this.drawRemoteShots();
-    this.drawPortals();
-
-    if (this.ship.alive) {
-      const blink = this.ship.invulnerable > 0 && Math.floor(this.ship.invulnerable * 10) % 2 === 0;
-      if (this.ship.invulnerable > 0) {
-        this.drawShield(this.ship.x, this.ship.y);
-      }
-      if (!blink) {
-        this.drawShipModel(this.ship.x, this.ship.y, this.ship.angle, '#6ee7b7');
-      }
-    }
-
-    ctx.restore();
+  asteroidsRemaining() {
+    const rocks = queryEntities(this.world, COMPONENT_FLAGS.rock);
+    return rocks.length;
   }
 
-  drawBackground(dt = 0) {
-    const ctx = this.ctx;
-    if (!ctx) return;
-    ctx.fillStyle = '#05070f';
-    ctx.fillRect(0, 0, this.width, this.height);
-
-    const layers = this.backgroundLayers;
-    if (!Array.isArray(layers) || !layers.length) return;
-
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    for (const layer of layers) {
-      const image = layer?.image;
-      if (!image || !this.isSpriteReady(image)) continue;
-      const width = image.naturalWidth || image.width || 0;
-      const height = image.naturalHeight || image.height || 0;
-      if (!width || !height) continue;
-
-      layer.offsetX = (layer.offsetX || 0) + (layer.speedX || 0) * dt;
-      layer.offsetY = (layer.offsetY || 0) + (layer.speedY || 0) * dt;
-
-      let offsetX = layer.offsetX % width;
-      let offsetY = layer.offsetY % height;
-      if (offsetX < 0) offsetX += width;
-      if (offsetY < 0) offsetY += height;
-
-      ctx.globalAlpha = layer.opacity ?? 1;
-      for (let x = -offsetX; x < this.width; x += width) {
-        for (let y = -offsetY; y < this.height; y += height) {
-          ctx.drawImage(image, x, y, width, height);
-        }
-      }
-
-      layer.offsetX = ((layer.offsetX % width) + width) % width;
-      layer.offsetY = ((layer.offsetY % height) + height) % height;
-    }
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
-
-  drawPlayerBullets() {
-    if (!this.bullets.length) return;
-    const ctx = this.ctx;
-    const sprite = this.bulletSprites.player;
-    if (sprite && this.isSpriteReady(sprite)) {
-      const width = sprite.naturalWidth || sprite.width;
-      const height = sprite.naturalHeight || sprite.height;
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      for (const bullet of this.bullets) {
-        ctx.drawImage(sprite, bullet.x - width / 2, bullet.y - height / 2, width, height);
-      }
-      ctx.restore();
-    } else {
-      ctx.strokeStyle = '#6ee7b7';
-      ctx.lineWidth = 2;
-      for (const bullet of this.bullets) {
-        ctx.beginPath();
-        ctx.arc(bullet.x, bullet.y, bullet.r, 0, TWO_PI);
-        ctx.stroke();
-      }
-    }
-  }
-
-  drawEnemyBullets() {
-    if (!this.enemyBullets.length) return;
-    const ctx = this.ctx;
-    const sprite = this.bulletSprites.enemy;
-    if (sprite && this.isSpriteReady(sprite)) {
-      const width = sprite.naturalWidth || sprite.width;
-      const height = sprite.naturalHeight || sprite.height;
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      for (const bullet of this.enemyBullets) {
-        ctx.save();
-        ctx.translate(bullet.x, bullet.y);
-        const angle = Math.atan2(bullet.vy, bullet.vx);
-        ctx.rotate(angle);
-        ctx.drawImage(sprite, -width / 2, -height / 2, width, height);
-        ctx.restore();
-      }
-      ctx.restore();
-    } else {
-      ctx.strokeStyle = 'rgba(248, 113, 113, 0.9)';
-      ctx.lineWidth = 2;
-      for (const bullet of this.enemyBullets) {
-        ctx.beginPath();
-        ctx.arc(bullet.x, bullet.y, 3, 0, TWO_PI);
-        ctx.stroke();
-      }
-    }
-  }
-
-  drawRemoteShots() {
-    if (!this.remoteShots.length) return;
-    const ctx = this.ctx;
-    const sprite = this.bulletSprites.remote;
-    if (sprite && this.isSpriteReady(sprite)) {
-      const width = sprite.naturalWidth || sprite.width;
-      const height = sprite.naturalHeight || sprite.height;
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      ctx.globalAlpha = 0.75;
-      for (const bullet of this.remoteShots) {
-        ctx.drawImage(sprite, bullet.x - width / 2, bullet.y - height / 2, width, height);
-      }
-      ctx.restore();
-    } else {
-      ctx.strokeStyle = 'rgba(94, 234, 212, 0.3)';
-      ctx.lineWidth = 1.5;
-      for (const bullet of this.remoteShots) {
-        ctx.beginPath();
-        ctx.arc(bullet.x, bullet.y, 2.5, 0, TWO_PI);
-        ctx.stroke();
-      }
-    }
-  }
-
-  drawExplosions() {
-    if (!this.explosions.length) return;
-    const ctx = this.ctx;
-    const sprite = this.images?.explosion;
-    if (sprite && this.isSpriteReady(sprite) && this.explosionSprite.frameSize) {
-      const frameSize = this.explosionSprite.frameSize;
-      const framesPerRow = this.explosionSprite.framesPerRow || 1;
-      const totalFrames = Math.max(1, this.explosionSprite.totalFrames || 1);
-      const frameDuration = this.explosionSprite.frameDuration || 0.05;
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      for (const explosion of this.explosions) {
-        const frameIndex = Math.min(totalFrames - 1, explosion.frameIndex || 0);
-        const sx = (frameIndex % framesPerRow) * frameSize;
-        const sy = Math.floor(frameIndex / framesPerRow) * frameSize;
-        const size = explosion.size || frameSize;
-        const half = size / 2;
-        const progress = Math.min(
-          1,
-          ((explosion.frameIndex || 0) + (explosion.frameTimer || 0) / frameDuration) / totalFrames,
-        );
-        ctx.globalAlpha = 0.9 - progress * 0.4;
-        ctx.drawImage(sprite, sx, sy, frameSize, frameSize, explosion.x - half, explosion.y - half, size, size);
-      }
-      ctx.restore();
-    } else {
-      ctx.save();
-      ctx.strokeStyle = 'rgba(248, 250, 252, 0.4)';
-      for (const explosion of this.explosions) {
-        const radius = (explosion.size || 0) / 2;
-        ctx.beginPath();
-        ctx.arc(explosion.x, explosion.y, radius, 0, TWO_PI);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-  }
-
-  drawPortals() {
-    if (!this.portalEffects.length) return;
-    const sprite = this.images?.portal;
-    if (!sprite || !this.isSpriteReady(sprite)) return;
-    const frameWidth = this.portalSprite.frameWidth || sprite.naturalHeight || sprite.height || 0;
-    const frameHeight = this.portalSprite.frameHeight || frameWidth;
-    if (!frameWidth || !frameHeight) return;
-    const framesPerRow = this.portalSprite.framesPerRow || Math.max(1, Math.floor((sprite.naturalWidth || sprite.width || frameWidth) / frameWidth));
-    const totalFrames = Math.max(1, this.portalSprite.totalFrames || framesPerRow);
-
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    for (const effect of this.portalEffects) {
-      const frameIndex = Math.min(totalFrames - 1, effect.frameIndex || 0);
-      const sx = (frameIndex % framesPerRow) * frameWidth;
-      const sy = Math.floor(frameIndex / framesPerRow) * frameHeight;
-      const baseFrame = frameWidth || 1;
-      const scale = effect.scale ?? ((this.ship?.radius || SHIP_RADIUS) * 2.3) / baseFrame;
-      const drawWidth = frameWidth * scale;
-      const drawHeight = frameHeight * scale;
-      ctx.globalAlpha = effect.opacity ?? 1;
-      ctx.save();
-      ctx.translate(effect.x ?? 0, effect.y ?? 0);
-      ctx.rotate(effect.rotation || 0);
-      ctx.drawImage(
-        sprite,
-        sx,
-        sy,
-        frameWidth,
-        frameHeight,
-        -drawWidth / 2,
-        -drawHeight / 2,
-        drawWidth,
-        drawHeight,
-      );
-      ctx.restore();
-    }
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
-
-  drawShield(x, y) {
-    const sprite = this.images?.shield;
-    if (!sprite || !this.isSpriteReady(sprite)) return;
-    const ctx = this.ctx;
-    const width = sprite.naturalWidth || sprite.width;
-    const height = sprite.naturalHeight || sprite.height;
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.globalAlpha = 0.85;
-    ctx.drawImage(sprite, x - width / 2, y - height / 2, width, height);
-    ctx.restore();
-  }
-
-  drawShipModel(x, y, angle, color, scale = 1) {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.scale(scale, scale);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(16, 0);
-    ctx.lineTo(-14, -10);
-    ctx.lineTo(-8, 0);
-    ctx.lineTo(-14, 10);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  drawAsteroid(asteroid) {
-    const ctx = this.ctx;
-    const shape = asteroid.shape || (asteroid.shape = makeAsteroidShape(asteroid.radius));
-    ctx.save();
-    ctx.translate(asteroid.x, asteroid.y);
-    ctx.rotate(asteroid.rotation);
-    ctx.beginPath();
-    if (shape.length) {
-      ctx.moveTo(shape[0].x, shape[0].y);
-      for (let i = 1; i < shape.length; i++) {
-        const point = shape[i];
-        ctx.lineTo(point.x, point.y);
-      }
-      ctx.closePath();
-    }
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  updateScoreDisplay() {
-    if (this.hud?.score) {
-      this.hud.score.textContent = String(this.score);
-      this.hud.score.dataset.gameScore = String(this.score);
-    }
-    if (this.hud?.best) {
-      this.hud.best.textContent = String(this.bestScore);
-    }
-    if (this.lastEmittedScore !== this.score) {
-      this.lastEmittedScore = this.score;
-      try {
-        window.parent?.postMessage?.({ type: 'GAME_SCORE', slug: SLUG, score: this.score }, '*');
-      } catch (err) {
-        /* ignore */
-      }
-    }
-    if (this.score > this.lastAchievementScore) {
-      this.lastAchievementScore = this.score;
-      emitEvent({ type: 'score', slug: SLUG, value: this.score });
-    }
-  }
-
-  addScore(value) {
-    this.score += value;
+  addScore(points) {
+    this.score += points;
     if (this.score > this.bestScore) {
       this.bestScore = this.score;
       this.persistBestScore();
     }
-    this.updateScoreDisplay();
+    this.hud.score.textContent = String(this.score);
+    this.hud.best.textContent = String(this.bestScore);
+  }
+
+  spawnThrusterParticles(pos, angle, vel) {
+    for (let i = 0; i < 2; i++) {
+      const entity = createEntity(this.world);
+      const speed = -120 + Math.random() * -40;
+      addComponent(this.world, 'position', entity, {
+        x: pos.x + Math.cos(angle + Math.PI) * (SHIP_RADIUS - 4) + randomRange(-3, 3),
+        y: pos.y + Math.sin(angle + Math.PI) * (SHIP_RADIUS - 4) + randomRange(-3, 3),
+      });
+      addComponent(this.world, 'velocity', entity, {
+        x: vel.x * 0.3 + Math.cos(angle) * speed + randomRange(-20, 20),
+        y: vel.y * 0.3 + Math.sin(angle) * speed + randomRange(-20, 20),
+      });
+      addComponent(this.world, 'collider', entity, { radius: 2 });
+      addComponent(this.world, 'particle', entity, { color: 'rgba(94, 234, 212, 0.8)', size: 2 });
+      addComponent(this.world, 'lifetime', entity, { remaining: 0.4, payload: 'particle' });
+    }
+  }
+
+  spawnExplosion(x, y, size) {
+    for (let i = 0; i < 12; i++) {
+      const angle = Math.random() * TWO_PI;
+      const speed = 80 + Math.random() * 180;
+      const entity = createEntity(this.world);
+      addComponent(this.world, 'position', entity, { x, y });
+      addComponent(this.world, 'velocity', entity, { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed });
+      addComponent(this.world, 'collider', entity, { radius: 1.8 });
+      addComponent(this.world, 'particle', entity, { color: 'rgba(239, 68, 68, 0.9)', size: 2 + size });
+      addComponent(this.world, 'lifetime', entity, { remaining: 0.6, payload: 'particle' });
+    }
+    try {
+      this.sounds.explode();
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  firePrimary(pos, vel, angle) {
+    this.bulletCooldown = 0.18;
+    const entity = createEntity(this.world);
+    const speed = 460;
+    addComponent(this.world, 'position', entity, {
+      x: pos.x + Math.cos(angle) * (SHIP_RADIUS + 6),
+      y: pos.y + Math.sin(angle) * (SHIP_RADIUS + 6),
+    });
+    addComponent(this.world, 'velocity', entity, {
+      x: vel.x + Math.cos(angle) * speed,
+      y: vel.y + Math.sin(angle) * speed,
+    });
+    addComponent(this.world, 'collider', entity, { radius: 3 });
+    addComponent(this.world, 'bullet', entity, {});
+    addComponent(this.world, 'lifetime', entity, { remaining: 0.9, payload: 'bullet' });
+    try {
+      this.sounds.laser();
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  shipDestroyed() {
+    const ship = getComponent(this.world, 'ship', this.shipEntity);
+    if (!ship.alive) return;
+    ship.alive = false;
+    ship.respawn = 2;
+    const shipPos = getComponent(this.world, 'position', this.shipEntity);
+    this.spawnExplosion(shipPos.x, shipPos.y, 2);
+    this.lives = Math.max(0, this.lives - 1);
+    this.updateLivesDisplay();
+    if (this.lives <= 0) {
+      this.gameOver = true;
+      this.paused = true;
+      this.endSession();
+      this.showOverlay('Game Over', 'Press Restart to try again.');
+    }
   }
 
   updateLivesDisplay() {
     if (!this.hud?.lives) return;
+    if (typeof document === 'undefined') return;
     this.hud.lives.innerHTML = '';
     for (let i = 0; i < this.lives; i++) {
-      const life = document.createElement('span');
-      life.className = 'asteroids-hud__life';
-      this.hud.lives.appendChild(life);
+      const span = document.createElement('span');
+      span.className = 'asteroids-hud__life';
+      this.hud.lives.appendChild(span);
     }
   }
 
-  hitShip() {
-    if (!this.ship.alive) return;
-    this.spawnExplosion(this.ship.x, this.ship.y, this.ship.radius * 1.5);
-    this.sounds.explode();
-    this.ship.alive = false;
-    this.ship.respawnTimer = 1.8;
-    this.lives--;
-    this.updateLivesDisplay();
-    if (this.lives <= 0) {
-      this.sounds.gameover();
-      this.gameOver = true;
-      this.endSession();
-      this.showOverlay('Game Over', `Final score: ${this.score}. Press restart to try again.`, true);
+  render(dt) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    ctx.save();
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, this.width, this.height);
+    ctx.fillStyle = '#030712';
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    // starfield
+    ctx.fillStyle = '#64748b';
+    for (const star of this.starfield) {
+      star.phase += dt * star.speed * 2.5;
+      const alpha = 0.35 + Math.sin(star.phase) * 0.25;
+      ctx.globalAlpha = clamp(alpha, 0.1, 0.6);
+      ctx.beginPath();
+      ctx.arc(star.x * this.width, star.y * this.height, 1.5, 0, TWO_PI);
+      ctx.fill();
     }
-  }
+    ctx.globalAlpha = 1;
 
-  respawnShip() {
-    if (this.lives <= 0) return;
-    this.ship = this.createShip();
-    this.ship.invulnerable = 2.5;
-    this.spawnPortalEffect(this.ship.x, this.ship.y, { followShip: true });
-  }
-
-  hyperspace() {
-    if (!this.ship.alive || this.ship.invulnerable > 0) return;
-    const originX = this.ship.x;
-    const originY = this.ship.y;
-    this.spawnPortalEffect(originX, originY, { rotationSpeed: randomRange(-1, 1) });
-    this.ship.x = Math.random() * this.width;
-    this.ship.y = Math.random() * this.height;
-    this.ship.vx *= 0.25;
-    this.ship.vy *= 0.25;
-    this.ship.invulnerable = 1.2;
-    this.spawnPortalEffect(this.ship.x, this.ship.y, { followShip: true });
-  }
-
-  togglePause() {
-    if (this.gameOver) return;
-    if (this.paused) this.resume(); else this.pause();
-  }
-
-  pause(fromShell = false) {
-    if (this.paused) return;
-    this.paused = true;
-    if (!fromShell) {
-      try { window.parent?.postMessage?.({ type: 'GAME_PAUSE', slug: SLUG }, '*'); } catch (err) { /* ignore */ }
+    const particles = queryEntities(this.world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.particle);
+    for (const entity of particles) {
+      const pos = getComponent(this.world, 'position', entity);
+      const particle = getComponent(this.world, 'particle', entity);
+      ctx.fillStyle = particle.color;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, particle.size, 0, TWO_PI);
+      ctx.fill();
     }
-    this.showOverlay('Paused', 'Press resume or P to continue.', false);
-  }
 
-  resume(fromShell = false) {
-    if (!this.paused && !this.gameOver) {
-      this.hideOverlay();
-      return;
+    const bullets = queryEntities(this.world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.bullet);
+    ctx.fillStyle = '#f8fafc';
+    for (const entity of bullets) {
+      const pos = getComponent(this.world, 'position', entity);
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, 2.5, 0, TWO_PI);
+      ctx.fill();
     }
-    if (this.gameOver) return;
-    this.paused = false;
-    this.hideOverlay();
-    if (!fromShell) {
-      try { window.parent?.postMessage?.({ type: 'GAME_RESUME', slug: SLUG }, '*'); } catch (err) { /* ignore */ }
+
+    const rocks = queryEntities(this.world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.rock);
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 2;
+    for (const entity of rocks) {
+      const pos = getComponent(this.world, 'position', entity);
+      const rot = getComponent(this.world, 'rotation', entity);
+      const rock = getComponent(this.world, 'rock', entity);
+      rot.angle += rock.spin * dt;
+      ctx.beginPath();
+      const shape = rock.shape;
+      for (let i = 0; i < shape.length; i++) {
+        const point = shape[i];
+        const px = pos.x + Math.cos(rot.angle) * point.x - Math.sin(rot.angle) * point.y;
+        const py = pos.y + Math.sin(rot.angle) * point.x + Math.cos(rot.angle) * point.y;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
     }
+
+    const ship = getComponent(this.world, 'ship', this.shipEntity);
+    const shipPos = getComponent(this.world, 'position', this.shipEntity);
+    const shipRot = getComponent(this.world, 'rotation', this.shipEntity);
+    if (ship.alive) {
+      const blink = ship.invulnerable > 0 && Math.floor(ship.invulnerable * 10) % 2 === 0;
+      if (!blink) {
+        ctx.save();
+        ctx.translate(shipPos.x, shipPos.y);
+        ctx.rotate(shipRot.angle);
+        ctx.strokeStyle = '#34d399';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(SHIP_RADIUS, 0);
+        ctx.lineTo(-SHIP_RADIUS * 0.8, SHIP_RADIUS * 0.6);
+        ctx.lineTo(-SHIP_RADIUS * 0.5, 0);
+        ctx.lineTo(-SHIP_RADIUS * 0.8, -SHIP_RADIUS * 0.6);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
   }
 
-  restart() {
-    this.gameOver = false;
-    this.score = 0;
-    this.wave = 1;
-    this.weaponMode = 'single';
-    this.lives = 3;
-    this.ship = this.createShip();
-    this.asteroids = [];
-    this.bullets = [];
-    this.enemyBullets = [];
-    this.particles = [];
-    this.explosions = [];
-    this.portalEffects = [];
-    this.waveTimer = 0;
-    this.fireCooldown = 0;
-    this.paused = false;
-    this.hideOverlay();
-    this.updateScoreDisplay();
-    this.hud.wave.textContent = String(this.wave);
-    this.hud.mode.textContent = this.weaponMode;
-    this.updateLivesDisplay();
-    this.applyWavePowerups();
-    this.spawnWave();
-    this.startSession();
-    this.spawnPortalEffect(this.ship.x, this.ship.y, { followShip: true });
+  getScore() {
+    return this.score;
   }
 
-  showOverlay(title, message, once = false) {
+  getBestScore() {
+    return this.bestScore;
+  }
+
+  getShipState() {
+    const pos = getComponent(this.world, 'position', this.shipEntity);
+    const vel = getComponent(this.world, 'velocity', this.shipEntity);
+    const rot = getComponent(this.world, 'rotation', this.shipEntity);
+    const ship = getComponent(this.world, 'ship', this.shipEntity);
+    return {
+      x: pos?.x ?? null,
+      y: pos?.y ?? null,
+      vx: vel?.x ?? null,
+      vy: vel?.y ?? null,
+      angle: rot?.angle ?? null,
+      invulnerable: ship?.invulnerable ?? null,
+      alive: ship?.alive ?? null,
+    };
+  }
+
+  getRockState() {
+    const rocks = queryEntities(this.world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.rock);
+    return rocks.map((entity) => {
+      const pos = getComponent(this.world, 'position', entity);
+      const vel = getComponent(this.world, 'velocity', entity);
+      const rock = getComponent(this.world, 'rock', entity);
+      const col = getComponent(this.world, 'collider', entity);
+      return {
+        x: pos?.x ?? null,
+        y: pos?.y ?? null,
+        vx: vel?.x ?? null,
+        vy: vel?.y ?? null,
+        radius: col?.radius ?? null,
+        size: rock?.size ?? null,
+        spin: rock?.spin ?? null,
+      };
+    });
+  }
+
+  isPaused() {
+    return this.paused;
+  }
+
+  isGameOver() {
+    return this.gameOver;
+  }
+
+  getWave() {
+    return this.wave;
+  }
+
+  showOverlay(title, message) {
     if (!this.hud?.overlay) return;
     this.hud.overlayTitle.textContent = title;
     this.hud.overlayMessage.textContent = message;
-    this.hud.overlay.classList.add('is-active');
-    if (once) {
-      clearTimeout(this.overlayTimeout);
-      this.overlayTimeout = setTimeout(() => this.hideOverlay(), 2000);
-    }
+    this.hud.overlay.classList.add('is-visible');
   }
 
   hideOverlay() {
     if (!this.hud?.overlay) return;
-    this.hud.overlay.classList.remove('is-active');
+    this.hud.overlay.classList.remove('is-visible');
   }
 
-  handleVisibilityChange() {
-    if (document.hidden) {
-      this.pause(true);
-    }
+  restoreBestScore() {
+    if (typeof localStorage === 'undefined') return 0;
+    const value = localStorage.getItem(STORAGE_KEYS.best);
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  handleShellMessage(event) {
-    const data = event && typeof event.data === 'object' ? event.data : null;
-    if (!data) return;
-    if (data.type === 'GAME_PAUSE' || data.type === 'GG_PAUSE') this.pause(true);
-    if (data.type === 'GAME_RESUME' || data.type === 'GG_RESUME') this.resume(true);
-    if (data.type === 'GG_RESTART') this.restart();
-  }
-
-  destroy() {
-    cancelAnimationFrame(this.rafId);
-    this.rafId = 0;
-    setRafActive(false, 'destroy');
-    recordMilestone('game:destroyed');
-    if (activeGame === this) {
-      activeGame = null;
-    }
-    this.controls?.dispose?.();
-    window.removeEventListener('resize', this.resize);
-    document.removeEventListener('visibilitychange', this.events.onVisibility);
-    window.removeEventListener('ggshell:pause', this.events.onShellPause);
-    window.removeEventListener('ggshell:resume', this.events.onShellResume);
-    window.removeEventListener('message', this.events.onShellMessage);
-    this.hud?.root?.remove();
-    this.hud?.overlay?.remove();
-    this.hud?.players?.remove();
-    this.endSession();
-    try { netDisconnect(); } catch (err) { /* ignore */ }
+  persistBestScore() {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(STORAGE_KEYS.best, String(this.bestScore));
   }
 }
-
-export function boot(context = {}) {
+function boot(context = {}) {
   const readyState = typeof document !== 'undefined' ? document.readyState : 'unknown';
   recordMilestone('boot:requested', { readyState });
   bootTracker.entry.bootAttempts = (bootTracker.entry.bootAttempts || 0) + 1;
