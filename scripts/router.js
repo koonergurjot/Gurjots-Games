@@ -4,14 +4,39 @@ export class Router {
     this.routes = [];
     window.addEventListener('popstate', () => this.resolve(location.pathname, { mode: 'pop', visited: new Set() }));
     document.addEventListener('click', e => {
-      const a = e.target.closest('a');
-      if (a && a instanceof HTMLAnchorElement && a.origin === location.origin) {
-        const href = a.getAttribute('href');
-        if (href && href.startsWith('/')) {
-          e.preventDefault();
-          this.navigate(href);
-        }
+      if (e.defaultPrevented) {
+        return;
       }
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        return;
+      }
+      const target = e.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const a = target.closest('a');
+      if (!a || !(a instanceof HTMLAnchorElement)) {
+        return;
+      }
+      if (a.target && a.target !== '_self') {
+        return;
+      }
+      if (a.hasAttribute('download')) {
+        return;
+      }
+      const rel = a.getAttribute('rel');
+      if (rel && /\bexternal\b/i.test(rel)) {
+        return;
+      }
+      if (a.origin !== location.origin) {
+        return;
+      }
+      const href = a.getAttribute('href');
+      if (!href || !href.startsWith('/')) {
+        return;
+      }
+      e.preventDefault();
+      this.navigate(href);
     });
   }
 

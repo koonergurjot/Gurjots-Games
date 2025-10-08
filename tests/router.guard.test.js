@@ -112,4 +112,42 @@ describe('Router guard navigation', () => {
     replaceSpy.mockRestore();
     history.replaceState({}, '', originalPathname);
   });
+
+  test('router does not hijack modified or external link clicks', async () => {
+    const outlet = document.createElement('div');
+    const router = new Router(outlet);
+    const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue();
+
+    const anchor = document.createElement('a');
+    anchor.href = '/games';
+    document.body.appendChild(anchor);
+
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, metaKey: true }));
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }));
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, altKey: true }));
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 1 }));
+
+    anchor.target = '_blank';
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    anchor.removeAttribute('target');
+
+    anchor.setAttribute('download', 'file');
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    anchor.removeAttribute('download');
+
+    anchor.setAttribute('rel', 'external noopener');
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    anchor.setAttribute('rel', 'noopener');
+
+    const child = document.createElement('span');
+    anchor.appendChild(child);
+    child.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(navigateSpy).toHaveBeenCalledTimes(1);
+    expect(navigateSpy).toHaveBeenCalledWith('/games');
+
+    anchor.remove();
+    navigateSpy.mockRestore();
+  });
 });
