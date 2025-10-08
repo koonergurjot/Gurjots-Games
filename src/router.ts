@@ -1,10 +1,12 @@
 export type Params = Record<string, string>;
-export type Loader = (params: Params) => Promise<{ default: (el: HTMLElement, params: Params) => void }>;
+export type Loader = (params: Params) => Promise<{ default: (el: HTMLElement, params: Params, context: ResolveContext) => void }>;
 type ResolveMode = 'push' | 'replace' | 'pop';
 
 export interface ResolveContext {
   mode: ResolveMode;
   visited: Set<string>;
+  url: URL;
+  path: string;
 }
 
 export type Guard = (params: Params, context: ResolveContext) => Promise<boolean | string> | boolean | string;
@@ -22,7 +24,12 @@ export class Router {
 
   constructor(outlet: HTMLElement) {
     this.outlet = outlet;
-    window.addEventListener('popstate', () => this.resolve(location.pathname, { mode: 'pop', visited: new Set() }));
+    window.addEventListener('popstate', () =>
+      this.resolve(this.buildFullPath(location.pathname + location.search + location.hash), {
+        mode: 'pop',
+        visited: new Set(),
+      })
+    );
     document.addEventListener('click', e => {
       if (e.defaultPrevented) {
         return;
@@ -90,21 +97,24 @@ export class Router {
   }
 
   async resolve(path: string, context?: Partial<ResolveContext>) {
+    const { url, fullPath } = this.parsePath(path);
     const resolveContext: ResolveContext = {
       mode: context?.mode ?? 'pop',
       visited: context?.visited ?? new Set<string>(),
+      url,
+      path: fullPath,
     };
 
-    if (resolveContext.visited.has(path)) {
-      await this.renderNotFound(resolveContext.mode, path);
+    if (resolveContext.visited.has(fullPath)) {
+      await this.renderNotFound(fullPath, resolveContext);
       return;
     }
 
-    resolveContext.visited.add(path);
+    resolveContext.visited.add(fullPath);
 
-    const match = this.match(path);
+    const match = this.match(url.pathname);
     if (!match) {
-      await this.renderNotFound(resolveContext.mode, path);
+      await this.renderNotFound(fullPath, resolveContext);
       return;
     }
 
@@ -115,8 +125,7 @@ export class Router {
     }
 
     if (guardResult === true) {
-      await this.renderRoute(route, params);
-      this.commitHistory(path, resolveContext.mode);
+      await this.renderRoute(route, params, resolveContext);
       return;
     }
 
@@ -130,7 +139,7 @@ export class Router {
       return;
     }
 
-    await this.renderNotFound(resolveContext.mode, path);
+    await this.renderNotFound(fullPath, resolveContext);
   }
 
   private match(path: string) {
@@ -148,19 +157,20 @@ export class Router {
     return undefined;
   }
 
-  private async renderRoute(route: Route, params: Params) {
+  private async renderRoute(route: Route, params: Params, context: ResolveContext) {
     const mod = await route.loader(params);
     this.outlet.innerHTML = '';
     if (typeof mod.default === 'function') {
-      mod.default(this.outlet, params);
+      mod.default(this.outlet, params, context);
     }
+    this.commitHistory(context.path, context.mode);
   }
 
-  private async renderNotFound(mode: ResolveMode, path: string) {
+  private async renderNotFound(path: string, context: ResolveContext) {
     const mod = await import('../scripts/pages/not-found.js');
     this.outlet.innerHTML = '';
     mod.default(this.outlet);
-    this.commitHistory(path, mode);
+    this.commitHistory(path, context.mode);
   }
 
   private commitHistory(path: string, mode: ResolveMode) {
@@ -169,6 +179,20 @@ export class Router {
     } else if (mode === 'replace') {
       history.replaceState({}, '', path);
     }
+  }
+
+  private parsePath(input: string) {
+    let target = input || '/';
+    if (!target.startsWith('/')) {
+      target = '/' + target.replace(/^#+/, '');
+    }
+    const url = new URL(target, location.origin);
+    const fullPath = this.buildFullPath(url.pathname + url.search + url.hash);
+    return { url, fullPath };
+  }
+
+  private buildFullPath(path: string) {
+    return path || '/';
   }
 }
 
