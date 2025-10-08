@@ -12,6 +12,12 @@ const ASTEROID_SIZES = [0, 14, 26, 40]; // index by size tier (1-3)
 const ASTEROID_SEGMENTS = 8;
 const ASTEROID_SPEED = [0, 120, 90, 70];
 const ASTEROID_SCORE = [0, 100, 50, 20];
+const STAR_LAYER_CONFIG = [
+  { density: 0.2, speed: 30, size: 2, color: '#e2e8f0' },
+  { density: 0.1, speed: 12, size: 1.5, color: '#cbd5f5' },
+  { density: 0.05, speed: 5, size: 1.1, color: '#94a3b8' },
+];
+const STAR_TWINKLE_SPEED = { min: 0.5, max: 1.2 };
 const STORAGE_KEYS = {
   best: `${SLUG}:best`,
 };
@@ -741,7 +747,8 @@ class AsteroidsGame {
 
     this.waveSpawnDelay = 0;
 
-    this.starfield = this.createStars(120);
+    this.starfieldTime = 0;
+    this.starfield = [];
 
     this.sounds = {
       laser: createAudio('../../assets/audio/laser.wav', 0.45),
@@ -754,6 +761,7 @@ class AsteroidsGame {
     if (this.hud?.wave) this.hud.wave.textContent = String(this.wave);
 
     this.resizeCanvas();
+    this.starfield = this.createStarLayers();
     if (typeof window !== 'undefined') {
       window.addEventListener('resize', this.handleResize);
       document.addEventListener('visibilitychange', this.handleVisibility);
@@ -790,6 +798,7 @@ class AsteroidsGame {
 
   handleResize() {
     this.resizeCanvas();
+    this.starfield = this.createStarLayers();
   }
 
   resizeCanvas() {
@@ -877,17 +886,41 @@ class AsteroidsGame {
     };
   }
 
-  createStars(count) {
-    const stars = [];
-    for (let i = 0; i < count; i++) {
-      stars.push({
-        x: Math.random(),
-        y: Math.random(),
-        speed: 0.15 + Math.random() * 0.3,
-        phase: Math.random() * TWO_PI,
-      });
-    }
-    return stars;
+  createStarLayers() {
+    const width = this.width || BASE_WIDTH;
+    const height = this.height || BASE_HEIGHT;
+    const areaFactor = (width * height) / 10000;
+    return STAR_LAYER_CONFIG.map((config) => {
+      const count = Math.max(1, Math.round(config.density * areaFactor));
+      const stars = [];
+      for (let i = 0; i < count; i++) {
+        stars.push(this.createStar(width, height));
+      }
+      return {
+        color: config.color,
+        speed: config.speed,
+        size: config.size,
+        stars,
+      };
+    });
+  }
+
+  createStar(width, height) {
+    return {
+      x: Math.random() * width,
+      y: Math.random() * height,
+      phase: Math.random() * TWO_PI,
+      twinkleSpeed: randomRange(STAR_TWINKLE_SPEED.min, STAR_TWINKLE_SPEED.max),
+    };
+  }
+
+  recycleStar(star) {
+    const width = this.width || BASE_WIDTH;
+    const height = this.height || BASE_HEIGHT;
+    star.x = width + Math.random() * width * 0.25;
+    star.y = Math.random() * height;
+    star.phase = Math.random() * TWO_PI;
+    star.twinkleSpeed = randomRange(STAR_TWINKLE_SPEED.min, STAR_TWINKLE_SPEED.max);
   }
 
   spawnShip() {
@@ -1287,14 +1320,16 @@ class AsteroidsGame {
     ctx.fillRect(0, 0, this.width, this.height);
 
     // starfield
-    ctx.fillStyle = '#64748b';
-    for (const star of this.starfield) {
-      star.phase += dt * star.speed * 2.5;
-      const alpha = 0.35 + Math.sin(star.phase) * 0.25;
-      ctx.globalAlpha = clamp(alpha, 0.1, 0.6);
-      ctx.beginPath();
-      ctx.arc(star.x * this.width, star.y * this.height, 1.5, 0, TWO_PI);
-      ctx.fill();
+    this.starfieldTime += dt;
+    for (const layer of this.starfield) {
+      ctx.fillStyle = layer.color;
+      for (const star of layer.stars) {
+        star.x -= layer.speed * dt;
+        if (star.x < -layer.size) this.recycleStar(star);
+        const alpha = 0.4 + 0.6 * Math.sin(star.phase + this.starfieldTime * star.twinkleSpeed);
+        ctx.globalAlpha = clamp(alpha, 0, 1);
+        ctx.fillRect(star.x, star.y, layer.size, layer.size);
+      }
     }
     ctx.globalAlpha = 1;
 
