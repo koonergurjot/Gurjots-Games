@@ -11,6 +11,14 @@ flowchart LR
 
 The client-side interface communicates with modular game logic. State is saved locally, while optional APIs provide multiplayer and leaderboards.
 
+## Game catalog in plain language
+
+Think of the catalog as a single, always-updated list that every part of the site reads from. Each game record keeps the basics you would expect on a store shelf — its short name, a friendly blurb, how you play it, and the type of tech behind it. We also keep supporting details like art and audio packages, the current build number, a pointer to its thumbnail sketch, any switches we can flip on or off, and the lightest hardware it needs to run smoothly.
+
+That list lives in a simple text file (`games.json`). Build tools and the live site both read that same file so new games instantly appear in grids, filters, and detail pages. The same list also feeds search listings and the sitemap, so Google and friends always see the latest lineup without extra work.
+
+Artwork is purposefully minimalist: every thumbnail is drawn in code instead of being uploaded as a heavy image. This keeps the look steady across the library and helps pages load quickly on every device.
+
 ## Updating Game Data
 
 Game metadata displayed on the landing page lives in the repository root `games.json` file.
