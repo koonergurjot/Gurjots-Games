@@ -91,16 +91,57 @@ const bootStatus = (() => {
   return status;
 })();
 
-const bootLog = bootStatus.log || function(){};
+const nativeBootLog = typeof bootStatus.log === 'function' ? bootStatus.log.bind(bootStatus) : null;
+const bootLogEntries = [];
+const MAX_DIAGNOSTIC_LOGS = 40;
+let diagnosticsEnabled = false;
+let pendingDiagnosticsFrame = false;
+
+function resolveBootLogLevel(event, fallbackLevel) {
+  const name = String(event || '').toLowerCase();
+  if (/error|fail|crash/.test(name)) return 'error';
+  if (/stall|missing|pending|timeout|watchdog|warn/.test(name)) return 'warn';
+  return fallbackLevel || 'info';
+}
+
+function bootLog(event, detail) {
+  let entry = null;
+  if (nativeBootLog) {
+    try {
+      entry = nativeBootLog(event, detail);
+    } catch (err) {
+      entry = {
+        at: performance.now(),
+        event: `${event}:log-error`,
+        detail: { error: err?.message || String(err), original: detail || null },
+        level: 'error',
+        message: `[snake] ${event} (log failed)`
+      };
+    }
+  }
+  const record = entry && typeof entry === 'object'
+    ? { ...entry }
+    : {
+        at: performance.now(),
+        event,
+        detail: detail || null,
+        level: resolveBootLogLevel(event, entry?.level),
+        message: `[snake] ${event}`
+      };
+  bootLogEntries.push(record);
+  if (bootLogEntries.length > MAX_DIAGNOSTIC_LOGS) {
+    bootLogEntries.splice(0, bootLogEntries.length - MAX_DIAGNOSTIC_LOGS);
+  }
+  scheduleDiagnosticsRender();
+  return entry ?? record;
+}
+
+bootStatus.log = bootLog;
 bootLog('init:start', { readyState: document.readyState });
 
 const SLUG = 'snake';
 
 const SPRITE_SOURCES = {
-  background: [
-    '/assets/backgrounds/parallax/arcade_layer1.png',
-    '/assets/backgrounds/parallax/arcade_layer2.png'
-  ],
   snakeHead: '/assets/sprites/enemy2.png',
   snakeBody: '/assets/sprites/block.png',
   fruit: '/assets/sprites/collectibles/gem_red.png',
@@ -112,9 +153,11 @@ const SPRITE_SOURCES = {
 };
 
 const spriteCache = {};
-
-const BACKGROUND_SCROLL_SPEEDS = [0.004, 0.008];
+const backgroundImageCache = new Map();
+let backgroundLayers = [];
+let backgroundScrollSpeeds = [0.004, 0.008];
 let backgroundScrollOffsets = [];
+let backgroundOverlayColor = null;
 let lastBackgroundTime = performance.now();
 
 function ensureSprite(name) {
@@ -140,6 +183,32 @@ function ensureSprite(name) {
 Object.keys(SPRITE_SOURCES).forEach(ensureSprite);
 
 preloadFirstFrameAssets(SLUG).catch(() => {});
+
+function loadBackgroundImage(src) {
+  if (!src) return null;
+  if (backgroundImageCache.has(src)) return backgroundImageCache.get(src);
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = src;
+  backgroundImageCache.set(src, img);
+  return img;
+}
+
+function setBackgroundTheme(themeId) {
+  const theme = BACKGROUND_THEMES.find(t => t.id === themeId) || BACKGROUND_THEMES[0];
+  backgroundThemeId = theme.id;
+  backgroundScrollSpeeds = Array.isArray(theme.speeds) && theme.speeds.length ? theme.speeds.slice() : [0.004, 0.008];
+  backgroundOverlayColor = theme.overlay || null;
+  backgroundLayers = theme.layers.map((layer, idx) => ({
+    image: loadBackgroundImage(layer.src),
+    alpha: typeof layer.alpha === 'number' ? layer.alpha : (idx === 0 ? 0.9 : 0.7)
+  }));
+  backgroundScrollOffsets = new Array(backgroundLayers.length).fill(0);
+  bootLog('theme:background', {
+    id: backgroundThemeId,
+    speeds: backgroundScrollSpeeds.map(v => Number(v.toFixed(4)))
+  });
+}
 
 function ensureGameCanvas(){
   let canvas = document.getElementById('game');
@@ -199,23 +268,81 @@ function resolveHudContainer() {
 
 const hud = resolveHudContainer();
 const scoreNode = document.getElementById('score');
-hud.innerHTML = `Arrows/WASD or swipe • R restart • P pause
-  <label><input type="checkbox" id="dailyToggle"/> Daily</label>
-  <ol id="dailyScores" style="margin:4px 0 0 0;padding-left:20px;font-size:14px"></ol>
-  <label>Snake <select id="snakeSkin"></select></label>
-  <label>Fruit <select id="fruitSkin"></select></label>
-  <label>Board <select id="boardSkin"></select></label>
-  <label>Size <select id="sizeSel">
-      <option value="16">16×16</option>
-      <option value="24">24×24</option>
-      <option value="32">32×32</option>
-    </select></label>
-  <label>Boundary <select id="wrapSel">
-      <option value="1">Wrap</option>
-      <option value="0">No Wrap</option>
-    </select></label>
-  <div id="debugPanel" aria-live="polite" aria-label="Debug info" style="margin-left:8px;padding:4px 8px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:12px;line-height:1.4;min-width:140px;"></div>
+hud.innerHTML = `
+  <div class="hud-panel hud-panel--controls">
+    <div class="hud-panel__header">
+      <h2 class="hud-panel__title">Run Controls</h2>
+      <p class="hud-panel__subtitle">Arrows/WASD or swipe • R restart • P pause</p>
+    </div>
+    <div class="hud-panel__body">
+      <label class="hud-field hud-field--toggle"><input type="checkbox" id="dailyToggle"/> Daily seed</label>
+      <label class="hud-field">Board size
+        <select id="sizeSel">
+          <option value="16">16×16</option>
+          <option value="24">24×24</option>
+          <option value="32">32×32</option>
+        </select>
+      </label>
+      <label class="hud-field">Boundary
+        <select id="wrapSel">
+          <option value="1">Wrap</option>
+          <option value="0">No Wrap</option>
+        </select>
+      </label>
+    </div>
+  </div>
+  <div class="hud-panel hud-panel--skins">
+    <div class="hud-panel__header">
+      <h2 class="hud-panel__title">Style Lab</h2>
+    </div>
+    <div class="hud-panel__body">
+      <label class="hud-field">Snake <select id="snakeSkin"></select></label>
+      <label class="hud-field">Fruit <select id="fruitSkin"></select></label>
+      <label class="hud-field">Board <select id="boardSkin"></select></label>
+      <label class="hud-field">Backdrop <select id="backgroundSkin"></select></label>
+    </div>
+  </div>
+  <div class="hud-panel hud-panel--missions">
+    <div class="hud-panel__header">
+      <h2 class="hud-panel__title">Missions</h2>
+    </div>
+    <div class="hud-panel__body">
+      <ul id="missionList" class="hud-missionList" aria-live="polite"></ul>
+    </div>
+  </div>
+  <div class="hud-panel hud-panel--combo">
+    <div class="hud-panel__header">
+      <h2 class="hud-panel__title">Combo Meter</h2>
+    </div>
+    <div class="hud-panel__body">
+      <div id="comboMeter" class="hud-meter" role="meter" aria-valuemin="0" aria-valuemax="10" aria-valuenow="0" aria-label="Combo streak">x0</div>
+      <div id="comboTimer" class="hud-meter__timer" aria-live="polite"></div>
+    </div>
+  </div>
+  <div class="hud-panel hud-panel--diagnostics">
+    <div class="hud-panel__header">
+      <h2 class="hud-panel__title">Diagnostics</h2>
+    </div>
+    <div class="hud-panel__body">
+      <label class="hud-field hud-field--toggle"><input type="checkbox" id="diagnosticsToggle"/> Live watchdog feed</label>
+      <div id="debugPanel" aria-live="polite" aria-label="Debug info" class="hud-diagnostics"></div>
+      <div id="watchdogLog" class="hud-logList" aria-live="polite"></div>
+    </div>
+  </div>
+  <div class="hud-panel hud-panel--daily">
+    <div class="hud-panel__header">
+      <h2 class="hud-panel__title">Daily Leaderboard</h2>
+    </div>
+    <div class="hud-panel__body">
+      <ol id="dailyScores" class="hud-dailyList"></ol>
+    </div>
+  </div>
 `;
+const missionListNode = document.getElementById('missionList');
+const comboMeterNode = document.getElementById('comboMeter');
+const comboTimerNode = document.getElementById('comboTimer');
+const diagnosticsToggle = document.getElementById('diagnosticsToggle');
+const watchdogLogNode = document.getElementById('watchdogLog');
 
 const storageState = {
   native: null,
@@ -293,6 +420,17 @@ function parseJSONSafe(raw, fallback) {
   }
 }
 
+diagnosticsEnabled = safeStorageGetItem(DIAGNOSTICS_KEY) === '1';
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const params = new URLSearchParams(location.search);
 const DAILY_SEED = new Date().toISOString().slice(0, 10);
 const DAILY_MODE = params.get('daily') === '1';
@@ -319,6 +457,8 @@ function renderScores(){
 window.renderScores = renderScores;
 renderScores();
 toggle.onchange = ()=>{ params.set('daily', toggle.checked ? '1':'0'); location.search = params.toString(); };
+renderMissions();
+renderComboPanel();
 const sizeSel = document.getElementById('sizeSel');
 const wrapSel = document.getElementById('wrapSel');
 const N = parseInt(params.get('size') || '32');
@@ -401,11 +541,88 @@ const BOARD_THEMES = [
   { id: 'dark', name: 'Dark', colors: [tokens['board-dark1'] || '#111623', tokens['board-dark2'] || '#0f1320'], unlock: p => true },
   { id: 'light', name: 'Light', colors: [tokens['board-light1'] || '#f3f4f6', tokens['board-light2'] || '#e5e7eb'], unlock: p => p.plays >= 3 }
 ];
+const BACKGROUND_THEMES = [
+  {
+    id: 'arcade',
+    name: 'Arcade Neon',
+    layers: [
+      { src: '/assets/backgrounds/parallax/arcade_layer1.png', alpha: 0.9 },
+      { src: '/assets/backgrounds/parallax/arcade_layer2.png', alpha: 0.7 }
+    ],
+    speeds: [0.004, 0.008],
+    overlay: 'rgba(126, 58, 242, 0.14)',
+    unlock: () => true
+  },
+  {
+    id: 'city',
+    name: 'Metro Mirage',
+    layers: [
+      { src: '/assets/backgrounds/parallax/city_layer1.png', alpha: 0.85 },
+      { src: '/assets/backgrounds/parallax/city_layer2.png', alpha: 0.65 }
+    ],
+    speeds: [0.003, 0.006],
+    overlay: 'rgba(56, 189, 248, 0.16)',
+    unlock: p => p.plays >= 3
+  },
+  {
+    id: 'forest',
+    name: 'Verdant Drift',
+    layers: [
+      { src: '/assets/backgrounds/parallax/forest_layer1.png', alpha: 0.9 },
+      { src: '/assets/backgrounds/parallax/forest_layer2.png', alpha: 0.7 }
+    ],
+    speeds: [0.0025, 0.0045],
+    overlay: 'rgba(74, 222, 128, 0.15)',
+    unlock: p => p.plays >= 6
+  },
+  {
+    id: 'space',
+    name: 'Star Drifter',
+    layers: [
+      { src: '/assets/backgrounds/parallax/space_layer1.png', alpha: 0.85 },
+      { src: '/assets/backgrounds/parallax/space_layer2.png', alpha: 0.7 }
+    ],
+    speeds: [0.006, 0.012],
+    overlay: 'rgba(129, 140, 248, 0.18)',
+    unlock: p => p.best >= 20
+  }
+];
 let FRUITS = ['🍎', '🍌', '🍇', '🍒', '🍊', '🍉'];
 let FRUIT_ART = FRUITS.map(icon => ({ icon, label: icon, spriteKey: 'fruit' }));
 let gemSpriteIndex = 0;
 const PROGRESS_KEY = 'snake:progress';
 const SKIN_KEY = 'snake:skin';
+const DIAGNOSTICS_KEY = 'snake:diagnostics';
+const MISSIONS = [
+  {
+    id: 'score-30',
+    name: 'Score 30',
+    goal: 30,
+    type: 'score',
+    description: 'Reach 30 points in a single run.'
+  },
+  {
+    id: 'combo-4',
+    name: 'Combo Artist',
+    goal: 4,
+    type: 'combo',
+    description: 'Chain snacks before the combo timer expires.'
+  },
+  {
+    id: 'plays-10',
+    name: 'Seasoned Pilot',
+    goal: 10,
+    type: 'plays',
+    description: 'Complete 10 lifetime runs.'
+  },
+  {
+    id: 'daily-clear',
+    name: 'Daily Clear',
+    goal: 1,
+    type: 'daily',
+    description: "Win today's daily challenge to log performance."
+  }
+];
 const defaultProgress = { plays: 0, best: 0 };
 const progressData = parseJSONSafe(safeStorageGetItem(PROGRESS_KEY), defaultProgress) || defaultProgress;
 let progress = {
@@ -417,11 +634,13 @@ function saveProgress() {
 }
 progress.plays++;
 saveProgress();
+renderMissions();
 const selectedData = parseJSONSafe(safeStorageGetItem(SKIN_KEY), {}) || {};
 const selected = (selectedData && typeof selectedData === 'object') ? selectedData : {};
 let snakeSkinId = typeof selected.snake === 'string' ? selected.snake : 'default';
 let fruitSkinId = typeof selected.fruit === 'string' ? selected.fruit : 'classic';
 let boardSkinId = typeof selected.board === 'string' ? selected.board : 'dark';
+let backgroundThemeId = typeof selected.background === 'string' ? selected.background : BACKGROUND_THEMES[0].id;
 function ensureUnlocked(id, arr) {
   const s = arr.find(t => t.id === id);
   return s && s.unlock(progress) ? id : arr[0].id;
@@ -429,8 +648,14 @@ function ensureUnlocked(id, arr) {
 snakeSkinId = ensureUnlocked(snakeSkinId, SNAKE_SKINS);
 fruitSkinId = ensureUnlocked(fruitSkinId, FRUIT_SKINS);
 boardSkinId = ensureUnlocked(boardSkinId, BOARD_THEMES);
+backgroundThemeId = ensureUnlocked(backgroundThemeId, BACKGROUND_THEMES);
 function saveSkinSelection() {
-  safeStorageSetItem(SKIN_KEY, JSON.stringify({ snake: snakeSkinId, fruit: fruitSkinId, board: boardSkinId }));
+  safeStorageSetItem(SKIN_KEY, JSON.stringify({
+    snake: snakeSkinId,
+    fruit: fruitSkinId,
+    board: boardSkinId,
+    background: backgroundThemeId
+  }));
 }
 function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
@@ -444,6 +669,10 @@ let obstacles = [];
 let won = false;
 let winHandled = false;
 const spriteEffects = [];
+const COMBO_WINDOW_MS = 3500;
+let comboCount = 0;
+let comboBest = 0;
+let comboExpiry = 0;
 
 const gridTextureState = {
   canvas: null,
@@ -680,6 +909,7 @@ function applySkin() {
   FRUITS = FRUIT_ART.map(art => art.icon);
   gemSpriteIndex = 0;
   fruitColor = f.color;
+  setBackgroundTheme(backgroundThemeId);
   saveSkinSelection();
   invalidateGridTexture();
 }
@@ -687,6 +917,7 @@ function populateSkinSelects() {
   const ss = document.getElementById('snakeSkin');
   const fs = document.getElementById('fruitSkin');
   const bs = document.getElementById('boardSkin');
+  const bg = document.getElementById('backgroundSkin');
   function fill(sel, arr, cur, set) {
     if (!sel) return;
     sel.innerHTML = '';
@@ -704,6 +935,130 @@ function populateSkinSelects() {
   fill(ss, SNAKE_SKINS, snakeSkinId, v => snakeSkinId = v);
   fill(fs, FRUIT_SKINS, fruitSkinId, v => fruitSkinId = v);
   fill(bs, BOARD_THEMES, boardSkinId, v => boardSkinId = v);
+  fill(bg, BACKGROUND_THEMES, backgroundThemeId, v => backgroundThemeId = v);
+}
+
+function getMissionStats(mission) {
+  const goal = Number(mission.goal) || 0;
+  let value = 0;
+  let statusText = '';
+  let disabled = false;
+  switch (mission.type) {
+    case 'score':
+      value = score;
+      statusText = `${Math.min(value, goal)} / ${goal} pts`;
+      break;
+    case 'combo':
+      value = comboBest;
+      statusText = `Best x${Math.max(1, comboBest)} / x${goal}`;
+      break;
+    case 'plays':
+      value = progress.plays;
+      statusText = `${Math.min(value, goal)} / ${goal} runs`;
+      break;
+    case 'daily':
+      value = DAILY_MODE && won ? 1 : 0;
+      disabled = !DAILY_MODE;
+      statusText = disabled ? 'Play Daily mode to progress' : `${value}/${goal} clears`;
+      break;
+    default:
+      value = 0;
+      statusText = `${value}/${goal}`;
+  }
+  const percent = goal > 0 ? Math.min(1, value / goal) : 0;
+  const complete = percent >= 1;
+  if (complete) statusText = 'Complete!';
+  return { value, goal, percent, complete, statusText, disabled };
+}
+
+function renderMissions() {
+  if (!missionListNode) return;
+  const items = MISSIONS.map(mission => {
+    const stats = getMissionStats(mission);
+    const percent = Math.round(stats.percent * 100);
+    const name = escapeHtml(mission.name);
+    const description = escapeHtml(mission.description);
+    const status = escapeHtml(stats.statusText);
+    return `
+      <li class="hud-mission" data-complete="${stats.complete ? 'true' : 'false'}" data-disabled="${stats.disabled ? 'true' : 'false'}">
+        <div class="hud-mission__name">${name}</div>
+        <div class="hud-mission__desc">${description}</div>
+        <div class="hud-mission__meter"><span style="width:${percent}%;"></span></div>
+        <div class="hud-mission__status">${status}</div>
+      </li>
+    `;
+  }).join('');
+  missionListNode.innerHTML = items;
+}
+
+function renderComboPanel(now = performance.now()) {
+  if (!comboMeterNode) return;
+  const active = comboCount > 0 && now <= comboExpiry;
+  const value = active ? comboCount : 0;
+  const bestForMax = Math.max(comboBest, MISSIONS.find(m => m.type === 'combo')?.goal || 5, 5);
+  comboMeterNode.textContent = active ? `x${comboCount}` : 'x0';
+  comboMeterNode.dataset.active = active ? 'true' : 'false';
+  comboMeterNode.setAttribute('aria-valuenow', String(value));
+  comboMeterNode.setAttribute('aria-valuemax', String(bestForMax));
+  comboMeterNode.setAttribute('aria-valuetext', active ? `Combo x${comboCount}` : 'No combo');
+  if (comboTimerNode) {
+    if (active) {
+      const remaining = Math.max(0, comboExpiry - now);
+      comboTimerNode.textContent = `${(remaining / 1000).toFixed(1)}s window • Best x${Math.max(comboBest, comboCount)}`;
+    } else {
+      comboTimerNode.textContent = comboBest > 0 ? `Best combo x${comboBest}` : 'Chain snacks quickly to start a combo!';
+    }
+  }
+}
+
+function registerComboHit(now = performance.now()) {
+  if (now <= comboExpiry) comboCount += 1;
+  else comboCount = 1;
+  comboExpiry = now + COMBO_WINDOW_MS;
+  if (comboCount > comboBest) comboBest = comboCount;
+  renderComboPanel(now);
+  renderMissions();
+  scheduleDiagnosticsRender();
+}
+
+function decayCombo(now = performance.now()) {
+  if (comboCount > 0 && now > comboExpiry) {
+    comboCount = 0;
+    renderComboPanel(now);
+    renderMissions();
+  }
+}
+
+function setDiagnosticsEnabled(enabled) {
+  diagnosticsEnabled = !!enabled;
+  if (diagnosticsToggle) diagnosticsToggle.checked = diagnosticsEnabled;
+  if (diagnosticsEnabled) {
+    if (debugPanel) debugPanel.style.display = 'block';
+    if (watchdogLogNode) watchdogLogNode.style.display = 'block';
+    updateDebugPanel();
+  } else {
+    if (debugPanel) {
+      debugPanel.style.display = 'none';
+      debugPanel.textContent = '';
+    }
+    if (watchdogLogNode) {
+      watchdogLogNode.style.display = 'none';
+      watchdogLogNode.textContent = '';
+    }
+  }
+  safeStorageSetItem(DIAGNOSTICS_KEY, diagnosticsEnabled ? '1' : '0');
+}
+
+function scheduleDiagnosticsRender() {
+  if (!diagnosticsEnabled) return;
+  if (pendingDiagnosticsFrame) return;
+  pendingDiagnosticsFrame = true;
+  const cb = () => {
+    pendingDiagnosticsFrame = false;
+    updateDebugPanel();
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(cb);
+  else setTimeout(cb, 32);
 }
 let paused = false;
 let level = 1;
@@ -762,10 +1117,67 @@ let foodsEaten = 0;
 let lastReplayRecord = parseJSONSafe(safeStorageGetItem(REPLAY_STORAGE_KEY), null);
 
 const debugPanel = document.getElementById('debugPanel');
+if (diagnosticsToggle) {
+  diagnosticsToggle.checked = diagnosticsEnabled;
+  diagnosticsToggle.addEventListener('change', () => setDiagnosticsEnabled(diagnosticsToggle.checked));
+}
+setDiagnosticsEnabled(diagnosticsEnabled);
 
 function updateDebugPanel() {
-  if (!debugPanel) return;
-  debugPanel.innerHTML = `Tick <strong>${tickCounter}</strong><br/>Length <strong>${snake.length}</strong><br/>Food slots <strong>${lastFoodCandidateCount}</strong>`;
+  if (!debugPanel || !diagnosticsEnabled) return;
+  const now = performance.now();
+  const raf = bootStatus.watchdogs?.raf || null;
+  const rafGap = raf?.lastTick ? Math.max(0, Math.round(now - raf.lastTick)) : null;
+  const rafFirst = raf?.firstTick && bootStatus.started ? Math.max(0, Math.round(raf.firstTick - bootStatus.started)) : null;
+  const lastLog = bootLogEntries.length ? bootLogEntries[bootLogEntries.length - 1] : null;
+  const canvasWatch = bootStatus.watchdogs?.canvas;
+  const canvasStatus = canvasWatch?.interval ? 'pending' : 'ready';
+  debugPanel.style.display = 'block';
+  debugPanel.dataset.level = lastLog?.level || 'info';
+  const lastLogEvent = lastLog ? escapeHtml(lastLog.event) : '—';
+  const canvasStatusHtml = escapeHtml(canvasStatus);
+  debugPanel.innerHTML = `
+    Tick <strong>${tickCounter}</strong><br/>
+    Length <strong>${snake.length}</strong><br/>
+    Combo best <strong>x${comboBest}</strong><br/>
+    Food slots <strong>${lastFoodCandidateCount}</strong><br/>
+    RAF gap <strong>${rafGap != null ? escapeHtml(String(rafGap)) + ' ms' : '—'}</strong>${rafFirst != null ? ` (start +${escapeHtml(String(rafFirst))} ms)` : ''}<br/>
+    Canvas <strong>${canvasStatusHtml}</strong><br/>
+    Last log <strong>${lastLogEvent}</strong>
+  `;
+  if (watchdogLogNode) {
+    const entries = bootLogEntries.slice(-6).reverse();
+    watchdogLogNode.style.display = 'block';
+    if (!entries.length) {
+      watchdogLogNode.innerHTML = '<div class="hud-log hud-log--info"><span class="hud-log__message">No watchdog activity recorded.</span></div>';
+    } else {
+      watchdogLogNode.innerHTML = entries.map(entry => {
+        const rel = bootStatus.started ? Math.max(0, entry.at - bootStatus.started) : entry.at;
+        const relText = `${(rel / 1000).toFixed(1)}s`;
+        let detailText = '';
+        if (entry.detail && typeof entry.detail === 'object') {
+          const detailPairs = Object.entries(entry.detail).slice(0, 2)
+            .map(([key, value]) => {
+              const safeKey = escapeHtml(key);
+              const snippet = escapeHtml(String(value).slice(0, 28));
+              return `${safeKey}:${snippet}`;
+            });
+          if (detailPairs.length) detailText = detailPairs.join(' • ');
+        }
+        const safeTime = escapeHtml(relText);
+        const safeMessage = escapeHtml(entry.event);
+        const safeDetail = detailText ? `<span class="hud-log__detail">${detailText}</span>` : '';
+        const level = entry.level || 'info';
+        return `
+          <div class="hud-log hud-log--${level}">
+            <span class="hud-log__time">${safeTime}</span>
+            <span class="hud-log__message">${safeMessage}</span>
+            ${safeDetail}
+          </div>
+        `;
+      }).join('');
+    }
+  }
 }
 
 function saveReplayRecord(record) {
@@ -868,6 +1280,11 @@ function resetGame(reason = 'manual', options = {}) {
   spriteEffects.length = 0;
   speedMs = SPEED_BASE_MS;
   score = 0;
+  comboCount = 0;
+  comboBest = 0;
+  comboExpiry = 0;
+  renderComboPanel();
+  renderMissions();
   const now = performance.now();
   lastTickTime = now;
   fruitSpawnTime = now;
@@ -883,6 +1300,7 @@ function resetGame(reason = 'manual', options = {}) {
   if (!skipProgress) {
     progress.plays++;
     saveProgress();
+    renderMissions();
   }
   populateSkinSelects();
   buildBoard(null);
@@ -1101,6 +1519,7 @@ function step() {
     snake.pop();
   }
   if (consumed) {
+    registerComboHit(performance.now());
     food = spawnFood();
     fruitSpawnTime = performance.now();
   }
@@ -1121,6 +1540,8 @@ function draw() {
   const offsetY = (c.height - side) / 2;
   const backgroundDelta = Math.min(Math.max(time - lastBackgroundTime, 0), 1000);
   lastBackgroundTime = time;
+  decayCombo(time);
+  renderComboPanel(time);
   // CELL is derived from the square side length so that N cells always fit exactly.
   CELL = side / N;
   // Store offsets so any canvas-space interaction can subtract them before using CELL.
@@ -1130,42 +1551,37 @@ function draw() {
   ctx.clearRect(0, 0, c.width, c.height);
 
   let backgroundDrawn = false;
-  const bg = ensureSprite('background');
-  if (Array.isArray(bg)) {
-    if (backgroundScrollOffsets.length !== bg.length) backgroundScrollOffsets = new Array(bg.length).fill(0);
+  const layers = Array.isArray(backgroundLayers) ? backgroundLayers : [];
+  if (layers.length) {
+    if (backgroundScrollOffsets.length !== layers.length) backgroundScrollOffsets = new Array(layers.length).fill(0);
     ctx.save();
     ctx.translate(offsetX, offsetY);
-    bg.forEach((layer, idx) => {
-      if (!layer || !layer.complete || !layer.naturalWidth || !layer.naturalHeight) return;
-      const speed = BACKGROUND_SCROLL_SPEEDS[idx] ?? BACKGROUND_SCROLL_SPEEDS[BACKGROUND_SCROLL_SPEEDS.length - 1] ?? 0.004;
-      const width = layer.naturalWidth;
-      const height = layer.naturalHeight;
+    layers.forEach((layer, idx) => {
+      const image = layer?.image;
+      if (!image || !image.complete || !image.naturalWidth || !image.naturalHeight) return;
+      const speed = backgroundScrollSpeeds[idx] ?? backgroundScrollSpeeds[backgroundScrollSpeeds.length - 1] ?? 0.004;
+      const width = image.naturalWidth;
+      const height = image.naturalHeight;
       if (!width || !height) return;
       backgroundScrollOffsets[idx] = (backgroundScrollOffsets[idx] + backgroundDelta * speed) % width;
       const scrollX = backgroundScrollOffsets[idx];
       ctx.save();
-      ctx.globalAlpha = idx === 0 ? 0.9 : 0.7;
+      ctx.globalAlpha = typeof layer.alpha === 'number' ? layer.alpha : (idx === 0 ? 0.9 : 0.7);
       for (let x = -width; x < side + width; x += width) {
         for (let y = -height; y < side + height; y += height) {
-          ctx.drawImage(layer, x - scrollX, y, width, height);
+          ctx.drawImage(image, x - scrollX, y, width, height);
         }
       }
       ctx.restore();
       backgroundDrawn = true;
     });
-    ctx.restore();
-  } else if (bg && bg.complete && bg.naturalWidth) {
-    ctx.save();
-    ctx.translate(offsetX, offsetY);
-    const pattern = ctx.createPattern(bg, 'repeat');
-    if (pattern) {
-      ctx.fillStyle = pattern;
+    if (backgroundDrawn && backgroundOverlayColor) {
+      ctx.save();
+      ctx.fillStyle = backgroundOverlayColor;
       ctx.fillRect(0, 0, side, side);
-    } else {
-      ctx.drawImage(bg, 0, 0, side, side);
+      ctx.restore();
     }
     ctx.restore();
-    backgroundDrawn = true;
   }
   if (!backgroundDrawn) {
     ctx.fillStyle = boardColors[0];
@@ -1319,6 +1735,7 @@ function saveScore(s) {
   progress.best = Math.max(progress.best, s);
   saveProgress();
   populateSkinSelects();
+  renderMissions();
   if (window.LB) {
     LB.submitScore(GAME_ID, s, DAILY_MODE ? DAILY_SEED : null);
     try { renderScores(); } catch { }
