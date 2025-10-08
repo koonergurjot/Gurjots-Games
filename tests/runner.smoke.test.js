@@ -19,6 +19,7 @@ function installCanvasStub() {
     setTransform: vi.fn(),
     clearRect: vi.fn(),
     fillRect: vi.fn(),
+    drawImage: vi.fn(),
     beginPath: vi.fn(),
     ellipse: vi.fn(),
     fill: vi.fn(),
@@ -121,7 +122,18 @@ describe('runner gameplay smoke test', () => {
   });
 
   it('launches the game, increments score, and stops on collision', async () => {
+    const readyPromise = new Promise(resolve => {
+      const bridge = window.Runner || (window.Runner = {});
+      const queue = Array.isArray(bridge.onReady) ? bridge.onReady : [];
+      if (!Array.isArray(bridge.onReady)) bridge.onReady = queue;
+      queue.push(game => resolve(game));
+    });
+
     await import('../games/runner/main.js');
+    const runner = await readyPromise;
+
+    runner?.applyResume?.({ emitEvent: false });
+    runner?.start?.();
 
     const scoreEl = document.getElementById('score');
     const shareBtn = document.getElementById('shareBtn');
@@ -130,12 +142,12 @@ describe('runner gameplay smoke test', () => {
     expect(Number(scoreEl.textContent)).toBeGreaterThan(0);
     expect(shareBtn.hidden).toBe(true);
 
-    window.loadRunnerLevel({
+    runner?.loadLevel?.({
       background: { clouds: [], buildings: [], foreground: [] },
       obstacles: [
         { x: 120, y: 0, w: 30, h: 120 },
       ],
-    });
+    }, { resetScore: true, silent: false, autoStart: true });
 
     expect(Number(scoreEl.textContent)).toBe(0);
 

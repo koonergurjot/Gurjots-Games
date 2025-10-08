@@ -52,10 +52,40 @@ fxCtx.setTransform(dpr,0,0,dpr,0,0);
 const S=cssSize/COLS;
 statusEl=requireElementById('status');
 const depthEl=/** @type {HTMLSelectElement} */ (requireElementById('difficulty'));
-const puzzleSelect=/** @type {HTMLSelectElement} */ (requireElementById('puzzle-select'));
+const timeControlSelect=/** @type {HTMLSelectElement} */ (requireElementById('time-control'));
+const clockModeLabelEl=requireElementById('clock-mode-label');
+const clockElements={
+  w:{
+    root:requireElementById('clock-player-white'),
+    time:requireElementById('clock-w-time'),
+    increment:requireElementById('clock-w-increment'),
+  },
+  b:{
+    root:requireElementById('clock-player-black'),
+    time:requireElementById('clock-b-time'),
+    increment:requireElementById('clock-b-increment'),
+  },
+};
+const trainingStartBtn=/** @type {HTMLButtonElement} */ (requireElementById('training-start'));
+const trainingHintBtn=/** @type {HTMLButtonElement} */ (requireElementById('training-hint'));
+const trainingStatusEl=requireElementById('training-status');
+const trainingProgressEl=requireElementById('training-progress');
+const trainingStreakEl=requireElementById('training-streak');
 const lobbyStatusEl=requireElementById('lobby-status');
 const rankingsList=/** @type {HTMLOListElement} */ (requireElementById('rankings'));
 const findMatchBtn=/** @type {HTMLButtonElement} */ (requireElementById('find-match'));
+const evaluationBarFill=requireElementById('evaluation-bar-fill');
+const evaluationScoreEl=requireElementById('evaluation-score');
+const evaluationHistoryCanvas=requireCanvas('evaluation-history');
+const evaluationHistoryCtx=require2dContext(evaluationHistoryCanvas);
+const evaluationSwingsList=requireElementById('evaluation-swings');
+const evalRect=evaluationHistoryCanvas.getBoundingClientRect();
+const evalCssWidth=Math.max(160, evalRect.width||220);
+const evalCssHeight=Math.max(120, evalRect.height||140);
+const evalDpr=window.devicePixelRatio||1;
+evaluationHistoryCanvas.width=Math.round(evalCssWidth*evalDpr);
+evaluationHistoryCanvas.height=Math.round(evalCssHeight*evalDpr);
+evaluationHistoryCtx.setTransform(evalDpr,0,0,evalDpr,0,0);
 const EMPTY = '.';
 // Simple FEN start
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
@@ -63,6 +93,10 @@ const COLORS={w:1,b:-1};
 let board=[], turn='w', sel=null, moves=[], over=false;
 let lastMove=null; let lastMoveInfo=null; let premove=null;
 let puzzleIndex=-1, puzzleStep=0;
+let puzzleStreak=0;
+let bestPuzzleStreak=0;
+let puzzleHintUsed=false;
+let hintMove=null;
 let anim=null;
 let castleRights={w:{K:true,Q:true},b:{K:true,Q:true}};
 let epTarget=null; // {x,y} square available for en passant capture
@@ -112,8 +146,29 @@ function onState(listener){
 }
 ChessNamespace.onState = onState;
 
+const TIME_CONTROLS=[
+  { id:'none', label:'Free Play (∞)', baseMs:0, incrementMs:0, summary:'Free play — no clock' },
+  { id:'rapid', label:'Rapid 10 | 5', baseMs:10*60*1000, incrementMs:5000, summary:'Rapid • 10 min +5s' },
+  { id:'blitz', label:'Blitz 5 | 3', baseMs:5*60*1000, incrementMs:3000, summary:'Blitz • 5 min +3s' },
+  { id:'bullet', label:'Bullet 1 | 0', baseMs:60*1000, incrementMs:0, summary:'Bullet • 1 min' },
+  { id:'classic', label:'Classical 15 | 10', baseMs:15*60*1000, incrementMs:10000, summary:'Classical • 15 min +10s' },
+];
+const timeControlMap=new Map(TIME_CONTROLS.map(tc=>[tc.id,tc]));
+let activeTimeControl=timeControlMap.get(timeControlSelect.value)||timeControlMap.get('rapid')||TIME_CONTROLS[0];
+timeControlSelect.value=activeTimeControl.id;
+clockModeLabelEl.textContent=activeTimeControl.summary;
 const moveTimers={w:0,b:0};
+const clockState={w:activeTimeControl.baseMs||0,b:activeTimeControl.baseMs||0};
+const incrementFlash={w:0,b:0};
 let turnStartedAt=null;
+const INCREMENT_FLASH_DURATION=1400;
+const CLOCK_EPSILON=10; // ms tolerance before flagging
+
+const evaluationHistory=[];
+const advantageSwings=[];
+let halfMoveCounter=0;
+const EVAL_SWING_THRESHOLD=150; // centipawns
+const EVAL_HISTORY_LIMIT=120;
 
 const PIECE_VALUES={p:100,n:320,b:330,r:500,q:900,k:0};
 
@@ -127,7 +182,7 @@ function nowMs(){
 function resetMoveTimers(){
   moveTimers.w=0;
   moveTimers.b=0;
-  turnStartedAt=nowMs();
+  resetClocks();
 }
 
 function snapshotTimers(){
@@ -135,6 +190,351 @@ function snapshotTimers(){
     w: Math.round(moveTimers.w),
     b: Math.round(moveTimers.b),
   };
+}
+
+function resetClocks(){
+  const base=activeTimeControl.baseMs||0;
+  clockState.w=base;
+  clockState.b=base;
+  incrementFlash.w=0;
+  incrementFlash.b=0;
+  if(base>0 && puzzleIndex<0 && !over){
+    turnStartedAt=nowMs();
+  }else if(base>0){
+    turnStartedAt=nowMs();
+  }else{
+    turnStartedAt=nowMs();
+  }
+  updateClockDisplay();
+}
+
+function stopClock(){
+  turnStartedAt=null;
+  updateClockDisplay();
+}
+
+function getClockSnapshot(){
+  if(!activeTimeControl || activeTimeControl.baseMs<=0) return null;
+  return {
+    control:activeTimeControl.id,
+    remaining:{
+      w: Math.round(getClockRemaining('w')),
+      b: Math.round(getClockRemaining('b')),
+    },
+  };
+}
+
+function getClockRemaining(color){
+  if(!activeTimeControl || activeTimeControl.baseMs<=0) return 0;
+  const base=clockState[color];
+  if(turn===color && turnStartedAt!==null && !over && puzzleIndex<0){
+    return Math.max(0, base-(nowMs()-turnStartedAt));
+  }
+  return Math.max(0, base);
+}
+
+function formatClock(ms, short=false){
+  if(ms===null) return '–';
+  if(ms===Infinity) return '∞';
+  if(ms<=0) return short?'0.0':'0:00';
+  const totalSeconds=Math.floor(ms/1000);
+  const minutes=Math.floor(totalSeconds/60);
+  const seconds=totalSeconds%60;
+  if(minutes>=1){
+    const secStr=seconds.toString().padStart(2,'0');
+    return `${minutes}:${secStr}`;
+  }
+  const tenths=Math.floor((ms%1000)/100);
+  return `${seconds}.${tenths}`;
+}
+
+function updateClockDisplay(){
+  if(!clockElements.w||!clockElements.b) return;
+  const now=nowMs();
+  const active=(color)=>turn===color && turnStartedAt!==null && !over && puzzleIndex<0 && activeTimeControl.baseMs>0;
+  ['w','b'].forEach(color=>{
+    const el=clockElements[color];
+    if(!el) return;
+    const remaining=activeTimeControl.baseMs>0?getClockRemaining(color):null;
+    const timeText=activeTimeControl.baseMs>0?formatClock(remaining):'∞';
+    if(el.time) el.time.textContent=timeText;
+    if(el.root){
+      el.root.classList.toggle('chess-clock__player--active', active(color));
+    }
+    if(el.increment){
+      if(incrementFlash[color] && (now-incrementFlash[color])<INCREMENT_FLASH_DURATION){
+        const incText=activeTimeControl.incrementMs>0?`+${formatClock(activeTimeControl.incrementMs,true)}`:'';
+        el.increment.textContent=incText;
+        el.increment.classList.add('chess-clock__increment--visible');
+      }else{
+        el.increment.textContent='';
+        el.increment.classList.remove('chess-clock__increment--visible');
+      }
+    }
+  });
+}
+
+function startClockTicker(){
+  if(typeof requestAnimationFrame!=='function') return;
+  if(startClockTicker.started) return;
+  startClockTicker.started=true;
+  function tick(){
+    updateClockDisplay();
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+function resetEvaluationTracking(){
+  evaluationHistory.length=0;
+  advantageSwings.length=0;
+  halfMoveCounter=0;
+  recordEvaluationSample({ skipIncrement:true });
+}
+
+function recordEvaluationSample(options={}){
+  const score=evaluateBoardScore();
+  if(!options.skipIncrement) halfMoveCounter++;
+  evaluationHistory.push({ ply:halfMoveCounter, score });
+  if(evaluationHistory.length>EVAL_HISTORY_LIMIT) evaluationHistory.shift();
+  const prev=evaluationHistory[evaluationHistory.length-2];
+  if(prev){
+    const delta=score-prev.score;
+    if(Math.abs(delta)>=EVAL_SWING_THRESHOLD){
+      advantageSwings.unshift({
+        ply:halfMoveCounter,
+        score,
+        delta,
+        mover:options.mover||null,
+      });
+      if(advantageSwings.length>6) advantageSwings.pop();
+    }
+  }
+  updateEvaluationVisualization(score);
+  return score;
+}
+
+function formatEvalScore(score){
+  const pawns=score/100;
+  const precision=Math.abs(pawns)<10?1:0;
+  const formatted=pawns.toFixed(precision);
+  return (pawns>=0?'+':'')+formatted;
+}
+
+function formatEvalDelta(delta){
+  const pawns=Math.abs(delta)/100;
+  const precision=pawns<10?1:0;
+  const base=pawns.toFixed(precision);
+  return `${delta>=0?'+':'-'}${base}`;
+}
+
+function updateEvaluationVisualization(currentScore){
+  const score=typeof currentScore==='number'?currentScore:evaluateBoardScore();
+  if(evaluationScoreEl) evaluationScoreEl.textContent=formatEvalScore(score);
+  const magnitudes=evaluationHistory.map(e=>Math.abs(e.score));
+  magnitudes.push(Math.abs(score));
+  const maxAbs=Math.max(400, ...magnitudes);
+  if(evaluationBarFill){
+    const pct=(score+maxAbs)/(maxAbs*2);
+    evaluationBarFill.style.height=`${Math.round(pct*100)}%`;
+  }
+  drawEvaluationHistory(maxAbs);
+  updateAdvantageSwingList();
+}
+
+function drawEvaluationHistory(maxAbs){
+  if(!evaluationHistoryCtx) return;
+  evaluationHistoryCtx.clearRect(0,0,evalCssWidth,evalCssHeight);
+  const entries=evaluationHistory.length?evaluationHistory:[{ ply:0, score:0 }];
+  const step=entries.length>1?(evalCssWidth/(entries.length-1)):0;
+  const toY=(score)=>{
+    const pct=(score+maxAbs)/(maxAbs*2);
+    return evalCssHeight-(pct*evalCssHeight);
+  };
+  // zero line
+  evaluationHistoryCtx.strokeStyle='rgba(148, 163, 184, 0.35)';
+  evaluationHistoryCtx.lineWidth=1;
+  const zeroY=toY(0);
+  evaluationHistoryCtx.beginPath();
+  evaluationHistoryCtx.moveTo(0, zeroY);
+  evaluationHistoryCtx.lineTo(evalCssWidth, zeroY);
+  evaluationHistoryCtx.stroke();
+
+  evaluationHistoryCtx.strokeStyle='rgba(125, 211, 252, 0.85)';
+  evaluationHistoryCtx.lineWidth=2;
+  evaluationHistoryCtx.beginPath();
+  entries.forEach((entry, idx)=>{
+    const x=idx*step;
+    const y=toY(entry.score);
+    if(idx===0) evaluationHistoryCtx.moveTo(x,y);
+    else evaluationHistoryCtx.lineTo(x,y);
+  });
+  evaluationHistoryCtx.stroke();
+}
+
+function updateAdvantageSwingList(){
+  if(!evaluationSwingsList) return;
+  evaluationSwingsList.innerHTML='';
+  if(!advantageSwings.length){
+    const li=document.createElement('li');
+    li.textContent='No big swings yet — keep playing!';
+    li.className='evaluation-swings__empty';
+    evaluationSwingsList.appendChild(li);
+    return;
+  }
+  advantageSwings.forEach(entry=>{
+    const li=document.createElement('li');
+    const mover=entry.mover==='b'?'Black':'White';
+    const moveNo=Math.max(1, Math.ceil(entry.ply/2));
+    const verb=entry.delta>=0?'surges':'slips';
+    li.textContent=`Move ${moveNo}: ${mover} ${verb} ${formatEvalDelta(entry.delta)} to ${formatEvalScore(entry.score)}`;
+    evaluationSwingsList.appendChild(li);
+  });
+}
+
+function updateTrainingHUD(){
+  if(!trainingStatusEl || !trainingProgressEl || !trainingStreakEl) return;
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  const total=puzzles.length;
+  if(onlineMode){
+    trainingStatusEl.textContent='Training is unavailable during online play.';
+    trainingProgressEl.textContent='';
+  } else if(puzzleIndex>=0 && puzzles[puzzleIndex]){
+    const puzzle=puzzles[puzzleIndex];
+    const steps=Array.isArray(puzzle.solution)?puzzle.solution.length:0;
+    const displayStep=Math.min(puzzleStep+1, Math.max(steps,1));
+    trainingStatusEl.textContent=puzzle.goal||`Challenge ${puzzleIndex+1}`;
+    if(steps>0){
+      trainingProgressEl.textContent=`Step ${displayStep} / ${steps}`;
+    } else {
+      trainingProgressEl.textContent=`Challenge ${puzzleIndex+1} of ${total}`;
+    }
+  } else {
+    trainingStatusEl.textContent='Start a guided challenge to sharpen your tactics.';
+    trainingProgressEl.textContent=total?`${total} challenges available`:'No challenges available.';
+  }
+  const streakLabel=(bestPuzzleStreak>0 && puzzleStreak!==bestPuzzleStreak)
+    ?`Streak ${puzzleStreak} (Best ${bestPuzzleStreak})`
+    :`Streak ${puzzleStreak}`;
+  trainingStreakEl.textContent=streakLabel;
+  if(trainingStartBtn) trainingStartBtn.disabled=onlineMode;
+  if(trainingHintBtn){
+    trainingHintBtn.disabled=onlineMode || puzzleIndex<0;
+  }
+}
+
+function startPuzzleLadder(){
+  if(onlineMode){
+    status('Training is unavailable during online play.');
+    return;
+  }
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  if(!puzzles.length){
+    status('No training challenges available.');
+    return;
+  }
+  puzzleStreak=0;
+  puzzleHintUsed=false;
+  hintMove=null;
+  loadPuzzle(0,{ reason:'training-start' });
+}
+
+function showPuzzleHint(){
+  if(onlineMode || puzzleIndex<0) return;
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  const puzzle=puzzles[puzzleIndex];
+  if(!puzzle || !Array.isArray(puzzle.solution) || !puzzle.solution.length) return;
+  const stepIndex=Math.min(puzzleStep, puzzle.solution.length-1);
+  hintMove=strToMove(puzzle.solution[stepIndex]);
+  puzzleHintUsed=true;
+  puzzleStreak=0;
+  updateTrainingHUD();
+  status('Hint highlighted — streak reset.');
+  draw();
+}
+
+function clearHint(){ hintMove=null; }
+
+function failPuzzle(message){
+  puzzleHintUsed=false;
+  clearHint();
+  puzzleStreak=0;
+  updateTrainingHUD();
+  status(message||'Incorrect, try again.');
+  loadPuzzle(puzzleIndex,{ reason:'puzzle-retry' });
+}
+
+function handlePuzzleSolved(){
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  if(!puzzles.length || puzzleIndex<0) return;
+  const current=puzzleIndex;
+  if(!puzzleHintUsed){
+    puzzleStreak++;
+    if(puzzleStreak>bestPuzzleStreak) bestPuzzleStreak=puzzleStreak;
+  } else {
+    puzzleStreak=0;
+  }
+  puzzleHintUsed=false;
+  clearHint();
+  updateTrainingHUD();
+  const next=current+1;
+  if(next<puzzles.length){
+    loadPuzzle(next,{ reason:'puzzle-advance' });
+    status(`Challenge ${current+1} complete!`);
+  } else {
+    puzzleIndex=-1;
+    puzzleStep=0;
+    updateTrainingHUD();
+    reset({ reason:'puzzle-complete' });
+    status('Ladder complete! Continue in free play.');
+  }
+}
+
+function queuePuzzleReply(moveStr){
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  if(!puzzles.length || puzzleIndex<0) return;
+  const reply=strToMove(moveStr);
+  const piece=board[reply.from.y][reply.from.x];
+  movePiece(reply.from,reply.to,{});
+  animateMove(reply.from,reply.to,piece,()=>{
+    finalizeMove({ source:'puzzle-reply', moveStr });
+    puzzleStep++;
+    clearHint();
+    updateTrainingHUD();
+    if(over) return;
+    if(puzzleIndex>=0){
+      const puzzle=puzzles[puzzleIndex];
+      if(puzzle && Array.isArray(puzzle.solution) && puzzleStep>=puzzle.solution.length){
+        handlePuzzleSolved();
+      } else {
+        draw();
+      }
+    }
+  });
+}
+
+function processPuzzleMove(moveStr){
+  if(puzzleIndex<0) return false;
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  const puzzle=puzzles[puzzleIndex];
+  if(!puzzle || !Array.isArray(puzzle.solution) || !puzzle.solution.length) return false;
+  const expected=puzzle.solution[puzzleStep];
+  if(moveStr!==expected){
+    failPuzzle('Incorrect — streak reset.');
+    return true;
+  }
+  puzzleStep++;
+  clearHint();
+  finalizeMove({ source:'puzzle-local', moveStr });
+  updateTrainingHUD();
+  if(over) return true;
+  if(puzzleStep>=puzzle.solution.length){
+    handlePuzzleSolved();
+    return true;
+  }
+  const replyStr=puzzle.solution[puzzleStep];
+  queuePuzzleReply(replyStr);
+  return true;
 }
 
 function getPlayMode(){
@@ -183,7 +583,10 @@ function baseState(extra={}){
     over,
     status:statusEl.textContent||'',
     timers:snapshotTimers(),
+    clock:getClockSnapshot(),
     evaluation:evaluateBoardScore(),
+    evaluationHistory:evaluationHistory.slice(-40).map(entry=>({ ply:entry.ply, score:entry.score })),
+    advantageSwings:advantageSwings.slice(0,6).map(entry=>({ ply:entry.ply, score:entry.score, delta:entry.delta, mover:entry.mover })),
     lastMove:cloneMoveDetails(lastMoveInfo),
   };
   return Object.assign(base, extra);
@@ -209,12 +612,32 @@ ChessNamespace.emitState = emitState;
 function applyMoveTiming(mover){
   const now=nowMs();
   let elapsed=null;
+  let flagged=false;
   if(turnStartedAt!==null){
     elapsed=Math.max(0, now-turnStartedAt);
     moveTimers[mover]+=elapsed;
+    if(activeTimeControl.baseMs>0 && puzzleIndex<0){
+      const before=Math.max(0, clockState[mover]);
+      const remaining=Math.max(0, before-elapsed);
+      if(remaining<=CLOCK_EPSILON && before>0){
+        flagged=true;
+        clockState[mover]=0;
+      }else{
+        clockState[mover]=remaining;
+      }
+      if(!flagged && activeTimeControl.incrementMs>0){
+        clockState[mover]+=activeTimeControl.incrementMs;
+        incrementFlash[mover]=now;
+      }
+    }
   }
-  turnStartedAt=now;
-  return { elapsed, now };
+  if(flagged){
+    turnStartedAt=null;
+  }else{
+    turnStartedAt=now;
+  }
+  updateClockDisplay();
+  return { elapsed, now, flagged };
 }
 
 function dispatchMoveEvent({mover, moveStr, source, elapsed, moveInfo, nextTurn}){
@@ -261,6 +684,21 @@ function handleGameOverState(stateId, extra={}){
   return payload;
 }
 
+function handleFlagFor(flaggedColor, meta={}){
+  if(over) return;
+  const loser=flaggedColor==='w'?'White':'Black';
+  const winner=flaggedColor==='w'?'Black':'White';
+  over=true;
+  overMsg=`${winner} wins on time`;
+  status(`${loser} ran out of time!`);
+  stopClock();
+  handleGameOverState('timeout', Object.assign({
+    winner,
+    loser,
+    flagged:flaggedColor,
+  }, meta));
+}
+
 function getSnapshot(){
   return {
     board:board.map(row=>row.slice()),
@@ -269,7 +707,10 @@ function getSnapshot(){
     mode:getPlayMode(),
     status:statusEl.textContent||'',
     timers:snapshotTimers(),
+    clock:getClockSnapshot(),
     evaluation:evaluateBoardScore(),
+    evaluationHistory:evaluationHistory.slice(-40).map(entry=>({ ply:entry.ply, score:entry.score })),
+    advantageSwings:advantageSwings.slice(0,6).map(entry=>({ ply:entry.ply, score:entry.score, delta:entry.delta, mover:entry.mover })),
     puzzleIndex,
     puzzleStep,
     onlineMode,
@@ -425,25 +866,31 @@ function scheduleBoardAnimation(){
 
 renderBoardTexture(boardPhase);
 scheduleBoardAnimation();
+updateTrainingHUD();
+updatePuzzleAvailability();
+startClockTicker();
 
-if(puzzleSelect && window.puzzles){
-  window.puzzles.forEach((_,i)=>{
-    const opt=document.createElement('option');
-    opt.value=i;
-    opt.textContent='Puzzle '+(i+1);
-    puzzleSelect.appendChild(opt);
-  });
-  puzzleSelect.addEventListener('change',()=>{
-    if(onlineMode){
-      puzzleSelect.value='-1';
-      status('Puzzles are unavailable during online play.');
-      return;
+if(timeControlSelect){
+  timeControlSelect.addEventListener('change',()=>{
+    const nextId=timeControlSelect.value;
+    const next=timeControlMap.get(nextId)||TIME_CONTROLS[0];
+    if(next.id===activeTimeControl.id) return;
+    activeTimeControl=next;
+    clockModeLabelEl.textContent=activeTimeControl.summary;
+    if(puzzleIndex>=0){
+      loadPuzzle(puzzleIndex,{ reason:'time-control-change' });
+    } else {
+      reset({ reason:'time-control-change' });
     }
-    const i=parseInt(puzzleSelect.value,10);
-    if(i>=0) loadPuzzle(i,{ reason:'puzzle-select' }); else { puzzleIndex=-1; reset({ reason:'puzzle-free-play' }); }
   });
 }
-updatePuzzleAvailability();
+
+if(trainingStartBtn){
+  trainingStartBtn.addEventListener('click',()=>{ startPuzzleLadder(); });
+}
+if(trainingHintBtn){
+  trainingHintBtn.addEventListener('click',()=>{ showPuzzleHint(); });
+}
 
 function reset(options={}){
   resetVictorySound();
@@ -456,6 +903,11 @@ function reset(options={}){
   lastMoveInfo=null;
   premove=null;
   resetMoveTimers();
+  clearHint();
+  puzzleHintUsed=false;
+  resetEvaluationTracking();
+  updateTrainingHUD();
+  updatePuzzleAvailability();
   recordPosition();
   draw(); status(currentTurnLabel());
   const payload=emitState('playing', {
@@ -476,6 +928,10 @@ function loadPuzzle(i, options={}){
     status('Puzzles are unavailable during online play.');
     return;
   }
+  if(!window.puzzles || !Array.isArray(window.puzzles) || !window.puzzles[i]){
+    status('Puzzle unavailable.');
+    return;
+  }
   puzzleIndex=i; puzzleStep=0;
   const p=window.puzzles[i];
   board=parseFEN(p.fen); turn='w'; sel=null; moves=[]; over=false; overMsg=null;
@@ -486,9 +942,15 @@ function loadPuzzle(i, options={}){
   premove=null;
   resetMoveTimers();
   recordPosition();
-  status('Puzzle '+(i+1)+': White to move');
+  clearHint();
+  puzzleHintUsed=false;
+  resetEvaluationTracking();
+  updateTrainingHUD();
+  updatePuzzleAvailability();
+  const title=p.title||`Challenge ${i+1}`;
+  const goal=p.goal?` — ${p.goal}`:'';
+  status(`${title}${goal}`.trim());
   draw();
-  if(puzzleSelect) puzzleSelect.value=i;
   const payload=emitState('playing', {
     reason: options.reason||'puzzle-load',
     move:null,
@@ -713,7 +1175,11 @@ function updateRankings(list){
     });
   }
 }
-function updatePuzzleAvailability(){ if(puzzleSelect) puzzleSelect.disabled=onlineMode; }
+function updatePuzzleAvailability(){
+  if(trainingStartBtn) trainingStartBtn.disabled=onlineMode;
+  if(trainingHintBtn) trainingHintBtn.disabled=onlineMode || puzzleIndex<0;
+  updateTrainingHUD();
+}
 function clearNetworkQueues(){ netMoveQueue.length=0; lastSentMove=null; }
 function currentTurnLabel(){
   if(onlineMode){
@@ -758,8 +1224,7 @@ function handleAiUnavailable(){
 function startOnlineMode(){
   onlineMode=true;
   clearNetworkQueues();
-  puzzleIndex=-1; puzzleStep=0;
-  if(puzzleSelect) puzzleSelect.value='-1';
+  puzzleIndex=-1; puzzleStep=0; hintMove=null; puzzleHintUsed=false;
   updatePuzzleAvailability();
   reset({ reason:'online-start' });
 }
@@ -804,6 +1269,10 @@ function draw(){
   if(lastMove){
     highlightSquare(lastMove.from.x, lastMove.from.y, 'rgba(255,230,0,0.25)');
     highlightSquare(lastMove.to.x, lastMove.to.y, 'rgba(255,230,0,0.25)');
+  }
+  if(hintMove){
+    highlightSquare(hintMove.from.x, hintMove.from.y, 'rgba(125,211,252,0.35)');
+    highlightSquare(hintMove.to.x, hintMove.to.y, 'rgba(56,189,248,0.25)');
   }
   for(let y=0;y<8;y++) for(let x=0;x<8;x++){
     if(anim && anim.progress<1 && anim.to.x===x && anim.to.y===y) continue;
@@ -909,8 +1378,20 @@ function finalizeMove({source,moveStr}){
   const mover=turn;
   const moveInfo=cloneMoveDetails(lastMoveInfo);
   const timing=applyMoveTiming(mover);
+  if(timing.flagged){
+    recordEvaluationSample({ mover });
+    handleFlagFor(mover, {
+      move:moveStr,
+      source,
+      elapsedMs:timing.elapsed==null?null:Math.round(timing.elapsed),
+    });
+    draw();
+    scheduleProcessNetQueue();
+    return;
+  }
   turn=(turn==='w'?'b':'w');
   recordPosition();
+  recordEvaluationSample({ mover });
   dispatchMoveEvent({
     mover,
     moveStr,
@@ -941,6 +1422,7 @@ function finalizeMove({source,moveStr}){
       overMsg=winner+' wins';
     }
     over=true;
+    stopClock();
     handleGameOverState('checkmate', {
       winner,
       loser,
@@ -957,6 +1439,7 @@ function finalizeMove({source,moveStr}){
     status('Stalemate');
     over=true;
     overMsg='Stalemate';
+    stopClock();
     handleGameOverState('stalemate', {
       mover:finishingMover,
       move:finishingMove,
@@ -971,6 +1454,7 @@ function finalizeMove({source,moveStr}){
     status('Draw by repetition');
     over=true;
     overMsg='Draw by repetition';
+    stopClock();
     handleGameOverState('threefold', {
       mover:finishingMover,
       move:finishingMove,
@@ -1143,32 +1627,8 @@ c.addEventListener('click', (e)=>{
         sel=null; moves=[];
         animateMove(from,to,piece,()=>{
           if(puzzleIndex>=0){
-            const sol=window.puzzles[puzzleIndex].solution;
-            const expected=sol[puzzleStep];
-            if(moveStr===expected){
-              puzzleStep++;
-              if(puzzleStep>=sol.length){
-                if(puzzleIndex+1 < window.puzzles.length){
-                  loadPuzzle(puzzleIndex+1,{ reason:'puzzle-advance' });
-                }
-                else {
-                  puzzleIndex=-1;
-                  if(puzzleSelect) puzzleSelect.value='-1';
-                  reset({ reason:'puzzle-complete' });
-                  status('All puzzles solved');
-                }
-              } else {
-                const reply=strToMove(sol[puzzleStep]);
-                const rp=board[reply.from.y][reply.from.x];
-                movePiece(reply.from,reply.to,{});
-                animateMove(reply.from,reply.to,rp,()=>{ puzzleStep++; draw(); });
-              }
-            } else {
-              status('Incorrect, try again.');
-              loadPuzzle(puzzleIndex,{ reason:'puzzle-retry' });
-            }
-            draw();
-            return;
+            const consumed=processPuzzleMove(moveStr);
+            if(consumed) return;
           }
           finalizeMove({source:'local', moveStr});
         });
