@@ -470,7 +470,7 @@
         "/assets/sprites/ship.png"
       ],
       "audio": [
-        "/assets/audio/hit.wav",
+        "/assets/audio/laser.wav",
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
       ]
@@ -708,6 +708,7 @@
         "/assets/sprites/ship.png"
       ],
       "audio": [
+        "/assets/audio/laser.wav",
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
       ]
