@@ -19,16 +19,39 @@ describe('tools/code-doctor.mjs', () => {
       version: '1.0.0',
     });
 
+    const relative = (name) => `./${name}.js`;
+
     await fixture.writeFile(
       'src/a.js',
-      ["import './b.js';", "import './d.js';", ''].join('\n'),
+      [relative('b'), relative('d')]
+        .map((importPath) => `import '${importPath}';`)
+        .concat('')
+        .join('\n'),
     );
-    await fixture.writeFile('src/b.js', "import './c.js';\n");
-    await fixture.writeFile('src/c.js', "import './a.js';\n");
-    await fixture.writeFile('src/d.js', "import './e.js';\n");
-    await fixture.writeFile('src/e.js', "import './f.js';\n");
-    await fixture.writeFile('src/f.js', "import './a.js';\n");
-    await fixture.writeFile('src/self.js', "import './self.js';\n");
+    await fixture.writeFile(
+      'src/b.js',
+      `import '${relative('c')}';\n`,
+    );
+    await fixture.writeFile(
+      'src/c.js',
+      `import '${relative('a')}';\n`,
+    );
+    await fixture.writeFile(
+      'src/d.js',
+      `import '${relative('e')}';\n`,
+    );
+    await fixture.writeFile(
+      'src/e.js',
+      `import '${relative('f')}';\n`,
+    );
+    await fixture.writeFile(
+      'src/f.js',
+      `import '${relative('a')}';\n`,
+    );
+    await fixture.writeFile(
+      'src/self.js',
+      `import '${relative('self')}';\n`,
+    );
 
     const result = await fixture.runDoctor();
 
