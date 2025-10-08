@@ -16,18 +16,33 @@ function capitalize(text) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-export default async function(outlet, params){
+export default async function(outlet, params, context){
   loadStyle('styles/pages/game.css');
   const slug = params.id;
-  const query = new URLSearchParams(location.search);
+  const url = context?.url ?? new URL(location.href);
+  const query = new URLSearchParams(url.search);
   const forceLegacy = query.has('legacy') || (query.get('shell') || '').toLowerCase() === 'legacy' || query.get('noshell') === '1';
+  document.title = 'Play — Gurjot\'s Games';
+  const game = await getGameById(params.id);
   const buildShellUrl = (id) => {
-    const url = new URL('/game.html', location.origin);
-    url.searchParams.set('slug', id);
-    return `${url.pathname}${url.search}`;
+    const shellUrl = new URL('/game.html', location.origin);
+    shellUrl.searchParams.set('slug', id);
+    if (game?.title) {
+      shellUrl.searchParams.set('title', game.title);
+    }
+    ['modern', 'shell', 'diag', 'diagnostics'].forEach(key => {
+      if (query.has(key)) {
+        const value = query.get(key);
+        if (value === null) {
+          shellUrl.searchParams.set(key, '');
+        } else {
+          shellUrl.searchParams.set(key, value);
+        }
+      }
+    });
+    return `${shellUrl.pathname}${shellUrl.search}`;
   };
   let src = forceLegacy ? `/games/${slug}/` : buildShellUrl(slug);
-  const game = await getGameById(params.id);
   if (game && forceLegacy){
     src = game.playPath || game.playUrl || src;
   }
@@ -118,5 +133,8 @@ export default async function(outlet, params){
   frame.id = 'game-frame';
   frame.src = src;
   frame.loading = 'lazy';
+  frame.allow = 'fullscreen; clipboard-read; clipboard-write';
+  frame.setAttribute('allowfullscreen', '');
+  frame.title = game?.title ? `${game.title} shell` : 'Game shell';
   outlet.appendChild(frame);
 }
