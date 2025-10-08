@@ -14,23 +14,11 @@
     "difficulty": "easy",
     "released": "2025-08-20",
     "playUrl": "/games/pong/",
-    "version": "2.1.0",
+    "version": "1.0.0",
     "thumbnailPath": "/games/pong/thumb.svg",
     "thumbnail": "/games/pong/thumb.svg",
     "assets": {
       "sprites": [
-        "/assets/backgrounds/parallax/arcade_layer1.png",
-        "/assets/backgrounds/parallax/arcade_layer2.png",
-        "/assets/backgrounds/parallax/city_layer1.png",
-        "/assets/backgrounds/parallax/city_layer2.png",
-        "/assets/backgrounds/parallax/forest_layer1.png",
-        "/assets/backgrounds/parallax/forest_layer2.png",
-        "/assets/backgrounds/parallax/space_layer1.png",
-        "/assets/backgrounds/parallax/space_layer2.png",
-        "/assets/effects/particle.png",
-        "/assets/effects/spark.png",
-        "/assets/effects/explosion.png",
-        "/assets/effects/shield.png",
         "/assets/sprites/paddle.png",
         "/assets/sprites/ball.png"
       ],
@@ -472,10 +460,9 @@
         "/assets/sprites/ship.png"
       ],
       "audio": [
-        "/assets/audio/laser.wav",
+        "/assets/audio/hit.wav",
         "/assets/audio/explode.wav",
-        "/assets/audio/powerup.wav",
-        "/assets/audio/gameover.wav"
+        "/assets/audio/powerup.wav"
       ]
     },
     "firstFrame": {
@@ -589,9 +576,6 @@
     "thumbnail": "/games/platformer/thumb.svg",
     "assets": {
       "sprites": [
-        "/assets/sprites/player/platformer_idle.png",
-        "/assets/sprites/player/platformer_run.png",
-        "/assets/sprites/player/platformer_jump.png",
         "/assets/sprites/coin.png"
       ],
       "audio": [
@@ -651,13 +635,6 @@
     "thumbnail": "/games/runner/thumb.svg",
     "assets": {
       "sprites": [
-        "/assets/backgrounds/parallax/city_layer1.png",
-        "/assets/backgrounds/parallax/city_layer2.png",
-        "/assets/effects/clouds/cloud1.png",
-        "/assets/effects/clouds/cloud2.png",
-        "/assets/effects/portal.png",
-        "/assets/powerups/multi.png",
-        "/assets/ui/star.png",
         "/assets/sprites/coin.png"
       ],
       "audio": [
@@ -719,20 +696,11 @@
     "thumbnail": "/games/shooter/thumb.svg",
     "assets": {
       "sprites": [
-        "/assets/backgrounds/parallax/space_layer1.png",
-        "/assets/backgrounds/parallax/space_layer2.png",
-        "/assets/effects/explosion.png",
-        "/assets/effects/portal.png",
-        "/assets/sprites/bullet.png",
-        "/assets/sprites/enemy1.png",
-        "/assets/sprites/enemy2.png",
         "/assets/sprites/ship.png"
       ],
       "audio": [
-        "/assets/audio/laser.wav",
         "/assets/audio/explode.wav",
-        "/assets/audio/powerup.wav",
-        "/assets/audio/gameover.wav"
+        "/assets/audio/powerup.wav"
       ]
     },
     "firstFrame": {
