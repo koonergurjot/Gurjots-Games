@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BAG_ORDER, generateSequence } from '../games/tetris/randomizer.js';
+import { BAG_ORDER, generateSequence, createRandomizerSelector } from '../games/tetris/randomizer.js';
 
 function droughtStats(sequence){
   const lastIndex=new Map();
@@ -42,5 +42,33 @@ describe('tetris randomizer',()=>{
     const first=generateSequence(seed,28);
     const second=generateSequence(seed,28);
     expect(second).toEqual(first);
+  });
+
+  it('supports alternative randomizer modes',()=>{
+    const seed=42;
+    const bagSeq=generateSequence(seed,21,'bag');
+    const classicSeq=generateSequence(seed,21,'classic');
+    const doubleSeq=generateSequence(seed,28,'double');
+    expect(classicSeq).toHaveLength(21);
+    expect(doubleSeq).toHaveLength(28);
+    expect(classicSeq).not.toEqual(bagSeq);
+    expect(new Set(doubleSeq.slice(0,14))).toEqual(new Set(BAG_ORDER));
+  });
+
+  it('allows switching modes via selector while preserving seeds',()=>{
+    const selector=createRandomizerSelector({ mode:'bag', seed:99 });
+    const firstPiece=selector.next();
+    expect(selector.seed).toBeTypeOf('number');
+    const previousSeed=selector.seed;
+    selector.setMode('classic');
+    expect(selector.mode).toBe('classic');
+    expect(selector.seed).toBe(previousSeed);
+    const preview=selector.generate(5);
+    expect(preview).toHaveLength(5);
+    const reseeded=selector.reset(1234);
+    expect(reseeded).toBe(1234);
+    const afterReset=selector.next();
+    expect(typeof afterReset).toBe('string');
+    expect(BAG_ORDER).toContain(firstPiece);
   });
 });
