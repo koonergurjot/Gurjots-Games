@@ -306,13 +306,125 @@ const boardTex=document.createElement('canvas');
 boardTex.width=pixelSize; boardTex.height=pixelSize;
 const bctx=require2dContext(boardTex);
 bctx.setTransform(dpr,0,0,dpr,0,0);
-for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
-  const light=((x+y)%2)===0;
-  const grad=bctx.createLinearGradient(x*S,y*S,x*S+S,y*S+S);
-  if(light){ grad.addColorStop(0,'#182235'); grad.addColorStop(1,'#1e2a42'); }
-  else { grad.addColorStop(0,'#0f172a'); grad.addColorStop(1,'#060b15'); }
-  bctx.fillStyle=grad; bctx.fillRect(x*S,y*S,S,S);
+
+const BOARD_LIGHT_BASE={ h:34, s:52, l:72 };
+const BOARD_DARK_BASE={ h:28, s:58, l:40 };
+const LIGHT_BAND_AMPLITUDE=2.4;
+const LIGHT_BAND_FREQ=0.06;
+const DARK_RADIAL_STRENGTH=7.5;
+const S_PX=pixelSize/COLS;
+const boardImageData=bctx.createImageData(pixelSize,pixelSize);
+
+/**
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ */
+function clamp(value,min,max){
+  return Math.max(min, Math.min(max, value));
 }
+
+/**
+ * @param {number} h
+ * @param {number} s
+ * @param {number} l
+ */
+function hslToRgb(h,s,l){
+  const hue=((h%360)+360)%360;
+  const sat=clamp(s,0,100)/100;
+  const lum=clamp(l,0,100)/100;
+  if(sat===0){
+    const gray=Math.round(lum*255);
+    return { r:gray, g:gray, b:gray };
+  }
+  const c=(1-Math.abs(2*lum-1))*sat;
+  const x=c*(1-Math.abs((hue/60)%2-1));
+  const m=lum-c/2;
+  let r1=0,g1=0,b1=0;
+  if(hue<60){ r1=c; g1=x; }
+  else if(hue<120){ r1=x; g1=c; }
+  else if(hue<180){ g1=c; b1=x; }
+  else if(hue<240){ g1=x; b1=c; }
+  else if(hue<300){ r1=x; b1=c; }
+  else { r1=c; b1=x; }
+  const r=Math.round((r1+m)*255);
+  const g=Math.round((g1+m)*255);
+  const b=Math.round((b1+m)*255);
+  return { r, g, b };
+}
+
+function renderBoardTexture(phase=0){
+  const data=boardImageData.data;
+  let offset=0;
+  for(let py=0;py<pixelSize;py++){
+    const row=Math.min(ROWS-1, Math.floor(py/S_PX));
+    const yLocal=py-row*S_PX;
+    for(let px=0;px<pixelSize;px++){
+      const col=Math.min(COLS-1, Math.floor(px/S_PX));
+      const xLocal=px-col*S_PX;
+      const u=(xLocal+0.5)/S_PX;
+      const v=(yLocal+0.5)/S_PX;
+      const light=((row+col)&1)===0;
+      if(light){
+        const band=Math.sin(xLocal*LIGHT_BAND_FREQ+phase);
+        const dx=u-0.5;
+        const dy=v-0.5;
+        const centerBoost=(1-clamp(Math.sqrt(dx*dx+dy*dy)/0.7,0,1))*1.2;
+        const lightness=clamp(BOARD_LIGHT_BASE.l+band*LIGHT_BAND_AMPLITUDE+centerBoost,0,100);
+        const { r, g, b }=hslToRgb(BOARD_LIGHT_BASE.h, BOARD_LIGHT_BASE.s, lightness);
+        data[offset++]=r;
+        data[offset++]=g;
+        data[offset++]=b;
+        data[offset++]=255;
+      }else{
+        const dx=u-0.5;
+        const dy=v-0.5;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        const radial=clamp(dist/0.6,0,1);
+        const lightness=clamp(BOARD_DARK_BASE.l-radial*DARK_RADIAL_STRENGTH,0,100);
+        const { r, g, b }=hslToRgb(BOARD_DARK_BASE.h, BOARD_DARK_BASE.s, lightness);
+        data[offset++]=r;
+        data[offset++]=g;
+        data[offset++]=b;
+        data[offset++]=255;
+      }
+    }
+  }
+  bctx.putImageData(boardImageData,0,0);
+}
+
+let boardPhase=0;
+let boardPhaseAccum=0;
+const BOARD_PHASE_SPEED=0.00016;
+const BOARD_PHASE_STEP=0.04;
+
+function scheduleBoardAnimation(){
+  if(typeof requestAnimationFrame!=='function') return;
+  const reduceMotion=typeof window!=='undefined' && typeof window.matchMedia==='function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false;
+  if(reduceMotion) return;
+  function step(ts){
+    if(!step.last) step.last=ts;
+    const delta=ts-step.last;
+    step.last=ts;
+    if(delta>0){
+      const deltaPhase=delta*BOARD_PHASE_SPEED;
+      boardPhase=(boardPhase+deltaPhase)%(Math.PI*2);
+      boardPhaseAccum+=deltaPhase;
+      if(boardPhaseAccum>=BOARD_PHASE_STEP){
+        boardPhaseAccum%=BOARD_PHASE_STEP;
+        renderBoardTexture(boardPhase);
+        draw();
+      }
+    }
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+renderBoardTexture(boardPhase);
+scheduleBoardAnimation();
 
 if(puzzleSelect && window.puzzles){
   window.puzzles.forEach((_,i)=>{
