@@ -10,13 +10,19 @@
   <style>
     /* Reset and base styles */
     * { box-sizing: border-box; }
-    body { 
-      margin: 0; 
+    body {
+      margin: 0;
       font-family: Inter, system-ui, -apple-system, sans-serif;
       line-height: 1.5;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+    }
+
+    :root {
+      --g2048-clock: 0ms;
+      --g2048-frame: 0ms;
+      --g2048-transition: 120ms;
     }
     
     /* Main layout - Mobile first responsive */
@@ -59,7 +65,7 @@
       font-weight: 500;
       cursor: pointer;
       touch-action: manipulation;
-      transition: all 0.15s ease;
+      transition: all var(--g2048-transition, 0.15s) ease;
     }
     
     .theme-toggle:hover {
@@ -166,7 +172,7 @@
       font-weight: 500;
       cursor: pointer;
       touch-action: manipulation;
-      transition: all 0.15s ease;
+      transition: all var(--g2048-transition, 0.15s) ease;
     }
     
     .control-button:hover,
@@ -401,10 +407,11 @@
         <div class="control-group">
           <div class="control-label">Actions</div>
           <button id="undoBtn" class="control-button" aria-label="Undo last move">Undo Move</button>
+          <button id="redoBtn" class="control-button" aria-label="Redo last undone move">Redo Move</button>
         </div>
       </div>
       <p class="help-text">
-        Use <strong>arrow keys</strong> to move. Press <kbd>R</kbd> to restart, <kbd>U</kbd> to undo, <kbd>H</kbd> for hints.
+        Use <strong>arrow keys</strong> to move. Press <kbd>R</kbd> to restart, <kbd>U</kbd> or <kbd>Ctrl+Z</kbd> to undo, <kbd>Y</kbd> or <kbd>Ctrl+Y</kbd> to redo, <kbd>H</kbd> for hints.
       </p>
     </footer>
   </div>
