@@ -11,9 +11,92 @@ const GROUND_HEIGHT = 60;
 const PLAYER_X = 160;
 
 const DIFFICULTY_SETTINGS = {
-  easy: { speed: 5.5, spawnRange: [140, 220] },
-  med: { speed: 6.8, spawnRange: [120, 200] },
-  hard: { speed: 8.2, spawnRange: [90, 170] },
+  relax: {
+    label: 'Relaxed',
+    speed: 5,
+    spawnRange: [160, 240],
+    ramp: {
+      speed: 2.6,
+      timeWindow: 110,
+      distanceWindow: 3600,
+      timeWeight: 0.5,
+      maxProgress: 1.1,
+      minTighten: 0.4,
+      maxTighten: 0.25,
+      minFloor: 0.6,
+      maxFloor: 0.7,
+    },
+  },
+  easy: {
+    label: 'Easy',
+    speed: 5.5,
+    spawnRange: [140, 220],
+    ramp: {
+      speed: 3,
+      minTighten: 0.5,
+      maxTighten: 0.3,
+      minFloor: 0.5,
+      maxFloor: 0.65,
+    },
+  },
+  med: {
+    label: 'Medium',
+    speed: 6.8,
+    spawnRange: [120, 200],
+    ramp: {
+      speed: 3.4,
+      minTighten: 0.55,
+      maxTighten: 0.35,
+      minFloor: 0.45,
+      maxFloor: 0.55,
+    },
+  },
+  hard: {
+    label: 'Hard',
+    speed: 8.2,
+    spawnRange: [90, 170],
+    ramp: {
+      speed: 3.8,
+      timeWindow: 70,
+      distanceWindow: 2800,
+      minTighten: 0.65,
+      maxTighten: 0.45,
+      minFloor: 0.4,
+      maxFloor: 0.5,
+      maxProgress: 1.3,
+    },
+  },
+  extreme: {
+    label: 'Extreme',
+    speed: 9.4,
+    spawnRange: [80, 150],
+    ramp: {
+      speed: 4.2,
+      timeWindow: 60,
+      distanceWindow: 2400,
+      minTighten: 0.72,
+      maxTighten: 0.5,
+      minFloor: 0.35,
+      maxFloor: 0.45,
+      maxProgress: 1.45,
+    },
+  },
+  endless: {
+    label: 'Endless Ramp',
+    speed: 6.2,
+    spawnRange: [120, 190],
+    ramp: {
+      speed: 4,
+      timeWindow: 75,
+      distanceWindow: 3000,
+      minTighten: 0.6,
+      maxTighten: 0.4,
+      minFloor: 0.38,
+      maxFloor: 0.5,
+      maxProgress: 2,
+      speedLerp: 0.03,
+    },
+  },
 };
 
 const DEFAULT_LEVEL = {
@@ -57,6 +140,45 @@ function createSeededRng(seedValue = Math.random() * 0xffffffff) {
     state ^= state + Math.imul(state ^ (state >>> 7), state | 61);
     return ((state ^ (state >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+function generateRandomSeed() {
+  const now = Date.now();
+  const perf = typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? Math.floor(performance.now() * 1000)
+    : 0;
+  const entropy = Math.floor(Math.random() * 0xffffffff);
+  return hashSeed(`${now}:${perf}:${entropy}`);
+}
+
+function normalizeSeedLabel(value) {
+  if (value === undefined || value === null) return '';
+  return String(value).trim().slice(0, 48);
+}
+
+function labelForSeed(value, hashed) {
+  const normalized = normalizeSeedLabel(value);
+  if (normalized) return normalized;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (hashed !== undefined) {
+    return `#${(hashed >>> 0).toString(16)}`;
+  }
+  return '';
+}
+
+function getDifficultyEntry(key) {
+  return DIFFICULTY_SETTINGS[key] || DIFFICULTY_SETTINGS.med;
+}
+
+function getDifficultyLabel(key) {
+  const entry = getDifficultyEntry(key);
+  if (entry?.label) return entry.label;
+  if (typeof key === 'string' && key.length) {
+    return key.charAt(0).toUpperCase() + key.slice(1);
+  }
+  return 'Medium';
 }
 
 preloadTileTextures().catch(() => null);
@@ -274,7 +396,10 @@ function generateSkylineLayer(config, options = {}) {
 
 function createProceduralSkyline(options = {}) {
   if (!Array.isArray(SKYLINE_LAYER_SETTINGS) || !SKYLINE_LAYER_SETTINGS.length) return [];
-  return SKYLINE_LAYER_SETTINGS.map(config => generateSkylineLayer(config, options));
+  const baseRng = typeof options.rng === 'function'
+    ? options.rng
+    : createSeededRng(options.seed ?? generateRandomSeed());
+  return SKYLINE_LAYER_SETTINGS.map(config => generateSkylineLayer(config, { ...options, rng: baseRng }));
 }
 
 const runnerBridge = (() => {
@@ -375,11 +500,33 @@ function buildRunnerOverlay() {
   const titleMessage = document.createElement('p');
   titleMessage.className = 'runner-overlay__text';
   titleMessage.id = 'runner-overlay-title';
+  const seedPanel = document.createElement('div');
+  seedPanel.className = 'runner-overlay__seed';
+  const seedLabel = document.createElement('label');
+  seedLabel.className = 'runner-overlay__seed-label';
+  seedLabel.setAttribute('for', 'runner-overlay-seed');
+  seedLabel.textContent = 'Daily Run Seed';
+  const seedInput = document.createElement('input');
+  seedInput.className = 'runner-overlay__seed-input';
+  seedInput.id = 'runner-overlay-seed';
+  seedInput.type = 'text';
+  seedInput.inputMode = 'text';
+  seedInput.autocomplete = 'off';
+  seedInput.placeholder = 'YYYY-MM-DD or custom';
+  const seedActions = document.createElement('div');
+  seedActions.className = 'runner-overlay__seed-actions';
+  const useSeedBtn = makeButton('Use Seed', 'runner-overlay-use-seed');
+  const clearSeedBtn = makeButton('Random Run', 'runner-overlay-clear-seed');
+  seedActions.append(useSeedBtn, clearSeedBtn);
+  const seedStatus = document.createElement('p');
+  seedStatus.className = 'runner-overlay__seed-status';
+  seedStatus.textContent = 'Leave blank to shuffle a new run each start.';
+  seedPanel.append(seedLabel, seedInput, seedActions, seedStatus);
   const titleActions = document.createElement('div');
   titleActions.className = 'runner-overlay__actions';
   const startBtn = makeButton('Start Run', 'runner-overlay-start');
   titleActions.append(startBtn);
-  titlePanel.append(titleHeading, titleMessage, titleActions);
+  titlePanel.append(titleHeading, titleMessage, seedPanel, titleActions);
 
   const pausePanel = document.createElement('div');
   pausePanel.className = 'runner-overlay__panel';
@@ -423,7 +570,15 @@ function buildRunnerOverlay() {
 
   return {
     root,
-    title: { panel: titlePanel, message: titleMessage, startBtn },
+    title: {
+      panel: titlePanel,
+      message: titleMessage,
+      startBtn,
+      seedInput,
+      useSeedBtn,
+      clearSeedBtn,
+      seedStatus,
+    },
     pause: { panel: pausePanel, message: pauseMessage, resumeBtn, restartBtn: pauseRestartBtn, menuBtn: pauseMenuBtn },
     gameover: {
       panel: gameOverPanel,
@@ -494,11 +649,21 @@ class RunnerGame {
     this.manualObstacles = [];
     this.manualIndex = 0;
 
-    this.seed = this.resolveSeed(context);
-    this.setSeed(this.seed);
+    const seedInfo = this.resolveSeedInfo(context);
+    const metaAutoStart = context?.meta?.autoStart;
+    this.seedMode = seedInfo.locked ? 'locked' : 'rolling';
+    this.dailySeedLabel = seedInfo.label;
+    this.seedBase = seedInfo.seed;
+    this.runCounter = 0;
+    this.skylineSeed = null;
+    this.activeRunSeed = this.seedBase;
+    this.pendingDailySeed = '';
+    this.seed = this.seedBase;
+    this.rng = createSeededRng(this.seedBase);
+    this.autoStartOnBoot = metaAutoStart !== undefined ? !!metaAutoStart : !seedInfo.locked;
 
-    this.background = this.buildBackground(DEFAULT_LEVEL.background);
-    this.parallaxLayers = this.createSkylineLayers();
+    this.background = { clouds: [], buildings: [], foreground: [] };
+    this.parallaxLayers = [];
     this.distance = 0;
     this.elapsedSeconds = 0;
     this.spawnTimer = 160;
@@ -507,8 +672,9 @@ class RunnerGame {
     this.lastDrawnScore = -1;
     this.bestScore = 0;
     this.difficulty = 'med';
-    this.baseSpeed = DIFFICULTY_SETTINGS.med.speed;
-    this.spawnRangeBase = [...DIFFICULTY_SETTINGS.med.spawnRange];
+    const defaultDifficulty = getDifficultyEntry(this.difficulty);
+    this.baseSpeed = defaultDifficulty.speed;
+    this.spawnRangeBase = [...defaultDifficulty.spawnRange];
     this.speed = this.baseSpeed;
     this.spawnRange = [...this.spawnRangeBase];
     this.difficultyProgress = 0;
@@ -570,6 +736,17 @@ class RunnerGame {
     this.scenes = createSceneManager({ id: 'runner-scenes' });
 
     this.overlay?.title?.startBtn?.addEventListener('click', () => this.dispatchAction('start', { source: 'ui' }));
+    this.overlay?.title?.useSeedBtn?.addEventListener('click', () => this.applyDailySeedFromOverlay());
+    this.overlay?.title?.clearSeedBtn?.addEventListener('click', () => this.clearDailySeed());
+    this.overlay?.title?.seedInput?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        this.applyDailySeedFromOverlay();
+      }
+    });
+    this.overlay?.title?.seedInput?.addEventListener('input', event => {
+      this.pendingDailySeed = normalizeSeedLabel(event.target?.value ?? '');
+    });
     this.overlay?.pause?.resumeBtn?.addEventListener('click', () => this.dispatchAction('resume', { source: 'ui' }));
     this.overlay?.pause?.restartBtn?.addEventListener('click', () => this.dispatchAction('restart', { source: 'ui' }));
     this.overlay?.pause?.menuBtn?.addEventListener('click', () => this.dispatchAction('menu', { source: 'ui' }));
@@ -578,14 +755,27 @@ class RunnerGame {
 
     setAudioPaused(true);
     this.attachEvents();
+    this.updateDailySeedUi();
     this.readPreferences(context);
     this.resize();
     this.restoreBestScore();
     this.setDifficulty(this.difficulty);
-    this.loadLevel(DEFAULT_LEVEL, { resetScore: true, silent: true, autoStart: false });
-    this.updateMission('Select a difficulty and press Start');
+    this.loadLevel(DEFAULT_LEVEL, { resetScore: true, silent: true, autoStart: this.autoStartOnBoot });
+    if (this.autoStartOnBoot) {
+      this.updateMission();
+    } else {
+      this.updateMission('Select a difficulty and press Start');
+    }
     this.draw();
-    this.initializeScenes();
+    const sceneReady = this.autoStartOnBoot
+      ? this.scenes
+        ?.clear({ transition: null })
+        .catch(() => {})
+        .then(() => this.scenes.push(() => this.createGameScene({ reset: false })))
+        .catch(err => {
+          console.error('[runner] failed to enter gameplay scene', err);
+        })
+      : this.initializeScenes();
   }
 
   attachEvents() {
@@ -625,11 +815,13 @@ class RunnerGame {
   }
 
   initializeScenes() {
-    if (!this.scenes) return;
-    this.scenes.clear({ transition: null }).catch(() => {});
-    this.scenes.push(() => this.createTitleScene()).catch(err => {
-      console.error('[runner] failed to enter title scene', err);
-    });
+    if (!this.scenes) return Promise.resolve();
+    return this.scenes.clear({ transition: null })
+      .catch(() => {})
+      .then(() => this.scenes.push(() => this.createTitleScene()))
+      .catch(err => {
+        console.error('[runner] failed to enter title scene', err);
+      });
   }
 
   dispatchAction(action, payload) {
@@ -696,12 +888,14 @@ class RunnerGame {
     if (!overlay?.title?.message) return;
     const parts = [];
     const best = Math.max(0, Math.floor(this.bestScore || 0));
-    const diffLabel = this.difficulty
-      ? this.difficulty.charAt(0).toUpperCase() + this.difficulty.slice(1)
-      : 'Medium';
+    const diffLabel = getDifficultyLabel(this.difficulty);
     if (this.levelName) parts.push(this.levelName);
     parts.push(`Best ${best} m`);
     parts.push(`Difficulty ${diffLabel}`);
+    if (this.isDailyRunActive()) {
+      const label = this.dailySeedLabel || `#${(this.seedBase >>> 0).toString(16)}`;
+      parts.push(`Daily Run ${label}`);
+    }
     overlay.title.message.textContent = parts.join(' • ');
   }
 
@@ -723,15 +917,14 @@ class RunnerGame {
     const score = Math.max(0, Number.isFinite(data.score) ? data.score : this.score || 0);
     const best = Math.max(0, Number.isFinite(data.bestScore) ? data.bestScore : this.bestScore || 0);
     const distance = Math.max(0, Number.isFinite(data.distance) ? data.distance : Math.floor(this.distance || 0));
-    const diffLabel = this.difficulty
-      ? this.difficulty.charAt(0).toUpperCase() + this.difficulty.slice(1)
-      : 'Medium';
+    const diffLabel = getDifficultyLabel(this.difficulty);
     const levelLabel = this.levelName ? this.levelName : (data.levelName || 'Standard Course');
     if (overlay.gameover.heading) {
       overlay.gameover.heading.textContent = 'Run Complete';
     }
     if (overlay.gameover.detail) {
-      overlay.gameover.detail.textContent = `${levelLabel} • Difficulty ${diffLabel}`;
+      const dailySuffix = this.isDailyRunActive() ? ' • Daily Run' : '';
+      overlay.gameover.detail.textContent = `${levelLabel} • Difficulty ${diffLabel}${dailySuffix}`;
     }
     if (overlay.gameover.score) {
       const distanceLabel = Number.isFinite(distance) ? `${distance} m travelled` : '';
@@ -799,6 +992,7 @@ class RunnerGame {
         this.updateMission('Select a difficulty and press Start');
         const startRun = async () => {
           try {
+            game.applyDailySeedFromOverlay();
             await ctx.manager.replace(() => game.createGameScene({ reset: true }));
           } catch (err) {
             console.error('[runner] start run failed', err);
@@ -1060,21 +1254,148 @@ class RunnerGame {
     return VIRTUAL_HEIGHT - GROUND_HEIGHT;
   }
 
-  resolveSeed(context = {}) {
+  resolveSeedInfo(context = {}) {
     const contextSeed = context?.meta?.seed ?? context?.seed;
     if (contextSeed !== undefined && contextSeed !== null && contextSeed !== '') {
-      return hashSeed(contextSeed);
+      const hashed = hashSeed(contextSeed);
+      return { seed: hashed, label: labelForSeed(contextSeed, hashed), locked: true };
+    }
+    const metaDaily = context?.meta?.dailySeed;
+    if (metaDaily) {
+      const hashed = hashSeed(metaDaily);
+      return { seed: hashed, label: labelForSeed(metaDaily, hashed), locked: true };
     }
     if (typeof URLSearchParams === 'function' && typeof location === 'object') {
       try {
         const params = new URLSearchParams(location.search || '');
-        const querySeed = params.get('seed');
-        if (querySeed) return hashSeed(querySeed);
+        const querySeed = params.get('seed') || params.get('dailySeed');
+        if (querySeed) {
+          const hashed = hashSeed(querySeed);
+          return { seed: hashed, label: labelForSeed(querySeed, hashed), locked: true };
+        }
       } catch (_) {
         /* ignore malformed URLs */
       }
     }
-    return hashSeed(Date.now());
+    let storedDaily = '';
+    try {
+      storedDaily = localStorage.getItem('runner:dailySeed') || '';
+    } catch (err) {
+      storedDaily = '';
+    }
+    if (storedDaily.trim()) {
+      const hashed = hashSeed(storedDaily);
+      return { seed: hashed, label: labelForSeed(storedDaily, hashed), locked: true };
+    }
+    const randomSeed = hashSeed(Date.now());
+    return { seed: randomSeed, label: '', locked: false };
+  }
+
+  isDailyRunActive() {
+    return this.seedMode === 'locked' && !!this.dailySeedLabel;
+  }
+
+  updateDailySeedUi() {
+    const overlay = this.overlay?.title;
+    if (!overlay) return;
+    if (overlay.seedStatus) {
+      overlay.seedStatus.textContent = this.isDailyRunActive()
+        ? `Daily Run active — seed “${this.dailySeedLabel}”`
+        : 'Randomized run — leave blank to shuffle each start.';
+    }
+    if (overlay.useSeedBtn) {
+      overlay.useSeedBtn.textContent = this.isDailyRunActive() ? 'Update Seed' : 'Use Seed';
+    }
+    if (overlay.clearSeedBtn) {
+      overlay.clearSeedBtn.textContent = this.isDailyRunActive() ? 'Clear Daily Run' : 'Random Run';
+    }
+    if (overlay.seedInput && document.activeElement !== overlay.seedInput) {
+      overlay.seedInput.value = this.isDailyRunActive() ? this.dailySeedLabel : (this.pendingDailySeed || '');
+    }
+  }
+
+  applyDailySeed(seedValue, opts = {}) {
+    const normalized = normalizeSeedLabel(seedValue);
+    if (!normalized) {
+      this.clearDailySeed(opts);
+      return;
+    }
+    const hashed = hashSeed(normalized);
+    this.seedMode = 'locked';
+    this.dailySeedLabel = labelForSeed(normalized, hashed);
+    this.seedBase = hashed;
+    this.seed = hashed;
+    this.runCounter = 0;
+    this.skylineSeed = null;
+    this.pendingDailySeed = '';
+    try {
+      localStorage.setItem('runner:dailySeed', normalized);
+    } catch (err) {
+      /* ignore storage errors */
+    }
+    if (opts.updateInput !== false && this.overlay?.title?.seedInput && document.activeElement !== this.overlay.title.seedInput) {
+      this.overlay.title.seedInput.value = normalized;
+    }
+    this.updateDailySeedUi();
+    this.updateTitleOverlay();
+    this.updateMission();
+  }
+
+  clearDailySeed(opts = {}) {
+    this.seedMode = 'rolling';
+    this.dailySeedLabel = '';
+    this.runCounter = 0;
+    this.skylineSeed = null;
+    this.seedBase = generateRandomSeed();
+    this.seed = this.seedBase;
+    this.pendingDailySeed = '';
+    try {
+      localStorage.removeItem('runner:dailySeed');
+    } catch (err) {
+      /* ignore */
+    }
+    if (opts.updateInput !== false && this.overlay?.title?.seedInput && document.activeElement !== this.overlay.title.seedInput) {
+      this.overlay.title.seedInput.value = '';
+    }
+    this.updateDailySeedUi();
+    this.updateTitleOverlay();
+    this.updateMission();
+  }
+
+  applyDailySeedFromOverlay() {
+    const input = this.overlay?.title?.seedInput;
+    if (!input) return;
+    const value = normalizeSeedLabel(input.value);
+    if (value) {
+      if (!this.isDailyRunActive() || value !== this.dailySeedLabel) {
+        this.applyDailySeed(value, { updateInput: false });
+      }
+      input.value = value;
+    } else if (this.isDailyRunActive()) {
+      this.clearDailySeed({ updateInput: false });
+      input.value = '';
+    } else {
+      this.pendingDailySeed = '';
+      this.updateDailySeedUi();
+    }
+  }
+
+  prepareRunSeeds({ initial = false } = {}) {
+    if (this.seedMode === 'locked') {
+      this.runCounter = initial ? 1 : (this.runCounter || 0) + 1;
+    } else {
+      if (!initial || !this.seedBase) {
+        this.seedBase = generateRandomSeed();
+      }
+      this.runCounter = 1;
+    }
+    this.setSeed(this.seedBase);
+    this.activeRunSeed = this.seed;
+    const skylineSalt = this.seedMode === 'locked'
+      ? `run-${this.runCounter}`
+      : `${Date.now()}:${Math.random()}`;
+    this.skylineSeed = hashSeed(`${this.seedBase}:skyline:${skylineSalt}`);
+    return { runSeed: this.activeRunSeed, skylineSeed: this.skylineSeed };
   }
 
   setSeed(seedValue) {
@@ -1150,7 +1471,7 @@ class RunnerGame {
     const layers = createProceduralSkyline({
       width: VIRTUAL_WIDTH,
       ground: this.groundY(),
-      rng: () => this.rand(),
+      seed: this.skylineSeed ?? this.seed,
     });
     if (!Array.isArray(layers)) return [];
     return layers.map(layer => ({ ...layer, offset: layer?.offset ?? 0 }));
@@ -1184,6 +1505,9 @@ class RunnerGame {
     this.manualObstacles = prepared.obstacles;
     this.manualIndex = 0;
     this.clearActiveEntities();
+    if (resetScore) {
+      this.prepareRunSeeds({ initial: this.runCounter === 0 });
+    }
     this.background = this.buildBackground(prepared.background);
     this.parallaxLayers = this.createSkylineLayers();
     this.spawnTimer = 120;
@@ -1259,9 +1583,9 @@ class RunnerGame {
   }
 
   setDifficulty(difficulty) {
-    const entry = DIFFICULTY_SETTINGS[difficulty];
-    const key = entry ? difficulty : 'med';
-    const settings = entry || DIFFICULTY_SETTINGS.med;
+    const hasEntry = Object.prototype.hasOwnProperty.call(DIFFICULTY_SETTINGS, difficulty);
+    const key = hasEntry ? difficulty : 'med';
+    const settings = getDifficultyEntry(key);
     this.difficulty = key;
     this.baseSpeed = settings.speed;
     this.spawnRangeBase = [...settings.spawnRange];
@@ -1289,10 +1613,11 @@ class RunnerGame {
       this.hud.mission.textContent = customText;
       return;
     }
-    const difficultyLabel = this.difficulty.charAt(0).toUpperCase() + this.difficulty.slice(1);
+    const difficultyLabel = getDifficultyLabel(this.difficulty);
     const levelLabel = this.levelName ? `${this.levelName} • ` : '';
+    const dailySuffix = this.isDailyRunActive() ? ' • Daily Run' : '';
     if (this.gameOver) {
-      this.hud.mission.textContent = `${levelLabel}Game Over • Best ${this.bestScore} m`;
+      this.hud.mission.textContent = `${levelLabel}Game Over • Best ${this.bestScore} m${dailySuffix}`;
     } else if (this.paused) {
       const reason = this.pauseReason;
       const label = reason === 'shell'
@@ -1300,9 +1625,9 @@ class RunnerGame {
         : reason === 'menu'
           ? 'Paused'
           : 'Paused';
-      this.hud.mission.textContent = `${levelLabel}${label}`;
+      this.hud.mission.textContent = `${levelLabel}${label}${dailySuffix}`;
     } else {
-      this.hud.mission.textContent = `${levelLabel}Difficulty: ${difficultyLabel} • Best ${this.bestScore} m`;
+      this.hud.mission.textContent = `${levelLabel}Difficulty: ${difficultyLabel} • Best ${this.bestScore} m${dailySuffix}`;
     }
   }
 
@@ -1425,19 +1750,35 @@ class RunnerGame {
   }
 
   updateDifficultyCurve() {
-    const settings = DIFFICULTY_SETTINGS[this.difficulty] || DIFFICULTY_SETTINGS.med;
+    const settings = getDifficultyEntry(this.difficulty);
+    const ramp = settings.ramp || {};
     const [baseMinGap, baseMaxGap] = this.spawnRangeBase;
-    const baseSpeed = settings.speed;
-    const timeProgress = clamp(this.elapsedSeconds / 90, 0, 1);
-    const distanceProgress = clamp(this.distance / 3200, 0, 1);
-    const combined = clamp(timeProgress * 0.6 + distanceProgress * 0.4, 0, 1.25);
+    const timeWindow = Math.max(1, ramp.timeWindow ?? 90);
+    const distanceWindow = Math.max(1, ramp.distanceWindow ?? 3200);
+    const rawTimeWeight = clamp(ramp.timeWeight ?? 0.6, 0, 1);
+    const rawDistanceWeight = clamp(ramp.distanceWeight ?? (1 - rawTimeWeight), 0, 1);
+    const weightSum = rawTimeWeight + rawDistanceWeight || 1;
+    const timeWeight = rawTimeWeight / weightSum;
+    const distanceWeight = rawDistanceWeight / weightSum;
+    const maxProgress = ramp.maxProgress ?? 1.25;
+    const timeProgress = clamp(this.elapsedSeconds / timeWindow, 0, 1);
+    const distanceProgress = clamp(this.distance / distanceWindow, 0, 1);
+    const combined = clamp(timeProgress * timeWeight + distanceProgress * distanceWeight, 0, maxProgress);
     this.difficultyProgress = combined;
-    const targetSpeed = baseSpeed + combined * 3.4;
-    this.speed = lerp(this.speed, targetSpeed, 0.02);
-    const minGap = baseMinGap * clamp(1 - combined * 0.55, 0.45, 1);
-    const maxGap = baseMaxGap * clamp(1 - combined * 0.35, 0.55, 1);
-    this.spawnRange[0] = Math.max(60, minGap);
-    this.spawnRange[1] = Math.max(this.spawnRange[0] + 20, maxGap);
+    const speedRamp = ramp.speed ?? 3.4;
+    const lerpRate = clamp(ramp.speedLerp ?? 0.02, 0.005, 0.08);
+    const targetSpeed = settings.speed + combined * speedRamp;
+    this.speed = lerp(this.speed, targetSpeed, lerpRate);
+    const minTighten = ramp.minTighten ?? 0.55;
+    const maxTighten = ramp.maxTighten ?? 0.35;
+    const minFloor = ramp.minFloor ?? 0.45;
+    const maxFloor = ramp.maxFloor ?? 0.55;
+    const minClamp = ramp.minClamp ?? 60;
+    const separation = ramp.minSeparation ?? 20;
+    const minScale = clamp(1 - combined * minTighten, minFloor, 1);
+    const maxScale = clamp(1 - combined * maxTighten, maxFloor, 1);
+    this.spawnRange[0] = Math.max(minClamp, baseMinGap * minScale);
+    this.spawnRange[1] = Math.max(this.spawnRange[0] + separation, baseMaxGap * maxScale);
   }
 
   spawnManualObstacles() {
@@ -2246,7 +2587,8 @@ class RunnerGame {
       while (startX > -repeatWidth) startX -= repeatWidth;
       ctx.save();
       ctx.globalAlpha = clamp(layer.alpha ?? 1, 0, 1);
-      if (layer.canvas && layer.canvas.width > 0 && layer.canvas.height > 0) {
+      const canDrawImage = typeof ctx.drawImage === 'function';
+      if (layer.canvas && layer.canvas.width > 0 && layer.canvas.height > 0 && canDrawImage) {
         const tileWidth = layer.canvas.width;
         const tileHeight = layer.canvas.height;
         for (let x = startX; x < VIRTUAL_WIDTH; x += repeatWidth) {
@@ -2255,6 +2597,16 @@ class RunnerGame {
       } else if (Array.isArray(layer.shapes) && layer.shapes.length) {
         for (let x = startX; x < VIRTUAL_WIDTH; x += repeatWidth) {
           for (const shape of layer.shapes) {
+            if (!shape) continue;
+            ctx.fillStyle = shape.color || '#1e293b';
+            ctx.fillRect(x + shape.x, shape.y, shape.w, shape.h);
+          }
+        }
+      } else if (layer.canvas && layer.canvas.width > 0 && layer.canvas.height > 0) {
+        // Fallback for environments without drawImage support
+        const shapes = Array.isArray(layer.shapes) ? layer.shapes : [];
+        for (let x = startX; x < VIRTUAL_WIDTH; x += repeatWidth) {
+          for (const shape of shapes) {
             if (!shape) continue;
             ctx.fillStyle = shape.color || '#1e293b';
             ctx.fillRect(x + shape.x, shape.y, shape.w, shape.h);
@@ -2605,7 +2957,7 @@ if (typeof window !== 'undefined') {
     if (!instance) {
       boot();
     }
-    const autoStart = instance?.scenes?.currentId === 'gameplay';
+    const autoStart = !!instance && !instance.paused && !instance.gameOver;
     instance?.loadLevel(level, { resetScore: true, silent: false, autoStart });
   };
 

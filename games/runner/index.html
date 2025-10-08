@@ -196,6 +196,44 @@
       gap: 0.75rem;
       justify-content: center;
     }
+    .runner-overlay__seed {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      text-align: left;
+    }
+    .runner-overlay__seed-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: rgba(226, 232, 240, 0.85);
+    }
+    .runner-overlay__seed-input {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.55);
+      color: #f8fafc;
+      font-size: 0.95rem;
+    }
+    .runner-overlay__seed-input::placeholder {
+      color: rgba(148, 163, 184, 0.65);
+    }
+    .runner-overlay__seed-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .runner-overlay__seed-actions .runner-overlay__btn {
+      flex: 1 1 140px;
+      min-width: 0;
+    }
+    .runner-overlay__seed-status {
+      margin: 0;
+      font-size: 0.8rem;
+      color: rgba(226, 232, 240, 0.65);
+    }
     .runner-overlay__btn {
       cursor: pointer;
       background: rgba(15, 23, 42, 0.82);
@@ -313,9 +351,12 @@
     <button id="shareBtn" hidden>🔗</button>
     <label>Difficulty:
       <select id="diffSel" name="diffSel">
+        <option value="relax">Relaxed</option>
         <option value="easy">Easy</option>
         <option value="med" selected>Medium</option>
         <option value="hard">Hard</option>
+        <option value="extreme">Extreme</option>
+        <option value="endless">Endless Ramp</option>
       </select>
     </label>
   </div>
