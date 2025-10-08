@@ -1222,7 +1222,7 @@ import "./pauseOverlay.js";
   }
 
   function pauseForShell(){
-    if(state.over) return;
+    if(state.over || state.paused) return;
     setPaused(true, "shell");
   }
   function resumeFromShell(){
