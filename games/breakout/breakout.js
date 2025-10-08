@@ -40,11 +40,63 @@ const BRICK_TILESET={
   ]
 };
 
+const BRICK_BASE_COLORS=['#a78bfa','#f97316','#38bdf8','#f472b6'];
+
 const BRICK_PADDING_X=20;
 const BRICK_TOP=60;
 const BRICK_SPACING=8;
 const BRICK_ROW_HEIGHT=26;
 const BRICK_HEIGHT=20;
+
+function normaliseColor(value){
+  if(typeof value!=='string')return null;
+  const trimmed=value.trim();
+  return trimmed.length?trimmed:null;
+}
+
+function getBrickBaseColor(brick){
+  const materialColor=normaliseColor(brick?.material?.color);
+  if(materialColor)return materialColor;
+  const palette=BRICK_BASE_COLORS;
+  const variantIndex=Number.isFinite(brick?.variant)?Math.abs(Math.round(brick.variant)):0;
+  if(palette.length){
+    return palette[variantIndex%palette.length];
+  }
+  return '#a78bfa';
+}
+
+function drawBrickSheen(context,brick){
+  const highlightHeight=Math.max(1,Math.min(brick.h,brick.h*0.25));
+  if(highlightHeight>0){
+    const highlightGradient=context.createLinearGradient(brick.x,brick.y,brick.x,brick.y+highlightHeight);
+    highlightGradient.addColorStop(0,'rgba(255,255,255,0.25)');
+    highlightGradient.addColorStop(1,'rgba(255,255,255,0)');
+    context.fillStyle=highlightGradient;
+    context.fillRect(brick.x,brick.y,brick.w,highlightHeight);
+  }
+  const shadowStart=brick.y+brick.h*0.5;
+  const shadowEnd=brick.y+brick.h;
+  const shadowHeight=Math.max(0,shadowEnd-shadowStart);
+  if(shadowHeight>0){
+    const shadowGradient=context.createLinearGradient(brick.x,shadowStart,brick.x,shadowEnd);
+    shadowGradient.addColorStop(0,'rgba(0,0,0,0)');
+    shadowGradient.addColorStop(1,'rgba(0,0,0,0.2)');
+    context.fillStyle=shadowGradient;
+    context.fillRect(brick.x,shadowStart,brick.w,shadowHeight);
+  }
+  context.save();
+  const wedgeWidth=Math.max(1,brick.w*0.4);
+  const wedgeDepth=Math.max(1,brick.h*0.55);
+  context.beginPath();
+  context.moveTo(brick.x,brick.y);
+  context.lineTo(brick.x+wedgeWidth,brick.y);
+  context.lineTo(brick.x+brick.w*0.35,brick.y+wedgeDepth);
+  context.closePath();
+  context.clip();
+  context.fillStyle='rgba(255,255,255,0.08)';
+  context.fillRect(brick.x,brick.y,brick.w,brick.h);
+  context.restore();
+}
 
 const EFFECT_SOURCES={
   spark:'/assets/effects/spark.png',
@@ -826,25 +878,22 @@ function draw(){
   if('imageSmoothingEnabled' in ctx&&ctx.imageSmoothingEnabled)ctx.imageSmoothingEnabled=false;
   drawParallaxBackground();
   renderTrailLayer();
-  const brickSprite=requestImage(spriteImages,'brick',SPRITE_SOURCES.brick);
+  const colorBuckets=new Map();
   for(const b of bricks){
-    if(b.hp>0){
-      if(brickSprite&&brickSprite.complete&&brickSprite.naturalWidth){
-        const tileSize=BRICK_TILESET.size;
-        const variants=BRICK_TILESET.variants;
-        const variantIndex=typeof b.variant==='number'?b.variant:0;
-        const variant=variants.length?variants[variantIndex%variants.length]:null;
-        if(variant){
-          const sx=variant.col*tileSize;
-          const sy=variant.row*tileSize;
-          ctx.drawImage(brickSprite,sx,sy,tileSize,tileSize,b.x,b.y,b.w,b.h);
-        }else{
-          ctx.drawImage(brickSprite,b.x,b.y,b.w,b.h);
-        }
-      }else{
-        ctx.fillStyle='#a78bfa';ctx.fillRect(b.x,b.y,b.w,b.h);
-      }
+    if(b.hp<=0)continue;
+    const baseColor=normaliseColor(getBrickBaseColor(b))||'#a78bfa';
+    if(!colorBuckets.has(baseColor))colorBuckets.set(baseColor,[]);
+    colorBuckets.get(baseColor).push(b);
+  }
+  for(const [color,list] of colorBuckets.entries()){
+    ctx.fillStyle=color;
+    for(const brick of list){
+      ctx.fillRect(brick.x,brick.y,brick.w,brick.h);
     }
+  }
+  for(const b of bricks){
+    if(b.hp<=0)continue;
+    drawBrickSheen(ctx,b);
   }
   const paddleSprite=requestImage(spriteImages,'paddle',SPRITE_SOURCES.paddle);
   if(paddleSprite&&paddleSprite.complete&&paddleSprite.naturalWidth){
