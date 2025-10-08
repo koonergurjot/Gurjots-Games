@@ -14,6 +14,9 @@ const REPORT_MD = path.join(HEALTH_DIR, 'report.md');
 const DEFAULT_BASELINE = path.join(HEALTH_DIR, 'baseline.json');
 const PLACEHOLDER_THUMB = 'assets/placeholder-thumb.png';
 const THUMB_EXTENSIONS = ['png', 'webp', 'jpg', 'jpeg', 'gif', 'svg'];
+const HEADLESS_BOOT_TIMEOUT_MS = 8000;
+const HEADLESS_DISABLE_ENV = 'GAME_DOCTOR_DISABLE_HEADLESS';
+const HEADLESS_IMPL_ENV = 'GAME_DOCTOR_HEADLESS_IMPL';
 
 const SEVERITY = {
   ERROR: 'error',
@@ -152,6 +155,22 @@ const ISSUE_TAXONOMY = new Map(
       category: 'placeholder-art',
       severity: ISSUE_SEVERITY_LEVEL.MINOR,
     },
+    'Headless boot timed out': {
+      category: 'headless-runtime',
+      severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
+    },
+    'Headless boot signaled error': {
+      category: 'headless-runtime',
+      severity: ISSUE_SEVERITY_LEVEL.BLOCKER,
+    },
+    'Headless boot run failed': {
+      category: 'headless-runtime',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
+    'Headless boot unexpected status': {
+      category: 'headless-runtime',
+      severity: ISSUE_SEVERITY_LEVEL.MAJOR,
+    },
     'Platformer level manifest unavailable': {
       category: 'level-data',
       severity: ISSUE_SEVERITY_LEVEL.MAJOR,
@@ -193,6 +212,305 @@ const ISSUE_TAXONOMY = new Map(
 
 const SHELL_ASSET_SCAN_EXTENSIONS = new Set(['.html', '.htm', '.js', '.mjs', '.cjs']);
 const ASSET_REFERENCE_PATTERN = /\/assets\/[^\s"'`()<>]+/g;
+const HEADLESS_DETAIL_LIMIT = 400;
+
+let headlessRunnerPromise = null;
+
+function isHeadlessDisabled() {
+  const flag = process.env[HEADLESS_DISABLE_ENV];
+  if (!flag) {
+    return false;
+  }
+  const normalized = String(flag).trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function resolveHeadlessModuleSpec() {
+  const custom = process.env[HEADLESS_IMPL_ENV];
+  if (!custom || !String(custom).trim()) {
+    return pathToFileURL(path.join(ROOT, 'tools', 'reporters', 'game-doctor-headless.mjs')).href;
+  }
+  const trimmed = String(custom).trim();
+  const normalized = trimmed.toLowerCase();
+  if (['off', 'none', 'disable', 'disabled', 'skip', 'false', '0'].includes(normalized)) {
+    return null;
+  }
+  if (trimmed.startsWith('file://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('./') || trimmed.startsWith('../')) {
+    return pathToFileURL(path.resolve(ROOT, trimmed)).href;
+  }
+  if (path.isAbsolute(trimmed)) {
+    return pathToFileURL(trimmed).href;
+  }
+  return trimmed;
+}
+
+async function ensureHeadlessRunner() {
+  if (headlessRunnerPromise) {
+    return headlessRunnerPromise;
+  }
+  if (isHeadlessDisabled()) {
+    headlessRunnerPromise = Promise.resolve(null);
+    return headlessRunnerPromise;
+  }
+  const spec = resolveHeadlessModuleSpec();
+  if (!spec) {
+    headlessRunnerPromise = Promise.resolve(null);
+    return headlessRunnerPromise;
+  }
+  headlessRunnerPromise = (async () => {
+    try {
+      const module = await import(spec);
+      if (!module || typeof module.createHeadlessRunner !== 'function') {
+        throw new Error('Headless module missing createHeadlessRunner export');
+      }
+      const runner = await module.createHeadlessRunner({ timeoutMs: HEADLESS_BOOT_TIMEOUT_MS });
+      return runner;
+    } catch (error) {
+      console.warn(
+        `Game doctor: headless boot harness unavailable (${error?.message ?? error}).`,
+      );
+      return null;
+    }
+  })();
+  return headlessRunnerPromise;
+}
+
+async function shutdownHeadlessRunner() {
+  if (!headlessRunnerPromise) {
+    return;
+  }
+  try {
+    const runner = await headlessRunnerPromise;
+    if (runner && typeof runner.close === 'function') {
+      await runner.close();
+    }
+  } catch (error) {
+    console.warn(`Game doctor: failed to close headless runner (${error?.message ?? error}).`);
+  } finally {
+    headlessRunnerPromise = null;
+  }
+}
+
+function sanitizeHeadlessValue(value) {
+  if (value == null) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.length > HEADLESS_DETAIL_LIMIT) {
+      return `${trimmed.slice(0, HEADLESS_DETAIL_LIMIT - 3)}...`;
+    }
+    return trimmed;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  if (value instanceof Error) {
+    return value.stack ?? value.message ?? String(value);
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function summarizeHeadlessResult(result) {
+  if (!result || typeof result !== 'object') {
+    return null;
+  }
+  const details = result.details ?? {};
+  const summary = { status: result.status ?? 'unknown' };
+  if (typeof details.waitedMs === 'number') {
+    summary.waitedMs = details.waitedMs;
+  }
+  if (details.message != null) {
+    summary.message = sanitizeHeadlessValue(details.message);
+  }
+  if (details.error != null) {
+    summary.error = sanitizeHeadlessValue(details.error);
+  }
+  if (details.event && typeof details.event === 'object') {
+    const event = {};
+    for (const key of ['message', 'reason', 'error', 'via', 'filename', 'lineno', 'colno']) {
+      if (details.event[key] != null) {
+        event[key] = sanitizeHeadlessValue(details.event[key]);
+      }
+    }
+    if (Object.keys(event).length > 0) {
+      summary.event = event;
+    }
+  }
+  if (Array.isArray(details.signals) && details.signals.length > 0) {
+    summary.signals = details.signals.map((entry) => {
+      const signal = { type: entry?.type ?? 'signal' };
+      if (entry?.data && typeof entry.data === 'object') {
+        const dataSummary = {};
+        if (typeof entry.data.type === 'string') {
+          dataSummary.type = entry.data.type;
+        }
+        if (entry.data.slug != null) {
+          dataSummary.slug = sanitizeHeadlessValue(entry.data.slug);
+        }
+        if (entry.data.synthetic != null) {
+          dataSummary.synthetic = sanitizeHeadlessValue(entry.data.synthetic);
+        }
+        if (Object.keys(dataSummary).length > 0) {
+          signal.data = dataSummary;
+        }
+      }
+      return signal;
+    });
+  }
+  return summary;
+}
+
+function buildHeadlessIssueContext(slug, shellRelative, result) {
+  const context = {};
+  if (slug) {
+    context.slug = slug;
+  }
+  if (shellRelative) {
+    context.shell = shellRelative;
+  }
+  const details = result?.details ?? {};
+  if (typeof details.waitedMs === 'number') {
+    context.waitedMs = details.waitedMs;
+  }
+  if (details.message != null) {
+    context.message = sanitizeHeadlessValue(details.message);
+  }
+  if (details.error != null) {
+    context.error = sanitizeHeadlessValue(details.error);
+  }
+  if (details.event && typeof details.event === 'object') {
+    const event = {};
+    for (const key of ['message', 'reason', 'error', 'via']) {
+      if (details.event[key] != null) {
+        event[key] = sanitizeHeadlessValue(details.event[key]);
+      }
+    }
+    if (Object.keys(event).length > 0) {
+      context.event = event;
+    }
+  }
+  return context;
+}
+
+async function runHeadlessBootValidation(slug, shellAbsolutePath, issues) {
+  if (!shellAbsolutePath) {
+    return null;
+  }
+  const runner = await ensureHeadlessRunner();
+  if (!runner) {
+    return null;
+  }
+  const shellRelative = relativeFromRoot(shellAbsolutePath);
+  let result;
+  try {
+    const shellUrl = pathToFileURL(shellAbsolutePath).href;
+    result = await runner.run(shellUrl, { slug, shellPath: shellRelative });
+  } catch (error) {
+    const context = buildHeadlessIssueContext(slug, shellRelative, {
+      details: { error: error?.message ?? error },
+    });
+    issues.push(formatIssue('Headless boot run failed', context));
+    return summarizeHeadlessResult({ status: 'exception', details: { error } });
+  }
+
+  if (!result || typeof result !== 'object') {
+    issues.push(
+      formatIssue(
+        'Headless boot run failed',
+        buildHeadlessIssueContext(slug, shellRelative, {
+          details: { message: 'Headless runner returned no result' },
+        }),
+      ),
+    );
+    return summarizeHeadlessResult({ status: 'failed', details: {} });
+  }
+
+  const summary = summarizeHeadlessResult(result);
+  if (!summary) {
+    issues.push(
+      formatIssue(
+        'Headless boot unexpected status',
+        buildHeadlessIssueContext(slug, shellRelative, result),
+      ),
+    );
+    return null;
+  }
+
+  if (summary.status === 'ready') {
+    return summary;
+  }
+
+  if (summary.status === 'timeout') {
+    issues.push(
+      formatIssue('Headless boot timed out', buildHeadlessIssueContext(slug, shellRelative, result)),
+    );
+    return summary;
+  }
+
+  if (summary.status === 'error') {
+    issues.push(
+      formatIssue(
+        'Headless boot signaled error',
+        buildHeadlessIssueContext(slug, shellRelative, result),
+      ),
+    );
+    return summary;
+  }
+
+  if (summary.status === 'exception' || summary.status === 'failed') {
+    issues.push(
+      formatIssue('Headless boot run failed', buildHeadlessIssueContext(slug, shellRelative, result)),
+    );
+    return summary;
+  }
+
+  issues.push(
+    formatIssue(
+      'Headless boot unexpected status',
+      {
+        ...buildHeadlessIssueContext(slug, shellRelative, result),
+        status: summary.status,
+      },
+    ),
+  );
+  return summary;
+}
+
+function formatHeadlessMarkdownLine(headless) {
+  const status = headless?.status ?? 'unknown';
+  if (status === 'ready') {
+    return '- Headless boot: ✅ GAME_READY received';
+  }
+  if (status === 'timeout') {
+    const waited = typeof headless.waitedMs === 'number' ? ` after ${headless.waitedMs}ms` : '';
+    return `- Headless boot: ❌ Timed out${waited}`;
+  }
+  if (status === 'error') {
+    const message = headless.message ?? headless.error;
+    const suffix = message ? ` (${sanitizeHeadlessValue(message)})` : '';
+    return `- Headless boot: ❌ GAME_ERROR${suffix}`;
+  }
+  if (status === 'exception' || status === 'failed') {
+    const detail = headless.error ?? headless.message;
+    const suffix = detail ? ` (${sanitizeHeadlessValue(detail)})` : '';
+    return `- Headless boot: ❌ Headless runner error${suffix}`;
+  }
+  if (status === 'skipped' || status === 'unavailable') {
+    return '- Headless boot: ⚠️ Skipped (unavailable)';
+  }
+  return `- Headless boot: ⚠️ ${status}`;
+}
 
 function mapSeverityToLevel(severity) {
   if (severity === SEVERITY.WARNING) {
@@ -1348,6 +1666,9 @@ function buildMarkdownReport(report) {
     } else {
       lines.push(`- Shell: missing`);
     }
+    if (game.runtime?.headless) {
+      lines.push(formatHeadlessMarkdownLine(game.runtime.headless));
+    }
     if (game.thumbnail?.found) {
       const note = game.thumbnail.placeholder ? ' (⚠️ placeholder)' : '';
       lines.push(`- Thumbnail: ${game.thumbnail.found}${note}`);
@@ -1600,10 +1921,11 @@ function selectBaselineEntry(game, maps) {
 }
 
 async function main() {
-  const cliConfig = parseCliArgs();
-  const { strictMode, baselinePath, writeBaseline } = cliConfig;
-  const { slugSources } = cliConfig;
-  let { changedRequested, forceEmptyFilter } = cliConfig;
+  try {
+    const cliConfig = parseCliArgs();
+    const { strictMode, baselinePath, writeBaseline } = cliConfig;
+    const { slugSources } = cliConfig;
+    let { changedRequested, forceEmptyFilter } = cliConfig;
 
   if (writeBaseline && !isBaselineWriteEnabled()) {
     console.error(
@@ -1724,6 +2046,7 @@ async function main() {
 
     let foundShell = null;
     let foundShellAbsolute = null;
+    let headlessSummary = null;
     if (slug) {
       const shellCandidates = [
         path.join(ROOT, 'games', slug, 'index.html'),
@@ -1745,6 +2068,8 @@ async function main() {
             tried: shellCandidates.map(relativeFromRoot),
           }),
         );
+      } else {
+        headlessSummary = await runHeadlessBootValidation(slug, foundShellAbsolute, issues);
       }
     }
 
@@ -1873,6 +2198,10 @@ async function main() {
         warnings: hasWarnings,
       },
     };
+
+    if (headlessSummary) {
+      result.runtime = { headless: headlessSummary };
+    }
 
     if (
       assetReferenceSummary &&
@@ -2033,6 +2362,9 @@ async function main() {
     } else {
       console.log(`Game doctor: all ${summary.total} game(s) look healthy!`);
     }
+  }
+  } finally {
+    await shutdownHeadlessRunner();
   }
 }
 
