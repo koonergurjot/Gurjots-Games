@@ -139,8 +139,10 @@
       toAbsolute(`${base}/bundle.mjs`)
     ].filter(Boolean));
 
+    const hasPreferredMode = typeof info.preferredMode === 'string' && info.preferredMode.length > 0;
     const shouldPreferModule = info.preferredMode === 'module' || info.preferredMode === 'script';
-    if (shouldPreferModule || moduleCandidates.length){
+    const shouldPreferIframe = info.preferredMode === 'iframe';
+    if (!shouldPreferIframe && (shouldPreferModule || (!hasPreferredMode && moduleCandidates.length))){
       const moduleEntry = await findFirstReachable(moduleCandidates);
       if (moduleEntry){
         return { mode: 'module', entry: moduleEntry, info: { ...info, title } };
