@@ -6,6 +6,7 @@ import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
 import { play as playSfx } from '../../shared/juice/audio.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
+import { createBag, createSeed, generateSequence as generateBagSequence } from './randomizer.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
@@ -172,10 +173,81 @@ const parallaxRequests=new Set();
 ensureSprites();
 let postedReady=false;
 const COLS=10, ROWS=20;
+const GRID_SIZE=COLS*ROWS;
 const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
 const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L:[[0,0,7],[7,7,7]]};
 const CLEAR_EFFECT_DURATION=0.6;
+const CLEAR_STAGE_SPLIT=[CLEAR_EFFECT_DURATION*0.5,CLEAR_EFFECT_DURATION*0.5];
 const LINES_PER_LEVEL=10;
+const LOCK_DELAY=0.5;
+const LOCK_RESET_LIMIT=15;
+const MOVE_DAS=0.16;
+const MOVE_ARR=0.02;
+const SOFT_DROP_FACTOR=6;
+
+function createGrid(){
+  return new Uint8Array(GRID_SIZE);
+}
+
+function gridIndex(x,y){
+  return y*COLS+x;
+}
+
+function getGridCell(state,x,y){
+  if(x<0||x>=COLS||y<0||y>=ROWS) return 0;
+  return state[gridIndex(x,y)]||0;
+}
+
+function setGridCell(state,x,y,value){
+  if(x<0||x>=COLS||y<0||y>=ROWS) return;
+  state[gridIndex(x,y)]=value;
+}
+
+function cloneGrid(state){
+  const out=[];
+  for(let y=0;y<ROWS;y++){
+    const row=new Array(COLS);
+    for(let x=0;x<COLS;x++) row[x]=state[gridIndex(x,y)]||0;
+    out.push(row);
+  }
+  return out;
+}
+
+function importGrid(data){
+  const state=createGrid();
+  if(Array.isArray(data)){
+    for(let y=0;y<Math.min(ROWS,data.length);y++){
+      const row=data[y];
+      if(!Array.isArray(row)) continue;
+      for(let x=0;x<Math.min(COLS,row.length);x++){
+        const value=row[x]|0;
+        if(value) state[gridIndex(x,y)]=value;
+      }
+    }
+  }else if(data instanceof Uint8Array && data.length===GRID_SIZE){
+    state.set(data);
+  }
+  return state;
+}
+
+function collapseRows(state,rows){
+  if(!rows?.length) return;
+  const toClear=new Set(rows);
+  let write=ROWS-1;
+  for(let y=ROWS-1;y>=0;y--){
+    if(toClear.has(y)) continue;
+    if(write!==y){
+      const fromStart=gridIndex(0,y);
+      const toStart=gridIndex(0,write);
+      state.copyWithin(toStart,fromStart,fromStart+COLS);
+    }
+    write--;
+  }
+  while(write>=0){
+    state.fill(0,gridIndex(0,write),gridIndex(0,write)+COLS);
+    write--;
+  }
+}
 
 function getCellSize(){
   return Math.floor(c.height/ROWS);
@@ -467,13 +539,17 @@ function drawEffects(){
 }
 
 function updateClearState(dt){
-  if(clearTimer<=0) return;
-  clearTimer=Math.max(0,clearTimer-dt);
-  if(clearTimer<=0 && clearRows.length){
-    const toClear=new Set(clearRows);
-    grid=grid.filter((row,index)=>!toClear.has(index));
-    while(grid.length<ROWS) grid.unshift(Array(COLS).fill(0));
-    clearRows.length=0;
+  if(!clearPipeline.length) return;
+  const current=clearPipeline[0];
+  current.timer-=dt;
+  if(current.stage===0 && current.timer<=0){
+    current.stage=1;
+    current.timer=CLEAR_STAGE_SPLIT[1];
+  }
+  if(current.stage===1 && current.timer<=0){
+    collapseRows(grid,current.rows);
+    clearPipeline.shift();
+    refreshClearingRows();
     updateGhost();
   }
 }
@@ -481,8 +557,7 @@ function updateClearState(dt){
 let bestScore=+(localStorage.getItem('tetris:bestScore')||0);
 let bestLines=+(localStorage.getItem('tetris:bestLines')||0);
 let started=false;
-let grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
-let bag=[];
+let grid=createGrid();
 let nextM;
 let holdM=null;
 let canHold=true;
@@ -490,9 +565,34 @@ let canHold=true;
 let cur;
 let ghost;
 let showGhost=localStorage.getItem('tetris:ghost')!=='0';
-let score=0, level=1, lines=0, over=false, dropMs=700, last=0, paused=false;
+let score=0, level=1, lines=0, over=false, dropMs=700, paused=false;
 let combo=-1;
 const scoreDisplay=document.getElementById('score');
+
+const moveState={
+  left:{active:false,das:0,arr:0},
+  right:{active:false,das:0,arr:0},
+  down:{active:false},
+  lastDir:null,
+};
+const rotationGrid={
+  width:COLS,
+  height:ROWS,
+  get(x,y){
+    return getGridCell(grid,x,y);
+  },
+};
+let rngSeed=createSeed();
+const bagRandomizer=createBag(rngSeed);
+
+function reseed(seed=createSeed()){
+  rngSeed=bagRandomizer.reset(seed);
+  const replayApi=globalScope?.Replay;
+  if(mode==='play' && replayApi && typeof replayApi.setSeed==='function'){
+    replayApi.setSeed(rngSeed);
+  }
+  return rngSeed;
+}
 
 function summarizeBroadcastPayload(data){
   if(!data || typeof data!=='object') return null;
@@ -511,9 +611,15 @@ function summarizeBroadcastPayload(data){
   if(currentPiece) summary.current=currentPiece;
   if(nextPiece) summary.next=nextPiece;
   if(holdPiece) summary.hold=holdPiece;
-  if(Array.isArray(data.grid)){
+  if(Number.isInteger(data.seed)) summary.seed=data.seed;
+  if(Array.isArray(data.grid) || data.grid instanceof Uint8Array){
     summary.hasGrid=true;
-    const filled=data.grid.reduce((acc,row)=>acc+(Array.isArray(row)?row.reduce((sum,cell)=>sum+(cell?1:0),0):0),0);
+    let filled=0;
+    if(data.grid instanceof Uint8Array){
+      for(const cell of data.grid) if(cell) filled++;
+    }else{
+      filled=data.grid.reduce((acc,row)=>acc+(Array.isArray(row)?row.reduce((sum,cell)=>sum+(cell?1:0),0):0),0);
+    }
     summary.filledCells=filled;
   }
   return summary;
@@ -562,6 +668,7 @@ function logBroadcastEvent(direction,payload,details){
 }
 
 function cloneMatrix(matrix){
+  if(matrix instanceof Uint8Array) return cloneGrid(matrix);
   if(!Array.isArray(matrix)) return [];
   return matrix.map(row=>Array.isArray(row)?row.slice():[]);
 }
@@ -588,6 +695,7 @@ function getPublicState(){
     combo,
     canHold,
     showGhost,
+    seed:rngSeed,
     grid: cloneMatrix(grid),
     current: clonePiece(cur),
     next: clonePiece(nextM),
@@ -634,6 +742,7 @@ function snapshotScore(){
     started,
     paused,
     over,
+    seed:rngSeed,
     status: over ? 'game-over' : (paused ? 'paused' : (started ? 'running' : 'idle')),
   };
 }
@@ -654,6 +763,7 @@ function snapshotEntities(){
       over,
       canHold,
       showGhost,
+      seed:rngSeed,
     },
   };
 }
@@ -723,15 +833,21 @@ const TetrisAPI={
   get currentPiece(){ return clonePiece(cur); },
   get nextPiece(){ return clonePiece(nextM); },
   get holdPiece(){ return clonePiece(holdM); },
+  get seed(){ return rngSeed; },
   get state(){ return getPublicState(); },
+  generateSequence(count=14,seed=rngSeed){
+    const safeCount=Math.max(0,Math.min(10000,Number.isFinite(count)?Math.floor(count):0));
+    return generateBagSequence(seed, safeCount);
+  },
   start(){
     if(over) return false;
     if(!started){
       started=true;
       const replayApi=globalScope?.Replay;
-      if(mode==='play' && replayApi && typeof replayApi.start==='function') replayApi.start();
-      last=typeof performance!=='undefined'?performance.now():Date.now();
+      if(mode==='play' && replayApi && typeof replayApi.start==='function') replayApi.start(rngSeed);
       lastFrame=0;
+      gravityTimer=0;
+      softDropTimer=0;
     }
     startGameLoop();
     return true;
@@ -765,8 +881,8 @@ const TetrisAPI={
   },
   reset(){
     stopGameLoop();
-    grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
-    bag=[];
+    grid=createGrid();
+    reseed(createSeed());
     initGame();
     score=0;
     level=1;
@@ -780,10 +896,12 @@ const TetrisAPI={
     shellPaused=false;
     pausedByShell=false;
     lockTimer=0;
-    clearRows.length=0;
-    clearTimer=0;
-    last=0;
+    lockResetCount=0;
+    clearPipeline.length=0;
+    clearingRows.clear();
     lastFrame=0;
+    gravityTimer=0;
+    softDropTimer=0;
     dropMs=700;
     syncScoreDisplay();
     updateGhost();
@@ -796,24 +914,13 @@ const TetrisAPI={
 globalScope.Tetris=TetrisAPI;
 notifyDiagnosticsListeners();
 
-function shuffle(a){
-  for(let i=a.length-1;i>0;i--){
-    const j=Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]];
-  }
-}
-
 function nextFromBag(){
   if(mode==='replay'){
     const t=Replay.nextPiece();
     const key=(t&&SHAPES[t])?t:'I';
     return {m:SHAPES[key].map(r=>r.slice()),t:key};
   }
-  if(bag.length===0){
-    bag=Object.keys(SHAPES);
-    shuffle(bag);
-  }
-  const t=bag.pop();
+  const t=bagRandomizer.next();
   return {m:SHAPES[t].map(r=>r.slice()),t};
 }
 
@@ -835,18 +942,25 @@ if(bc && mode==='spectate'){
     const data=e?.data;
     logBroadcastEvent('inbound',data,{event:'message'});
     if(data && typeof data==='object'){
-      ({grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost}=data);
+      grid=importGrid(data.grid);
+      ({cur,nextM,holdM,score,level,lines,over,paused,started,showGhost}=data);
       if(typeof data.combo==='number') combo=data.combo;
+      if(Number.isInteger(data.seed)) rngSeed=data.seed>>>0;
       syncScoreDisplay();
       updateGhost();
     }
   };
 }
-let lockTimer=0; const LOCK_DELAY=0.5; let lastFrame=0;
+let lockTimer=0;
+let lockResetCount=0;
+let lastFrame=0;
+let gravityTimer=0;
+let softDropTimer=0;
 let shellPaused=false;
 let pausedByShell=false;
 let rafId=0;
-let clearTimer=0, clearRows=[];
+const clearPipeline=[];
+const clearingRows=new Set();
 let rotated=false;
 
 function initGame(){
@@ -863,18 +977,23 @@ function spawn(){
   return {m:piece.m.map(r=>r.slice()), x:3, y:0, t:piece.t, o:0};
 }
 function collide(p){
-  for(let y=0;y<p.m.length;y++)
+  for(let y=0;y<p.m.length;y++){
     for(let x=0;x<p.m[y].length;x++){
       if(!p.m[y][x]) continue;
-      const nx=p.x+x, ny=p.y+y;
-      if(nx<0||nx>=COLS||ny>=ROWS||grid[ny]?.[nx]) return true;
+      const nx=p.x+x;
+      const ny=p.y+y;
+      if(nx<0||nx>=COLS||ny>=ROWS) return true;
+      if(getGridCell(grid,nx,ny)) return true;
     }
+  }
   return false;
 }
 function merge(p){
-  for(let y=0;y<p.m.length;y++)
-    for(let x=0;x<p.m[y].length;x++)
-      if(p.m[y][x]) grid[p.y+y][p.x+x]=p.m[y][x];
+  for(let y=0;y<p.m.length;y++){
+    for(let x=0;x<p.m[y].length;x++){
+      if(p.m[y][x]) setGridCell(grid,p.x+x,p.y+y,p.m[y][x]);
+    }
+  }
 }
 
 function updateGhost(){
@@ -897,14 +1016,35 @@ function updateBest(){
   }
 }
 
+function refreshClearingRows(){
+  clearingRows.clear();
+  if(!clearPipeline.length) return;
+  const active=clearPipeline[0];
+  for(const row of active.rows) clearingRows.add(row);
+}
+
+function queueLineClear(rows){
+  if(!rows?.length) return;
+  const sorted=[...rows].sort((a,b)=>a-b);
+  clearPipeline.push({ rows:sorted, stage:0, timer:CLEAR_STAGE_SPLIT[0] });
+  refreshClearingRows();
+}
+
 function clearLines(){
-  clearRows=[];
-  for(let y=0;y<ROWS;y++)
-    if(grid[y].every(v=>v)) clearRows.push(y);
-  if(clearRows.length){
-    clearTimer=CLEAR_EFFECT_DURATION;
+  const rows=[];
+  for(let y=0;y<ROWS;y++){
+    let filled=true;
+    for(let x=0;x<COLS;x++){
+      if(!getGridCell(grid,x,y)){ filled=false; break; }
+    }
+    if(filled) rows.push(y);
   }
-  return clearRows.length;
+  if(rows.length) queueLineClear(rows);
+  return rows;
+}
+
+function isClearing(){
+  return clearPipeline.length>0;
 }
 
 function isTSpin(p){
@@ -913,7 +1053,7 @@ function isTSpin(p){
   let count=0;
   for(const [dx,dy] of corners){
     const nx=p.x+dx, ny=p.y+dy;
-    if(nx<0||nx>=COLS||ny>=ROWS || grid[ny][nx]) count++;
+    if(nx<0||nx>=COLS||ny>=ROWS || getGridCell(grid,nx,ny)) count++;
   }
   return count>=3;
 }
@@ -922,7 +1062,8 @@ function lockPiece(soft=0,hard=0){
   const lockedPiece=clonePiece(cur);
   merge(cur);
   const tSpin=isTSpin(cur);
-  const cleared=clearLines();
+  const clearedRows=clearLines();
+  const cleared=clearedRows.length;
   let pts=soft + hard*2;
   if(tSpin){
     pts+=[0,800,1200,1600][cleared]||400;
@@ -950,16 +1091,56 @@ function lockPiece(soft=0,hard=0){
   emitLockEffects(lockedPiece,hard);
   playSound('hit');
   if(cleared>0){
-    emitLineClearEffects(clearRows);
+    emitLineClearEffects(clearedRows);
     playSound('explode');
   }
   if(leveledUp) playSound('power');
   rotated=false;
+  lockResetCount=0;
+}
+
+function triggerGameOver(){
+  if(over) return;
+  over=true;
+  updateBest();
+  GG.addAch(GAME_ID,'Stacked');
+  if(mode==='play'){
+    Replay.stop();
+    Replay.download('tetris-replay-'+Date.now()+'.json');
+  }
+}
+
+function onPieceMoved(){
+  const touching=collide({...cur,y:cur.y+1});
+  if(touching){
+    if(lockResetCount<LOCK_RESET_LIMIT){
+      lockTimer=0;
+      lockResetCount++;
+    }
+  }else{
+    lockTimer=0;
+    lockResetCount=0;
+  }
+  updateGhost();
+}
+
+function spawnNextPiece(){
+  cur=spawn();
+  canHold=true;
+  lockTimer=0;
+  lockResetCount=0;
+  gravityTimer=0;
+  softDropTimer=0;
+  updateGhost();
+  if(collide(cur)){
+    triggerGameOver();
+  }
 }
 
 function drawCell(x,y,v,cell){
   if(!v) return;
-  drawBlockAtPixel(x*cell,y*cell,cell,COLORS[v],1,{shadow:false});
+  const alpha=clearingRows.has(y)?0.6:1;
+  drawBlockAtPixel(x*cell,y*cell,cell,COLORS[v],alpha,{shadow:false});
 }
 function drawPieceCell(x,y,v,cell,alpha=1){
   drawBlockAtPixel(x*cell,y*cell,cell,COLORS[v],alpha,{shadow:true});
@@ -1037,7 +1218,7 @@ function draw(){
   }
 
   for(let y=0;y<ROWS;y++)
-    for(let x=0;x<COLS;x++) drawCell(x,y,grid[y][x],cell);
+    for(let x=0;x<COLS;x++) drawCell(x,y,getGridCell(grid,x,y),cell);
   drawGhost(cell);
   for(let y=0;y<cur.m.length;y++)
     for(let x=0;x<cur.m[y].length;x++)
@@ -1075,47 +1256,42 @@ function draw(){
 
 function drop(manual=false){
   cur.y++;
+  if(manual) GG.addXP(1);
   if(collide(cur)){
     cur.y--;
     lockPiece(manual?1:0,0);
-    cur=spawn();
-    canHold=true;
-    lockTimer=0;
-    if(collide(cur)){
-      over=true;
-      updateBest();
-      GG.addAch(GAME_ID,'Stacked');
-      if(mode==='play'){ Replay.stop(); Replay.download('tetris-replay-'+Date.now()+'.json'); }
-    }
-  } else {
-    if(manual){ score++; updateBest(); syncScoreDisplay(); }
-    lockTimer=0;
+    spawnNextPiece();
+    return 'lock';
   }
-  updateGhost();
+  if(manual){
+    score++;
+    updateBest();
+    syncScoreDisplay();
+  }
+  gravityTimer=0;
+  onPieceMoved();
+  return 'move';
 }
+
 function hardDrop(){
   let dist=0;
   while(true){
     const nextPos={...cur,y:cur.y+1};
-    if(collide(nextPos)) break; // loop avoids counting the collision step
+    if(collide(nextPos)) break;
     cur.y=nextPos.y;
     dist++;
   }
-  lockPiece(0,dist);
-  cur=spawn();
-  canHold=true;
-  lockTimer=0;
-  updateBest();
-  updateGhost();
-  if(collide(cur)){
-    over=true;
-    updateBest();
-    GG.addAch(GAME_ID,'Stacked');
-    if(mode==='play'){ Replay.stop(); Replay.download('tetris-replay-'+Date.now()+'.json'); }
+  if(dist>0){
+    gravityTimer=0;
   }
+  lockPiece(0,dist);
+  spawnNextPiece();
+  updateBest();
+  return true;
 }
+
 function hold(){
-  if(!canHold) return;
+  if(!canHold) return false;
   const temp=holdM;
   holdM={m:cur.m.map(r=>r.slice()),t:cur.t};
   if(temp){
@@ -1125,30 +1301,110 @@ function hold(){
   }
   canHold=false;
   rotated=false;
+  lockTimer=0;
+  lockResetCount=0;
+  gravityTimer=0;
+  softDropTimer=0;
   updateGhost();
+  if(collide(cur)) triggerGameOver();
+  return true;
 }
 
-function applyAction(a){
-  if(a==='left'){
-    const nx=cur.x-1; const p={...cur,x:nx};
-    if(!collide(p)){ cur.x=nx; lockTimer=0; updateGhost(); }
+function attemptShift(dx){
+  const candidate={...cur,x:cur.x+dx};
+  if(collide(candidate)) return false;
+  cur.x=candidate.x;
+  onPieceMoved();
+  return true;
+}
+
+function attemptRotate(dir=1){
+  const cand=TetrisEngine.rotate(cur,rotationGrid,dir);
+  if(cand!==cur){
+    cur=cand;
+    playSound('click');
+    onPieceMoved();
+    rotated=true;
+    return true;
   }
-  if(a==='right'){
-    const nx=cur.x+1; const p={...cur,x:nx};
-    if(!collide(p)){ cur.x=nx; lockTimer=0; updateGhost(); }
+  return false;
+}
+
+function executeAction(action,{record=true}={}){
+  let result=false;
+  switch(action){
+    case 'left':
+      result=attemptShift(-1);
+      break;
+    case 'right':
+      result=attemptShift(1);
+      break;
+    case 'rotate':
+      result=attemptRotate(1);
+      break;
+    case 'down': {
+      const outcome=drop(true);
+      result=outcome==='move'||outcome==='lock';
+      break;
+    }
+    case 'hardDrop':
+      result=hardDrop();
+      break;
+    case 'hold':
+      result=hold();
+      break;
+    default:
+      result=false;
   }
-  if(a==='rotate'){
-    const cand=TetrisEngine.rotate(cur,grid,1);
-    if(cand!==cur){ cur=cand; playSound('click'); lockTimer=0; updateGhost(); rotated=true; }
+  if(record && result && mode==='play') Replay.recordAction(action);
+  return result;
+}
+
+function activeHorizontalDirection(){
+  if(moveState.left.active && moveState.right.active){
+    return moveState.lastDir==='right'?'right':'left';
   }
-  if(a==='down'){
-    drop(true); GG.addXP(1);
+  if(moveState.left.active) return 'left';
+  if(moveState.right.active) return 'right';
+  return null;
+}
+
+function updateHorizontalMovement(dt){
+  const dir=activeHorizontalDirection();
+  if(!dir) return;
+  const state=moveState[dir];
+  if(state.das>0){
+    state.das=Math.max(0,state.das-dt);
+    if(state.das===0){
+      executeAction(dir,{record:mode==='play'});
+      state.arr=0;
+    }
+    return;
   }
-  if(a==='hardDrop'){
-    hardDrop();
+  const interval=Math.max(MOVE_ARR,0.001);
+  state.arr+=dt;
+  while(state.arr>=interval){
+    const moved=executeAction(dir,{record:mode==='play'});
+    state.arr-=interval;
+    if(state.arr<0) state.arr=0;
+    if(!moved) break;
+    if(MOVE_ARR<=0){
+      state.arr=0;
+      break;
+    }
   }
-  if(a==='hold'){
-    hold();
+}
+
+function updateSoftDrop(dt){
+  if(!moveState.down.active) return;
+  const baseInterval=Math.max(dropMs/1000,0.01);
+  const interval=Math.max(baseInterval/SOFT_DROP_FACTOR,0.01);
+  softDropTimer+=dt;
+  while(softDropTimer>=interval){
+    const moved=executeAction('down',{record:mode==='play'});
+    softDropTimer-=interval;
+    if(softDropTimer<0) softDropTimer=0;
+    if(!moved) break;
   }
 }
 
@@ -1159,6 +1415,7 @@ addEventListener('keydown',e=>{
   if(e.code==='Space' || preventKeys.has(key) || key==='Spacebar'){
     e.preventDefault();
   }
+  if((key.startsWith('Arrow') || key==='Spacebar' || e.code==='Space') && e.repeat) return;
   if(keyLower==='g'){
     showGhost=!showGhost;
     localStorage.setItem('tetris:ghost',showGhost?'1':'0');
@@ -1167,12 +1424,13 @@ addEventListener('keydown',e=>{
   }
   if(mode!=='play') return;
   if(!started){
-    if(e.code==='Space'){ started=true; Replay.start(); return; }
+    if(e.code==='Space'){ started=true; Replay.start(rngSeed); return; }
     return;
   }
   if(over && keyLower==='r'){
-    grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
-    bag=[]; initGame();
+    grid=createGrid();
+    reseed(createSeed());
+    initGame();
     score=0; level=1; lines=0; holdM=null; canHold=true;
     syncScoreDisplay();
     over=false; started=false;
@@ -1180,22 +1438,68 @@ addEventListener('keydown',e=>{
     return;
   }
   if(keyLower==='p'){ paused=!paused; return; }
-  if(paused || over || clearTimer>0) return;
+  if(paused || over || isClearing()) return;
 
-  if(e.key==='ArrowLeft'){ applyAction('left'); Replay.recordAction('left'); }
-  if(e.key==='ArrowRight'){ applyAction('right'); Replay.recordAction('right'); }
-  if(e.key==='ArrowUp'){ applyAction('rotate'); Replay.recordAction('rotate'); }
-  if(e.key==='ArrowDown'){ applyAction('down'); Replay.recordAction('down'); }
-  if(e.code==='Space'){ applyAction('hardDrop'); Replay.recordAction('hardDrop'); }
-  if(keyLower==='c'){ applyAction('hold'); Replay.recordAction('hold'); }
+  if(key==='ArrowLeft'){
+    moveState.left.active=true;
+    moveState.left.das=MOVE_DAS;
+    moveState.left.arr=0;
+    moveState.lastDir='left';
+    executeAction('left');
+    return;
+  }
+  if(key==='ArrowRight'){
+    moveState.right.active=true;
+    moveState.right.das=MOVE_DAS;
+    moveState.right.arr=0;
+    moveState.lastDir='right';
+    executeAction('right');
+    return;
+  }
+  if(key==='ArrowDown'){
+    moveState.down.active=true;
+    softDropTimer=0;
+    executeAction('down');
+    return;
+  }
+  if(key==='ArrowUp'){
+    executeAction('rotate');
+    return;
+  }
+  if(e.code==='Space'){
+    executeAction('hardDrop');
+    return;
+  }
+  if(keyLower==='c'){
+    executeAction('hold');
+  }
+});
+
+addEventListener('keyup',e=>{
+  const key=e.key||'';
+  if(key==='ArrowLeft'){
+    moveState.left.active=false;
+    moveState.left.das=0;
+    moveState.left.arr=0;
+    if(moveState.right.active) moveState.lastDir='right';
+  }
+  if(key==='ArrowRight'){
+    moveState.right.active=false;
+    moveState.right.das=0;
+    moveState.right.arr=0;
+    if(moveState.left.active) moveState.lastDir='left';
+  }
+  if(key==='ArrowDown'){
+    moveState.down.active=false;
+    softDropTimer=0;
+  }
 });
 
 
 let touchX=null,touchY=null;
 function handleAction(a){
-  if(mode!=='play' || paused || over || clearTimer>0) return;
-  applyAction(a);
-  Replay.recordAction(a);
+  if(mode!=='play' || paused || over || isClearing()) return;
+  executeAction(a);
 }
 c.addEventListener('pointerdown',e=>{touchX=e.clientX;touchY=e.clientY;});
 c.addEventListener('pointerup',e=>{
@@ -1211,37 +1515,46 @@ c.addEventListener('pointerup',e=>{
 
 function loop(ts){
   if(shellPaused){ rafId=0; return; }
-  if(!last) last=ts;
   if(!lastFrame) lastFrame=ts;
   const dt=Math.min((ts-lastFrame)/1000,0.05);
   lastFrame=ts;
 
   if(mode==='replay' && started && !paused && !over){
-    const acts=Replay.tick(dt); acts.forEach(a=>applyAction(a));
+    const acts=Replay.tick(dt);
+    acts.forEach(a=>executeAction(a,{record:false}));
   }
 
-  if(mode!=='spectate' && started && !paused && !over && clearTimer<=0 && ts-last>dropMs){
-    drop();
-    last=ts;
-  }
-  if(mode!=='spectate' && started && !paused && !over && clearTimer<=0){
-    const touching=collide({...cur,y:cur.y+1});
-    if(touching){
-      lockTimer+=dt;
-      if(lockTimer>=LOCK_DELAY){
-        lockPiece();
-        cur=spawn();
-        canHold=true;
-        lockTimer=0;
-        updateGhost();
-        if(collide(cur)){
-          over=true;
-          updateBest();
-          GG.addAch(GAME_ID,'Stacked');
-          if(mode==='play'){ Replay.stop(); Replay.download('tetris-replay-'+Date.now()+'.json'); }
+  const canUpdate=mode!=='spectate' && started && !paused && !over;
+  const clearing=isClearing();
+
+  if(canUpdate){
+    if(!clearing){
+      updateHorizontalMovement(dt);
+      updateSoftDrop(dt);
+      const baseInterval=Math.max(dropMs/1000,0.01);
+      gravityTimer+=dt;
+      while(gravityTimer>=baseInterval){
+        const outcome=drop(false);
+        if(outcome==='lock'){
+          gravityTimer=0;
+          break;
         }
+        gravityTimer-=baseInterval;
       }
-    } else {
+      const touching=collide({...cur,y:cur.y+1});
+      if(touching){
+        lockTimer+=dt;
+        if(lockTimer>=LOCK_DELAY){
+          lockPiece();
+          spawnNextPiece();
+          lockTimer=0;
+        }
+      }else{
+        lockTimer=0;
+      }
+    }else{
+      gravityTimer=0;
+      softDropTimer=0;
       lockTimer=0;
     }
   }
@@ -1251,7 +1564,7 @@ function loop(ts){
   ctx.clearRect(0,0,c.width,c.height);
   draw();
   if(bc && mode==='play'){
-    const payload={grid,cur,nextM,holdM,score,level,lines,over,paused,started,showGhost,combo};
+    const payload={grid:cloneGrid(grid),cur,nextM,holdM,score,level,lines,over,paused,started,showGhost,combo,seed:rngSeed};
     bc.postMessage(payload);
     logBroadcastEvent('outbound',payload,{event:'message'});
   }
@@ -1279,8 +1592,8 @@ function resumeFromShell(){
   if(pausedByShell && !over){
     paused=false;
     pausedByShell=false;
-    last=performance.now();
     lastFrame=0;
+    gravityTimer=0;
   } else {
     pausedByShell=false;
   }
