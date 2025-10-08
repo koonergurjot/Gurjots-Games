@@ -1,0 +1,21 @@
+{
+  "name": "Foundry Belt",
+  "speedRamp": 0.22,
+  "dropTable": {
+    "chance": 0.32,
+    "weights": { "MULTI": 1.6, "SLOW": 1.2 }
+  },
+  "materials": {
+    "A": { "hp": 2, "variant": 1, "score": 18, "powerMultiplier": 1 },
+    "B": { "hp": 3, "variant": 2, "score": 28, "powerMultiplier": 0.8 },
+    "C": { "hp": 1, "variant": 0, "score": 12, "powerMultiplier": 1.5 },
+    "D": { "hp": 5, "variant": 3, "score": 45, "powerMultiplier": 0.6 }
+  },
+  "rows": [
+    "CCCCCCCCCCCCCCCC",
+    "0A0B0A0B0A0B0A0B",
+    "DDDDDDDDDDDDDDDD",
+    "0A0B0A0B0A0B0A0B",
+    "CCCCCCCCCCCCCCCC"
+  ]
+}

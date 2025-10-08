@@ -26,7 +26,11 @@
         "breakout.js",
         "levels.js",
         "powerups.js",
+        "powerups.json",
         "adapter.js"
+      ],
+      "globs": [
+        "levels/*.json"
       ]
     },
     "chess": {

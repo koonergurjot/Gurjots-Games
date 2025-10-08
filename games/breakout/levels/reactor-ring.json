@@ -1,0 +1,21 @@
+{
+  "name": "Reactor Ring",
+  "speedRamp": 0.18,
+  "dropTable": {
+    "chance": 0.3,
+    "weights": { "LASER": 1.4 }
+  },
+  "materials": {
+    "A": { "hp": 1, "variant": 3, "score": 12, "powerMultiplier": 1.2 },
+    "B": { "hp": 2, "variant": 0, "score": 18, "powerMultiplier": 1 },
+    "C": { "hp": 4, "variant": 1, "score": 30, "powerMultiplier": 0.9 },
+    "D": { "hp": 2, "variant": 2, "score": 22, "powerMultiplier": 1.4 }
+  },
+  "rows": [
+    "0A0B0A0B0A0B0A0B0A0",
+    "DDDDDDDDDDDDDDDDDDD",
+    "0C0B0C0B0C0B0C0B0C0",
+    "BBBBBBBBBBBBBBBBBBB",
+    "0A0B0A0B0A0B0A0B0A0"
+  ]
+}

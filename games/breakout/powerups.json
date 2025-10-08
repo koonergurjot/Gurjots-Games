@@ -1,0 +1,36 @@
+{
+  "effects": [
+    {
+      "id": "EXPAND",
+      "type": "enlarge",
+      "duration": 10,
+      "widthMultiplier": 1.35,
+      "maxWidth": 240,
+      "weight": 3.5,
+      "sprite": "/assets/powerups/shield.png"
+    },
+    {
+      "id": "SLOW",
+      "type": "slow",
+      "duration": 6,
+      "speedScale": 0.7,
+      "weight": 3,
+      "sprite": "/assets/powerups/slow.png"
+    },
+    {
+      "id": "MULTI",
+      "type": "multi",
+      "count": 2,
+      "weight": 2.5,
+      "sprite": "/assets/powerups/multi.png"
+    },
+    {
+      "id": "LASER",
+      "type": "laser",
+      "duration": 5,
+      "pulseInterval": 0.28,
+      "weight": 1.5,
+      "sprite": "/assets/powerups/lightning.png"
+    }
+  ]
+}
