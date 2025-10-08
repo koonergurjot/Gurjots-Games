@@ -6,18 +6,25 @@ const SLUG = 'asteroids';
 const TWO_PI = Math.PI * 2;
 const BASE_WIDTH = 960;
 const BASE_HEIGHT = 720;
-const MAX_SPEED = 320;
+const SHIP_BASE_MAX_SPEED = 320;
+const SHIP_BASE_THRUST = 520;
+const SHIP_BASE_TURN_SPEED = 3.6;
 const SHIP_RADIUS = 18;
 const ASTEROID_SIZES = [0, 14, 26, 40]; // index by size tier (1-3)
 const ASTEROID_SEGMENTS = 8;
-const ASTEROID_SPEED = [0, 120, 90, 70];
-const ASTEROID_SCORE = [0, 100, 50, 20];
+const ASTEROID_BASE_SPEED = [0, 120, 90, 70];
+const ASTEROID_BASE_SCORE = [0, 100, 50, 20];
 const STAR_LAYER_CONFIG = [
   { density: 0.2, speed: 30, size: 2, color: '#e2e8f0' },
   { density: 0.1, speed: 12, size: 1.5, color: '#cbd5f5' },
   { density: 0.05, speed: 5, size: 1.1, color: '#94a3b8' },
 ];
 const STAR_TWINKLE_SPEED = { min: 0.5, max: 1.2 };
+const DIFFICULTY_PRESETS = [
+  { key: 'relaxed', label: 'Relaxed', shipSpeed: 0.85, asteroidSpeed: 0.75, score: 0.75 },
+  { key: 'standard', label: 'Standard', shipSpeed: 1, asteroidSpeed: 1, score: 1 },
+  { key: 'veteran', label: 'Veteran', shipSpeed: 1.15, asteroidSpeed: 1.25, score: 1.4 },
+];
 const STORAGE_KEYS = {
   best: `${SLUG}:best`,
 };
@@ -598,16 +605,18 @@ function lifetimeSystem(world, dt, onExpire) {
 
 const DEFAULT_WAVE_CONFIG = {
   waves: [
-    { rocks: [ { size: 3, count: 2 } ] },
-    { rocks: [ { size: 3, count: 3 } ] },
-    { rocks: [ { size: 3, count: 3 }, { size: 2, count: 1 } ] },
-    { rocks: [ { size: 3, count: 4 }, { size: 2, count: 1 } ] },
-    { rocks: [ { size: 3, count: 4 }, { size: 2, count: 2 } ] },
-    { rocks: [ { size: 3, count: 4 }, { size: 2, count: 2 }, { size: 1, count: 1 } ] },
-    { rocks: [ { size: 3, count: 5 }, { size: 2, count: 2 }, { size: 1, count: 1 } ] },
-    { rocks: [ { size: 3, count: 5 }, { size: 2, count: 3 }, { size: 1, count: 1 } ] },
-    { rocks: [ { size: 3, count: 6 }, { size: 2, count: 3 }, { size: 1, count: 2 } ] },
-    { rocks: [ { size: 3, count: 6 }, { size: 2, count: 4 }, { size: 1, count: 2 } ] },
+    { type: 'asteroids', rocks: [ { size: 3, count: 2 } ] },
+    { type: 'asteroids', rocks: [ { size: 3, count: 3 } ] },
+    { type: 'asteroids', rocks: [ { size: 3, count: 3 }, { size: 2, count: 1 } ] },
+    { type: 'objective', label: 'Disable the Beacons', targets: 3, targetHealth: 2, rocks: [ { size: 3, count: 3 }, { size: 2, count: 1 } ] },
+    { type: 'asteroids', rocks: [ { size: 3, count: 4 }, { size: 2, count: 2 } ] },
+    { type: 'asteroids', rocks: [ { size: 3, count: 4 }, { size: 2, count: 2 }, { size: 1, count: 1 } ] },
+    { type: 'asteroids', rocks: [ { size: 3, count: 5 }, { size: 2, count: 2 }, { size: 1, count: 1 } ] },
+    { type: 'boss', label: 'Rogue Hunter', boss: { hp: 18, radius: 44, speed: 140, fireRate: 1.4, score: 1500 }, rocks: [ { size: 2, count: 2 }, { size: 1, count: 2 } ] },
+    { type: 'asteroids', rocks: [ { size: 3, count: 6 }, { size: 2, count: 3 }, { size: 1, count: 2 } ] },
+    { type: 'objective', label: 'Secure Data Cores', targets: 4, targetHealth: 3, rocks: [ { size: 3, count: 4 }, { size: 2, count: 2 }, { size: 1, count: 1 } ] },
+    { type: 'boss', label: 'Dreadnought Escort', boss: { hp: 24, radius: 50, speed: 160, fireRate: 1.1, score: 2200 }, rocks: [ { size: 2, count: 3 }, { size: 1, count: 2 } ] },
+    { type: 'asteroids', label: 'Endless Siege', rocks: [ { size: 3, count: 6 }, { size: 2, count: 4 }, { size: 1, count: 3 } ] },
   ],
   splits: {
     '3': [2, 2],
@@ -639,14 +648,24 @@ async function loadWaveConfig() {
 }
 
 function resolveWaveConfig(config, wave) {
-  if (!config?.waves?.length) return DEFAULT_WAVE_CONFIG.waves[0];
+  if (!config?.waves?.length) return normalizeWaveEntry(DEFAULT_WAVE_CONFIG.waves[0]);
   const index = Math.min(config.waves.length - 1, Math.max(0, wave - 1));
-  return config.waves[index];
+  return normalizeWaveEntry(config.waves[index]);
 }
 
 function resolveSplitRules(config, size) {
   const table = config?.splits || DEFAULT_WAVE_CONFIG.splits;
   return Array.isArray(table?.[String(size)]) ? table[String(size)] : [];
+}
+
+function normalizeWaveEntry(entry) {
+  if (!entry) return { type: 'asteroids', rocks: [] };
+  const type = typeof entry.type === 'string' ? entry.type : 'asteroids';
+  const normalized = { ...entry, type };
+  if (!Array.isArray(normalized.rocks)) {
+    normalized.rocks = [];
+  }
+  return normalized;
 }
 
 function angleTo(x1, y1, x2, y2) {
@@ -724,6 +743,10 @@ class AsteroidsGame {
     this.world = createWorld(this.width, this.height);
     this.shipEntity = null;
 
+    this.difficultyIndex = 1;
+    this.tuning = this.createDifficultyTuning(DIFFICULTY_PRESETS[this.difficultyIndex]?.key || 'standard');
+    this.shipMaxSpeed = this.tuning.shipMaxSpeed;
+
     this.bulletCooldown = 0;
     this.thrustTimer = 0;
     this.postedReady = false;
@@ -747,8 +770,15 @@ class AsteroidsGame {
 
     this.waveSpawnDelay = 0;
 
+    this.parallaxTime = 0;
+    this.parallaxEvents = [];
+    this.nextParallaxEvent = this.scheduleParallaxEvent();
+
     this.starfieldTime = 0;
     this.starfield = [];
+
+    this.specialWave = null;
+    this.enemyProjectiles = [];
 
     this.sounds = {
       laser: createAudio('../../assets/audio/laser.wav', 0.45),
@@ -756,6 +786,7 @@ class AsteroidsGame {
     };
 
     this.hud = this.createHud();
+    this.updateDifficultyUi();
     if (this.hud?.best) this.hud.best.textContent = String(this.bestScore);
     if (this.hud?.score) this.hud.score.textContent = '0';
     if (this.hud?.wave) this.hud.wave.textContent = String(this.wave);
@@ -828,6 +859,10 @@ class AsteroidsGame {
         lives: { innerHTML: '' },
         overlayTitle: { textContent: '' },
         overlayMessage: { textContent: '' },
+        objectiveRow: { setAttribute() {}, removeAttribute() {} },
+        objectiveValue: { textContent: '', style: {} },
+        difficultySlider: { value: '0' },
+        difficultyLabels: [],
       };
     }
 
@@ -835,6 +870,7 @@ class AsteroidsGame {
 
     const hud = document.createElement('div');
     hud.className = 'asteroids-hud';
+    const difficultyLabels = DIFFICULTY_PRESETS.map((preset, index) => `<span data-index="${index}">${preset.label}</span>`).join('');
     hud.innerHTML = `
       <div class="asteroids-hud__row">
         <span class="asteroids-hud__label">Score</span>
@@ -852,6 +888,10 @@ class AsteroidsGame {
         <span class="asteroids-hud__label">Lives</span>
         <span class="asteroids-hud__lives" id="asteroids-lives"></span>
       </div>
+      <div class="asteroids-hud__row asteroids-hud__row--objective" data-objective-row hidden>
+        <span class="asteroids-hud__label">Objective</span>
+        <span class="asteroids-hud__value" id="asteroids-objective">--</span>
+      </div>
     `;
     surface.appendChild(hud);
 
@@ -864,6 +904,11 @@ class AsteroidsGame {
         <button type="button" data-action="resume">Start</button>
         <button type="button" data-action="restart">Restart</button>
       </div>
+      <div class="asteroids-overlay__difficulty" id="asteroids-difficulty-panel">
+        <label for="asteroids-difficulty">Difficulty</label>
+        <input type="range" id="asteroids-difficulty" min="0" max="${DIFFICULTY_PRESETS.length - 1}" step="1" value="${this.difficultyIndex}" />
+        <div class="asteroids-overlay__difficulty-labels">${difficultyLabels}</div>
+      </div>
     `;
     surface.appendChild(overlay);
 
@@ -873,6 +918,47 @@ class AsteroidsGame {
     });
     overlay.querySelector('[data-action="restart"]').addEventListener('click', () => this.restart());
 
+    const difficultyPanel = overlay.querySelector('#asteroids-difficulty-panel');
+    if (difficultyPanel) {
+      difficultyPanel.style.marginTop = '16px';
+      const label = difficultyPanel.querySelector('label');
+      if (label) {
+        label.style.display = 'block';
+        label.style.fontSize = '13px';
+        label.style.fontWeight = '600';
+        label.style.marginBottom = '6px';
+        label.style.textTransform = 'uppercase';
+        label.style.letterSpacing = '0.08em';
+      }
+      const slider = difficultyPanel.querySelector('input[type="range"]');
+      if (slider) {
+        slider.style.width = '100%';
+        slider.style.margin = '0';
+      }
+      const labelsRow = difficultyPanel.querySelector('.asteroids-overlay__difficulty-labels');
+      if (labelsRow) {
+        labelsRow.style.display = 'flex';
+        labelsRow.style.justifyContent = 'space-between';
+        labelsRow.style.gap = '8px';
+        labelsRow.style.marginTop = '6px';
+        labelsRow.style.fontSize = '11px';
+        labelsRow.style.textTransform = 'uppercase';
+        labelsRow.style.letterSpacing = '0.08em';
+        labelsRow.style.opacity = '0.8';
+      }
+    }
+
+    const difficultySlider = overlay.querySelector('#asteroids-difficulty');
+    const difficultySpans = Array.from(overlay.querySelectorAll('.asteroids-overlay__difficulty-labels span'));
+    if (difficultySlider) {
+      difficultySlider.addEventListener('input', (event) => {
+        const value = Number(event.target?.value);
+        if (!Number.isNaN(value)) {
+          this.setDifficultyIndex(value);
+        }
+      });
+    }
+
     return {
       root: hud,
       overlay,
@@ -881,8 +967,12 @@ class AsteroidsGame {
       best: hud.querySelector('#asteroids-best'),
       wave: hud.querySelector('#asteroids-wave'),
       lives: hud.querySelector('#asteroids-lives'),
+      objectiveRow: hud.querySelector('[data-objective-row]'),
+      objectiveValue: hud.querySelector('#asteroids-objective'),
       overlayTitle: overlay.querySelector('#asteroids-overlay-title'),
       overlayMessage: overlay.querySelector('#asteroids-overlay-message'),
+      difficultySlider,
+      difficultyLabels: difficultySpans,
     };
   }
 
@@ -923,6 +1013,485 @@ class AsteroidsGame {
     star.twinkleSpeed = randomRange(STAR_TWINKLE_SPEED.min, STAR_TWINKLE_SPEED.max);
   }
 
+  createDifficultyTuning(key) {
+    const preset = DIFFICULTY_PRESETS.find((entry) => entry.key === key) || DIFFICULTY_PRESETS[1] || DIFFICULTY_PRESETS[0];
+    const shipSpeedScale = typeof preset.shipSpeed === 'number' ? preset.shipSpeed : 1;
+    const asteroidSpeedScale = typeof preset.asteroidSpeed === 'number' ? preset.asteroidSpeed : shipSpeedScale;
+    const scoreScale = typeof preset.score === 'number' ? preset.score : 1;
+    const turnScale = clamp(0.85 + (shipSpeedScale - 1) * 0.45, 0.75, 1.3);
+    return {
+      key: preset.key,
+      label: preset.label,
+      shipThrust: SHIP_BASE_THRUST * shipSpeedScale,
+      shipTurnSpeed: SHIP_BASE_TURN_SPEED * turnScale,
+      shipMaxSpeed: SHIP_BASE_MAX_SPEED * shipSpeedScale,
+      asteroidSpeed: ASTEROID_BASE_SPEED.map((speed) => speed * asteroidSpeedScale),
+      asteroidScore: ASTEROID_BASE_SCORE.map((score) => Math.max(5, Math.round(score * scoreScale))),
+      scoreScale,
+    };
+  }
+
+  setDifficultyIndex(index) {
+    const clamped = clamp(Math.round(index), 0, DIFFICULTY_PRESETS.length - 1);
+    if (this.difficultyIndex === clamped && this.tuning) {
+      this.updateDifficultyUi();
+      return;
+    }
+    this.difficultyIndex = clamped;
+    const key = DIFFICULTY_PRESETS[clamped]?.key || 'standard';
+    this.tuning = this.createDifficultyTuning(key);
+    this.shipMaxSpeed = this.tuning.shipMaxSpeed;
+    const ship = this.shipEntity != null ? getComponent(this.world, 'ship', this.shipEntity) : null;
+    if (ship) {
+      ship.thrust = this.tuning.shipThrust;
+      ship.turnSpeed = this.tuning.shipTurnSpeed;
+    }
+    if (this.specialWave?.type === 'boss' && typeof this.specialWave.baseScore === 'number') {
+      this.specialWave.score = Math.round(this.specialWave.baseScore * (this.tuning?.scoreScale ?? 1));
+    } else if (this.specialWave?.type === 'objective') {
+      if (typeof this.specialWave.basePerTarget === 'number') {
+        this.specialWave.perTargetScore = Math.max(50, Math.round(this.specialWave.basePerTarget * (this.tuning?.scoreScale ?? 1)));
+      }
+      if (typeof this.specialWave.baseCompletion === 'number') {
+        this.specialWave.targetScore = Math.max(100, Math.round(this.specialWave.baseCompletion * (this.tuning?.scoreScale ?? 1)));
+      }
+    }
+    this.updateDifficultyUi();
+  }
+
+  updateDifficultyUi() {
+    if (!this.hud) return;
+    if (this.hud.difficultySlider && this.hud.difficultySlider.value !== String(this.difficultyIndex)) {
+      this.hud.difficultySlider.value = String(this.difficultyIndex);
+    }
+    if (Array.isArray(this.hud.difficultyLabels)) {
+      for (const span of this.hud.difficultyLabels) {
+        const spanIndex = Number(span.dataset?.index ?? -1);
+        const isActive = spanIndex === this.difficultyIndex;
+        span.style.opacity = isActive ? '1' : '0.5';
+        span.style.fontWeight = isActive ? '700' : '500';
+      }
+    }
+    if (this.specialWave) {
+      this.refreshObjectiveHud();
+    }
+  }
+
+  updateWaveLabel(config) {
+    if (!this.hud?.wave) return;
+    const label = typeof config?.label === 'string' && config.label.trim() ? config.label.trim() : '';
+    this.hud.wave.textContent = label ? `${this.wave} – ${label}` : String(this.wave);
+  }
+
+  refreshObjectiveHud() {
+    if (!this.hud?.objectiveRow || !this.hud?.objectiveValue) return;
+    if (!this.specialWave) {
+      this.hud.objectiveRow.setAttribute('hidden', '');
+      this.hud.objectiveValue.textContent = '--';
+      this.hud.objectiveValue.style.opacity = '0.8';
+      return;
+    }
+
+    this.hud.objectiveRow.removeAttribute('hidden');
+    let text = this.specialWave.label || 'Objective';
+    if (this.specialWave.type === 'boss' && this.specialWave.boss) {
+      const hp = Math.max(0, Math.ceil(this.specialWave.boss.hp ?? 0));
+      text = `${this.specialWave.label || 'Eliminate the boss'} (${hp} HP)`;
+    } else if (this.specialWave.type === 'objective') {
+      const remaining = this.specialWave.targets?.length ?? 0;
+      if (this.specialWave.complete) {
+        text = `${this.specialWave.label || 'Objective'} complete`;
+      } else {
+        const label = this.specialWave.label || 'Objective';
+        text = `${label}: ${remaining} target${remaining === 1 ? '' : 's'} remaining`;
+      }
+    }
+    this.hud.objectiveValue.textContent = text;
+    this.hud.objectiveValue.style.opacity = this.specialWave.complete ? '0.7' : '1';
+  }
+
+  spawnBossWave(config) {
+    const bossConfig = config?.boss || {};
+    const label = typeof config?.label === 'string' && config.label.trim() ? config.label.trim() : 'Boss Incoming';
+    const radius = Math.max(30, bossConfig.radius ?? 48);
+    const hp = Math.max(8, bossConfig.hp ?? 20);
+    const speed = Math.max(90, bossConfig.speed ?? 140);
+    const fireRate = Math.max(0.6, bossConfig.fireRate ?? 1.3);
+    const baseScore = typeof bossConfig.score === 'number' ? bossConfig.score : 1600;
+    const entryY = randomRange(radius * 1.5, Math.max(radius * 1.5, this.height - radius * 1.5));
+    this.specialWave = {
+      type: 'boss',
+      label,
+      boss: {
+        x: this.width + radius + 80,
+        y: entryY,
+        radius,
+        hp,
+        maxHp: hp,
+        speed,
+        fireRate,
+        fireCooldown: fireRate * 0.6,
+        direction: -1,
+        sineTimer: Math.random() * TWO_PI,
+        verticalAmplitude: randomRange(70, 120),
+        entryTimer: 1.2,
+      },
+      score: Math.round(baseScore * (this.tuning?.scoreScale ?? 1)),
+      baseScore,
+      complete: false,
+    };
+    this.refreshObjectiveHud();
+  }
+
+  spawnObjectiveWave(config) {
+    const label = typeof config?.label === 'string' && config.label.trim() ? config.label.trim() : 'Objective';
+    const count = Math.max(1, Math.round(config?.targets ?? 3));
+    const health = Math.max(1, Math.round(config?.targetHealth ?? 2));
+    const radius = Math.max(18, config?.targetRadius ?? 26);
+    const baseScore = typeof config?.score === 'number' ? config.score : 260 * count;
+    const shipPos = getComponent(this.world, 'position', this.shipEntity) || { x: this.width / 2, y: this.height / 2 };
+    const shipRadius = getComponent(this.world, 'collider', this.shipEntity)?.radius || SHIP_RADIUS;
+    const safeRadius = shipRadius * 8;
+    const targets = [];
+    for (let i = 0; i < count; i++) {
+      let attempt = 0;
+      let x = 0;
+      let y = 0;
+      do {
+        x = randomRange(radius * 1.5, this.width - radius * 1.5);
+        y = randomRange(radius * 1.5, this.height - radius * 1.5);
+        attempt++;
+      } while (distanceSquared(x, y, shipPos.x, shipPos.y) < safeRadius * safeRadius && attempt < 12);
+      targets.push({
+        x,
+        y,
+        baseX: x,
+        baseY: y,
+        radius,
+        hp: health,
+        pulse: Math.random() * TWO_PI,
+        pulseSpeed: randomRange(1.2, 2.2),
+        orbitAngle: Math.random() * TWO_PI,
+        orbitSpeed: randomRange(-0.6, 0.6),
+        orbitRadius: randomRange(10, 26),
+      });
+    }
+
+    const scoreScale = this.tuning?.scoreScale ?? 1;
+    const basePerTarget = Math.max(50, Math.round(baseScore / count));
+    const baseCompletion = Math.max(100, Math.round(baseScore * 0.6));
+    const perTarget = Math.max(50, Math.round(basePerTarget * scoreScale));
+    const completionBonus = Math.max(100, Math.round(baseCompletion * scoreScale));
+
+    this.specialWave = {
+      type: 'objective',
+      label,
+      targets,
+      perTargetScore: perTarget,
+      targetScore: completionBonus,
+      basePerTarget,
+      baseCompletion,
+      complete: false,
+    };
+    this.refreshObjectiveHud();
+  }
+
+  updateSpecialWave(dt) {
+    if (!this.specialWave) return;
+    if (this.specialWave.type === 'boss') {
+      const boss = this.specialWave.boss;
+      if (!boss) return;
+      const ship = getComponent(this.world, 'ship', this.shipEntity);
+      const shipPos = getComponent(this.world, 'position', this.shipEntity);
+      const shipCol = getComponent(this.world, 'collider', this.shipEntity);
+      boss.entryTimer = Math.max(0, boss.entryTimer - dt);
+      const entryFactor = boss.entryTimer > 0 ? clamp(1 - boss.entryTimer / 1.2, 0.35, 1) : 1;
+      boss.x += boss.direction * boss.speed * entryFactor * dt;
+      if (boss.x < boss.radius * 1.1) {
+        boss.x = boss.radius * 1.1;
+        boss.direction = 1;
+      } else if (boss.x > this.width - boss.radius * 1.1) {
+        boss.x = this.width - boss.radius * 1.1;
+        boss.direction = -1;
+      }
+      boss.sineTimer += dt;
+      boss.y += Math.sin(boss.sineTimer * 1.2) * boss.verticalAmplitude * dt;
+      boss.y = clamp(boss.y, boss.radius * 0.9, this.height - boss.radius * 0.9);
+
+      boss.fireCooldown -= dt;
+      if (boss.fireCooldown <= 0) {
+        boss.fireCooldown += boss.fireRate;
+        if (ship && shipPos) {
+          const angle = Math.atan2(shipPos.y - boss.y, shipPos.x - boss.x);
+          const spread = 0.4;
+          const projectileSpeed = 220 + 40 * this.difficultyIndex;
+          this.spawnEnemyProjectile(boss.x, boss.y, angle, projectileSpeed, 4.5, 6);
+          this.spawnEnemyProjectile(boss.x, boss.y, angle + spread, projectileSpeed * 0.85, 4, 6);
+          this.spawnEnemyProjectile(boss.x, boss.y, angle - spread, projectileSpeed * 0.85, 4, 6);
+        }
+      }
+
+      if (ship?.alive && ship.invulnerable <= 0 && shipPos && shipCol) {
+        if (distanceSquared(shipPos.x, shipPos.y, boss.x, boss.y) < (shipCol.radius + boss.radius * 0.8) ** 2) {
+          this.shipDestroyed();
+        }
+      }
+    } else if (this.specialWave.type === 'objective') {
+      if (Array.isArray(this.specialWave.targets)) {
+        for (const target of this.specialWave.targets) {
+          target.orbitAngle += target.orbitSpeed * dt;
+          target.x = target.baseX + Math.cos(target.orbitAngle) * target.orbitRadius;
+          target.y = target.baseY + Math.sin(target.orbitAngle) * target.orbitRadius;
+          target.pulse += target.pulseSpeed * dt;
+        }
+      }
+    }
+  }
+
+  spawnEnemyProjectile(x, y, angle, speed, lifetime = 4, radius = 5) {
+    const color = 'rgba(248, 113, 113, 0.9)';
+    this.enemyProjectiles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: lifetime,
+      radius,
+      color,
+    });
+  }
+
+  updateEnemyProjectiles(dt) {
+    if (!this.enemyProjectiles.length) return;
+    const ship = getComponent(this.world, 'ship', this.shipEntity);
+    const shipPos = getComponent(this.world, 'position', this.shipEntity);
+    const shipCol = getComponent(this.world, 'collider', this.shipEntity);
+    const boundsMargin = 40;
+    for (const projectile of this.enemyProjectiles) {
+      projectile.life -= dt;
+      projectile.x += projectile.vx * dt;
+      projectile.y += projectile.vy * dt;
+      if (ship?.alive && ship.invulnerable <= 0 && shipPos && shipCol) {
+        if (distanceSquared(projectile.x, projectile.y, shipPos.x, shipPos.y) < (projectile.radius + shipCol.radius) ** 2) {
+          projectile.life = 0;
+          this.shipDestroyed();
+        }
+      }
+      if (
+        projectile.x < -boundsMargin ||
+        projectile.x > this.width + boundsMargin ||
+        projectile.y < -boundsMargin ||
+        projectile.y > this.height + boundsMargin
+      ) {
+        projectile.life = 0;
+      }
+    }
+    this.enemyProjectiles = this.enemyProjectiles.filter((projectile) => projectile.life > 0);
+  }
+
+  handleSpecialBulletHit(bulletPos, radius) {
+    if (!this.specialWave || this.specialWave.complete) return false;
+    if (this.specialWave.type === 'boss') {
+      const boss = this.specialWave.boss;
+      if (!boss) return false;
+      const distance = distanceSquared(bulletPos.x, bulletPos.y, boss.x, boss.y);
+      if (distance < (radius + boss.radius) ** 2) {
+        boss.hp -= 1;
+        this.spawnExplosion(bulletPos.x, bulletPos.y, 0.6);
+        if (boss.hp <= 0) {
+          this.specialWave.complete = true;
+          this.specialWave.boss = null;
+          this.enemyProjectiles.length = 0;
+          this.addScore(this.specialWave.score || Math.round(1500 * (this.tuning?.scoreScale ?? 1)));
+          this.spawnExplosion(boss.x, boss.y, 4);
+        }
+        this.refreshObjectiveHud();
+        return true;
+      }
+      return false;
+    }
+    if (this.specialWave.type === 'objective' && Array.isArray(this.specialWave.targets)) {
+      for (let i = 0; i < this.specialWave.targets.length; i++) {
+        const target = this.specialWave.targets[i];
+        if (distanceSquared(bulletPos.x, bulletPos.y, target.x, target.y) < (radius + target.radius) ** 2) {
+          target.hp -= 1;
+          this.spawnExplosion(target.x, target.y, 1.2);
+          if (target.hp <= 0) {
+            this.specialWave.targets.splice(i, 1);
+            this.addScore(this.specialWave.perTargetScore || Math.round(150 * (this.tuning?.scoreScale ?? 1)));
+            i--;
+          }
+          if (!this.specialWave.targets.length && !this.specialWave.complete) {
+            this.specialWave.complete = true;
+            this.addScore(this.specialWave.targetScore || Math.round(300 * (this.tuning?.scoreScale ?? 1)));
+          }
+          this.refreshObjectiveHud();
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  scheduleParallaxEvent() {
+    return randomRange(18, 36);
+  }
+
+  spawnParallaxEvent() {
+    const type = Math.random() < 0.6 ? 'comet' : 'nebula';
+    if (type === 'comet') {
+      const layerIndex = Math.floor(Math.random() * Math.max(1, this.starfield.length));
+      const baseLayer = this.starfield[layerIndex] || { speed: 24, color: '#e2e8f0' };
+      const speed = (baseLayer.speed || 24) * randomRange(4, 6.5);
+      const y = randomRange(this.height * 0.15, this.height * 0.85);
+      this.parallaxEvents.push({
+        type: 'comet',
+        x: this.width + 120,
+        y,
+        vx: -speed,
+        vy: randomRange(-18, 18),
+        radius: 3,
+        duration: (this.width + 240) / speed,
+        time: 0,
+        color: baseLayer.color || '#f8fafc',
+        trail: [],
+        tailLength: 18,
+      });
+    } else {
+      const layerIndex = Math.floor(Math.random() * Math.max(1, this.starfield.length));
+      const baseLayer = this.starfield[layerIndex] || { color: '#38bdf8' };
+      this.parallaxEvents.push({
+        type: 'nebula',
+        x: randomRange(this.width * 0.2, this.width * 0.8),
+        y: randomRange(this.height * 0.2, this.height * 0.8),
+        radius: randomRange(140, 220),
+        duration: randomRange(5, 8),
+        time: 0,
+        color: baseLayer.color || '#38bdf8',
+      });
+    }
+  }
+
+  updateParallaxEvents(dt) {
+    if (typeof dt !== 'number') return;
+    if (this.nextParallaxEvent != null) {
+      this.nextParallaxEvent -= dt;
+      if (this.nextParallaxEvent <= 0) {
+        this.spawnParallaxEvent();
+        this.nextParallaxEvent = this.scheduleParallaxEvent();
+      }
+    }
+    if (!this.parallaxEvents.length) return;
+    for (const event of this.parallaxEvents) {
+      event.time += dt;
+      if (event.type === 'comet') {
+        event.x += event.vx * dt;
+        event.y += event.vy * dt;
+        event.trail.unshift({ x: event.x, y: event.y });
+        if (event.trail.length > event.tailLength) {
+          event.trail.pop();
+        }
+      }
+    }
+    this.parallaxEvents = this.parallaxEvents.filter((event) => {
+      if (event.type === 'comet') {
+        return event.time < event.duration && event.x > -180;
+      }
+      return event.time < event.duration;
+    });
+  }
+
+  renderParallaxEvents(ctx) {
+    if (!this.parallaxEvents.length) return;
+    for (const event of this.parallaxEvents) {
+      if (event.type === 'comet') {
+        const trail = event.trail || [];
+        for (let i = 0; i < trail.length; i++) {
+          const point = trail[i];
+          const t = 1 - i / trail.length;
+          ctx.globalAlpha = t * 0.5;
+          ctx.fillStyle = event.color || '#f8fafc';
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 2 + 6 * t, 0, TWO_PI);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath();
+        ctx.arc(event.x, event.y, event.radius + 1.5, 0, TWO_PI);
+        ctx.fill();
+      } else if (event.type === 'nebula') {
+        const progress = clamp(event.time / event.duration, 0, 1);
+        const alpha = Math.sin(progress * Math.PI);
+        const gradient = ctx.createRadialGradient(event.x, event.y, event.radius * 0.2, event.x, event.y, event.radius);
+        gradient.addColorStop(0, `${event.color}80`);
+        gradient.addColorStop(1, `${event.color}00`);
+        ctx.globalAlpha = alpha * 0.6;
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(event.x, event.y, event.radius, 0, TWO_PI);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  renderSpecialWave(ctx, stage = 'all') {
+    if (!this.specialWave) return;
+    const allowObjective = stage === 'all' || stage === 'pre';
+    const allowBoss = stage === 'all' || stage === 'post';
+    if (allowObjective && this.specialWave.type === 'objective' && Array.isArray(this.specialWave.targets)) {
+      for (const target of this.specialWave.targets) {
+        const pulse = 0.6 + 0.4 * Math.sin(target.pulse);
+        const gradient = ctx.createRadialGradient(target.x, target.y, target.radius * 0.3, target.x, target.y, target.radius * 1.1);
+        gradient.addColorStop(0, `rgba(96, 165, 250, ${0.6 * pulse})`);
+        gradient.addColorStop(1, 'rgba(96, 165, 250, 0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, target.radius * 1.1, 0, TWO_PI);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(191, 219, 254, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, target.radius * 0.65, 0, TWO_PI);
+        ctx.stroke();
+      }
+    }
+    if (allowBoss && this.specialWave.type === 'boss' && this.specialWave.boss) {
+      const boss = this.specialWave.boss;
+      const hpRatio = clamp(boss.hp / (boss.maxHp || boss.hp || 1), 0, 1);
+      const bodyGradient = ctx.createRadialGradient(boss.x, boss.y, boss.radius * 0.3, boss.x, boss.y, boss.radius);
+      bodyGradient.addColorStop(0, 'rgba(248, 113, 113, 0.9)');
+      bodyGradient.addColorStop(1, 'rgba(248, 113, 113, 0.1)');
+      ctx.fillStyle = bodyGradient;
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, boss.radius, 0, TWO_PI);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(252, 165, 165, 0.9)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, boss.radius * 0.75, 0, TWO_PI);
+      ctx.stroke();
+
+      // health ring
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, boss.radius + 8, -Math.PI / 2, -Math.PI / 2 + hpRatio * TWO_PI);
+      ctx.stroke();
+    }
+  }
+
+  renderEnemyProjectiles(ctx) {
+    if (!this.enemyProjectiles.length) return;
+    for (const projectile of this.enemyProjectiles) {
+      ctx.fillStyle = projectile.color || 'rgba(248, 113, 113, 0.9)';
+      ctx.beginPath();
+      ctx.arc(projectile.x, projectile.y, projectile.radius, 0, TWO_PI);
+      ctx.fill();
+    }
+  }
+
   spawnShip() {
     const entity = createEntity(this.world);
     addComponent(this.world, 'position', entity, { x: this.width / 2, y: this.height / 2 });
@@ -931,8 +1500,8 @@ class AsteroidsGame {
     addComponent(this.world, 'collider', entity, { radius: SHIP_RADIUS });
     addComponent(this.world, 'ship', entity, {
       alive: true,
-      thrust: 520,
-      turnSpeed: 3.6,
+      thrust: this.tuning?.shipThrust ?? SHIP_BASE_THRUST,
+      turnSpeed: this.tuning?.shipTurnSpeed ?? SHIP_BASE_TURN_SPEED,
       invulnerable: 2.4,
       respawn: 0,
     });
@@ -941,6 +1510,14 @@ class AsteroidsGame {
 
   spawnWave() {
     const config = resolveWaveConfig(this.waveConfig, this.wave);
+    this.specialWave = null;
+    this.enemyProjectiles.length = 0;
+    if (config.type === 'boss') {
+      this.spawnBossWave(config);
+    } else if (config.type === 'objective') {
+      this.spawnObjectiveWave(config);
+    }
+
     const entries = Array.isArray(config?.rocks) ? config.rocks : [];
     const shipPos = getComponent(this.world, 'position', this.shipEntity);
     const originX = shipPos?.x ?? this.width / 2;
@@ -965,7 +1542,8 @@ class AsteroidsGame {
         } while (distanceSquared(spawnX, spawnY, originX, originY) < safeRadius * safeRadius);
 
         const angle = angleTo(spawnX, spawnY, originX, originY) + randomRange(-0.4, 0.4);
-        const speed = ASTEROID_SPEED[entry.size] * randomRange(0.7, 1.1);
+        const baseSpeed = this.tuning?.asteroidSpeed?.[entry.size] ?? ASTEROID_BASE_SPEED[entry.size] ?? 80;
+        const speed = baseSpeed * randomRange(0.7, 1.1);
         this.spawnAsteroid(entry.size, {
           x: spawnX,
           y: spawnY,
@@ -976,7 +1554,8 @@ class AsteroidsGame {
     }
 
     this.waveSpawnDelay = 0;
-    this.hud.wave.textContent = String(this.wave);
+    this.updateWaveLabel(config);
+    this.refreshObjectiveHud();
   }
 
   spawnAsteroid(size, { x, y, vx = 0, vy = 0 }) {
@@ -1034,9 +1613,15 @@ class AsteroidsGame {
     this.started = false;
     this.bulletCooldown = 0;
     this.waveSpawnDelay = 0;
+    this.specialWave = null;
+    this.enemyProjectiles = [];
+    this.parallaxEvents = [];
+    this.nextParallaxEvent = this.scheduleParallaxEvent();
     this.updateLivesDisplay();
     if (this.hud?.wave) this.hud.wave.textContent = String(this.wave);
     if (this.hud?.score) this.hud.score.textContent = '0';
+    this.refreshObjectiveHud();
+    this.updateDifficultyUi();
     this.hideOverlay();
     this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Press Start to play.');
     this.endSession();
@@ -1095,6 +1680,11 @@ class AsteroidsGame {
         shipVel.y = 0;
       }
       this.systems(dt);
+      this.updateParallaxEvents(dt);
+      this.updateSpecialWave(dt);
+      this.updateEnemyProjectiles(dt);
+      this.resolveCollisions();
+      this.advanceWave(dt);
       return;
     }
 
@@ -1111,8 +1701,9 @@ class AsteroidsGame {
     if (thrusting) {
       const ax = Math.cos(shipRot.angle) * ship.thrust * dt;
       const ay = Math.sin(shipRot.angle) * ship.thrust * dt;
-      shipVel.x = clamp(shipVel.x + ax, -MAX_SPEED, MAX_SPEED);
-      shipVel.y = clamp(shipVel.y + ay, -MAX_SPEED, MAX_SPEED);
+      const maxSpeed = this.shipMaxSpeed ?? SHIP_BASE_MAX_SPEED;
+      shipVel.x = clamp(shipVel.x + ax, -maxSpeed, maxSpeed);
+      shipVel.y = clamp(shipVel.y + ay, -maxSpeed, maxSpeed);
       this.thrustTimer += dt;
       if (this.thrustTimer > 0.02) {
         this.spawnThrusterParticles(shipPos, shipRot.angle, shipVel);
@@ -1130,6 +1721,9 @@ class AsteroidsGame {
     }
 
     this.systems(dt);
+    this.updateParallaxEvents(dt);
+    this.updateSpecialWave(dt);
+    this.updateEnemyProjectiles(dt);
     this.resolveCollisions();
     this.advanceWave(dt);
   }
@@ -1146,15 +1740,19 @@ class AsteroidsGame {
     for (const bullet of bullets) {
       const bulletPos = getComponent(this.world, 'position', bullet);
       const bulletCol = getComponent(this.world, 'collider', bullet);
-      let hit = false;
-      for (const rock of rocks) {
-        if (!this.world.alive[rock]) continue;
-        const rockPos = getComponent(this.world, 'position', rock);
-        const rockCol = getComponent(this.world, 'collider', rock);
-        if (distanceSquared(bulletPos.x, bulletPos.y, rockPos.x, rockPos.y) < (bulletCol.radius + rockCol.radius) ** 2) {
-          hit = true;
-          this.handleAsteroidHit(rock);
-          break;
+      if (!bulletPos || !bulletCol) continue;
+      const radius = bulletCol.radius || 3;
+      let hit = this.handleSpecialBulletHit(bulletPos, radius);
+      if (!hit) {
+        for (const rock of rocks) {
+          if (!this.world.alive[rock]) continue;
+          const rockPos = getComponent(this.world, 'position', rock);
+          const rockCol = getComponent(this.world, 'collider', rock);
+          if (distanceSquared(bulletPos.x, bulletPos.y, rockPos.x, rockPos.y) < (radius + rockCol.radius) ** 2) {
+            hit = true;
+            this.handleAsteroidHit(rock);
+            break;
+          }
         }
       }
       if (hit) {
@@ -1182,16 +1780,18 @@ class AsteroidsGame {
     const rock = getComponent(this.world, 'rock', entity);
     const pos = getComponent(this.world, 'position', entity);
     const vel = getComponent(this.world, 'velocity', entity);
-    this.addScore(ASTEROID_SCORE[rock.size] || 20);
+    const points = this.tuning?.asteroidScore?.[rock.size] ?? ASTEROID_BASE_SCORE[rock.size] ?? 20;
+    this.addScore(points);
     this.spawnExplosion(pos.x, pos.y, rock.size);
     destroyEntity(this.world, entity);
 
     const splits = resolveSplitRules(this.waveConfig, rock.size);
     if (!splits.length) return;
-    const baseSpeed = ASTEROID_SPEED[Math.max(1, rock.size - 1)];
+    const parentSize = Math.max(1, rock.size - 1);
+    const parentBaseSpeed = this.tuning?.asteroidSpeed?.[parentSize] ?? ASTEROID_BASE_SPEED[parentSize] ?? 90;
     for (const childSize of splits) {
       const angle = Math.random() * TWO_PI;
-      const speed = baseSpeed * randomRange(0.8, 1.2);
+      const speed = parentBaseSpeed * randomRange(0.8, 1.2);
       this.spawnAsteroid(childSize, {
         x: pos.x,
         y: pos.y,
@@ -1202,7 +1802,7 @@ class AsteroidsGame {
   }
 
   advanceWave(dt) {
-    if (this.asteroidsRemaining() > 0) return;
+    if (!this.isWaveComplete()) return;
     this.waveSpawnDelay += dt;
     if (this.waveSpawnDelay < 1.5) return;
     this.wave++;
@@ -1212,6 +1812,21 @@ class AsteroidsGame {
   asteroidsRemaining() {
     const rocks = queryEntities(this.world, COMPONENT_FLAGS.rock);
     return rocks.length;
+  }
+
+  isWaveComplete() {
+    if (this.specialWave && !this.specialWave.complete) {
+      if (this.specialWave.type === 'boss' && this.specialWave.boss) {
+        return false;
+      }
+      if (this.specialWave.type === 'objective' && (this.specialWave.targets?.length ?? 0) > 0) {
+        return false;
+      }
+      if (!this.specialWave.complete) {
+        return false;
+      }
+    }
+    return this.asteroidsRemaining() <= 0;
   }
 
   addScore(points) {
@@ -1333,6 +1948,9 @@ class AsteroidsGame {
     }
     ctx.globalAlpha = 1;
 
+    this.renderParallaxEvents(ctx);
+    this.renderSpecialWave(ctx, 'pre');
+
     const particles = queryEntities(this.world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.particle);
     for (const entity of particles) {
       const pos = getComponent(this.world, 'position', entity);
@@ -1372,6 +1990,9 @@ class AsteroidsGame {
       ctx.closePath();
       ctx.stroke();
     }
+
+    this.renderSpecialWave(ctx, 'post');
+    this.renderEnemyProjectiles(ctx);
 
     const ship = getComponent(this.world, 'ship', this.shipEntity);
     const shipPos = getComponent(this.world, 'position', this.shipEntity);

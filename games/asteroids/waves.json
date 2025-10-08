@@ -1,15 +1,17 @@
 {
   "waves": [
-    { "rocks": [ { "size": 3, "count": 2 } ] },
-    { "rocks": [ { "size": 3, "count": 3 } ] },
-    { "rocks": [ { "size": 3, "count": 3 }, { "size": 2, "count": 1 } ] },
-    { "rocks": [ { "size": 3, "count": 4 }, { "size": 2, "count": 1 } ] },
-    { "rocks": [ { "size": 3, "count": 4 }, { "size": 2, "count": 2 } ] },
-    { "rocks": [ { "size": 3, "count": 4 }, { "size": 2, "count": 2 }, { "size": 1, "count": 1 } ] },
-    { "rocks": [ { "size": 3, "count": 5 }, { "size": 2, "count": 2 }, { "size": 1, "count": 1 } ] },
-    { "rocks": [ { "size": 3, "count": 5 }, { "size": 2, "count": 3 }, { "size": 1, "count": 1 } ] },
-    { "rocks": [ { "size": 3, "count": 6 }, { "size": 2, "count": 3 }, { "size": 1, "count": 2 } ] },
-    { "rocks": [ { "size": 3, "count": 6 }, { "size": 2, "count": 4 }, { "size": 1, "count": 2 } ] }
+    { "type": "asteroids", "rocks": [ { "size": 3, "count": 2 } ] },
+    { "type": "asteroids", "rocks": [ { "size": 3, "count": 3 } ] },
+    { "type": "asteroids", "rocks": [ { "size": 3, "count": 3 }, { "size": 2, "count": 1 } ] },
+    { "type": "objective", "label": "Disable the Beacons", "targets": 3, "targetHealth": 2, "rocks": [ { "size": 3, "count": 3 }, { "size": 2, "count": 1 } ] },
+    { "type": "asteroids", "rocks": [ { "size": 3, "count": 4 }, { "size": 2, "count": 2 } ] },
+    { "type": "asteroids", "rocks": [ { "size": 3, "count": 4 }, { "size": 2, "count": 2 }, { "size": 1, "count": 1 } ] },
+    { "type": "asteroids", "rocks": [ { "size": 3, "count": 5 }, { "size": 2, "count": 2 }, { "size": 1, "count": 1 } ] },
+    { "type": "boss", "label": "Rogue Hunter", "boss": { "hp": 18, "radius": 44, "speed": 140, "fireRate": 1.4, "score": 1500 }, "rocks": [ { "size": 2, "count": 2 }, { "size": 1, "count": 2 } ] },
+    { "type": "asteroids", "rocks": [ { "size": 3, "count": 6 }, { "size": 2, "count": 3 }, { "size": 1, "count": 2 } ] },
+    { "type": "objective", "label": "Secure Data Cores", "targets": 4, "targetHealth": 3, "rocks": [ { "size": 3, "count": 4 }, { "size": 2, "count": 2 }, { "size": 1, "count": 1 } ] },
+    { "type": "boss", "label": "Dreadnought Escort", "boss": { "hp": 24, "radius": 50, "speed": 160, "fireRate": 1.1, "score": 2200 }, "rocks": [ { "size": 2, "count": 3 }, { "size": 1, "count": 2 } ] },
+    { "type": "asteroids", "label": "Endless Siege", "rocks": [ { "size": 3, "count": 6 }, { "size": 2, "count": 4 }, { "size": 1, "count": 3 } ] }
   ],
   "splits": {
     "3": [2, 2],
