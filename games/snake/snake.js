@@ -609,9 +609,8 @@ function randomSeed() {
 function resolveSeed(seedOverride) {
   if (typeof seedOverride === 'number' && Number.isFinite(seedOverride)) return seedOverride >>> 0;
   if (typeof seedOverride === 'string' && seedOverride) return hashSeedString(seedOverride);
-  const base = randomSeed();
-  if (DAILY_MODE) return base ^ hashSeedString(DAILY_SEED);
-  return base;
+  if (DAILY_MODE) return hashSeedString(DAILY_SEED);
+  return randomSeed();
 }
 
 function startRng(seedOverride) {
