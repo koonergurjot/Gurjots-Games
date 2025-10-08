@@ -14,6 +14,7 @@ const ROOT = path.resolve(__dirname, '..');
 const HEALTH_DIR = path.join(ROOT, 'health');
 const REPORT_MD = path.join(HEALTH_DIR, 'code-report.md');
 const REPORT_JSON = path.join(HEALTH_DIR, 'code-report.json');
+const BASELINE_JSON = path.join(HEALTH_DIR, 'code-baseline.json');
 
 const SYNTAX_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx']);
 const IMPORT_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx']);
@@ -158,6 +159,52 @@ function hasDependency(pkg, name) {
   );
 }
 
+async function readBaselineScore() {
+  try {
+    const raw = await fs.readFile(BASELINE_JSON, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      if (typeof parsed.value === 'number') {
+        return {
+          score: {
+            value: parsed.value,
+            breakdown: Array.isArray(parsed.breakdown) ? parsed.breakdown : [],
+          },
+          generatedAt: typeof parsed.generatedAt === 'string' ? parsed.generatedAt : null,
+        };
+      }
+      if (parsed.score && typeof parsed.score === 'object' && typeof parsed.score.value === 'number') {
+        return {
+          score: {
+            value: parsed.score.value,
+            breakdown: Array.isArray(parsed.score.breakdown)
+              ? parsed.score.breakdown
+              : [],
+          },
+          generatedAt: typeof parsed.generatedAt === 'string' ? parsed.generatedAt : null,
+        };
+      }
+    }
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return null;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(
+      `Failed to read ${relativePath(BASELINE_JSON)}: ${message}\n`,
+    );
+  }
+  return null;
+}
+
+async function writeBaselineScore(score, generatedAt) {
+  const payload = {
+    generatedAt,
+    score,
+  };
+  await fs.writeFile(BASELINE_JSON, JSON.stringify(payload, null, 2), 'utf8');
+}
+
 async function collectFiles(startDir) {
   const pending = [startDir];
   const files = [];
@@ -208,6 +255,13 @@ function statusSymbol(status) {
 
 function formatMarkdownBlock(content) {
   return ['```', content.trimEnd(), '```'].join('\n');
+}
+
+function formatScoreValue(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return null;
+  }
+  return Number(value).toFixed(2);
 }
 
 function matchesTypeDeclaration(pathRef) {
@@ -915,13 +969,60 @@ async function checkUnusedCode(files, result) {
   result.issues = issues;
 }
 
-function buildMarkdownReport(generatedAt, overallStatus, exitCode, results, fatalError) {
+function buildMarkdownReport(
+  generatedAt,
+  overallStatus,
+  exitCode,
+  results,
+  fatalError,
+  scoreDetails,
+) {
   const lines = [];
   lines.push('# Code Doctor Report');
   lines.push('');
   lines.push(`Generated: ${generatedAt}`);
   lines.push('');
   lines.push(`Overall Status: ${statusSymbol(overallStatus)} ${overallStatus}`);
+  lines.push('');
+
+  const scoreValue = scoreDetails?.current ? formatScoreValue(scoreDetails.current.value) : null;
+  const baselineValue = scoreDetails?.previous ? formatScoreValue(scoreDetails.previous.value) : null;
+  const diffValue =
+    typeof scoreDetails?.diff === 'number' && !Number.isNaN(scoreDetails.diff)
+      ? formatScoreValue(scoreDetails.diff)
+      : null;
+
+  lines.push('## Code Health');
+  lines.push('');
+  if (scoreValue) {
+    lines.push(`Score: **${scoreValue} / 100**`);
+  } else {
+    lines.push('Score: Unable to compute.');
+  }
+
+  if (baselineValue) {
+    const diffPrefix = diffValue ? (Number(scoreDetails.diff) >= 0 ? '+' : '') : '';
+    const diffLabel = diffValue ? ` (${diffPrefix}${diffValue} vs. baseline)` : '';
+    lines.push(`Baseline: ${baselineValue} / 100${diffLabel}`);
+    if (scoreDetails?.previousGeneratedAt) {
+      lines.push(`Baseline Recorded: ${scoreDetails.previousGeneratedAt}`);
+    }
+  } else if (scoreDetails?.updated) {
+    if (scoreValue) {
+      lines.push(`Baseline: Initialized to ${scoreValue} / 100.`);
+    } else {
+      lines.push('Baseline: Initialized to current score.');
+    }
+  } else {
+    lines.push('Baseline: Not available.');
+  }
+
+  if (scoreDetails?.updated) {
+    lines.push(`Baseline updated (${scoreDetails.baselinePath}).`);
+  } else if (scoreDetails?.updateRequested && scoreDetails?.updateError) {
+    lines.push(`Baseline update skipped: ${scoreDetails.updateError}`);
+  }
+
   lines.push('');
   lines.push('## Summary');
   lines.push('');
@@ -1097,7 +1198,14 @@ function computeHealthScore(results) {
   };
 }
 
-function buildJsonReport(generatedAt, overallStatus, exitCode, results, fatalError) {
+function buildJsonReport(
+  generatedAt,
+  overallStatus,
+  exitCode,
+  results,
+  fatalError,
+  scoreDetails,
+) {
   const serialized = {
     generatedAt,
     overallStatus,
@@ -1111,8 +1219,38 @@ function buildJsonReport(generatedAt, overallStatus, exitCode, results, fatalErr
       circular: results.circular,
       unused: results.unused,
     },
-    score: computeHealthScore(results),
+    score: scoreDetails?.current ?? null,
   };
+  if (scoreDetails) {
+    const baseline = {};
+    if (scoreDetails.previous) {
+      baseline.previous = scoreDetails.previous;
+    }
+    if (typeof scoreDetails.diff === 'number' && !Number.isNaN(scoreDetails.diff)) {
+      baseline.diff = Number(scoreDetails.diff.toFixed(2));
+    }
+    if (scoreDetails.previousGeneratedAt) {
+      baseline.previousGeneratedAt = scoreDetails.previousGeneratedAt;
+    }
+    if (
+      scoreDetails.baselinePath &&
+      (scoreDetails.previous || scoreDetails.updateRequested || scoreDetails.updated || scoreDetails.updateError)
+    ) {
+      baseline.path = scoreDetails.baselinePath;
+    }
+    if (scoreDetails.updateRequested) {
+      baseline.updateRequested = true;
+    }
+    if (scoreDetails.updated) {
+      baseline.updated = true;
+    }
+    if (scoreDetails.updateError) {
+      baseline.updateError = scoreDetails.updateError;
+    }
+    if (Object.keys(baseline).length > 0) {
+      serialized.baseline = baseline;
+    }
+  }
   if (fatalError) {
     serialized.error = fatalError;
   }
@@ -1198,26 +1336,96 @@ async function main() {
     return 'passed';
   })();
 
+  const currentScore = computeHealthScore(results);
+  const baselineEntry = await readBaselineScore();
+  const previousScore = baselineEntry?.score ?? null;
+  const hasPreviousValue = previousScore && typeof previousScore.value === 'number';
+  const scoreDiff = hasPreviousValue
+    ? Number((currentScore.value - previousScore.value).toFixed(2))
+    : null;
+  const baselinePathRelative = relativePath(BASELINE_JSON);
+  const updateRequested = Boolean(process.env.CODE_DOCTOR_UPDATE_BASELINE);
+  let baselineUpdated = false;
+  let baselineUpdateError = '';
+
+  if (updateRequested) {
+    if (exitCode === 0) {
+      try {
+        await writeBaselineScore(currentScore, generatedAt);
+        baselineUpdated = true;
+      } catch (error) {
+        baselineUpdateError = error instanceof Error ? error.message : String(error);
+        process.stderr.write(
+          `Failed to update ${baselinePathRelative}: ${baselineUpdateError}\n`,
+        );
+      }
+    } else {
+      baselineUpdateError = 'Checks failed; baseline not updated.';
+    }
+  }
+
+  const scoreDetails = {
+    current: currentScore,
+    previous: previousScore,
+    previousGeneratedAt: baselineEntry?.generatedAt ?? null,
+    diff: scoreDiff,
+    baselinePath: baselinePathRelative,
+    updateRequested,
+    updated: baselineUpdated,
+    updateError: baselineUpdateError,
+  };
+
+  const scoreValueString = formatScoreValue(currentScore.value) ?? String(currentScore.value);
+  let scoreMessage = `[code-doctor] Code Health Score: ${scoreValueString}/100`;
+  if (hasPreviousValue) {
+    const baselineValueString = formatScoreValue(previousScore.value) ?? String(previousScore.value);
+    if (scoreDiff !== null) {
+      const diffValueString = formatScoreValue(scoreDiff) ?? String(scoreDiff);
+      const prefix = scoreDiff >= 0 ? '+' : '';
+      scoreMessage += ` (${prefix}${diffValueString} vs baseline ${baselineValueString})`;
+    } else {
+      scoreMessage += ` (baseline ${baselineValueString})`;
+    }
+  }
+  console.log(scoreMessage);
+  if (baselineUpdated) {
+    console.log(`[code-doctor] Baseline updated at ${baselinePathRelative}.`);
+  } else if (updateRequested && baselineUpdateError) {
+    console.log(`[code-doctor] Baseline update skipped: ${baselineUpdateError}`);
+  }
+
   try {
     await fs.writeFile(
       REPORT_MD,
-      buildMarkdownReport(generatedAt, overallStatus, exitCode, results, fatalErrorMessage),
+      buildMarkdownReport(
+        generatedAt,
+        overallStatus,
+        exitCode,
+        results,
+        fatalErrorMessage,
+        scoreDetails,
+      ),
       'utf8',
     );
   } catch (error) {
-    process.stderr.write(`Failed to write ${relativePath(REPORT_MD)}: ${error.message}
-`);
+    process.stderr.write(`Failed to write ${relativePath(REPORT_MD)}: ${error.message}\n`);
   }
 
   try {
     await fs.writeFile(
       REPORT_JSON,
-      buildJsonReport(generatedAt, overallStatus, exitCode, results, fatalErrorMessage),
+      buildJsonReport(
+        generatedAt,
+        overallStatus,
+        exitCode,
+        results,
+        fatalErrorMessage,
+        scoreDetails,
+      ),
       'utf8',
     );
   } catch (error) {
-    process.stderr.write(`Failed to write ${relativePath(REPORT_JSON)}: ${error.message}
-`);
+    process.stderr.write(`Failed to write ${relativePath(REPORT_JSON)}: ${error.message}\n`);
   }
 
   if (exitCode !== 0) {
