@@ -1083,21 +1083,6 @@ function drawTileBackground(ctx,x,y,size,radius,fillColor,strokeColor,value){
   ctx.restore();
 }
 
-function roundRect(ctx,x,y,w,h,r,fill,stroke,scale=1){
-  const path=getRoundedRectPath(w,h,r);
-  ctx.save();
-  ctx.translate(x,y);
-  if(scale!==1){
-    const cx=w/2, cy=h/2;
-    ctx.translate(cx,cy);
-    ctx.scale(scale,scale);
-    ctx.translate(-cx,-cy);
-  }
-  if(fill) ctx.fill(path);
-  if(stroke) ctx.stroke(path);
-  ctx.restore();
-}
-
 function getHint(){
   hintDir=engineHint(grid,hintDepth);
   draw();
