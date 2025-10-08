@@ -200,6 +200,64 @@ describe('tools/game-doctor.mjs', () => {
     ).toBe(true);
   });
 
+  it('records headless boot issues when runner reports GAME_ERROR', async () => {
+    fixture = await createGameDoctorFixture('headless-error');
+
+    await fixture.writeJson('games.json', [
+      buildGameEntry('headless-error', {
+        title: 'Headless Error Game',
+      }),
+    ]);
+
+    await fixture.writeFile('games/headless-error/index.html', '<!doctype html><title>Error Game</title>');
+    await fixture.writeFile('assets/sprites/headless-error.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/headless-error.mp3', 'audio-bytes');
+    await fixture.writeFile('assets/thumbs/headless-error.png', 'thumb-bytes');
+
+    await fixture.writeFile(
+      'tools/headless-stub.mjs',
+      `export async function createHeadlessRunner(){\n  return {\n    async run(_, context){\n      if (context?.slug === 'headless-error'){\n        return { status: 'error', details: { message: 'stub failure' } };\n      }\n      return { status: 'ready', details: {} };\n    },\n    async close(){},\n  };\n}\n`,
+    );
+
+    const result = await fixture.runDoctor();
+
+    expect(result.code).toBe(1);
+    const report = await fixture.readJson('health/report.json');
+    expect(report.games).toHaveLength(1);
+    expect(report.games[0].issues.some((issue) => issue.message === 'Headless boot signaled error')).toBe(true);
+    expect(report.games[0].runtime?.headless?.status).toBe('error');
+  });
+
+  it('records headless boot timeout issues', async () => {
+    fixture = await createGameDoctorFixture('headless-timeout');
+
+    await fixture.writeJson('games.json', [
+      buildGameEntry('headless-timeout', {
+        title: 'Headless Timeout Game',
+      }),
+    ]);
+
+    await fixture.writeFile('games/headless-timeout/index.html', '<!doctype html><title>Timeout Game</title>');
+    await fixture.writeFile('assets/sprites/headless-timeout.png', 'sprite-bytes');
+    await fixture.writeFile('assets/audio/headless-timeout.mp3', 'audio-bytes');
+    await fixture.writeFile('assets/thumbs/headless-timeout.png', 'thumb-bytes');
+
+    await fixture.writeFile(
+      'tools/headless-stub.mjs',
+      `export async function createHeadlessRunner(){\n  return {\n    async run(_, context){\n      if (context?.slug === 'headless-timeout'){\n        return { status: 'timeout', details: { waitedMs: 5000 } };\n      }\n      return { status: 'ready', details: {} };\n    },\n    async close(){},\n  };\n}\n`,
+    );
+
+    const result = await fixture.runDoctor();
+
+    expect(result.code).toBe(1);
+    const report = await fixture.readJson('health/report.json');
+    expect(report.games).toHaveLength(1);
+    const issues = report.games[0].issues.map((issue) => issue.message);
+    expect(issues).toContain('Headless boot timed out');
+    expect(report.games[0].runtime?.headless?.status).toBe('timeout');
+    expect(report.games[0].runtime?.headless?.waitedMs).toBe(5000);
+  });
+
   it('flags missing /assets/ references discovered in shell sources', async () => {
     fixture = await createGameDoctorFixture('asset-references');
 

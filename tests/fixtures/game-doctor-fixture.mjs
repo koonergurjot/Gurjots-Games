@@ -13,6 +13,7 @@ class GameDoctorFixture {
   constructor(root) {
     this.root = root;
     this.gameDoctorPath = this.path('tools/game-doctor.mjs');
+    this.defaultEnv = {};
   }
 
   path(relativePath) {
@@ -43,7 +44,7 @@ class GameDoctorFixture {
     return new Promise((resolve, reject) => {
       const child = spawn(process.execPath, [this.gameDoctorPath, ...args], {
         cwd: this.root,
-        env: { ...process.env, ...env },
+        env: { ...process.env, ...this.defaultEnv, ...env },
       });
 
       let stdout = '';
@@ -112,6 +113,10 @@ export async function createGameDoctorFixture(name = 'fixture') {
     fixture.path('tools/reporters/game-doctor-manifest.json'),
   );
   await copyFileIfExists(
+    path.join(REPO_ROOT, 'tools', 'reporters', 'game-doctor-headless.mjs'),
+    fixture.path('tools/reporters/game-doctor-headless.mjs'),
+  );
+  await copyFileIfExists(
     path.join(REPO_ROOT, 'tools', 'schemas', 'games.schema.json'),
     fixture.path('tools/schemas/games.schema.json'),
   );
@@ -119,6 +124,12 @@ export async function createGameDoctorFixture(name = 'fixture') {
     path.join(REPO_ROOT, 'assets', 'placeholder-thumb.png'),
     fixture.path('assets/placeholder-thumb.png'),
   );
+
+  await fixture.writeFile(
+    'tools/headless-stub.mjs',
+    `export async function createHeadlessRunner(){\n  return {\n    async run(){\n      return { status: 'ready', details: {} };\n    },\n    async close(){},\n  };\n}\n`,
+  );
+  fixture.defaultEnv.GAME_DOCTOR_HEADLESS_IMPL = './tools/headless-stub.mjs';
 
   try {
     await fs.symlink(path.join(REPO_ROOT, 'node_modules'), fixture.path('node_modules'), 'dir');
