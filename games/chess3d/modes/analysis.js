@@ -1,5 +1,5 @@
 import { evaluate, cancel } from "../ai/ai.js";
-import * as rules from "../../chess/engine/rules.js";
+import * as logic from "../logic.js";
 import Chess from "../../chess/engine/chess.min.js";
 
 export function mountAnalysis(container,{clocks}={}){
@@ -38,7 +38,7 @@ export function mountAnalysis(container,{clocks}={}){
 
   async function loop(){
     if(!polling) return;
-    const fen=rules.fen();
+    const fen=logic.fen();
     const info=await evaluate(fen,{depth:12});
     if(!polling) return;
     const cp = info.mate!=null ? (info.mate>0?100000:-100000) : info.cp;

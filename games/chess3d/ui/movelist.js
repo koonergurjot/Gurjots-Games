@@ -1,4 +1,4 @@
-import * as rules from '../../chess/engine/rules.js';
+import * as logic from '../logic.js';
 export function mountMoveList(container,{onJump}={}){
   const wrap=document.createElement('div');
   wrap.style.display='flex';
@@ -21,10 +21,10 @@ export function mountMoveList(container,{onJump}={}){
 
   container.appendChild(wrap);
 
-  let index=rules.historySAN().length;
+  let index=logic.historySAN().length;
 
   function refresh(){
-    const moves=rules.historySAN();
+    const moves=logic.historySAN();
     list.innerHTML='';
     moves.forEach((san,i)=>{
       const li=document.createElement('li');
@@ -38,7 +38,7 @@ export function mountMoveList(container,{onJump}={}){
   function setIndex(i){ index=i; }
 
   btnUndo.onclick=()=>{ if(index>0 && onJump) onJump(index-1); };
-  btnRedo.onclick=()=>{ const moves=rules.historySAN(); if(index<moves.length && onJump) onJump(index+1); };
+  btnRedo.onclick=()=>{ const moves=logic.historySAN(); if(index<moves.length && onJump) onJump(index+1); };
 
   refresh();
   return { refresh, setIndex };

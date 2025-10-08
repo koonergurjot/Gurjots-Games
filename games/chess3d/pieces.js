@@ -1,223 +1,400 @@
-
-/**
- * Lightweight chess pieces using basic primitives.
- */
 import { envDataUrl } from "./textures/env.js";
+import { mergeGeometries } from "./lib/BufferGeometryUtils.js";
 
-let THREERef, sceneRef, helpersRef;
-const pieces = new Map(); // id -> {mesh, square, type, color}
-let currentPieceStyle = 'classic';
-let pieceEnvMap;
+let THREERef;
+let sceneRef;
+let helpersRef;
+let envMap;
 
-export async function createPieces(scene, THREE, helpers){
-  THREERef = THREE; sceneRef = scene; helpersRef = helpers;
-  // Load environment map from data URL
+const instancers = new Map();
+const piecesBySquare = new Map();
+const animations = [];
+const captureAnimations = [];
+let currentPieceStyle = "classic";
+
+const MAX_INSTANCES = { P: 16, R: 4, N: 4, B: 4, Q: 2, K: 2 };
+const PIECE_TYPES = ["P", "N", "B", "R", "Q", "K"];
+const BASE_OFFSET = 0.12;
+
+const tmpMatrix = new (class {
+  constructor() {
+    this.position = null;
+    this.scale = null;
+    this.quaternion = null;
+    this.matrix = null;
+  }
+  ensure(THREE) {
+    if (!this.position) {
+      this.position = new THREE.Vector3();
+      this.scale = new THREE.Vector3(1, 1, 1);
+      this.quaternion = new THREE.Quaternion();
+      this.matrix = new THREE.Matrix4();
+    }
+    return this;
+  }
+})();
+
+const palette = {
+  classic: { w: 0xe9edf5, b: 0x20232a },
+  metal: { w: 0xdfe8ff, b: 0x3c4252 },
+  glass: { w: 0xe5ffff, b: 0x1c2b3a },
+};
+
+const paletteColors = {
+  w: null,
+  b: null,
+};
+
+function ensurePalette(style) {
+  const THREE = THREERef;
+  const cfg = palette[style] || palette.classic;
+  if (!paletteColors.w) {
+    paletteColors.w = new THREE.Color(cfg.w);
+    paletteColors.b = new THREE.Color(cfg.b);
+  } else {
+    paletteColors.w.setHex(cfg.w);
+    paletteColors.b.setHex(cfg.b);
+  }
+}
+
+function buildProfile(type, THREE) {
+  const Vec2 = THREE.Vector2;
+  if (type === "P") {
+    return [
+      new Vec2(0, 0),
+      new Vec2(0.42, 0),
+      new Vec2(0.46, 0.08),
+      new Vec2(0.3, 0.18),
+      new Vec2(0.26, 0.52),
+      new Vec2(0.22, 0.72),
+      new Vec2(0.3, 0.86),
+      new Vec2(0.24, 0.94),
+      new Vec2(0, 1.05),
+    ];
+  }
+  if (type === "R") {
+    return [
+      new Vec2(0, 0),
+      new Vec2(0.46, 0),
+      new Vec2(0.5, 0.08),
+      new Vec2(0.35, 0.18),
+      new Vec2(0.32, 0.68),
+      new Vec2(0.48, 0.72),
+      new Vec2(0.48, 0.82),
+      new Vec2(0.34, 0.86),
+      new Vec2(0.34, 0.92),
+      new Vec2(0, 0.92),
+    ];
+  }
+  if (type === "N") {
+    return [
+      new Vec2(0, 0),
+      new Vec2(0.42, 0),
+      new Vec2(0.46, 0.08),
+      new Vec2(0.32, 0.16),
+      new Vec2(0.3, 0.42),
+      new Vec2(0.26, 0.6),
+      new Vec2(0.32, 0.74),
+      new Vec2(0.26, 0.88),
+      new Vec2(0.18, 0.98),
+      new Vec2(0, 1.1),
+    ];
+  }
+  if (type === "B") {
+    return [
+      new Vec2(0, 0),
+      new Vec2(0.42, 0),
+      new Vec2(0.46, 0.08),
+      new Vec2(0.3, 0.16),
+      new Vec2(0.24, 0.64),
+      new Vec2(0.18, 0.76),
+      new Vec2(0.28, 0.86),
+      new Vec2(0.2, 1.02),
+      new Vec2(0, 1.12),
+    ];
+  }
+  if (type === "Q") {
+    return [
+      new Vec2(0, 0),
+      new Vec2(0.48, 0),
+      new Vec2(0.52, 0.08),
+      new Vec2(0.34, 0.2),
+      new Vec2(0.28, 0.7),
+      new Vec2(0.4, 0.86),
+      new Vec2(0.3, 1.02),
+      new Vec2(0.22, 1.12),
+      new Vec2(0, 1.22),
+    ];
+  }
+  // King
+  return [
+    new Vec2(0, 0),
+    new Vec2(0.5, 0),
+    new Vec2(0.54, 0.08),
+    new Vec2(0.34, 0.2),
+    new Vec2(0.3, 0.74),
+    new Vec2(0.4, 0.9),
+    new Vec2(0.24, 1.06),
+    new Vec2(0.24, 1.16),
+    new Vec2(0, 1.28),
+  ];
+}
+
+function buildGeometry(type, THREE) {
+  const profile = buildProfile(type, THREE);
+  const lathe = new THREE.LatheGeometry(profile, 36);
+  lathe.computeVertexNormals();
+  const bevel = new THREE.CylinderGeometry(profile[1].x, profile[1].x, 0.04, 32);
+  bevel.translate(0, 0.02, 0);
+  const merged = mergeGeometries([bevel, lathe]);
+  merged.computeVertexNormals();
+  merged.translate(0, BASE_OFFSET, 0);
+  merged.computeBoundingBox();
+  try { merged.computeBoundingSphere(); } catch (_) {}
+  return merged;
+}
+
+function ensureInstancers() {
+  if (!THREERef || !sceneRef) return;
+  if (instancers.size) return;
+  ensurePalette(currentPieceStyle);
+  const THREE = THREERef;
+  const material = new (THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial)({
+    color: 0xffffff,
+    metalness: 0.4,
+    roughness: 0.35,
+    vertexColors: true,
+    envMap: envMap || null,
+    envMapIntensity: 0.85,
+    clearcoat: 0.35,
+    clearcoatRoughness: 0.3,
+  });
+  PIECE_TYPES.forEach((type) => {
+    const geometry = buildGeometry(type, THREE);
+    const capacity = MAX_INSTANCES[type];
+    const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+    mesh.count = 0;
+    if (mesh.instanceMatrix?.setUsage) {
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    }
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    sceneRef.add(mesh);
+    instancers.set(type, {
+      mesh,
+      capacity,
+      count: 0,
+      indexMap: new Map(),
+    });
+  });
+}
+
+function applyPieceColor(piece) {
+  const { mesh } = piece.instancer;
+  const color = piece.color === "w" ? paletteColors.w : paletteColors.b;
+  mesh.setColorAt(piece.index, color);
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+}
+
+function setPieceMatrix(piece, position, options = {}) {
+  const { lift = 0, scale = 1 } = options;
+  const THREE = THREERef;
+  const state = tmpMatrix.ensure(THREE);
+  state.position.set(position.x, position.y + lift, position.z);
+  state.scale.set(scale, scale, scale);
+  state.matrix.compose(state.position, state.quaternion, state.scale);
+  piece.instancer.mesh.setMatrixAt(piece.index, state.matrix);
+  piece.instancer.mesh.instanceMatrix.needsUpdate = true;
+}
+
+function spawnPiece(type, color, square) {
+  const inst = instancers.get(type);
+  if (!inst || inst.count >= inst.capacity) return null;
+  const index = inst.count;
+  inst.count += 1;
+  inst.mesh.count = inst.count;
+  const piece = { type, color, square, instancer: inst, index };
+  inst.indexMap.set(index, piece);
+  piecesBySquare.set(square, piece);
+  const pos = helpersRef.squareToPosition(square);
+  setPieceMatrix(piece, pos);
+  applyPieceColor(piece);
+  return piece;
+}
+
+function releasePiece(piece) {
+  const inst = piece.instancer;
+  const lastIndex = inst.count - 1;
+  if (lastIndex < 0) return;
+  if (piece.index !== lastIndex) {
+    const lastPiece = inst.indexMap.get(lastIndex);
+    const matrix = new THREERef.Matrix4();
+    inst.mesh.getMatrixAt(lastIndex, matrix);
+    inst.mesh.setMatrixAt(piece.index, matrix);
+    const color = new THREERef.Color();
+    inst.mesh.getColorAt(lastIndex, color);
+    inst.mesh.setColorAt(piece.index, color);
+    if (lastPiece) {
+      lastPiece.index = piece.index;
+      inst.indexMap.set(piece.index, lastPiece);
+    }
+  }
+  inst.indexMap.delete(lastIndex);
+  inst.count -= 1;
+  inst.mesh.count = inst.count;
+  inst.mesh.instanceMatrix.needsUpdate = true;
+  if (inst.mesh.instanceColor) inst.mesh.instanceColor.needsUpdate = true;
+}
+
+function clearBoard() {
+  piecesBySquare.clear();
+  animations.length = 0;
+  captureAnimations.length = 0;
+  instancers.forEach((inst) => {
+    inst.count = 0;
+    inst.mesh.count = 0;
+    inst.indexMap.clear();
+  });
+}
+
+export async function createPieces(scene, THREE, helpers) {
+  THREERef = THREE;
+  sceneRef = scene;
+  helpersRef = helpers;
   try {
     const loader = new THREE.TextureLoader();
-    pieceEnvMap = await loader.loadAsync(envDataUrl);
-    try { pieceEnvMap.mapping = THREE.EquirectangularReflectionMapping; } catch(_){}
-    try { pieceEnvMap.colorSpace = THREE.SRGBColorSpace; }
-    catch(_) { try { pieceEnvMap.encoding = THREE.sRGBEncoding; } catch(_){} }
-  } catch(_){ pieceEnvMap = null; }
-}
-
-export async function placeInitialPosition(){
-  clearPieces();
-  // Place pawns
-  for (let f=0; f<8; f++){
-    spawn('P','w', fileRankToSquare(f,1));
-    spawn('P','b', fileRankToSquare(f,6));
+    envMap = await loader.loadAsync(envDataUrl);
+    try { envMap.mapping = THREE.EquirectangularReflectionMapping; } catch (_) {}
+    try { envMap.colorSpace = THREE.SRGBColorSpace; }
+    catch (_) { try { envMap.encoding = THREE.sRGBEncoding; } catch (_) {} }
+  } catch (_) {
+    envMap = null;
   }
-  // R N B Q K B N R
-  const back = ['R','N','B','Q','K','B','N','R'];
-  for (let f=0; f<8; f++){
-    spawn(back[f],'w', fileRankToSquare(f,0));
-    spawn(back[f],'b', fileRankToSquare(f,7));
+  ensureInstancers();
+}
+
+export function applySnapshot(pieces = []) {
+  clearBoard();
+  ensurePalette(currentPieceStyle);
+  pieces.forEach((piece) => {
+    spawnPiece(piece.type, piece.color, piece.square);
+  });
+}
+
+function startCapture(square) {
+  const target = piecesBySquare.get(square);
+  if (!target) return;
+  piecesBySquare.delete(square);
+  captureAnimations.push({
+    piece: target,
+    start: performance.now(),
+    duration: 220,
+    origin: helpersRef.squareToPosition(square),
+  });
+}
+
+function handlePromotion(piece, promotion) {
+  if (!promotion || !piece) return;
+  const square = piece.square;
+  releasePiece(piece);
+  const promoted = spawnPiece(promotion, piece.color, square);
+  if (promoted) {
+    piecesBySquare.set(square, promoted);
   }
-  setPieceStyle(currentPieceStyle);
 }
 
-export function listPieces(){
-  return [...pieces.values()];
-}
-
-export function getPieceBySquare(square){
-  for (const p of pieces.values()){
-    if (p.square === square) return p;
-  }
-  return null;
-}
-
-export async function movePieceByUci(uci){
-  const from = uci.slice(0,2);
-  const to = uci.slice(2,4);
-  const promo = uci.includes('=') ? uci.slice(5,6).toUpperCase() : null;
-
-  const mover = getPieceBySquare(from);
+export function animateMove(detail) {
+  if (!detail) return;
+  const mover = piecesBySquare.get(detail.from);
   if (!mover) return;
+  const startPos = helpersRef.squareToPosition(detail.from);
+  const endPos = helpersRef.squareToPosition(detail.to);
 
-  // en passant capture: if pawn moves diagonally to empty square, capture pawn behind
-  let cap = getPieceBySquare(to);
-  if (cap){
-    await fadeOutAndRemove(cap.mesh);
-    try{ window.SFX?.beep?.({ freq: 520, dur: 0.08, vol: 0.25 }); }catch(_){}
-    for (const [id, p] of pieces.entries()){
-      if (p === cap) pieces.delete(id);
-    }
-  }
-  else {
-    // check possible en passant
-    if (mover.type === 'P' && from[0] !== to[0]){
-      const dir = mover.color === 'w' ? -1 : 1; // board ranks increase upwards; captured pawn behind target
-      const epSquare = to[0] + String(parseInt(to[1],10) + dir);
-      const ep = getPieceBySquare(epSquare);
-      if (ep && ep.type === 'P' && ep.color !== mover.color){
-        await fadeOutAndRemove(ep.mesh);
-        try{ window.SFX?.beep?.({ freq: 520, dur: 0.08, vol: 0.25 }); }catch(_){}
-        for (const [id, p] of pieces.entries()){
-          if (p === ep) pieces.delete(id);
-        }
-      }
-    }
+  const isEnPassant = detail.flags?.includes("e");
+  if (detail.captured) {
+    const captureSquare = isEnPassant
+      ? `${detail.to[0]}${Number.parseInt(detail.to[1], 10) + (detail.color === "w" ? -1 : 1)}`
+      : detail.to;
+    startCapture(captureSquare);
   }
 
-  mover.square = to;
-  if (promo) mover.type = promo;
+  piecesBySquare.delete(detail.from);
+  piecesBySquare.set(detail.to, mover);
+  mover.square = detail.to;
 
-  const target = helpersRef.squareToPosition(to);
-  await animateTo(mover.mesh, target);
-  try{ window.SFX?.beep?.({ freq: 600, dur: 0.05, vol: 0.2 }); }catch(_){}
+  animations.push({
+    piece: mover,
+    start: startPos,
+    end: endPos,
+    startTime: performance.now(),
+    duration: 260,
+    lift: 0.3,
+    promotion: detail.promotion || null,
+  });
 
-  // handle castling rook move
-  if (mover.type === 'K' && Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) === 2){
-    const isKingSide = to.charCodeAt(0) > from.charCodeAt(0);
-    const rank = from[1];
-    const rookFrom = (isKingSide ? 'h' : 'a') + rank;
-    const rookTo = (isKingSide ? 'f' : 'd') + rank;
-    const rook = getPieceBySquare(rookFrom);
-    if (rook){
+  if (detail.flags?.includes("k") || detail.flags?.includes("q")) {
+    const rookRank = detail.color === "w" ? "1" : "8";
+    const rookFrom = detail.flags.includes("k") ? `h${rookRank}` : `a${rookRank}`;
+    const rookTo = detail.flags.includes("k") ? `f${rookRank}` : `d${rookRank}`;
+    const rook = piecesBySquare.get(rookFrom);
+    if (rook) {
+      piecesBySquare.delete(rookFrom);
+      piecesBySquare.set(rookTo, rook);
       rook.square = rookTo;
-      const rTarget = helpersRef.squareToPosition(rookTo);
-      await animateTo(rook.mesh, rTarget);
+      animations.push({
+        piece: rook,
+        start: helpersRef.squareToPosition(rookFrom),
+        end: helpersRef.squareToPosition(rookTo),
+        startTime: performance.now(),
+        duration: 220,
+        lift: 0.12,
+      });
     }
   }
 }
 
-function clearPieces(){
-  for (const p of pieces.values()){
-    sceneRef.remove(p.mesh);
-  }
-  pieces.clear();
-}
-
-function spawn(type, color, square){
-  const id = `${type}${color}${Math.random().toString(36).slice(2,7)}`;
-  const mesh = buildMesh(type, color);
-  const pos = helpersRef.squareToPosition(square);
-  mesh.position.set(pos.x, pos.y + 0.2, pos.z);
-  mesh.castShadow = true;
-  sceneRef.add(mesh);
-  pieces.set(id, {id, mesh, type, color, square});
-}
-
-function buildMesh(type, color){
-  const T = THREERef;
-  const mat = (T.MeshPhysicalMaterial ? new T.MeshPhysicalMaterial({ color: color==='w' ? 0xe9edf5 : 0x20232a, metalness:0.35, roughness:0.35, reflectivity: 0.4, clearcoat: 0.4, clearcoatRoughness: 0.25 }) : new T.MeshStandardMaterial({ color: color==='w' ? 0xe9edf5 : 0x20232a, metalness:0.3, roughness:0.4 }));
-  if (pieceEnvMap){ mat.envMap = pieceEnvMap; mat.needsUpdate = true; }
-  const h = {K:1.05,Q:0.95,R:0.78,B:0.78,N:0.78,P:0.62}[type] || 0.62;
-
-  // Higher fidelity shape: beveled base + lathe body + type head
-  const group = new T.Group();
-  const base = new T.Mesh(new T.CylinderGeometry(0.34, 0.38, 0.08, 32), mat);
-  const bevel = new T.Mesh((T.TorusGeometry? new T.TorusGeometry(0.31, 0.04, 12, 48) : new T.CylinderGeometry(0.32, 0.32, 0.02, 24)), mat);
-  bevel.rotation.x = Math.PI/2;
-  bevel.position.y = 0.04;
-  const profile = [];
-  const bodyH = h*0.7;
-  for(let i=0;i<=10;i++){
-    const t=i/10;
-    const r=0.28 - 0.08*(t*t);
-    profile.push(new T.Vector2(r, 0.08 + t*bodyH));
-  }
-  const body = new T.Mesh((T.LatheGeometry ? new T.LatheGeometry(profile, 36) : new T.CylinderGeometry(0.24, 0.28, bodyH, 16)), mat);
-  const headY = 0.08 + bodyH + 0.08;
-  let head;
-  if (type==='K') head = new T.Mesh((T.CapsuleGeometry? new T.CapsuleGeometry(0.16, 0.18, 8, 16) : new T.CylinderGeometry(0.18, 0.18, 0.26, 12)), mat);
-  else if (type==='Q') head = new T.Mesh(new T.ConeGeometry(0.2, 0.22, 16), mat);
-  else if (type==='R') head = new T.Mesh(new T.CylinderGeometry(0.22, 0.22, 0.22, 16), mat);
-  else if (type==='B') head = new T.Mesh((T.OctahedronGeometry? new T.OctahedronGeometry(0.18, 0) : new T.SphereGeometry(0.17, 12, 10)), mat);
-  else if (type==='N') head = new T.Mesh((T.CapsuleGeometry? new T.CapsuleGeometry(0.15, 0.12, 8, 12) : new T.ConeGeometry(0.16, 0.18, 10)), mat);
-  else head = new T.Mesh(new T.SphereGeometry(0.16, 20, 14), mat);
-  head.position.y = headY;
-  body.castShadow = head.castShadow = base.castShadow = bevel.castShadow = true;
-  group.add(base, bevel, body, head);
-  return group;
-}
-
-async function animateTo(mesh, target){
-  const start = {x: mesh.position.x, y: mesh.position.y, z: mesh.position.z};
-  const end = target;
-  const lift = 0.25;
-  const dur = 250;
-  const t0 = performance.now();
-  await new Promise(resolve => {
-    function step(t){
-      const k = Math.min(1, (t - t0)/dur);
-      const ease = k<0.5 ? 2*k*k : -1+(4-2*k)*k;
-      mesh.position.x = start.x + (end.x - start.x)*ease;
-      mesh.position.z = start.z + (end.z - start.z)*ease;
-      mesh.position.y = start.y + (lift*(1 - Math.abs(1-2*k)));
-      if (k<1) requestAnimationFrame(step); else { mesh.position.y = end.y; resolve(); }
-    }
-    requestAnimationFrame(step);
-  });
-}
-
-async function fadeOutAndRemove(mesh){
-  const mats=[];
-  mesh.traverse((ch)=>{ if (ch.isMesh) mats.push(ch.material); });
-  const start=performance.now();
-  const dur=200;
-  await new Promise((resolve)=>{
-    function step(t){
-      const k=Math.min(1,(t-start)/dur);
-      mats.forEach(m=>{ if (m && 'opacity' in m){ m.transparent=true; m.opacity=1-k; }});
-      if (k<1) requestAnimationFrame(step); else resolve();
-    }
-    requestAnimationFrame(step);
-  });
-  sceneRef.remove(mesh);
-}
-
-function fileRankToSquare(f,r){ return String.fromCharCode(97+f) + (r+1); }
-
-export function setPieceStyle(style){
+export function update(time) {
   if (!THREERef) return;
-  currentPieceStyle = style;
-  const T = THREERef;
-  const styles = {
-    classic: (c)=> {
-      const m = new T.MeshPhysicalMaterial({ color: c==='w'?0xe9edf5:0x20232a, metalness:0.35, roughness:0.35, reflectivity: 0.4, clearcoat: 0.4, clearcoatRoughness: 0.25 });
-      if (pieceEnvMap){ m.envMap = pieceEnvMap; }
-      return m;
-    },
-    metal: (c)=> {
-      const m = new T.MeshPhysicalMaterial({ color: c==='w'?0xdfe4ea:0x2a2e35, metalness:0.95, roughness:0.18, reflectivity: 0.9, clearcoat:0.6, clearcoatRoughness:0.15 });
-      if (pieceEnvMap){ m.envMap = pieceEnvMap; }
-      return m;
-    },
-    glass: (c)=> {
-      const m = new T.MeshPhysicalMaterial({ color: c==='w'?0xffffff:0x9ad0ff, metalness:0.0, roughness:0.02, transparent:true, opacity:0.35, transmission:1, ior: 1.3, thickness: 0.35 });
-      if (pieceEnvMap){ m.envMap = pieceEnvMap; }
-      return m;
+  const now = typeof time === "number" ? time : performance.now();
+  for (let i = animations.length - 1; i >= 0; i -= 1) {
+    const anim = animations[i];
+    const t = Math.min(1, (now - anim.startTime) / anim.duration);
+    const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    const pos = {
+      x: anim.start.x + (anim.end.x - anim.start.x) * ease,
+      y: anim.start.y + (anim.end.y - anim.start.y) * ease,
+      z: anim.start.z + (anim.end.z - anim.start.z) * ease,
+    };
+    const lift = Math.sin(t * Math.PI) * (anim.lift || 0);
+    setPieceMatrix(anim.piece, pos, { lift });
+    if (t >= 1) {
+      if (anim.promotion) {
+        handlePromotion(anim.piece, anim.promotion);
+      }
+      animations.splice(i, 1);
     }
-  };
-  for (const p of pieces.values()){
-    const mat = (styles[style]||styles.classic)(p.color);
-    p.mesh.traverse(ch=>{ if (ch.isMesh) ch.material = mat; });
+  }
+
+  for (let i = captureAnimations.length - 1; i >= 0; i -= 1) {
+    const anim = captureAnimations[i];
+    const t = Math.min(1, (now - anim.start) / anim.duration);
+    const scale = 1 - t;
+    setPieceMatrix(anim.piece, anim.origin, { scale: Math.max(0.001, scale) });
+    if (t >= 1) {
+      releasePiece(anim.piece);
+      captureAnimations.splice(i, 1);
+    }
   }
 }
 
-export function getPieceStyle(){
+export function setPieceStyle(style) {
+  currentPieceStyle = style;
+  ensurePalette(style);
+  instancers.forEach((inst) => {
+    inst.indexMap.forEach((piece) => applyPieceColor(piece));
+  });
+}
+
+export function getPieceStyle() {
   return currentPieceStyle;
 }

@@ -24,8 +24,20 @@ export function getLegalMoves(square) {
 
 export function move({ from, to, promotion }) {
   const res = game.move({ from, to, promotion });
-  return res ? { ok: true, san: res.san, flags: res.flags } : { ok: false };
+  if (!res) return { ok: false };
+  const detail = {
+    color: res.color,
+    from: res.from,
+    to: res.to,
+    piece: res.piece?.toUpperCase?.() || res.piece,
+    san: res.san,
+    flags: res.flags,
+    promotion: res.promotion ? res.promotion.toUpperCase() : null,
+    captured: res.captured ? res.captured.toUpperCase() : null,
+  };
+  return { ok: true, san: res.san, flags: res.flags, detail };
 }
+
 export const _internal = { get game(){ return game; } };
 
 export function undo() {

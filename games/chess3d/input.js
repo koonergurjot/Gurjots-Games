@@ -8,14 +8,28 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
   let selectedSquare = null;
   const markers = [];
   let hoverMesh = null;
+  let hoverSquare = null;
   let rendererRef = renderer;
   let controlsRef = controls;
   const canvas = rendererRef?.domElement || null;
+  const boardPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const planePoint = new THREE.Vector3();
 
   function clearMarkers() {
     while (markers.length) {
       scene.remove(markers.pop());
     }
+  }
+
+  function pickSquare(e) {
+    if (!rendererRef?.domElement) return null;
+    const rect = rendererRef.domElement.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    raycaster.setFromCamera(mouse, camera);
+    const intersection = raycaster.ray.intersectPlane(boardPlane, planePoint);
+    if (!intersection) return null;
+    return boardHelpers.positionToSquare(planePoint.x, planePoint.z);
   }
 
   function showTargets(from, moves) {
@@ -52,16 +66,12 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
   }
 
   function onPointer(e) {
-    if (!rendererRef?.domElement) return;
-    const rect = rendererRef.domElement.getBoundingClientRect();
-    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(scene.children, true);
-    const tile = intersects.find((i) => i.object.userData && i.object.userData.square);
-    if (!tile) return;
-
-    const sq = tile.object.userData.square;
+    const sq = pickSquare(e);
+    if (!sq) {
+      selectedSquare = null;
+      clearMarkers();
+      return;
+    }
     if (!selectedSquare) {
       const legal = (rulesApi.getLegalMoves && rulesApi.getLegalMoves(sq)) || [];
       if (legal.length) {
@@ -82,22 +92,21 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
   };
   const onPointerMove = (e) => {
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    mouse.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(scene.children, true);
-    const tile = intersects.find((i) => i.object.userData && i.object.userData.square);
-    if (tile){
-      const pos = boardHelpers.squareToPosition(tile.object.userData.square);
+    const sq = pickSquare(e);
+    if (sq){
+      const pos = boardHelpers.squareToPosition(sq);
       if (!hoverMesh){
         const g = new THREE.RingGeometry(boardHelpers.tileSize*0.45, boardHelpers.tileSize*0.49, 24);
         const m = new THREE.MeshBasicMaterial({ color: 0xffff88, transparent:true, opacity:0.45, depthWrite:false, depthTest:false });
         hoverMesh = new THREE.Mesh(g,m); hoverMesh.rotation.x = -Math.PI/2; scene.add(hoverMesh);
       }
-      hoverMesh.position.set(pos.x, pos.y + 0.02, pos.z);
-    }else if (hoverMesh){
+      if (hoverSquare !== sq) {
+        hoverSquare = sq;
+        hoverMesh.position.set(pos.x, pos.y + 0.02, pos.z);
+      }
+    } else if (hoverMesh){
       scene.remove(hoverMesh); hoverMesh = null;
+      hoverSquare = null;
     }
   };
 
@@ -114,6 +123,13 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
   const onWindowPointerCancel = () => {
     if (!rendererRef?.domElement) return;
     if (controlsRef) controlsRef.enabled = true;
+    selectedSquare = null;
+    clearMarkers();
+    if (hoverMesh) {
+      scene.remove(hoverMesh);
+      hoverMesh = null;
+      hoverSquare = null;
+    }
   };
   // Use window-level listeners so we still receive pointerup/cancel events if the pointer leaves the canvas.
   window.addEventListener('pointerup', onWindowPointerEnd);
