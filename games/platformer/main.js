@@ -1715,7 +1715,7 @@ export async function boot() {
       return;
     }
 
-    if (localPlayer.y > worldBounds.height + TILE * 4) {
+    if (localPlayer.y >= worldBounds.height + TILE * 4) {
       triggerGameOver(
         'Game Over',
         `You fell after collecting ${localPlayer.collected}/${coins.length} coins in ${secondsElapsed().toFixed(1)}s.`,
