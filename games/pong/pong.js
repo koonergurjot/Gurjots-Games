@@ -37,6 +37,12 @@ import "./pauseOverlay.js";
     keys:{p1Up:"KeyW", p1Down:"KeyS", p2Up:"ArrowUp", p2Down:"ArrowDown", pause:"Space"},
   };
 
+  const BG_HUE_BASE_A = 220;
+  const BG_HUE_BASE_B = 260;
+  const BG_HUE_AMP = 15;
+  const BG_HUE_SPEED = 0.05;
+  const BG_VIGNETTE_ALPHA = 0.4;
+
   const state = {
     ...DFLT, ...loadLS(),
     running:false, t0:0, last:0, dt:0, acc:0,
@@ -47,6 +53,8 @@ import "./pauseOverlay.js";
     shellPaused:false,
     images:{ powerups:{}, effects:{} },
     backgroundLayers:null,
+    backgroundCanvas:null,
+    backgroundCtx:null,
     pauseOverlay:null,
     debugHud:null,
     debugVisible:false,
@@ -254,6 +262,75 @@ import "./pauseOverlay.js";
       }
       ctx.restore();
     }
+  }
+
+  function ensureBackgroundCanvas(){
+    if(state.backgroundCanvas && state.backgroundCtx) return state.backgroundCanvas;
+    if(typeof document === "undefined") return null;
+    let canvas = state.backgroundCanvas;
+    if(!canvas){
+      canvas = document.querySelector(".pong-bg-canvas");
+      if(!canvas){
+        canvas = document.createElement("canvas");
+        canvas.className = "pong-bg-canvas";
+        canvas.setAttribute("aria-hidden", "true");
+        const target = document.body || document.documentElement;
+        if(target.firstChild){
+          target.insertBefore(canvas, target.firstChild);
+        } else {
+          target.appendChild(canvas);
+        }
+      }
+      state.backgroundCanvas = canvas;
+    }
+    const ctx = canvas.getContext("2d");
+    if(!ctx) return null;
+    state.backgroundCtx = ctx;
+    return canvas;
+  }
+
+  function resizeBackgroundCanvas(){
+    if(typeof window === "undefined") return;
+    const canvas = ensureBackgroundCanvas();
+    if(!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(window.innerWidth * dpr));
+    const height = Math.max(1, Math.round(window.innerHeight * dpr));
+    if(canvas.width !== width || canvas.height !== height){
+      canvas.width = width;
+      canvas.height = height;
+    }
+  }
+
+  function renderBackground(timeMs){
+    if(typeof window === "undefined") return;
+    const canvas = ensureBackgroundCanvas();
+    const ctx = state.backgroundCtx;
+    if(!canvas || !ctx) return;
+    resizeBackgroundCanvas();
+    const w = canvas.width;
+    const h = canvas.height;
+    if(!w || !h) return;
+    const seconds = (timeMs || performance.now()) / 1000;
+    const phase = seconds * BG_HUE_SPEED;
+    const motionScale = state.reduceMotion ? 0 : 1;
+    const hue1 = BG_HUE_BASE_A + BG_HUE_AMP * Math.sin(phase) * motionScale;
+    const hue2 = BG_HUE_BASE_B + BG_HUE_AMP * Math.sin(phase + Math.PI / 2) * motionScale;
+    ctx.globalCompositeOperation = "source-over";
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, `hsl(${hue1}, 60%, 12%)`);
+    gradient.addColorStop(1, `hsl(${hue2}, 60%, 10%)`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    const radius = Math.sqrt(w * w + h * h) * 0.6;
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, radius);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, `rgba(0,0,0,${BG_VIGNETTE_ALPHA})`);
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "source-over";
   }
 
   function clear(){
@@ -1008,6 +1085,7 @@ import "./pauseOverlay.js";
     state.loopId = requestAnimationFrame(frame);
     const delta = Math.min(MAX_FRAME_DELTA, (t - (state.last||t)) / 1000); // Fixed-step integration with an accumulator; clamp to avoid spiral of death.
     state.last = t;
+    renderBackground(t);
 
     updateParallax(delta);
     try { scenes.update(delta); } catch (err) { console.error('[pong] scene update failed', err); }
@@ -1053,6 +1131,8 @@ import "./pauseOverlay.js";
   function buildUI(root){
     document.body.classList.remove("theme-neon","theme-vapor","theme-crt","theme-minimal");
     document.body.classList.add(themeToClass(state.theme));
+    ensureBackgroundCanvas();
+    resizeBackgroundCanvas();
 
     const bar = h("div",{class:"pong-bar"},
       h("div",{class:"pong-title"},"Pong"),
@@ -1491,6 +1571,7 @@ import "./pauseOverlay.js";
   // ---------- Events ----------
   function addEvents(){
     window.addEventListener("resize", onResize);
+    window.addEventListener("resize", resizeBackgroundCanvas);
     const onShellPause=()=>pauseForShell();
     const onShellResume=()=>{ if(!document.hidden) resumeFromShell(); };
     const onVisibility=()=>{ if(document.hidden) pauseForShell(); else resumeFromShell(); };
