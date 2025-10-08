@@ -13,6 +13,7 @@ const vertexShader = `
   varying vec3 vWorldPos;
   varying vec3 vNormal;
   #ifdef USE_COLOR
+  attribute vec3 color;
   varying vec3 vColor;
   #endif
 
