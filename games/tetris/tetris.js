@@ -1268,7 +1268,9 @@ function drop(manual=false){
     updateBest();
     syncScoreDisplay();
   }
-  gravityTimer=0;
+  if(manual){
+    gravityTimer=0;
+  }
   onPieceMoved();
   return 'move';
 }
