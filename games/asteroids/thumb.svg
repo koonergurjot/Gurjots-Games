@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="title desc">
+  <title id="title">Asteroids thumbnail</title>
+  <desc id="desc">Triangle spaceship dodging floating asteroids in deep space.</desc>
+  <defs>
+    <radialGradient id="asteroids-bg" cx="0.5" cy="0.4" r="0.9">
+      <stop offset="0%" stop-color="#1c2541" />
+      <stop offset="100%" stop-color="#0b132b" />
+    </radialGradient>
+  </defs>
+  <rect width="160" height="90" rx="10" fill="url(#asteroids-bg)" />
+  <g fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1">
+    <circle cx="20" cy="20" r="1" />
+    <circle cx="50" cy="12" r="1" />
+    <circle cx="120" cy="18" r="1" />
+    <circle cx="90" cy="8" r="1" />
+    <circle cx="135" cy="50" r="1" />
+    <circle cx="70" cy="60" r="1" />
+  </g>
+  <g fill="#5c677d" stroke="#2e3444" stroke-width="3" stroke-linejoin="round">
+    <path d="M32 64l10-4 6 7-4 10-11 2-7-9z" />
+    <path d="M126 26l9-2 6 8-3 9-11 4-7-6z" />
+    <path d="M98 64l7-3 5 6-2 8-8 3-6-5z" />
+  </g>
+  <g transform="translate(78 45) rotate(-20)">
+    <path d="M0 -14 L10 12 L0 6 L-10 12 Z" fill="#e0fbfc" stroke="#98c1d9" stroke-width="2" />
+    <path d="M0 12 Q0 20 -6 28" stroke="#f07167" stroke-width="3" stroke-linecap="round" fill="none" />
+    <path d="M0 12 Q0 20 6 28" stroke="#f07167" stroke-width="3" stroke-linecap="round" fill="none" />
+  </g>
+</svg>

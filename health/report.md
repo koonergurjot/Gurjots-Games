@@ -14,7 +14,7 @@ Generated: 2025-10-07T21:13:46.273Z
 - Slug: pong
 - Status: ✅ Healthy
 - Shell: games/pong/index.html
-- Thumbnail: games/pong/thumb.png
+- Thumbnail: games/pong/thumb.svg
 - Sprites checked: 2
 - Audio checked: 3
 - Manifest paths: all required paths found
@@ -93,7 +93,7 @@ Generated: 2025-10-07T21:13:46.273Z
 - Slug: asteroids
 - Status: ✅ Healthy
 - Shell: games/asteroids/index.html
-- Thumbnail: games/asteroids/thumb.png
+- Thumbnail: games/asteroids/thumb.svg
 - Sprites checked: 1
 - Audio checked: 3
 - Manifest paths: all required paths found
@@ -104,7 +104,7 @@ Generated: 2025-10-07T21:13:46.273Z
 - Slug: maze3d
 - Status: ✅ Healthy
 - Shell: games/maze3d/index.html
-- Thumbnail: games/maze3d/thumb.png
+- Thumbnail: games/maze3d/thumb.svg
 - Sprites checked: 2
 - Audio checked: 1
 - Manifest paths: all required paths found
@@ -115,7 +115,7 @@ Generated: 2025-10-07T21:13:46.273Z
 - Slug: platformer
 - Status: ✅ Healthy
 - Shell: games/platformer/index.html
-- Thumbnail: games/platformer/thumb.png
+- Thumbnail: games/platformer/thumb.svg
 - Sprites checked: 1
 - Audio checked: 2
 - Manifest paths: all required paths found
@@ -127,7 +127,7 @@ Generated: 2025-10-07T21:13:46.273Z
 - Slug: runner
 - Status: ✅ Healthy
 - Shell: games/runner/index.html
-- Thumbnail: games/runner/thumb.png
+- Thumbnail: games/runner/thumb.svg
 - Sprites checked: 1
 - Audio checked: 3
 - Manifest paths: all required paths found
@@ -138,7 +138,7 @@ Generated: 2025-10-07T21:13:46.273Z
 - Slug: shooter
 - Status: ✅ Healthy
 - Shell: games/shooter/index.html
-- Thumbnail: games/shooter/thumb.png
+- Thumbnail: games/shooter/thumb.svg
 - Sprites checked: 1
 - Audio checked: 2
 - Manifest paths: all required paths found

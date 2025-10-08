@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="title desc">
+  <title id="title">Pixel Platformer thumbnail</title>
+  <desc id="desc">Pixel hero jumping between floating platforms with coins.</desc>
+  <defs>
+    <linearGradient id="platformer-bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#1d3557" />
+      <stop offset="100%" stop-color="#457b9d" />
+    </linearGradient>
+  </defs>
+  <rect width="160" height="90" rx="10" fill="url(#platformer-bg)" />
+  <g fill="#f1faee" opacity="0.25">
+    <circle cx="40" cy="26" r="10" />
+    <circle cx="68" cy="20" r="8" />
+    <circle cx="92" cy="24" r="12" />
+  </g>
+  <g transform="translate(0 10)">
+    <g fill="#2d6a4f" stroke="#1b4332" stroke-width="2" stroke-linejoin="round">
+      <rect x="18" y="52" width="36" height="10" rx="3" />
+      <rect x="66" y="36" width="32" height="10" rx="3" />
+      <rect x="112" y="48" width="28" height="10" rx="3" />
+    </g>
+    <g fill="#dda15e" stroke="#bc6c25" stroke-width="2">
+      <circle cx="82" cy="30" r="5" />
+      <circle cx="120" cy="40" r="5" />
+      <circle cx="135" cy="36" r="5" />
+    </g>
+    <g transform="translate(48 20)">
+      <rect x="-6" y="22" width="12" height="12" rx="2" fill="#e63946" stroke="#9d0208" stroke-width="2" />
+      <rect x="-10" y="12" width="8" height="12" rx="2" fill="#1d3557" stroke="#0b1d33" stroke-width="2" />
+      <rect x="2" y="12" width="8" height="12" rx="2" fill="#1d3557" stroke="#0b1d33" stroke-width="2" />
+      <path d="M-10 12 L-8 6 L-2 8 L-4 14 Z" fill="#ffb703" stroke="#fb8500" stroke-width="2" />
+      <path d="M2 12 L4 6 L10 8 L8 14 Z" fill="#ffb703" stroke="#fb8500" stroke-width="2" />
+      <circle cx="-1" cy="28" r="2" fill="#f1faee" />
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="title desc">
+  <title id="title">Alien Shooter thumbnail</title>
+  <desc id="desc">Retro spaceship aiming at incoming alien ships with laser beams.</desc>
+  <defs>
+    <linearGradient id="shooter-bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#050816" />
+      <stop offset="100%" stop-color="#1a1b3a" />
+    </linearGradient>
+  </defs>
+  <rect width="160" height="90" rx="14" fill="url(#shooter-bg)" />
+  <g fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5">
+    <circle cx="80" cy="45" r="34" />
+    <circle cx="80" cy="45" r="22" />
+    <circle cx="80" cy="45" r="12" />
+  </g>
+  <g stroke-width="3" stroke-linecap="round">
+    <path d="M80 20 L80 10" stroke="#f72585" />
+    <path d="M80 80 L80 70" stroke="#4cc9f0" />
+    <path d="M40 45 L28 45" stroke="#4361ee" />
+    <path d="M120 45 L132 45" stroke="#7209b7" />
+  </g>
+  <g transform="translate(80 58)">
+    <path d="M0 -18 L10 -2 L0 4 L-10 -2 Z" fill="#4cc9f0" stroke="#4895ef" stroke-width="2" />
+    <path d="M0 4 L6 16 L0 18 L-6 16 Z" fill="#4895ef" stroke="#4361ee" stroke-width="2" />
+    <circle cx="0" cy="-6" r="3" fill="#caf0f8" />
+  </g>
+  <g fill="#f4a261" stroke="#e76f51" stroke-width="2" stroke-linejoin="round">
+    <path d="M32 28 l10 -6 8 6 -4 10 -12 2 -6 -6z" />
+    <path d="M120 28 l10 -6 8 6 -4 10 -12 2 -6 -6z" />
+  </g>
+</svg>
