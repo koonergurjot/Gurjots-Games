@@ -2067,7 +2067,7 @@ export async function boot() {
 
   const keys = new Set();
 
-  function resetState() {
+  function resetState({ autoStart = true } = {}) {
     if (currentLevel) {
       coins = currentLevel.coins.map((coin) => ({ ...coin, collected: false }));
       goal = currentLevel.goal ? { ...currentLevel.goal } : goal;
