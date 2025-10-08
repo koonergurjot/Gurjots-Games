@@ -49,6 +49,13 @@
   font-size: 0.75rem;
 }
 
+.game-card__actions {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .game-card .play {
   align-self: flex-start;
   padding: 4px 8px;
@@ -57,4 +64,45 @@
   text-decoration: none;
   border-radius: 4px;
   font-size: 0.85rem;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.game-card .play:hover {
+  background: #0059c9;
+  box-shadow: 0 2px 6px rgba(0, 112, 243, 0.35);
+}
+
+.game-card__favorite {
+  border: 1px solid #d0d7e3;
+  background: #f5f7fb;
+  color: #1f2937;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.game-card__favorite:hover {
+  background: #e2e8f5;
+  border-color: #a8b3c7;
+}
+
+.game-card__favorite:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.game-card__favorite-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.game-card__favorite.is-active {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
 }

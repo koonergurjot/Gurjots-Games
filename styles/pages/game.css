@@ -5,3 +5,64 @@
   height: 80vh;
   border: 0;
 }
+
+.game-preferences {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #f9fafb;
+  display: grid;
+  gap: 1rem;
+}
+
+.game-preferences__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.game-preferences__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.game-preferences__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.game-preferences__toggle input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+}
+
+.game-preferences__select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.game-preferences__select select {
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.95rem;
+  color: #1f2937;
+}
+
+.game-preferences__summary {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #4b5563;
+}

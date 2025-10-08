@@ -1,4 +1,5 @@
 import { loadStyle } from '../utils.js';
+import { isFavorite, toggleFavorite } from '../state/user-state.js';
 
 loadStyle('styles/components/game-card.css');
 
@@ -11,9 +12,36 @@ template.innerHTML = `
     <h3 class="game-title"></h3>
     <p class="game-short"></p>
     <div class="tags"></div>
-    <a class="play" href="#">Play</a>
+    <div class="game-card__actions">
+      <a class="play" href="#">Play</a>
+      <button type="button" class="game-card__favorite" data-game-favorite aria-pressed="false">
+        <span class="game-card__favorite-icon" aria-hidden="true">☆</span>
+        <span class="game-card__favorite-label">Add to favorites</span>
+      </button>
+    </div>
   </article>
 `;
+
+export function syncFavoriteButton(button, favorite) {
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+  const isActive = Boolean(favorite);
+  button.classList.toggle('is-active', isActive);
+  button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  button.setAttribute('data-active', isActive ? 'true' : 'false');
+  button.setAttribute('title', isActive ? 'Remove from favorites' : 'Add to favorites');
+
+  const icon = button.querySelector('.game-card__favorite-icon');
+  if (icon) {
+    icon.textContent = isActive ? '★' : '☆';
+  }
+
+  const label = button.querySelector('.game-card__favorite-label');
+  if (label) {
+    label.textContent = isActive ? 'Remove from favorites' : 'Add to favorites';
+  }
+}
 
 export function createGameCard(game) {
   const fragment = template.content.cloneNode(true);
@@ -41,6 +69,22 @@ export function createGameCard(game) {
   });
   const link = card.querySelector('.play');
   link.href = `/game/${game.id}`;
+
+  const favoriteButton = card.querySelector('[data-game-favorite]');
+  if (favoriteButton) {
+    favoriteButton.dataset.gameFavorite = game.id;
+
+    syncFavoriteButton(favoriteButton, isFavorite(game.id));
+
+    favoriteButton.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const nextState = toggleFavorite(game.id);
+      const isNowFavorite = nextState.favorites.includes(game.id);
+      syncFavoriteButton(favoriteButton, isNowFavorite);
+    });
+  }
+
   return card;
 }
 
