@@ -15,6 +15,7 @@ const oppC=document.getElementById('oppBoard'), oppCtx=oppC?.getContext('2d');
 const net=window.Net;
 let oppGrid=null, oppScore=0;
 let PAD=12, S=80, GAP=10;
+const TILE_RADIUS = 9;
 let canvasCssWidth=0, canvasCssHeight=0;
 const LS_SIZE='g2048.size';
 const sizeSel=document.getElementById('sizeSel');
@@ -355,11 +356,42 @@ function drawOpponent(){
   oppCtx.fillStyle=theme.text;
   oppCtx.font='16px Inter,system-ui';
   oppCtx.fillText(`Opponent: ${oppScore}`,12,20);
-  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
-    const v=oppGrid[y]?.[x]||0; const px=PAD + x*(S+GAP); const py=40 + y*(S+GAP);
-    oppCtx.fillStyle=v?tileColor(v):theme.empty; oppCtx.strokeStyle=oppC.style.borderColor; oppCtx.lineWidth=1;
-    roundRect(oppCtx,px,py,S,S,10,true,true);
-    if(v){ oppCtx.fillStyle=(v<=4)?theme.tileTextDark:theme.tileTextLight; oppCtx.font=(v<100)?'28px Inter':'24px Inter'; oppCtx.textAlign='center'; oppCtx.textBaseline='middle'; oppCtx.fillText(v,px+S/2,py+S/2+2); }
+  const strokeColor = oppC?.style?.borderColor || '#00000022';
+  const emptyCells=[];
+  const tiles=[];
+  let order=0;
+  for(let y=0;y<N;y++){
+    for(let x=0;x<N;x++){
+      const px=PAD + x*(S+GAP);
+      const py=40 + y*(S+GAP);
+      emptyCells.push({x:px,y:py});
+      const v=oppGrid[y]?.[x]||0;
+      if(!v) continue;
+      tiles.push({
+        x:px,
+        y:py,
+        value:v,
+        fill:tileColor(v),
+        textColor:(v<=4)?theme.tileTextDark:theme.tileTextLight,
+        font:(v<100)?'28px Inter':'24px Inter',
+        order:order++,
+        layer:Math.log2(v)
+      });
+    }
+  }
+
+  for(const cell of emptyCells){
+    drawTileBackground(oppCtx,cell.x,cell.y,S,TILE_RADIUS,theme.empty,strokeColor,0);
+  }
+
+  tiles.sort((a,b)=>a.layer===b.layer?a.order-b.order:a.layer-b.layer);
+  oppCtx.textAlign='center';
+  oppCtx.textBaseline='middle';
+  for(const tile of tiles){
+    drawTileBackground(oppCtx,tile.x,tile.y,S,TILE_RADIUS,tile.fill,strokeColor,tile.value);
+    oppCtx.fillStyle=tile.textColor;
+    oppCtx.font=tile.font;
+    oppCtx.fillText(tile.value,tile.x+S/2,tile.y+S/2+2);
   }
 }
 
@@ -844,52 +876,90 @@ function draw(anim){
   ctx.fillStyle = theme.text;
   ctx.font = '16px Inter,system-ui';
   ctx.fillText(scoreText, 12, 20);
+  const strokeColor = c?.style?.borderColor || '#00000022';
   const base=(!reduceMotion && anim)?anim.base:grid;
-  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
-    // Skip rendering base tile if new tile animation is active at this position
-    if(!reduceMotion && newTileAnim && newTileAnim.x === x && newTileAnim.y === y) {
-      // Draw empty cell background only
-      const px=PAD + x*(S+GAP); const py=40 + y*(S+GAP);
-      ctx.fillStyle=theme.empty; ctx.strokeStyle=c.style.borderColor; ctx.lineWidth=1;
-      roundRect(ctx,px,py,S,S,10,true,true);
-      continue;
-    }
+  const emptyCells=[];
+  const tileDrawList=[];
+  let tileOrder=0;
+  for(let y=0;y<N;y++){
+    for(let x=0;x<N;x++){
+      const px=PAD + x*(S+GAP);
+      const py=40 + y*(S+GAP);
+      emptyCells.push({x:px,y:py});
 
-    const v=base[y][x]; const px=PAD + x*(S+GAP); const py=40 + y*(S+GAP);
-
-    // Check if this is a merged tile for scale effect
-    let scale = 1;
-    const mergedKey = `${x},${y}`;
-    if(!reduceMotion && mergedAnim.has(mergedKey) && !anim) {
-      scale = mergedAnim.get(mergedKey).scale;
-    }
-    
-    ctx.fillStyle=v?tileColor(v):theme.empty; ctx.strokeStyle=c.style.borderColor; ctx.lineWidth=1;
-    roundRect(ctx,px,py,S,S,10,true,true,scale);
-    if(v){ 
-      if(!reduceMotion && scale !== 1) {
-        ctx.save();
-        const cx = px + S/2, cy = py + S/2;
-        ctx.translate(cx, cy);
-        ctx.scale(scale, scale);
-        ctx.translate(-cx, -cy);
+      if(!reduceMotion && newTileAnim && newTileAnim.x === x && newTileAnim.y === y) {
+        continue;
       }
-      ctx.fillStyle=(v<=4)?theme.tileTextDark:theme.tileTextLight;
-      ctx.font=(v<100)?'28px Inter':'24px Inter';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(v,px+S/2,py+S/2+2);
-      if(!reduceMotion && scale !== 1) ctx.restore();
+
+      const v=base[y][x];
+      if(!v) continue;
+
+      let scale = 1;
+      const mergedKey = `${x},${y}`;
+      if(!reduceMotion && mergedAnim.has(mergedKey) && !anim) {
+        scale = mergedAnim.get(mergedKey).scale;
+      }
+
+      tileDrawList.push({
+        x:px,
+        y:py,
+        value:v,
+        scale,
+        fill:tileColor(v),
+        textColor:(v<=4)?theme.tileTextDark:theme.tileTextLight,
+        font:(v<100)?'28px Inter':'24px Inter',
+        order:tileOrder++,
+        layer:Math.log2(v)
+      });
+    }
+  }
+
+  for(const cell of emptyCells){
+    drawTileBackground(ctx,cell.x,cell.y,S,TILE_RADIUS,theme.empty,strokeColor,0);
+  }
+
+  tileDrawList.sort((a,b)=>a.layer===b.layer?a.order-b.order:a.layer-b.layer);
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  for(const tile of tileDrawList){
+    const needsScale=!reduceMotion && tile.scale!==1;
+    if(needsScale){
+      ctx.save();
+      const cx=tile.x+S/2, cy=tile.y+S/2;
+      ctx.translate(cx,cy);
+      ctx.scale(tile.scale,tile.scale);
+      ctx.translate(-cx,-cy);
+    }
+    drawTileBackground(ctx,tile.x,tile.y,S,TILE_RADIUS,tile.fill,strokeColor,tile.value);
+    ctx.fillStyle=tile.textColor;
+    ctx.font=tile.font;
+    ctx.fillText(tile.value,tile.x+S/2,tile.y+S/2+2);
+    if(needsScale){
+      ctx.restore();
     }
   }
   if(!reduceMotion && anim){
-    for(const t of anim.tiles){
+    const movingTiles=anim.tiles.map((t,index)=>{
       const px=PAD + (t.fromX + (t.toX - t.fromX)*anim.p)*(S+GAP);
       const py=40 + (t.fromY + (t.toY - t.fromY)*anim.p)*(S+GAP);
-      const v=t.value;
-      ctx.fillStyle=tileColor(v); ctx.strokeStyle=c.style.borderColor; ctx.lineWidth=1;
-      roundRect(ctx,px,py,S,S,10,true,true);
-      ctx.fillStyle=(v<=4)?theme.tileTextDark:theme.tileTextLight;
-      ctx.font=(v<100)?'28px Inter':'24px Inter'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(v,px+S/2,py+S/2+2);
+      return {
+        x:px,
+        y:py,
+        value:t.value,
+        fill:tileColor(t.value),
+        order:index,
+        layer:Math.log2(t.value)
+      };
+    });
+
+    movingTiles.sort((a,b)=>a.layer===b.layer?a.order-b.order:a.layer-b.layer);
+    for(const tile of movingTiles){
+      drawTileBackground(ctx,tile.x,tile.y,S,TILE_RADIUS,tile.fill,strokeColor,tile.value);
+      ctx.fillStyle=(tile.value<=4)?theme.tileTextDark:theme.tileTextLight;
+      ctx.font=(tile.value<100)?'28px Inter':'24px Inter';
+      ctx.textAlign='center';
+      ctx.textBaseline='middle';
+      ctx.fillText(tile.value,tile.x+S/2,tile.y+S/2+2);
     }
   }
 
@@ -899,29 +969,28 @@ function draw(anim){
     const py = 40 + newTileAnim.y * (S + GAP);
     const v = newTileAnim.value;
     const scale = newTileAnim.scale;
-    
-    ctx.fillStyle = tileColor(v);
-    ctx.strokeStyle = c.style.borderColor;
-    ctx.lineWidth = 1;
-    roundRect(ctx, px, py, S, S, 10, true, true, scale);
-    
+
+    ctx.save();
+    const cx = px + S/2, cy = py + S/2;
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.translate(-cx, -cy);
+
+    drawTileBackground(ctx, px, py, S, TILE_RADIUS, tileColor(v), strokeColor, v);
+
     if(scale > 0.3) { // Only show text when tile is big enough
-      ctx.save();
-      const cx = px + S/2, cy = py + S/2;
-      ctx.translate(cx, cy);
-      ctx.scale(scale, scale);
-      ctx.translate(-cx, -cy);
-      
       ctx.fillStyle = (v <= 4) ? theme.tileTextDark : theme.tileTextLight;
       ctx.font = (v < 100) ? '28px Inter' : '24px Inter';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(v, px + S/2, py + S/2 + 2);
-      
-      ctx.restore();
     }
+
+    ctx.restore();
   }
-  
+
+  ctx.textAlign='left';
+  ctx.textBaseline='alphabetic';
   if(hintDir!=null){ ctx.fillText('Hint: '+['Left','Up','Right','Down'][hintDir],12,canvasCssHeight-12); }
   updateStatus();
   drawOpponent();
@@ -940,65 +1009,93 @@ function tileColor(v){
   return color;
 }
 
+function getRoundedRectPath(w,h,r){
+  let radii;
+  if(typeof r==='number'){
+    radii={tl:r,tr:r,br:r,bl:r};
+  } else {
+    radii=r;
+  }
+  const key=`${w}_${h}_${radii.tl}_${radii.tr}_${radii.br}_${radii.bl}`;
+  if(!renderCache.roundRectPaths.has(key)){
+    const path=new Path2D();
+    path.moveTo(radii.tl,0);
+    path.lineTo(w-radii.tr,0);
+    path.quadraticCurveTo(w,0,w,radii.tr);
+    path.lineTo(w,h-radii.br);
+    path.quadraticCurveTo(w,h,w-radii.br,h);
+    path.lineTo(radii.bl,h);
+    path.quadraticCurveTo(0,h,0,h-radii.bl);
+    path.lineTo(0,radii.tl);
+    path.quadraticCurveTo(0,0,radii.tl,0);
+    path.closePath();
+    renderCache.roundRectPaths.set(key,path);
+  }
+  return renderCache.roundRectPaths.get(key);
+}
+
+function computeShadowAlpha(value){
+  if(!value) return 0;
+  const depth=Math.max(0,Math.log2(value)-1);
+  const intensity=1+depth*0.08;
+  return Math.min(0.22*intensity,0.45);
+}
+
+function drawTileBackground(ctx,x,y,size,radius,fillColor,strokeColor,value){
+  const path=getRoundedRectPath(size,size,radius);
+  ctx.save();
+  ctx.translate(x,y);
+
+  if(value){
+    const shadowAlpha=computeShadowAlpha(value);
+    if(shadowAlpha>0){
+      ctx.save();
+      ctx.shadowColor=`rgba(0,0,0,${shadowAlpha.toFixed(3)})`;
+      ctx.shadowBlur=6;
+      ctx.shadowOffsetX=0;
+      ctx.shadowOffsetY=2;
+      ctx.fillStyle=fillColor;
+      ctx.fill(path);
+      ctx.restore();
+    }
+  }
+
+  ctx.fillStyle=fillColor;
+  ctx.fill(path);
+
+  if(strokeColor){
+    ctx.strokeStyle=strokeColor;
+    ctx.lineWidth=1;
+    ctx.stroke(path);
+  }
+
+  if(value){
+    ctx.save();
+    ctx.clip(path);
+    const highlight=ctx.createLinearGradient(0,0,0,size);
+    highlight.addColorStop(0,'rgba(255,255,255,0.10)');
+    highlight.addColorStop(0.45,'rgba(255,255,255,0)');
+    ctx.fillStyle=highlight;
+    ctx.fillRect(0,0,size,size);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
 function roundRect(ctx,x,y,w,h,r,fill,stroke,scale=1){
-  if(typeof r==='number'){ r={tl:r,tr:r,br:r,bl:r}; }
-  
-  // Cache path for standard tiles (most common case)
-  const pathKey = `${w}_${h}_${r.tl}`;
-  let pathCached = false;
-  
-  if(scale === 1 && renderCache.roundRectPaths.has(pathKey)) {
-    const path = renderCache.roundRectPaths.get(pathKey);
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.fill(path);
-    if(stroke) ctx.stroke(path);
-    ctx.restore();
-    return;
+  const path=getRoundedRectPath(w,h,r);
+  ctx.save();
+  ctx.translate(x,y);
+  if(scale!==1){
+    const cx=w/2, cy=h/2;
+    ctx.translate(cx,cy);
+    ctx.scale(scale,scale);
+    ctx.translate(-cx,-cy);
   }
-  
-  if(scale !== 1) {
-    ctx.save();
-    const cx = x + w/2, cy = y + h/2;
-    ctx.translate(cx, cy);
-    ctx.scale(scale, scale);
-    ctx.translate(-cx, -cy);
-  }
-  
-  ctx.beginPath();
-  ctx.moveTo(x+r.tl,y);
-  ctx.lineTo(x+w-r.tr,y);
-  ctx.quadraticCurveTo(x+w,y,x+w,y+r.tr);
-  ctx.lineTo(x+w,y+h-r.br);
-  ctx.quadraticCurveTo(x+w,y+h,x+w-r.br,y+h);
-  ctx.lineTo(x+r.bl,y+h);
-  ctx.quadraticCurveTo(x,y+h,x,y+h-r.bl);
-  ctx.lineTo(x,y+r.tl);
-  ctx.quadraticCurveTo(x,y,x+r.tl,y);
-  ctx.closePath();
-  
-  // Cache the path for reuse (only for standard scale)
-  if(scale === 1 && !renderCache.roundRectPaths.has(pathKey)) {
-    const translatedPath = new Path2D();
-    translatedPath.moveTo(r.tl,0);
-    translatedPath.lineTo(w-r.tr,0);
-    translatedPath.quadraticCurveTo(w,0,w,r.tr);
-    translatedPath.lineTo(w,h-r.br);
-    translatedPath.quadraticCurveTo(w,h,w-r.br,h);
-    translatedPath.lineTo(r.bl,h);
-    translatedPath.quadraticCurveTo(0,h,0,h-r.bl);
-    translatedPath.lineTo(0,r.tl);
-    translatedPath.quadraticCurveTo(0,0,r.tl,0);
-    translatedPath.closePath();
-    renderCache.roundRectPaths.set(pathKey, translatedPath);
-  }
-  
-  if(fill) ctx.fill();
-  if(stroke) ctx.stroke();
-  
-  if(scale !== 1) {
-    ctx.restore();
-  }
+  if(fill) ctx.fill(path);
+  if(stroke) ctx.stroke(path);
+  ctx.restore();
 }
 
 function getHint(){
