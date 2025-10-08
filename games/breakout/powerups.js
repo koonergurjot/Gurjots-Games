@@ -1,8 +1,25 @@
 const MANIFEST_URL = new URL('./powerups.json', import.meta.url);
 
+function normaliseSpriteEntry(sprite) {
+  if (typeof sprite === 'string') {
+    const trimmed = sprite.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  return null;
+}
+
 function normaliseDefinition(raw) {
   const id = String(raw?.id || '').trim();
   if (!id) return null;
+  const spriteEntries = Array.isArray(raw?.sprite)
+    ? raw.sprite.map(normaliseSpriteEntry).filter(Boolean)
+    : [];
+  const sprite = spriteEntries.length
+    ? spriteEntries
+    : (normaliseSpriteEntry(raw?.sprite) ? [normaliseSpriteEntry(raw?.sprite)] : []);
+  const grants = Array.isArray(raw?.grants)
+    ? raw.grants.map((value) => String(value || '').trim()).filter(Boolean)
+    : [];
   const base = {
     id,
     type: String(raw?.type || '').trim() || 'generic',
@@ -13,7 +30,8 @@ function normaliseDefinition(raw) {
     count: Number(raw?.count ?? 0),
     pulseInterval: Number(raw?.pulseInterval ?? 0.3),
     weight: Number(raw?.weight ?? 0),
-    sprite: typeof raw?.sprite === 'string' ? raw.sprite : null,
+    sprites: sprite,
+    grants,
   };
   return Object.freeze(base);
 }
@@ -43,7 +61,7 @@ export function getPowerUpDefinition(id) {
 
 export function getPowerUpSprite(id) {
   const def = getPowerUpDefinition(id);
-  return def?.sprite || null;
+  return Array.isArray(def?.sprites) && def.sprites.length ? def.sprites[0] : null;
 }
 
 export function selectPowerUp({ multipliers = null, rng = Math.random } = {}) {
