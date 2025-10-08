@@ -28,6 +28,12 @@
     { id: "env", label: "Env" },
   ];
 
+  const ADAPTER_READY_TIMEOUT_MS = 5000;
+  const ADAPTER_READY_POLL_INTERVAL_MS = 50;
+  const adapterReadyWaiters = [];
+  let adapterReadyTimer = null;
+  let adapterReadyDeadline = 0;
+
   const state = {
     store: reportStore,
     maxLogs: reportStore?.config?.maxConsole || 500,
@@ -295,12 +301,6 @@
       return "";
     }
   }
-
-  const ADAPTER_READY_TIMEOUT_MS = 5000;
-  const ADAPTER_READY_POLL_INTERVAL_MS = 50;
-  const adapterReadyWaiters = [];
-  let adapterReadyTimer = null;
-  let adapterReadyDeadline = 0;
 
   function ensureDiagnosticsAdapterModule(){
     const resolved = resolveDiagnosticsAdapterModule();
