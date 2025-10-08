@@ -42,7 +42,7 @@ export function normalizePlayPath(playUrl) {
     pathname = pathname.replace(/\/+/g, '/');
     if (!pathname.startsWith('/')) pathname = `/${pathname}`;
     pathname = pathname.replace(/\/+$/, '');
-    if (!pathname.endsWith('.html')) {
+    if (!/\.html$/i.test(pathname)) {
       pathname = `${pathname}/index.html`;
     }
     return `${pathname}${asUrl.search || ''}${asUrl.hash || ''}`;
