@@ -580,6 +580,167 @@ async function resolveRelativeImport(filePath, specifier, existenceCache, extens
   return null;
 }
 
+function toPosixPath(value) {
+  return value.replace(/\\/g, '/');
+}
+
+let gitTrackedFilesPromise = null;
+
+async function getGitTrackedFiles() {
+  if (gitTrackedFilesPromise) {
+    return gitTrackedFilesPromise;
+  }
+
+  gitTrackedFilesPromise = (async () => {
+    try {
+      const { code, stdout } = await runCommand('git', ['ls-files']);
+      if (code !== 0) {
+        return [];
+      }
+      return stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => toPosixPath(line));
+    } catch {
+      return [];
+    }
+  })();
+
+  return gitTrackedFilesPromise;
+}
+
+function buildCaseSensitivityChecker(files) {
+  if (!Array.isArray(files) || files.length === 0) {
+    return null;
+  }
+
+  const normalizedFiles = files.map((file) => toPosixPath(file));
+  const fileMap = new Map();
+  const dirMap = new Map();
+  const extensions = new Set();
+
+  dirMap.set('.', '.');
+
+  for (const file of normalizedFiles) {
+    const lowerFile = file.toLowerCase();
+    if (!fileMap.has(lowerFile)) {
+      fileMap.set(lowerFile, file);
+    }
+
+    const ext = path.posix.extname(file);
+    if (ext) {
+      extensions.add(ext);
+    }
+
+    let dir = path.posix.dirname(file);
+    while (dir && dir !== '.' && dir !== '/') {
+      const lowerDir = dir.toLowerCase();
+      if (!dirMap.has(lowerDir)) {
+        dirMap.set(lowerDir, dir);
+      }
+      const next = path.posix.dirname(dir);
+      if (next === dir) {
+        break;
+      }
+      dir = next;
+    }
+    if (dir === '.' || dir === '/') {
+      dirMap.set('.', '.');
+    }
+  }
+
+  const defaultExtensions = [''];
+  for (const ext of extensions) {
+    defaultExtensions.push(ext);
+  }
+
+  const seenCandidate = new Set();
+
+  const resolveCandidates = (importer, specifier) => {
+    if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
+      return [];
+    }
+
+    const importerPosix = toPosixPath(importer);
+    const normalizedSpecifier = toPosixPath(specifier);
+    let relativeCandidate;
+
+    if (normalizedSpecifier.startsWith('/')) {
+      relativeCandidate = normalizedSpecifier.slice(1);
+    } else {
+      const importerDir = path.posix.dirname(importerPosix);
+      const joined = path.posix.join(
+        importerDir === '.' ? '' : importerDir,
+        normalizedSpecifier,
+      );
+      relativeCandidate = path.posix.normalize(joined);
+    }
+
+    const cleanCandidate = relativeCandidate.replace(/\\/g, '/');
+    const candidates = [];
+
+    const addCandidate = (candidate) => {
+      const normalized = candidate.replace(/\\/g, '/');
+      const lower = normalized.toLowerCase();
+      const key = `${lower}`;
+      if (!seenCandidate.has(key)) {
+        seenCandidate.add(key);
+        candidates.push(normalized);
+      }
+    };
+
+    seenCandidate.clear();
+    addCandidate(cleanCandidate);
+    for (const ext of defaultExtensions) {
+      addCandidate(`${cleanCandidate}${ext}`);
+    }
+    for (const ext of defaultExtensions) {
+      addCandidate(path.posix.join(cleanCandidate, `index${ext}`));
+    }
+
+    return candidates;
+  };
+
+  const checkImportCase = (importer, specifier) => {
+    const candidates = resolveCandidates(importer, specifier);
+    for (const candidate of candidates) {
+      const lower = candidate.toLowerCase();
+      if (fileMap.has(lower)) {
+        const actual = fileMap.get(lower);
+        if (actual !== candidate) {
+          return { expected: actual, actual: candidate };
+        }
+        return null;
+      }
+      if (dirMap.has(lower)) {
+        const actualDir = dirMap.get(lower);
+        if (actualDir !== candidate) {
+          return { expected: actualDir, actual: candidate };
+        }
+      }
+    }
+    return null;
+  };
+
+  return { checkImportCase };
+}
+
+let caseSensitivityCheckerPromise = null;
+
+async function getCaseSensitivityChecker() {
+  if (caseSensitivityCheckerPromise) {
+    return caseSensitivityCheckerPromise;
+  }
+
+  caseSensitivityCheckerPromise = (async () => {
+    const files = await getGitTrackedFiles();
+    return buildCaseSensitivityChecker(files);
+  })();
+
+  return caseSensitivityCheckerPromise;
+}
+
 async function checkImportTargets(files, result) {
   if (files.length === 0) {
     result.status = 'passed';
@@ -591,6 +752,8 @@ async function checkImportTargets(files, result) {
   const existenceCache = new Map();
 
   const missing = [];
+  const caseMismatches = [];
+  const caseChecker = await getCaseSensitivityChecker();
 
   await runWithConcurrency(files, async (filePath) => {
     let content;
@@ -601,9 +764,27 @@ async function checkImportTargets(files, result) {
     }
     const specs = findImportSpecifiers(content);
 
-    for (const specifier of specs) {
+    for (const rawSpecifier of specs) {
+      const specifier = normalizeImportSpecifier(rawSpecifier);
       if (!isRelativeImportSpecifier(specifier)) {
         continue;
+      }
+      let hasCaseMismatch = false;
+      if (caseChecker) {
+        const caseIssue = caseChecker.checkImportCase(
+          relativePath(filePath),
+          specifier,
+        );
+        if (caseIssue) {
+          caseMismatches.push({
+            type: 'case-mismatch',
+            file: relativePath(filePath),
+            specifier: rawSpecifier,
+            expected: caseIssue.expected,
+            actual: caseIssue.actual,
+          });
+          hasCaseMismatch = true;
+        }
       }
       const resolved = await resolveRelativeImport(
         filePath,
@@ -611,21 +792,33 @@ async function checkImportTargets(files, result) {
         existenceCache,
         RELATIVE_IMPORT_RESOLVE_EXTENSIONS,
       );
-      if (!resolved) {
+      if (!resolved && !hasCaseMismatch) {
         missing.push({
+          type: 'missing',
           file: relativePath(filePath),
-          specifier,
+          specifier: rawSpecifier,
         });
       }
     }
   });
-  if (missing.length === 0) {
+  if (missing.length === 0 && caseMismatches.length === 0) {
     result.status = 'passed';
     result.summary = 'All relative imports resolved.';
   } else {
     result.status = 'issues';
-    result.summary = `${missing.length} missing relative import${missing.length === 1 ? '' : 's'}.`;
-    result.issues = missing;
+    const parts = [];
+    if (missing.length > 0) {
+      parts.push(
+        `${missing.length} missing relative import${missing.length === 1 ? '' : 's'}`,
+      );
+    }
+    if (caseMismatches.length > 0) {
+      parts.push(
+        `${caseMismatches.length} case mismatch${caseMismatches.length === 1 ? '' : 'es'}`,
+      );
+    }
+    result.summary = `${parts.join(' and ')}.`;
+    result.issues = missing.concat(caseMismatches);
   }
 }
 
@@ -991,10 +1184,19 @@ function buildMarkdownReport(generatedAt, overallStatus, exitCode, results, fata
   if (importResult.issues.length === 0) {
     lines.push(importResult.summary || 'All relative imports resolved.');
   } else {
-    lines.push(importResult.summary || 'Missing relative imports:');
+    lines.push(importResult.summary || 'Relative import issues detected:');
     lines.push('');
     for (const issue of importResult.issues) {
-      lines.push(`- **${issue.file}** → \`${issue.specifier}\``);
+      if (issue.type === 'case-mismatch') {
+        const details = issue.expected
+          ? ` (case mismatch: expected \`${issue.expected}\`, imported \`${issue.actual}\`)`
+          : ' (case mismatch)';
+        lines.push(`- **${issue.file}** → \`${issue.specifier}\`${details}`);
+      } else if (issue.type === 'missing') {
+        lines.push(`- **${issue.file}** → \`${issue.specifier}\` (missing)`);
+      } else {
+        lines.push(`- **${issue.file}** → \`${issue.specifier}\``);
+      }
     }
   }
   lines.push('');
