@@ -74,7 +74,7 @@ function card(game){
   const tags = game.tags || game.genres || [];
   const short = game.description || '';
   const badge = Array.isArray(tags) && tags[0] ? prettyTag(tags[0]) : 'Game';
-  const thumb = game.thumbnail || game.image || game.cover || null;
+  const thumb = game.thumbnailPath || game.thumbnail || game.image || game.cover || null;
   const params = new URLSearchParams();
   if (slug) params.set(PRIMARY_QUERY_KEY, slug);
   if (id) params.set('id', id);
@@ -172,11 +172,11 @@ function collectManifest(slug){
   const assets = new Set();
   const playPath = record.playPath || record.path;
   if (playPath) assets.add(playPath);
-  const thumb = record.thumbnail || record.image || record.cover;
+  const thumb = record.thumbnailPath || record.thumbnail || record.image || record.cover;
   if (thumb) assets.add(thumb);
-  const firstFrame = record.firstFrame;
-  if (firstFrame && typeof firstFrame === 'object') {
-    Object.values(firstFrame).forEach(value => {
+  const assetHints = record.assetHints;
+  if (assetHints && typeof assetHints === 'object') {
+    Object.values(assetHints).forEach(value => {
       if (!value) return;
       if (Array.isArray(value)) {
         value.forEach(item => {
@@ -235,7 +235,8 @@ async function boot(){
         tags: g.tags || g.genres || [],
         thumbnail: g.thumbnail || g.image || g.cover || null,
         playPath: g.playPath || g.playUrl || g.path || null,
-        firstFrame: g.firstFrame || g.initialAssets || null
+        thumbnailPath: g.thumbnailPath || g.thumbnail || g.image || g.cover || null,
+        assetHints: g.assets || g.firstFrame || g.initialAssets || null
       };
       if (slug) {
         GAME_LOOKUP.set(slug, record);

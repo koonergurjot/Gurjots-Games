@@ -4,11 +4,14 @@ export const games = [
     "id": "pong",
     "slug": "pong",
     "title": "Pong Classic",
+    "description": "A snappy canvas remake of the arcade legend.",
     "short": "A snappy canvas remake of the arcade legend.",
+    "controls": "Player 1: W/S to move. Player 2 (local) uses ↑/↓. Press Space to pause or resume.",
     "tags": [
       "classic",
       "2D"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "easy",
     "released": "2025-08-20",
     "playUrl": "/games/pong/",
@@ -23,6 +26,18 @@ export const games = [
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
       ]
+    },
+    "featureFlags": [
+      "AI",
+      "Touch",
+      "Keybinds",
+      "Gamepad",
+      "SFX",
+      "Diagnostics"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 200
     },
     "help": {
       "objective": "Win rallies until you reach 11 points before your opponent.",
@@ -43,15 +58,30 @@ export const games = [
     "id": "snake",
     "slug": "snake",
     "title": "Snake",
+    "description": "Eat, grow, don't bonk into yourself.",
     "short": "Eat, grow, don't bonk into yourself.",
+    "controls": "Use Arrow keys or WASD to steer. Press P to pause and R to restart.",
     "tags": [
       "classic",
       "2D"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "easy",
     "released": "2025-08-25",
     "playUrl": "/games/snake/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/snake/thumb.svg",
     "thumbnail": "/games/snake/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/coin.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -61,6 +91,14 @@ export const games = [
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Touch"
+    ],
+    "minDevice": {
+      "width": 320,
+      "height": 200
     },
     "help": {
       "objective": "Grow the snake by eating fruit without crashing into walls or your tail.",
@@ -81,15 +119,33 @@ export const games = [
     "id": "tetris",
     "slug": "tetris",
     "title": "Tetris",
+    "description": "Classic falling blocks. Clear lines, level up.",
     "short": "Classic falling blocks. Clear lines, level up.",
+    "controls": "←/→ move, ↑ rotate, ↓ soft drop, Space hard drop, P pause.",
     "tags": [
       "classic",
       "2D"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "medium",
     "released": "2025-08-26",
     "playUrl": "/games/tetris/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/tetris/thumb.svg",
     "thumbnail": "/games/tetris/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/block.png",
+        "/assets/backgrounds/arcade.png",
+        "/assets/effects/spark.png",
+        "/assets/effects/explosion.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/block.png",
@@ -102,6 +158,14 @@ export const games = [
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Keyboard"
+    ],
+    "minDevice": {
+      "width": 320,
+      "height": 200
     },
     "help": {
       "objective": "Clear horizontal lines by stacking falling tetrominoes without topping out.",
@@ -122,15 +186,32 @@ export const games = [
     "id": "breakout",
     "slug": "breakout",
     "title": "Breakout",
+    "description": "Smash bricks, power-ups, chase the score.",
     "short": "Smash bricks, power-ups, chase the score.",
+    "controls": "Move the paddle with the mouse or ←/→ keys. Click/tap to launch. P pauses, R restarts after a loss.",
     "tags": [
       "classic",
       "2D"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "medium",
     "released": "2025-08-26",
     "playUrl": "/games/breakout/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/breakout/thumb.svg",
     "thumbnail": "/games/breakout/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/paddle.png",
+        "/assets/sprites/brick.png",
+        "/assets/sprites/ball.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/paddle.png",
@@ -142,6 +223,15 @@ export const games = [
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Mouse",
+      "Touch"
+    ],
+    "minDevice": {
+      "width": 320,
+      "height": 200
     },
     "help": {
       "objective": "Break every brick on the stage while protecting your remaining lives.",
@@ -162,15 +252,29 @@ export const games = [
     "id": "chess",
     "slug": "chess",
     "title": "Chess (2D)",
+    "description": "Traditional chess for two players.",
     "short": "Traditional chess for two players.",
+    "controls": "Click or tap a piece, then select a highlighted square to move. Use on-screen options for puzzles, difficulty, and remapping.",
     "tags": [
       "classic",
       "board"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "hard",
     "released": "2025-08-20",
     "playUrl": "/games/chess/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/chess/thumb.svg",
     "thumbnail": "/games/chess/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/ui/panel.png",
+        "/assets/ui/star.png"
+      ],
+      "audio": [
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/ui/panel.png",
@@ -179,6 +283,14 @@ export const games = [
       "audio": [
         "/assets/audio/click.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Two Player"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 240
     },
     "help": {
       "objective": "Checkmate the opposing king using standard chess rules.",
@@ -199,15 +311,29 @@ export const games = [
     "id": "chess3d",
     "slug": "chess3d",
     "title": "Chess 3D (Local)",
+    "description": "A three-dimensional chess experiment.",
     "short": "A three-dimensional chess experiment.",
+    "controls": "Drag to orbit the camera, scroll or pinch to zoom, and right-drag to pan. Click a piece then a target square to move.",
     "tags": [
       "3D",
       "offline"
     ],
+    "engineType": "threejs",
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/chess3d/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/chess3d/thumb.svg",
     "thumbnail": "/games/chess3d/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/chess3d/wood_light.png",
+        "/assets/sprites/chess3d/wood_dark.png"
+      ],
+      "audio": [
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/chess3d/wood_light.png",
@@ -216,6 +342,15 @@ export const games = [
       "audio": [
         "/assets/audio/click.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "WebGL",
+      "Camera Control"
+    ],
+    "minDevice": {
+      "width": 720,
+      "height": 405
     },
     "help": {
       "objective": "Outmaneuver the AI in a fully rotatable 3D chessboard and deliver checkmate.",
@@ -236,15 +371,28 @@ export const games = [
     "id": "2048",
     "slug": "2048",
     "title": "2048",
+    "description": "Slide numbers to reach 2048.",
     "short": "Slide numbers to reach 2048.",
+    "controls": "Use Arrow keys to slide tiles. R restarts, U undoes, H shows a hint.",
     "tags": [
       "puzzle",
       "2D"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "medium",
     "released": "2025-08-20",
     "playUrl": "/games/2048/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/2048/thumb.svg",
     "thumbnail": "/games/2048/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/block.png"
+      ],
+      "audio": [
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/block.png"
@@ -252,6 +400,15 @@ export const games = [
       "audio": [
         "/assets/audio/click.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Undo",
+      "Hints"
+    ],
+    "minDevice": {
+      "width": 320,
+      "height": 200
     },
     "help": {
       "objective": "Slide numbered tiles together to reach the 2048 tile (and beyond).",
@@ -272,11 +429,14 @@ export const games = [
     "id": "asteroids",
     "slug": "asteroids",
     "title": "Asteroids",
+    "description": "Pilot your ship and blast space rocks.",
     "short": "Pilot your ship and blast space rocks.",
+    "controls": "A/D or ←/→ rotate, W or ↑ thrust, Space/Enter fire, Shift/K hyperspace, P pause, R restart.",
     "tags": [
       "classic",
       "2D"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/asteroids/",
@@ -290,6 +450,14 @@ export const games = [
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Keyboard"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 240
     },
     "help": {
       "objective": "Pilot your ship through space, blasting asteroids and enemies to survive each wave.",
@@ -310,10 +478,13 @@ export const games = [
     "id": "maze3d",
     "slug": "maze3d",
     "title": "Maze 3D",
+    "description": "Wander a first-person labyrinth to find the exit.",
     "short": "Wander a first-person labyrinth to find the exit.",
+    "controls": "WASD or Arrow keys move, mouse looks. Press P to pause, R to restart, Esc releases pointer lock.",
     "tags": [
       "3D"
     ],
+    "engineType": "threejs",
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/maze3d/",
@@ -326,6 +497,15 @@ export const games = [
       "audio": [
         "/assets/audio/powerup.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Online Co-op",
+      "Pointer Lock"
+    ],
+    "minDevice": {
+      "width": 720,
+      "height": 405
     },
     "help": {
       "objective": "Find the exit of the randomly generated labyrinth before your opponent does.",
@@ -346,10 +526,13 @@ export const games = [
     "id": "platformer",
     "slug": "platformer",
     "title": "Pixel Platformer",
+    "description": "Run and jump across platforms to reach the goal.",
     "short": "Run and jump across platforms to reach the goal.",
+    "controls": "←/→ move, Space or ↑ jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
     "tags": [
       "2D"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
@@ -362,6 +545,15 @@ export const games = [
         "/assets/audio/hit.wav",
         "/assets/audio/powerup.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Co-op",
+      "Gamepad"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 240
     },
     "help": {
       "objective": "Run, jump, and collect coins across the stage while staying ahead of hazards.",
@@ -382,10 +574,13 @@ export const games = [
     "id": "runner",
     "slug": "runner",
     "title": "City Runner",
+    "description": "Dash through the city and avoid obstacles.",
     "short": "Dash through the city and avoid obstacles.",
+    "controls": "Space or ↑ jumps, ↓ slides. On mobile, tap right to jump and left to slide.",
     "tags": [
       "2D"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/runner/",
@@ -399,6 +594,15 @@ export const games = [
         "/assets/audio/powerup.wav",
         "/assets/audio/click.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Touch",
+      "Leaderboards"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 240
     },
     "help": {
       "objective": "Sprint through the city streets, dodging obstacles to keep your run alive.",
@@ -419,10 +623,13 @@ export const games = [
     "id": "shooter",
     "slug": "shooter",
     "title": "Alien Shooter",
+    "description": "Blast waves of invaders and survive.",
     "short": "Blast waves of invaders and survive.",
+    "controls": "WASD or Arrow keys move, Space/Enter shoot. Keep moving to avoid hits.",
     "tags": [
       "2D"
     ],
+    "engineType": "canvas-2d",
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
@@ -435,6 +642,14 @@ export const games = [
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
       ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Keyboard"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 240
     },
     "help": {
       "objective": "Hold off waves of aliens by dodging fire and blasting every intruder.",

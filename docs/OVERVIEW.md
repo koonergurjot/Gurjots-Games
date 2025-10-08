@@ -2,6 +2,12 @@
 
 This document outlines the architecture of the game library.
 
+## How the experience is stitched together (plain-language tour)
+
+- **Navigating between screens.** Think of the site as a single, always-open booklet. The main grid of games is the cover, tapping a game opens a detail page that wraps the playable version, and a handy diagnostics panel can slide in on top when we need to peek under the hood. All of this happens without a hard page refresh, so it feels snappy.
+- **Remembering player choices.** Behind the scenes we keep a small notepad of personal touches—whether a player likes sound on or off, prefers easier challenges, which game they tried most recently, and any titles they have starred. That shared memory lets every part of the site stay in sync about what the player enjoys.
+- **Consistent look and feel.** Buttons, cards, pop-up dialogs, toast messages, and tab strips all come from the same style kit. Because of that, every screen looks related, and new features can plug into the existing visual language without feeling out of place.
+
 ```mermaid
 flowchart LR
     UI[User Interface] --> Logic[Game Logic]
