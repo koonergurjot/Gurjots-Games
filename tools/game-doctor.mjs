@@ -199,11 +199,11 @@ const ISSUE_TAXONOMY = new Map(
       category: 'level-data',
       severity: ISSUE_SEVERITY_LEVEL.MAJOR,
     },
-    'firstFrame.sprites is not an array': {
+    'assets.sprites is not an array': {
       category: 'catalog-data',
       severity: ISSUE_SEVERITY_LEVEL.MAJOR,
     },
-    'firstFrame.audio is not an array': {
+    'assets.audio is not an array': {
       category: 'catalog-data',
       severity: ISSUE_SEVERITY_LEVEL.MAJOR,
     },
@@ -960,21 +960,24 @@ function buildAssetCatalog(games) {
       continue;
     }
 
-    const firstFrame = game && typeof game === 'object' ? game.firstFrame : null;
-    if (!firstFrame || typeof firstFrame !== 'object') {
+    const assetHints =
+      game && typeof game === 'object'
+        ? game.assets || game.firstFrame || game.firstFrameAssets || null
+        : null;
+    if (!assetHints || typeof assetHints !== 'object') {
       continue;
     }
 
-    if (Array.isArray(firstFrame.sprites)) {
-      for (const sprite of firstFrame.sprites) {
+    if (Array.isArray(assetHints.sprites)) {
+      for (const sprite of assetHints.sprites) {
         if (typeof sprite === 'string') {
           recordAssetReference(catalog, slug, sprite);
         }
       }
     }
 
-    if (Array.isArray(firstFrame.audio)) {
-      for (const audio of firstFrame.audio) {
+    if (Array.isArray(assetHints.audio)) {
+      for (const audio of assetHints.audio) {
         if (typeof audio === 'string') {
           recordAssetReference(catalog, slug, audio);
         }
@@ -2078,9 +2081,9 @@ async function main() {
       issues.push(...levelIssues);
     }
 
-    const firstFrame = game.firstFrame ?? {};
-    const spriteList = ensureArray(firstFrame.sprites, 'firstFrame.sprites', issues);
-    const audioList = ensureArray(firstFrame.audio, 'firstFrame.audio', issues);
+    const assetHints = game.assets ?? game.firstFrame ?? game.firstFrameAssets ?? {};
+    const spriteList = ensureArray(assetHints.sprites, 'assets.sprites', issues);
+    const audioList = ensureArray(assetHints.audio, 'assets.audio', issues);
 
     const checkedSprites = [];
     for (const sprite of spriteList) {

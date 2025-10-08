@@ -2,19 +2,28 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createGameDoctorFixture } from './fixtures/game-doctor-fixture.mjs';
 
 function buildGameEntry(slug, overrides = {}) {
+  const assetHints = {
+    sprites: [`/assets/sprites/${slug}.png`],
+    audio: [`/assets/audio/${slug}.mp3`],
+  };
   const base = {
     id: slug,
     slug,
     title: `${slug} title`,
+    description: 'Short description',
     short: 'Short description',
+    controls: 'Arrow keys',
     tags: ['arcade'],
+    engineType: 'canvas-2d',
+    assets: assetHints,
+    version: '1.0.0',
+    thumbnailPath: `/assets/thumbs/${slug}.png`,
+    featureFlags: ['offline'],
+    minDevice: { width: 320, height: 200 },
     difficulty: 'easy',
     released: '2024-01-01',
     playUrl: `/games/${slug}/`,
-    firstFrame: {
-      sprites: [`/assets/sprites/${slug}.png`],
-      audio: [`/assets/audio/${slug}.mp3`],
-    },
+    firstFrame: assetHints,
     help: {
       objective: 'Score points',
       controls: 'Arrow keys',
@@ -22,7 +31,23 @@ function buildGameEntry(slug, overrides = {}) {
       steps: ['Start'],
     },
   };
-  return { ...base, ...overrides };
+  const entry = { ...base, ...overrides };
+  if (overrides.firstFrame && !overrides.assets) {
+    entry.assets = entry.firstFrame;
+  }
+  if (overrides.assets && !overrides.firstFrame) {
+    entry.firstFrame = entry.assets;
+  }
+  if (!entry.assets && entry.firstFrame) {
+    entry.assets = entry.firstFrame;
+  }
+  if (!entry.firstFrame && entry.assets) {
+    entry.firstFrame = entry.assets;
+  }
+  if (!entry.help?.controls && entry.controls) {
+    entry.help = { ...(entry.help || {}), controls: entry.controls };
+  }
+  return entry;
 }
 
 let fixture;

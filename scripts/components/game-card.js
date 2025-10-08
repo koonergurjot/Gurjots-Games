@@ -46,7 +46,12 @@ export function syncFavoriteButton(button, favorite) {
 export function createGameCard(game) {
   const fragment = template.content.cloneNode(true);
   const card = fragment.querySelector('.game-card');
-  const sprite = game.firstFrame?.sprites?.[0] || null;
+  const sprite =
+    game.thumbnailPath ||
+    game.thumbnail ||
+    game.assets?.sprites?.[0] ||
+    game.firstFrame?.sprites?.[0] ||
+    null;
   const media = card.querySelector('.game-card__media');
 
   if (sprite) {
@@ -59,7 +64,7 @@ export function createGameCard(game) {
   }
 
   card.querySelector('.game-title').textContent = game.title;
-  card.querySelector('.game-short').textContent = game.short || '';
+  card.querySelector('.game-short').textContent = game.description || game.short || '';
   const tagsEl = card.querySelector('.tags');
   (game.tags || []).forEach(tag => {
     const chip = document.createElement('span');
