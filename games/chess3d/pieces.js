@@ -1,10 +1,9 @@
-import { envDataUrl } from "./textures/env.js";
 import { mergeGeometries } from "./lib/BufferGeometryUtils.js";
+import { createToonRampMaterial } from "./materials/toonRampMaterial.js";
 
 let THREERef;
 let sceneRef;
 let helpersRef;
-let envMap;
 
 const instancers = new Map();
 const piecesBySquare = new Map();
@@ -159,15 +158,13 @@ function ensureInstancers() {
   if (instancers.size) return;
   ensurePalette(currentPieceStyle);
   const THREE = THREERef;
-  const material = new (THREE.MeshPhysicalMaterial || THREE.MeshStandardMaterial)({
-    color: 0xffffff,
-    metalness: 0.4,
-    roughness: 0.35,
+  const material = createToonRampMaterial(THREE, {
     vertexColors: true,
-    envMap: envMap || null,
-    envMapIntensity: 0.85,
-    clearcoat: 0.35,
-    clearcoatRoughness: 0.3,
+    bandCount: 4,
+    ambient: 0.32,
+    specIntensity: 0.2,
+    shininess: 56,
+    fillIntensity: 0.12,
   });
   PIECE_TYPES.forEach((type) => {
     const geometry = buildGeometry(type, THREE);
@@ -261,15 +258,6 @@ export async function createPieces(scene, THREE, helpers) {
   THREERef = THREE;
   sceneRef = scene;
   helpersRef = helpers;
-  try {
-    const loader = new THREE.TextureLoader();
-    envMap = await loader.loadAsync(envDataUrl);
-    try { envMap.mapping = THREE.EquirectangularReflectionMapping; } catch (_) {}
-    try { envMap.colorSpace = THREE.SRGBColorSpace; }
-    catch (_) { try { envMap.encoding = THREE.sRGBEncoding; } catch (_) {} }
-  } catch (_) {
-    envMap = null;
-  }
   ensureInstancers();
 }
 
