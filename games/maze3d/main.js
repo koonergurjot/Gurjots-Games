@@ -1418,7 +1418,7 @@ function applyGridSnap(position, dt) {
   position.z += dz * ratio;
 }
 
-function buildMaze(seed) {
+function buildMaze(seed, { algorithm: forcedAlgorithm } = {}) {
   if (floor) {
     scene.remove(floor);
     disposeMesh(floor);
@@ -1454,9 +1454,13 @@ function buildMaze(seed) {
   currentMazeMeta = null;
 
   const rand = seedRandom(seed);
-  const algorithm = algorithmPreference === 'auto'
-    ? (rand() < 0.5 ? 'prim' : 'backtracker')
-    : algorithmPreference;
+  const normalizedForced = forcedAlgorithm && ALGORITHM_OPTIONS.has(forcedAlgorithm)
+    ? (forcedAlgorithm === 'auto' ? null : forcedAlgorithm)
+    : null;
+  const algorithm = normalizedForced
+    || (algorithmPreference === 'auto'
+      ? (rand() < 0.5 ? 'prim' : 'backtracker')
+      : algorithmPreference);
   const { grid, solution, metadata } = generateMaze(MAZE_CELLS, MAZE_CELLS, { algorithm, seed });
   currentMazeMeta = metadata;
   mazeGrid = grid;
@@ -1572,7 +1576,8 @@ function start(syncTime) {
     emitEvent({ type: 'play', slug: 'maze3d' });
     if (net && syncTime === undefined) {
       const startAt = Date.now();
-      net.send('start', { seed: currentSeed, startAt });
+      const algorithm = currentMazeMeta?.algorithm || null;
+      net.send('start', { seed: currentSeed, startAt, algorithm });
     }
   }
   paused = false;
@@ -1594,7 +1599,7 @@ function resume(syncTime) {
   }
 }
 
-function restart(seed = Math.floor(Math.random()*1e9)) {
+function restart(seed = Math.floor(Math.random()*1e9), options = {}) {
   running = false;
   paused = true;
   startTime = 0;
@@ -1602,7 +1607,7 @@ function restart(seed = Math.floor(Math.random()*1e9)) {
   opponentFinish = null;
   myFinish = null;
   updateMazeParams();
-  buildMaze(seed);
+  buildMaze(seed, options);
   timeEl.textContent = '0.00';
   oppTimeEl.textContent = '--';
   message.textContent = 'Click Start to play.';
@@ -1619,9 +1624,9 @@ function connectMatch() {
   const room = roomInput?.value?.trim();
   if (!room) return;
   net = connect(room, {
-    start: ({ seed, startAt }) => {
+    start: ({ seed, startAt, algorithm }) => {
       currentSeed = seed;
-      restart(seed);
+      restart(seed, { algorithm });
       const offset = Date.now() - startAt;
       start(performance.now() - offset);
     },
