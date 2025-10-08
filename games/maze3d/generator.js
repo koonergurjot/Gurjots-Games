@@ -74,9 +74,71 @@ function generatePrim(width, height, rand) {
   return grid;
 }
 
+function neighbors(x, y) {
+  return [
+    [x + 1, y],
+    [x - 1, y],
+    [x, y + 1],
+    [x, y - 1]
+  ];
+}
+
+function solveMaze(grid) {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const start = [1, 1];
+  const goal = [cols - 2, rows - 2];
+  const queue = [start];
+  const visited = new Set([start.join(',')]);
+  const prev = new Map();
+
+  while (queue.length) {
+    const [x, y] = queue.shift();
+    if (x === goal[0] && y === goal[1]) break;
+    for (const [nx, ny] of neighbors(x, y)) {
+      if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      if (grid[ny][nx] !== 0) continue;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      prev.set(key, [x, y]);
+      queue.push([nx, ny]);
+    }
+  }
+
+  const path = [];
+  let current = goal;
+  let guard = cols * rows;
+  while (current && guard-- > 0) {
+    path.push(current);
+    if (current[0] === start[0] && current[1] === start[1]) break;
+    const key = current.join(',');
+    current = prev.get(key) || null;
+  }
+
+  path.reverse();
+  if (!path.length || path[0][0] !== start[0] || path[0][1] !== start[1]) {
+    return [];
+  }
+  return path;
+}
+
 export function generateMaze(width, height, { algorithm = 'backtracker', seed } = {}) {
   const rand = seed !== undefined ? seedRandom(seed) : Math.random;
-  if (algorithm === 'prim') return generatePrim(width, height, rand);
-  return generateBacktracker(width, height, rand);
+  const normalized = algorithm === 'prim' ? 'prim' : 'backtracker';
+  const grid = normalized === 'prim'
+    ? generatePrim(width, height, rand)
+    : generateBacktracker(width, height, rand);
+  const solution = solveMaze(grid);
+  return {
+    grid,
+    solution,
+    metadata: {
+      algorithm: normalized,
+      seed: seed ?? null,
+      width,
+      height,
+    }
+  };
 }
 

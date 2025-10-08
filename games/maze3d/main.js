@@ -5,6 +5,23 @@ import { emitEvent } from '../../shared/achievements.js';
 import { connect } from './net.js';
 import { generateMaze, seedRandom } from './generator.js';
 
+function loadPreference(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ?? fallback;
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function savePreference(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    // ignore storage failures
+  }
+}
+
 async function loadCatalog() {
   const urls = ['/games.json', '/public/games.json'];
   let lastError = null;
@@ -114,6 +131,20 @@ function renderMinimapOverlay() {
   minimapCtx.fillStyle = 'rgba(255,255,255,0.15)';
   minimapCtx.fillRect(0, 0, minimapOverlay.width, minimapOverlay.height);
   minimapCtx.restore();
+  if (assistEnabled && assistHeatSamples.length) {
+    for (const { vec, weight } of assistHeatSamples) {
+      const u = (vec.x / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
+      const v = (vec.z / (cellSize * MAZE_CELLS * 1.2)) * 100 + 100;
+      const gradient = minimapCtx.createRadialGradient(u, v, 0, u, v, 12);
+      const alpha = 0.08 + 0.35 * (1 - weight);
+      gradient.addColorStop(0, `rgba(56,189,248,${alpha})`);
+      gradient.addColorStop(1, 'rgba(14,165,233,0)');
+      minimapCtx.fillStyle = gradient;
+      minimapCtx.beginPath();
+      minimapCtx.arc(u, v, 12, 0, Math.PI * 2);
+      minimapCtx.fill();
+    }
+  }
   if (trail.length) {
     minimapCtx.fillStyle = '#38bdf8';
     for (const p of trail) {
@@ -143,6 +174,29 @@ scene.add(playerLight);
 const controls = new PointerLockControls(camera, renderer.domElement);
 const player = controls.getObject();
 let opponent = { mesh: null };
+
+const isTouchDevice = typeof window !== 'undefined' && (
+  window.matchMedia?.('(pointer:coarse)')?.matches ||
+  'ontouchstart' in window ||
+  (navigator?.maxTouchPoints ?? 0) > 0
+);
+
+const playerVelocity = new THREE.Vector2();
+const desiredInput = new THREE.Vector2();
+const targetVelocity = new THREE.Vector2();
+const mobileInput = new THREE.Vector2();
+let mobileInputActive = false;
+const MOVE_SETTINGS = {
+  maxSpeed: 5.5,
+  accel: 9,
+  decel: 12,
+  snapSpeed: 6,
+  snapThreshold: 0.45
+};
+
+const assistGroup = new THREE.Group();
+assistGroup.visible = false;
+scene.add(assistGroup);
 let timeEl;
 let oppTimeEl;
 let bestEl;
@@ -359,6 +413,15 @@ if (typeof window !== 'undefined') {
     onDiagnosticsPointerLockChange,
     onDiagnosticsNetworkLatency,
     getDiagnosticsSnapshot,
+    getSolutionCells: () => mazeSolutionCells.map(([x, y]) => [x, y]),
+    getSolutionWorld: () => mazeSolutionWorld.map((vec) => vec.clone()),
+    getMazeMetadata: () => ({
+      ...(currentMazeMeta || {}),
+      rows: mazeRows,
+      cols: mazeCols,
+    }),
+    setAssistMode,
+    setInputProfile,
   };
 
   import('./adapter.js').catch((err) => {
@@ -379,6 +442,9 @@ let enemySelect = document.getElementById('enemyCount');
 let roomInput = document.getElementById('roomInput');
 let connectBtn = document.getElementById('connectBtn');
 let rematchBtn = document.getElementById('rematchBtn');
+let algorithmSelect = document.getElementById('mazeAlgorithm');
+let assistSelect = document.getElementById('assistMode');
+let controlSelect = document.getElementById('controlProfile');
 
 ({
   overlay,
@@ -424,6 +490,39 @@ if (roomInput) roomInput.value = Math.random().toString(36).slice(2,7);
 if (best) bestEl.textContent = best.toFixed(2);
 
 let trail = []; let lastTrailPos = null;
+let mazeSolutionCells = [];
+let mazeSolutionWorld = [];
+let assistHeatSamples = [];
+let wallMesh = null;
+const stickState = { active: false, pointerId: null, radius: 60, centerX: 0, centerY: 0 };
+
+const ASSIST_MODES = new Set(['off', 'heatmap']);
+let assistMode = ASSIST_MODES.has(loadPreference('maze3d:assistMode', 'off'))
+  ? loadPreference('maze3d:assistMode', 'off')
+  : 'off';
+let assistEnabled = assistMode !== 'off';
+assistGroup.visible = assistEnabled;
+
+const ALGORITHM_OPTIONS = new Set(['auto', 'prim', 'backtracker']);
+let algorithmPreference = loadPreference('maze3d:algorithm', 'auto');
+if (!ALGORITHM_OPTIONS.has(algorithmPreference)) {
+  algorithmPreference = 'auto';
+}
+
+const SUPPORTED_PROFILES = new Set(['keyboard', 'stick', 'tilt']);
+let inputProfile = loadPreference('maze3d:inputProfile', isTouchDevice ? 'stick' : 'keyboard');
+if (!SUPPORTED_PROFILES.has(inputProfile)) {
+  inputProfile = isTouchDevice ? 'stick' : 'keyboard';
+}
+if (!isTouchDevice) {
+  inputProfile = 'keyboard';
+}
+
+let tiltBaseline = null;
+let tiltActive = false;
+let virtualStickPad = null;
+let virtualStickThumb = null;
+let virtualStickPointerId = null;
 
 const keys = {};
 document.addEventListener('keydown', (e) => {
@@ -438,11 +537,33 @@ startBtn?.addEventListener('click', () => start());
 restartBtn?.addEventListener('click', () => restart());
 sizeSelect?.addEventListener('change', () => restart());
 enemySelect?.addEventListener('change', () => restart());
+algorithmSelect?.addEventListener('change', () => {
+  const value = algorithmSelect.value;
+  algorithmPreference = ALGORITHM_OPTIONS.has(value) ? value : 'auto';
+  savePreference('maze3d:algorithm', algorithmPreference);
+  restart(currentSeed);
+});
+assistSelect?.addEventListener('change', () => {
+  setAssistMode(assistSelect.value);
+});
+controlSelect?.addEventListener('change', () => {
+  setInputProfile(controlSelect.value);
+});
 connectBtn?.addEventListener('click', connectMatch);
 rematchBtn?.addEventListener('click', () => { opponentFinish = myFinish = null; restart(); start(); if (rematchBtn) rematchBtn.style.display='none'; });
 
+applyInputProfile();
+setAssistMode(assistMode);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    resetMobileInput();
+    tiltBaseline = null;
+  }
+});
+
 function ensureOverlayElements(elements) {
-  let { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn } = elements;
+  let { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect } = elements;
   const doc = document;
   const body = doc.body || doc.documentElement;
 
@@ -555,6 +676,41 @@ function ensureOverlayElements(elements) {
     ]);
   }
 
+  if (!algorithmSelect) {
+    algorithmSelect = ensureSelect('mazeAlgorithm', 'Algorithm:', [
+      ['auto', 'Auto (Mixed)'],
+      ['prim', "Prim's"],
+      ['backtracker', 'Recursive Backtracker']
+    ]);
+  }
+  algorithmSelect.value = algorithmSelect.value || algorithmPreference;
+  if (ALGORITHM_OPTIONS.has(algorithmSelect.value)) {
+    algorithmPreference = algorithmSelect.value;
+  }
+
+  if (!assistSelect) {
+    assistSelect = ensureSelect('assistMode', 'Assist Mode:', [
+      ['off', 'Off'],
+      ['heatmap', 'Breadcrumb Heatmap']
+    ]);
+  }
+  assistSelect.value = assistMode;
+
+  if (!controlSelect) {
+    controlSelect = ensureSelect('controlProfile', 'Controls:', [
+      ['keyboard', 'Keyboard/Mouse'],
+      ['stick', 'Virtual Stick'],
+      ['tilt', 'Tilt']
+    ]);
+  }
+  if (!isTouchDevice) {
+    controlSelect.value = 'keyboard';
+    controlSelect.disabled = true;
+  } else {
+    controlSelect.disabled = false;
+    controlSelect.value = inputProfile;
+  }
+
   const needsMultiplayerFallback = !roomInput || !connectBtn || !rematchBtn;
   let multiplayerRow = panel.querySelector('#multiplayerRow');
   if (!multiplayerRow && needsMultiplayerFallback) {
@@ -613,7 +769,247 @@ function ensureOverlayElements(elements) {
     buttonTarget.appendChild(shareBtn);
   }
 
-  return { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn };
+  return { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect };
+}
+
+function resetMobileInput() {
+  mobileInput.set(0, 0);
+  mobileInputActive = false;
+  if (virtualStickThumb) {
+    virtualStickThumb.style.transform = 'translate(0px, 0px)';
+  }
+}
+
+function updateStickGeometryFromDom() {
+  if (!virtualStickPad || virtualStickPad.style.display === 'none') return;
+  const rect = virtualStickPad.getBoundingClientRect();
+  stickState.radius = rect.width / 2;
+  stickState.centerX = rect.left + stickState.radius;
+  stickState.centerY = rect.top + stickState.radius;
+}
+
+function ensureVirtualStickElements() {
+  if (virtualStickPad) return;
+  const pad = document.createElement('div');
+  pad.id = 'virtualStick';
+  pad.style.position = 'fixed';
+  pad.style.bottom = '24px';
+  pad.style.left = '24px';
+  pad.style.width = '120px';
+  pad.style.height = '120px';
+  pad.style.borderRadius = '50%';
+  pad.style.background = 'rgba(15,23,42,0.35)';
+  pad.style.border = '1px solid rgba(56,189,248,0.6)';
+  pad.style.backdropFilter = 'blur(6px)';
+  pad.style.touchAction = 'none';
+  pad.style.zIndex = '20';
+  pad.style.display = 'none';
+  const thumb = document.createElement('div');
+  thumb.style.position = 'absolute';
+  thumb.style.left = '50%';
+  thumb.style.top = '50%';
+  thumb.style.width = '56px';
+  thumb.style.height = '56px';
+  thumb.style.marginLeft = '-28px';
+  thumb.style.marginTop = '-28px';
+  thumb.style.borderRadius = '50%';
+  thumb.style.background = 'rgba(56,189,248,0.7)';
+  thumb.style.boxShadow = '0 0 12px rgba(56,189,248,0.6)';
+  thumb.style.pointerEvents = 'none';
+  thumb.style.transform = 'translate(0px, 0px)';
+  pad.appendChild(thumb);
+  document.body?.appendChild(pad);
+  virtualStickPad = pad;
+  virtualStickThumb = thumb;
+  pad.addEventListener('pointerdown', handleVirtualStickPointerDown, { passive: false });
+  window.addEventListener('pointermove', handleVirtualStickPointerMove, { passive: false });
+  window.addEventListener('pointerup', handleVirtualStickPointerUp, { passive: false });
+  window.addEventListener('pointercancel', handleVirtualStickPointerUp, { passive: false });
+  window.addEventListener('resize', updateStickGeometryFromDom);
+}
+
+function setVirtualStickVisible(visible) {
+  ensureVirtualStickElements();
+  if (!virtualStickPad) return;
+  virtualStickPad.style.display = visible ? 'block' : 'none';
+  if (visible) {
+    updateStickGeometryFromDom();
+  } else {
+    stickState.active = false;
+    stickState.pointerId = null;
+    resetMobileInput();
+  }
+}
+
+function updateVirtualStickFromEvent(event) {
+  if (!virtualStickPad) return;
+  updateStickGeometryFromDom();
+  const dx = event.clientX - stickState.centerX;
+  const dy = event.clientY - stickState.centerY;
+  const radius = stickState.radius || 1;
+  let strafe = THREE.MathUtils.clamp(dx / radius, -1, 1);
+  let forward = THREE.MathUtils.clamp(-dy / radius, -1, 1);
+  const mag = Math.hypot(strafe, forward);
+  if (mag > 1) {
+    strafe /= mag;
+    forward /= mag;
+  }
+  if (Math.abs(strafe) < 0.05) strafe = 0;
+  if (Math.abs(forward) < 0.05) forward = 0;
+  mobileInput.set(strafe, forward);
+  mobileInputActive = mag > 0.05;
+  if (virtualStickThumb) {
+    const offsetX = strafe * radius * 0.4;
+    const offsetY = -forward * radius * 0.4;
+    virtualStickThumb.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+  }
+}
+
+function handleVirtualStickPointerDown(event) {
+  if (!virtualStickPad) return;
+  stickState.active = true;
+  stickState.pointerId = event.pointerId;
+  virtualStickPad.setPointerCapture?.(event.pointerId);
+  updateVirtualStickFromEvent(event);
+  event.preventDefault();
+}
+
+function handleVirtualStickPointerMove(event) {
+  if (!stickState.active || stickState.pointerId !== event.pointerId) return;
+  updateVirtualStickFromEvent(event);
+  event.preventDefault();
+}
+
+function handleVirtualStickPointerUp(event) {
+  if (stickState.pointerId !== event.pointerId) return;
+  stickState.active = false;
+  stickState.pointerId = null;
+  virtualStickPad?.releasePointerCapture?.(event.pointerId);
+  resetMobileInput();
+  event.preventDefault();
+}
+
+function handleDeviceOrientation(event) {
+  if (!tiltActive) return;
+  const { beta, gamma } = event;
+  if (beta == null || gamma == null) return;
+  if (!tiltBaseline) {
+    tiltBaseline = { beta, gamma };
+    return;
+  }
+  const baselineBeta = tiltBaseline.beta;
+  const baselineGamma = tiltBaseline.gamma;
+  let strafe = THREE.MathUtils.clamp((gamma - baselineGamma) / 22, -1, 1);
+  let forward = THREE.MathUtils.clamp((baselineBeta - beta) / 28, -1, 1);
+  tiltBaseline.beta = THREE.MathUtils.lerp(baselineBeta, beta, 0.05);
+  tiltBaseline.gamma = THREE.MathUtils.lerp(baselineGamma, gamma, 0.05);
+  if (Math.abs(strafe) < 0.07) strafe = 0;
+  if (Math.abs(forward) < 0.07) forward = 0;
+  mobileInput.set(strafe, forward);
+  const mag = mobileInput.length();
+  if (mag > 1) mobileInput.divideScalar(mag);
+  mobileInputActive = mag > 0.05;
+}
+
+function handleTiltPermissionDenied() {
+  disableTiltControls();
+  if (inputProfile === 'tilt') {
+    inputProfile = 'stick';
+    savePreference('maze3d:inputProfile', inputProfile);
+    if (controlSelect) controlSelect.value = inputProfile;
+    applyInputProfile();
+  }
+}
+
+function enableTiltControls() {
+  if (tiltActive) return;
+  if (typeof window === 'undefined' || typeof DeviceOrientationEvent === 'undefined') {
+    handleTiltPermissionDenied();
+    return;
+  }
+  const attach = () => {
+    tiltBaseline = null;
+    window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+    tiltActive = true;
+  };
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then((result) => {
+      if (result === 'granted') {
+        attach();
+      } else {
+        handleTiltPermissionDenied();
+      }
+    }).catch(() => {
+      handleTiltPermissionDenied();
+    });
+  } else {
+    attach();
+  }
+}
+
+function disableTiltControls() {
+  if (tiltActive) {
+    window.removeEventListener('deviceorientation', handleDeviceOrientation, true);
+    tiltActive = false;
+  }
+  tiltBaseline = null;
+  if (inputProfile !== 'stick') {
+    resetMobileInput();
+  }
+}
+
+function applyInputProfile() {
+  if (inputProfile === 'stick') {
+    disableTiltControls();
+    setVirtualStickVisible(true);
+    resetMobileInput();
+  } else if (inputProfile === 'tilt') {
+    setVirtualStickVisible(false);
+    enableTiltControls();
+  } else {
+    disableTiltControls();
+    setVirtualStickVisible(false);
+    resetMobileInput();
+  }
+  updatePointerLockPreference();
+}
+
+function setInputProfile(profile) {
+  let normalized = SUPPORTED_PROFILES.has(profile) ? profile : 'keyboard';
+  if (!isTouchDevice) normalized = 'keyboard';
+  if (normalized === inputProfile) {
+    if (controlSelect && controlSelect.value !== normalized) {
+      controlSelect.value = normalized;
+    }
+    return;
+  }
+  inputProfile = normalized;
+  savePreference('maze3d:inputProfile', inputProfile);
+  if (controlSelect && controlSelect.value !== inputProfile) {
+    controlSelect.value = inputProfile;
+  }
+  applyInputProfile();
+}
+
+function setAssistMode(mode) {
+  const normalized = ASSIST_MODES.has(mode) ? mode : 'off';
+  assistMode = normalized;
+  assistEnabled = normalized !== 'off';
+  assistGroup.visible = assistEnabled;
+  savePreference('maze3d:assistMode', normalized);
+  if (assistSelect && assistSelect.value !== normalized) {
+    assistSelect.value = normalized;
+  }
+}
+
+function shouldUsePointerLock() {
+  return !isTouchDevice || inputProfile === 'keyboard';
+}
+
+function updatePointerLockPreference() {
+  if (!shouldUsePointerLock() && controls.isLocked) {
+    controls.unlock();
+  }
 }
 
 function ensureHudElements(elements) {
@@ -661,6 +1057,65 @@ function ensureHudElements(elements) {
   return { timeEl, oppTimeEl, bestEl };
 }
 
+function disposeMesh(mesh) {
+  if (!mesh) return;
+  if (mesh.geometry?.dispose) mesh.geometry.dispose();
+  if (Array.isArray(mesh.material)) {
+    for (const mat of mesh.material) {
+      mat?.dispose?.();
+    }
+  } else {
+    mesh.material?.dispose?.();
+  }
+}
+
+function disposeAssistChildren() {
+  for (const child of [...assistGroup.children]) {
+    assistGroup.remove(child);
+    disposeMesh(child);
+  }
+}
+
+function rebuildAssistVisuals() {
+  disposeAssistChildren();
+  assistHeatSamples = [];
+  if (!mazeSolutionWorld.length) return;
+  const crumbSpacing = Math.max(1, Math.floor(mazeSolutionWorld.length / 40));
+  const crumbCount = Math.max(1, Math.ceil(mazeSolutionWorld.length / crumbSpacing));
+  const crumbGeo = new THREE.SphereGeometry(0.18, 12, 12);
+  const crumbMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0.55,
+    color: 0xffffff,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const crumbs = new THREE.InstancedMesh(crumbGeo, crumbMat, crumbCount);
+  crumbs.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  if (!crumbs.instanceColor) {
+    crumbs.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(crumbCount * 3), 3);
+  }
+  const matrix = new THREE.Matrix4();
+  const color = new THREE.Color();
+  for (let i = 0; i < crumbCount; i++) {
+    const sampleIndex = Math.min(mazeSolutionWorld.length - 1, i * crumbSpacing);
+    const pos = mazeSolutionWorld[sampleIndex];
+    matrix.makeTranslation(pos.x, 0.2, pos.z);
+    crumbs.setMatrixAt(i, matrix);
+    const t = mazeSolutionWorld.length <= 1 ? 0 : sampleIndex / (mazeSolutionWorld.length - 1);
+    color.setHSL(0.55 - 0.35 * t, 0.8, 0.55);
+    crumbs.setColorAt(i, color);
+  }
+  crumbs.instanceMatrix.needsUpdate = true;
+  if (crumbs.instanceColor) crumbs.instanceColor.needsUpdate = true;
+  crumbs.renderOrder = 1;
+  assistGroup.add(crumbs);
+  assistHeatSamples = mazeSolutionWorld.map((vec, index) => ({
+    vec,
+    weight: mazeSolutionWorld.length <= 1 ? 0 : index / (mazeSolutionWorld.length - 1)
+  }));
+}
+
 function showOverlay() {
   if (!overlay) return;
   overlay.classList.remove('hidden');
@@ -687,6 +1142,7 @@ let enemies = [];
 let mazeGrid = [];
 let mazeCols = 0;
 let mazeRows = 0;
+let currentMazeMeta = null;
 const PATH_RECALC_INTERVAL = 0.25;
 let pathRecalcTimer = 0;
 let lastPlayerCell = null;
@@ -697,6 +1153,17 @@ let profileLogTimer = 0;
 
 function cellsEqual(a, b) {
   return !!a && !!b && a[0] === b[0] && a[1] === b[1];
+}
+
+function shouldKeepWall(x, y, grid) {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  let openSides = 0;
+  if (x > 0 && grid[y][x - 1] === 0) openSides++;
+  if (x < cols - 1 && grid[y][x + 1] === 0) openSides++;
+  if (y > 0 && grid[y - 1][x] === 0) openSides++;
+  if (y < rows - 1 && grid[y + 1][x] === 0) openSides++;
+  return openSides > 0;
 }
 
 function updateMazeParams() {
@@ -920,67 +1387,156 @@ function updateEnemies(dt) {
   }
 }
 
+function computeMovementInput() {
+  const forward = (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0) - (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0);
+  const strafe = (keys['KeyD'] || keys['ArrowRight'] ? 1 : 0) - (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0);
+  desiredInput.set(strafe, forward);
+  if (mobileInputActive) {
+    desiredInput.x += mobileInput.x;
+    desiredInput.y += mobileInput.y;
+  }
+  const lenSq = desiredInput.lengthSq();
+  if (lenSq > 1) desiredInput.normalize();
+  return desiredInput;
+}
+
+function applyGridSnap(position, dt) {
+  if (!mazeGrid.length || !mazeCols || !mazeRows) return;
+  if (desiredInput.lengthSq() > 0.01) return;
+  if (playerVelocity.length() > MOVE_SETTINGS.snapThreshold) return;
+  const [cx, cy] = worldToCell(position.x, position.z, mazeCols, mazeRows);
+  if (cy < 0 || cy >= mazeGrid.length || cx < 0 || cx >= mazeGrid[0].length) return;
+  if (mazeGrid[cy][cx] !== 0) return;
+  const [wx, wz] = cellToWorld(cx, cy, mazeCols, mazeRows);
+  const dx = wx - position.x;
+  const dz = wz - position.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist < 0.001) return;
+  const maxStep = MOVE_SETTINGS.snapSpeed * dt;
+  const ratio = Math.min(1, maxStep / dist);
+  position.x += dx * ratio;
+  position.z += dz * ratio;
+}
+
 function buildMaze(seed) {
-  if (floor) scene.remove(floor);
-  if (exitMesh) scene.remove(exitMesh);
-  for (const e of enemies) scene.remove(e.mesh);
+  if (floor) {
+    scene.remove(floor);
+    disposeMesh(floor);
+    floor = null;
+  }
+  if (exitMesh) {
+    scene.remove(exitMesh);
+    disposeMesh(exitMesh);
+    exitMesh = null;
+  }
+  if (wallMesh) {
+    scene.remove(wallMesh);
+    disposeMesh(wallMesh);
+    wallMesh = null;
+  }
+  for (const enemy of enemies) {
+    if (enemy.mesh) {
+      scene.remove(enemy.mesh);
+      disposeMesh(enemy.mesh);
+    }
+  }
   enemies = [];
   navCache = null;
   lastPlayerCell = null;
   pathRecalcTimer = 0;
   wallBoxes = [];
+  trail = [];
+  lastTrailPos = null;
+  playerVelocity.set(0, 0);
+  mazeSolutionCells = [];
+  mazeSolutionWorld = [];
+  assistHeatSamples = [];
+  currentMazeMeta = null;
+
   const rand = seedRandom(seed);
-  const algorithm = rand() < 0.5 ? 'prim' : 'backtracker';
-  mazeGrid = generateMaze(MAZE_CELLS, MAZE_CELLS, { algorithm, seed });
-  const grid = mazeGrid;
+  const algorithm = algorithmPreference === 'auto'
+    ? (rand() < 0.5 ? 'prim' : 'backtracker')
+    : algorithmPreference;
+  const { grid, solution, metadata } = generateMaze(MAZE_CELLS, MAZE_CELLS, { algorithm, seed });
+  currentMazeMeta = metadata;
+  mazeGrid = grid;
   mazeRows = grid.length;
   mazeCols = grid[0].length;
   const rows = mazeRows;
   const cols = mazeCols;
+  mazeSolutionCells = solution.map(([cx, cy]) => [cx, cy]);
+  mazeSolutionWorld = mazeSolutionCells.map(([cx, cy]) => {
+    const [wx, wz] = cellToWorld(cx, cy, cols, rows);
+    return new THREE.Vector3(wx, 0.05, wz);
+  });
+  rebuildAssistVisuals();
+
   const wallTilesX = Math.max(1, Math.round(cellSize / BASE_CELL_SIZE));
   const wallTilesY = Math.max(1, Math.round(wallHeight / cellSize));
   wallTexture.repeat.set(wallTilesX, wallTilesY);
   wallTexture.needsUpdate = true;
+
   const wallGeo = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
-  const wallMat = new THREE.MeshStandardMaterial({ map: wallTexture });
+  const wallMat = new THREE.MeshStandardMaterial({
+    map: wallTexture,
+    side: THREE.FrontSide
+  });
+  const wallMatrix = new THREE.Matrix4();
+  const wallSize = new THREE.Vector3(cellSize, wallHeight, cellSize);
+  const wallCenters = [];
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
-      if (grid[y][x] === 1) {
-        const mesh = new THREE.Mesh(wallGeo, wallMat);
-        const [wx, wz] = cellToWorld(x, y, cols, rows);
-        mesh.position.set(wx, wallHeight / 2, wz);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        scene.add(mesh);
-        const box = new THREE.Box3().setFromCenterAndSize(mesh.position, new THREE.Vector3(cellSize, wallHeight, cellSize));
-        wallBoxes.push(box);
-      }
+      if (grid[y][x] !== 1) continue;
+      if (!shouldKeepWall(x, y, grid)) continue;
+      const [wx, wz] = cellToWorld(x, y, cols, rows);
+      wallCenters.push([wx, wz]);
+      const center = new THREE.Vector3(wx, wallHeight / 2, wz);
+      const box = new THREE.Box3().setFromCenterAndSize(center, wallSize);
+      wallBoxes.push(box);
     }
   }
+  if (wallCenters.length) {
+    wallMesh = new THREE.InstancedMesh(wallGeo, wallMat, wallCenters.length);
+    wallMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    const center = new THREE.Vector3();
+    for (let i = 0; i < wallCenters.length; i++) {
+      const [wx, wz] = wallCenters[i];
+      center.set(wx, wallHeight / 2, wz);
+      wallMatrix.makeTranslation(center.x, center.y, center.z);
+      wallMesh.setMatrixAt(i, wallMatrix);
+    }
+    wallMesh.instanceMatrix.needsUpdate = true;
+    wallMesh.castShadow = true;
+    wallMesh.receiveShadow = true;
+    scene.add(wallMesh);
+  }
+
   floorTexture.repeat.set(cols, rows);
   floorTexture.needsUpdate = true;
   const floorGeo = new THREE.PlaneGeometry(cols * cellSize, rows * cellSize);
-  const floorMat = new THREE.MeshStandardMaterial({ map: floorTexture });
+  const floorMat = new THREE.MeshStandardMaterial({
+    map: floorTexture,
+    side: THREE.FrontSide
+  });
   floor = new THREE.Mesh(floorGeo, floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  // breadcrumb trail
-  trail = [];
-
-  const [sx, sz] = cellToWorld(1,1,cols,rows);
+  const [sx, sz] = cellToWorld(1, 1, cols, rows);
   controls.getObject().position.set(sx, 1.5, sz);
 
   const [ex, ez] = cellToWorld(cols - 2, rows - 2, cols, rows);
-  exitMesh = new THREE.Mesh(new THREE.BoxGeometry(cellSize, wallHeight, cellSize), new THREE.MeshStandardMaterial({ color: 0x00ff00 }));
+  exitMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(cellSize, wallHeight, cellSize),
+    new THREE.MeshStandardMaterial({ color: 0x00ff00, side: THREE.FrontSide })
+  );
   exitMesh.position.set(ex, wallHeight / 2, ez);
   exitMesh.castShadow = true;
   exitMesh.receiveShadow = true;
   scene.add(exitMesh);
-  exitBox = new THREE.Box3().setFromCenterAndSize(exitMesh.position, new THREE.Vector3(cellSize, wallHeight, cellSize));
+  exitBox = new THREE.Box3().setFromCenterAndSize(exitMesh.position.clone(), new THREE.Vector3(cellSize, wallHeight, cellSize));
 
-  // spawn enemies
   const open = [];
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
@@ -994,7 +1550,7 @@ function buildMaze(seed) {
     const [cx, cy] = open.splice(idx, 1)[0];
     const [wx, wz] = cellToWorld(cx, cy, cols, rows);
     const geo = new THREE.SphereGeometry(0.4, 16, 16);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xff0000, side: THREE.FrontSide });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
     mesh.position.set(wx, 1.5, wz);
@@ -1021,7 +1577,11 @@ function start(syncTime) {
   }
   paused = false;
   hideOverlay();
-  controls.lock();
+  if (shouldUsePointerLock()) {
+    controls.lock();
+  } else {
+    controls.unlock();
+  }
   notifyDiagnosticsState('running', {
     reason: syncTime !== undefined ? 'sync-start' : 'local-start',
     sync: syncTime !== undefined,
@@ -1146,26 +1706,40 @@ function finish(time) {
 }
 
 function update(dt) {
-  const speed = 5;
   const prev = controls.getObject().position.clone();
-  if (keys['KeyW']) controls.moveForward(speed * dt);
-  if (keys['KeyS']) controls.moveForward(-speed * dt);
-  if (keys['KeyA']) controls.moveRight(-speed * dt);
-  if (keys['KeyD']) controls.moveRight(speed * dt);
+  const input = computeMovementInput();
+  const hasInput = input.lengthSq() > 0;
+  targetVelocity.copy(input).multiplyScalar(MOVE_SETTINGS.maxSpeed);
+  const damping = hasInput ? MOVE_SETTINGS.accel : MOVE_SETTINGS.decel;
+  const lerpFactor = THREE.MathUtils.clamp(1 - Math.exp(-damping * dt), 0, 1);
+  playerVelocity.lerp(targetVelocity, lerpFactor);
+  if (!hasInput && playerVelocity.lengthSq() < 1e-4) {
+    playerVelocity.set(0, 0);
+  }
+  if (playerVelocity.y !== 0) controls.moveForward(playerVelocity.y * dt);
+  if (playerVelocity.x !== 0) controls.moveRight(playerVelocity.x * dt);
 
   const pos = controls.getObject().position;
   pos.y = 1.5;
-  // breadcrumbs
+  let collided = false;
+  for (const box of wallBoxes) {
+    if (box.containsPoint(pos)) {
+      collided = true;
+      break;
+    }
+  }
+  if (collided) {
+    pos.copy(prev);
+    playerVelocity.set(0, 0);
+  } else {
+    applyGridSnap(pos, dt);
+  }
+
   if (!lastTrailPos || pos.distanceTo(lastTrailPos) > 1.5) {
     trail.push(pos.clone());
     lastTrailPos = pos.clone();
   }
-  for (const box of wallBoxes) {
-    if (box.containsPoint(pos)) {
-      pos.copy(prev);
-      break;
-    }
-  }
+
   if (exitBox && exitBox.containsPoint(pos)) {
     const time = (performance.now() - startTime) / 1000;
     timeEl.textContent = time.toFixed(2);
