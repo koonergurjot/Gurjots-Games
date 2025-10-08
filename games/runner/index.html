@@ -126,6 +126,88 @@
       opacity: 0.7;
       z-index: 5;
     }
+    .runner-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.22s ease-in-out;
+      z-index: 40;
+    }
+    .runner-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .runner-overlay__panel {
+      display: none;
+      flex-direction: column;
+      gap: 0.75rem;
+      padding: 1.5rem 1.75rem;
+      border-radius: 20px;
+      background: rgba(8, 11, 26, 0.88);
+      border: 1px solid rgba(110, 231, 183, 0.28);
+      box-shadow: 0 24px 52px rgba(2, 6, 23, 0.65);
+      max-width: min(420px, 92vw);
+      width: min(420px, 92vw);
+      text-align: center;
+      backdrop-filter: blur(6px);
+    }
+    .runner-overlay[data-scene="title"] .runner-overlay__panel[data-scene="title"],
+    .runner-overlay[data-scene="pause"] .runner-overlay__panel[data-scene="pause"],
+    .runner-overlay[data-scene="gameover"] .runner-overlay__panel[data-scene="gameover"] {
+      display: flex;
+    }
+    .runner-overlay__heading {
+      margin: 0;
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .runner-overlay__text {
+      margin: 0;
+      font-size: 1rem;
+      color: rgba(226, 232, 240, 0.78);
+    }
+    .runner-overlay__score {
+      margin: 0;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #f8fafc;
+    }
+    .runner-overlay__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+    .runner-overlay__btn {
+      cursor: pointer;
+      background: rgba(15, 23, 42, 0.82);
+      color: #e2e8f0;
+      border: 1px solid rgba(110, 231, 183, 0.32);
+      border-radius: 0.75rem;
+      padding: 0.55rem 1.1rem;
+      font: inherit;
+      min-width: 140px;
+      transition: background 0.18s ease-in-out, border-color 0.18s ease-in-out;
+    }
+    .runner-overlay__btn:hover {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: rgba(110, 231, 183, 0.5);
+    }
+    @media (max-width: 560px) {
+      .runner-overlay__panel {
+        width: min(360px, 100%);
+        padding: 1.25rem;
+      }
+      .runner-overlay__btn {
+        min-width: 120px;
+      }
+    }
     .touch {
       position: absolute;
       inset: 0;

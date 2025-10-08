@@ -2,6 +2,7 @@
 import { pushEvent } from "/games/common/diag-adapter.js";
 import { preloadFirstFrameAssets } from "../../shared/game-asset-preloader.js";
 import { play as playSfx } from "../../shared/juice/audio.js";
+import { createSceneManager } from "../../src/engine/scenes.js";
 
 (function(){
   "use strict";
@@ -34,7 +35,11 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     shellPaused:false,
     images:{ powerups:{}, effects:{} },
     backgroundLayers:null,
+    overlay:null,
   };
+
+  const scenes = createSceneManager({ id: `${SLUG}-scenes` });
+  state.scenes = scenes;
 
   const globalScope = typeof window !== "undefined" ? window : undefined;
   const pongReadyQueue = (() => {
@@ -70,6 +75,8 @@ import { play as playSfx } from "../../shared/juice/audio.js";
   };
 
   preloadFirstFrameAssets(SLUG).catch(()=>{});
+
+  const OVERLAY_FADE_MS = 220;
 
   function createImage(src){
     const img = new Image();
@@ -342,6 +349,7 @@ import { play as playSfx } from "../../shared/juice/audio.js";
         if(layer) layer.offset = 0;
       }
     }
+    updateTitleOverlay();
   }
 
   function spawnBall(dir=1, speed=360){
@@ -366,7 +374,16 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     return false;
   }
 
-  function endMatch(){ state.over=true; state.paused=true; toast("Match over"); playSound("explode"); }
+  function endMatch(){
+    if (state.over) return;
+    state.over=true;
+    state.paused=true;
+    toast("Match over");
+    playSound("explode");
+    const winner = state.score.p1 === state.score.p2 ? null : state.score.p1 > state.score.p2 ? 'p1' : 'p2';
+    const details = { winner, left: state.score.p1, right: state.score.p2, mode: state.mode };
+    scenes.push(() => createGameOverScene(details)).catch(err => console.error('[pong] gameover scene failed', err));
+  }
 
   function toast(msg){
     pushEvent("game", { level:"info", message:`[${SLUG}] ${msg}` });
@@ -648,6 +665,7 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     state.last = t;
 
     updateParallax(delta);
+    try { scenes.update(delta); } catch (err) { console.error('[pong] scene update failed', err); }
 
     if(!state.running){
       state.dt = 0;
@@ -693,13 +711,46 @@ import { play as playSfx } from "../../shared/juice/audio.js";
       h("div",{class:"pong-title"},"Pong"),
       h("span",{class:"pong-spacer"}),
       h("span",{class:"pong-kbd"},"Pause: Space"),
-      h("button",{class:"pong-btn",onclick:togglePause},"Pause"),
+      h("button",{class:"pong-btn",onclick:()=>dispatchAction('pause',{source:'ui', reason:'user'})},"Pause"),
       h("button",{class:"pong-btn",onclick:openKeybinds},"Keys")
     );
 
-    const wrap = h("div",{class:"pong-canvas-wrap"},
-      h("canvas",{class:"pong-canvas", id:"game", width:String(W), height:String(H), role:"img", "aria-label":"Pong gameplay"})
+    const canvasEl = h("canvas",{class:"pong-canvas", id:"game", width:String(W), height:String(H), role:"img", "aria-label":"Pong gameplay"});
+
+    const overlayRoot = h("div",{class:"pong-overlay", id:"pong-overlay", "aria-live":"polite", "aria-hidden":"true"});
+    const overlayTitleMessage = h("p",{class:"pong-overlay__text", id:"pong-overlay-title"},"");
+    const overlayStartBtn = h("button",{class:"pong-overlay__btn", id:"pong-overlay-start"},"Start Match");
+    const overlayTitlePanel = h("div",{class:"pong-overlay__panel", "data-scene":"title"},
+      h("h2",{class:"pong-overlay__heading"},"Pong Classic"),
+      overlayTitleMessage,
+      h("div",{class:"pong-overlay__actions"}, overlayStartBtn)
     );
+
+    const overlayPauseMessage = h("p",{class:"pong-overlay__text", id:"pong-overlay-pause"},"Game paused");
+    const overlayResumeBtn = h("button",{class:"pong-overlay__btn", id:"pong-overlay-resume"},"Resume");
+    const overlayRestartBtn = h("button",{class:"pong-overlay__btn", id:"pong-overlay-restart"},"Restart");
+    const overlayMenuBtn = h("button",{class:"pong-overlay__btn", id:"pong-overlay-menu"},"Main Menu");
+    const overlayPausePanel = h("div",{class:"pong-overlay__panel", "data-scene":"pause"},
+      h("h2",{class:"pong-overlay__heading"},"Paused"),
+      overlayPauseMessage,
+      h("div",{class:"pong-overlay__actions"}, overlayResumeBtn, overlayRestartBtn, overlayMenuBtn)
+    );
+
+    const overlayGameOverHeading = h("h2",{class:"pong-overlay__heading", id:"pong-overlay-gameover-heading"},"Match Over");
+    const overlayGameOverDetail = h("p",{class:"pong-overlay__text", id:"pong-overlay-gameover-detail"},"");
+    const overlayGameOverScore = h("p",{class:"pong-overlay__score", id:"pong-overlay-gameover-score"},"");
+    const overlayGameOverRestart = h("button",{class:"pong-overlay__btn", id:"pong-overlay-gameover-restart"},"Play Again");
+    const overlayGameOverMenu = h("button",{class:"pong-overlay__btn", id:"pong-overlay-gameover-menu"},"Main Menu");
+    const overlayGameOverPanel = h("div",{class:"pong-overlay__panel", "data-scene":"gameover"},
+      overlayGameOverHeading,
+      overlayGameOverDetail,
+      overlayGameOverScore,
+      h("div",{class:"pong-overlay__actions"}, overlayGameOverRestart, overlayGameOverMenu)
+    );
+
+    overlayRoot.append(overlayTitlePanel, overlayPausePanel, overlayGameOverPanel);
+
+    const wrap = h("div",{class:"pong-canvas-wrap"}, canvasEl, overlayRoot);
 
     const hud = h("div",{class:"pong-hud"},
       h("div",{class:"pong-score", id:"score-p1"},"0"),
@@ -709,48 +760,39 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     );
 
     const menu = h("div",{class:"pong-menu"},
-      // Mode
       h("div",{class:"pong-row"},
         h("label",{},"Mode:"),
         select(["1P","2P","Endless","Mayhem"], state.mode, v=>{state.mode=v; saveLS(); reset(); emitStateChange("mode", v);})
       ),
-      // AI
       h("div",{class:"pong-row"},
         h("label",{},"AI:"),
         select(["Easy","Normal","Hard","Insane"], state.ai, v=>{state.ai=v; saveLS(); emitStateChange("difficulty", v);})
       ),
-      // Score to
       h("div",{class:"pong-row"},
         h("label",{},"To Score:"),
-        number(state.toScore, v=>{state.toScore=v; saveLS();})
+        number(state.toScore, v=>{state.toScore=v; saveLS(); updateTitleOverlay();})
       ),
-      // Powerups
       h("div",{class:"pong-row"},
         h("label",{},"Powerups:"),
         toggle(state.powerups, v=>{state.powerups=v; saveLS();})
       ),
-      // SFX
       h("div",{class:"pong-row"},
         h("label",{},"SFX:"),
         toggle(state.sfx, v=>{state.sfx=v; saveLS();})
       ),
-      // Theme
       h("div",{class:"pong-row"},
         h("label",{},"Theme:"),
         select(["neon","vapor","crt","minimal"], state.theme, v=>{state.theme=v; saveLS();
-          // Preserve shell/host classes on <body>; only swap the theme-specific class.
           document.body.classList.remove("theme-neon","theme-vapor","theme-crt","theme-minimal");
           document.body.classList.add(themeToClass(v));
         })
       ),
-      // Reduce motion
       h("div",{class:"pong-row"},
         h("label",{},"Reduce motion:"),
         toggle(state.reduceMotion, v=>{state.reduceMotion=v; saveLS();})
       ),
-      // Replay btn
       h("button",{class:"pong-btn",onclick:playReplay},"Instant Replay"),
-      h("button",{class:"pong-btn",onclick:()=>{reset();}},"Reset Match")
+      h("button",{class:"pong-btn",onclick:()=>dispatchAction('restart',{source:'ui'})},"Reset Match")
     );
 
     const keyModal = state.keyModal = h("div",{class:"pong-modal", id:"key-modal"},
@@ -770,10 +812,26 @@ import { play as playSfx } from "../../shared/juice/audio.js";
 
     root.append(bar, wrap, hud, menu, keyModal);
     state.hud = {p1: hud.querySelector("#score-p1"), p2: hud.querySelector("#score-p2")};
+    state.overlay = {
+      root: overlayRoot,
+      current: null,
+      title: { panel: overlayTitlePanel, message: overlayTitleMessage, startBtn: overlayStartBtn },
+      pause: { panel: overlayPausePanel, message: overlayPauseMessage, resumeBtn: overlayResumeBtn, restartBtn: overlayRestartBtn, menuBtn: overlayMenuBtn },
+      gameover: { panel: overlayGameOverPanel, heading: overlayGameOverHeading, detail: overlayGameOverDetail, score: overlayGameOverScore, restartBtn: overlayGameOverRestart, menuBtn: overlayGameOverMenu },
+    };
+
+    overlayStartBtn.addEventListener('click', () => dispatchAction('start', { source: 'ui' }));
+    overlayResumeBtn.addEventListener('click', () => dispatchAction('resume', { source: 'ui' }));
+    overlayRestartBtn.addEventListener('click', () => dispatchAction('restart', { source: 'ui' }));
+    overlayMenuBtn.addEventListener('click', () => dispatchAction('menu', { source: 'ui' }));
+    overlayGameOverRestart.addEventListener('click', () => dispatchAction('restart', { source: 'ui' }));
+    overlayGameOverMenu.addEventListener('click', () => dispatchAction('menu', { source: 'ui' }));
+
     installCanvas();
     ensureContext();
     addEvents();
     onResize();
+    updateTitleOverlay();
   }
 
   function themeToClass(t){ return {"neon":"theme-neon","vapor":"theme-vapor","crt":"theme-crt","minimal":"theme-minimal"}[t]||"theme-neon"; }
@@ -802,18 +860,357 @@ import { play as playSfx } from "../../shared/juice/audio.js";
   function toggle(value, on){ const b=h("button",{class:"pong-btn", "aria-pressed":String(!!value)}, value?"On":"Off"); b.addEventListener("click", ()=>{ value=!value; b.setAttribute("aria-pressed", String(!!value)); b.textContent=value?"On":"Off"; on(value); }); return b; }
   function number(value, on){ const i=h("input",{class:"pong-input", type:"number", value:String(value), min:"1", max:"99", style:"width:5rem"}); i.addEventListener("change", ()=>on(parseInt(i.value||"0")||11)); return i; }
 
-  function togglePause(){ state.paused=!state.paused; if(!state.paused){ state.last=performance.now(); } }
-  function pauseForShell(){
-    if(state.over) return;
-    if(state.paused){ state.shellPaused=false; return; }
-    state.shellPaused=true;
-    state.paused=true;
+  function dispatchAction(action, payload) {
+    try {
+      return scenes.handle(action, payload);
+    } catch (err) {
+      console.error('[pong] dispatch action failed', err);
+      return false;
+    }
   }
+
+  function setOverlayScene(kind) {
+    const overlay = state.overlay;
+    if (!overlay?.root) return;
+    overlay.current = kind || null;
+    overlay.root.dataset.scene = kind || '';
+    overlay.root.setAttribute('aria-hidden', kind ? 'false' : 'true');
+  }
+
+  function animateOverlayVisibility(kind, immediate = false) {
+    const overlay = state.overlay;
+    if (!overlay?.root) return Promise.resolve();
+    const root = overlay.root;
+    if (immediate) {
+      if (kind) root.classList.add('show');
+      else root.classList.remove('show');
+      return Promise.resolve();
+    }
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        root.removeEventListener('transitionend', onEnd);
+        resolve();
+      };
+      const onEnd = event => {
+        if (event.target === root) finish();
+      };
+      root.addEventListener('transitionend', onEnd);
+      requestAnimationFrame(() => {
+        if (kind) root.classList.add('show');
+        else root.classList.remove('show');
+      });
+      setTimeout(finish, OVERLAY_FADE_MS + 120);
+    });
+  }
+
+  function showOverlay(kind, data = {}, immediate = false) {
+    if (kind === 'title') updateTitleOverlay();
+    if (kind === 'pause') updatePauseOverlay(data.reason);
+    if (kind === 'gameover') updateGameOverOverlay(data);
+    setOverlayScene(kind);
+    return animateOverlayVisibility(kind, immediate);
+  }
+
+  function hideOverlay(immediate = false) {
+    setOverlayScene(null);
+    return animateOverlayVisibility(null, immediate);
+  }
+
+  function updateTitleOverlay() {
+    const overlay = state.overlay;
+    if (!overlay?.title?.message) return;
+    const parts = [];
+    const target = state.toScore ?? 0;
+    parts.push(`First to ${target}` + (state.winByTwo ? ' (win by two)' : ''));
+    if (state.mode) parts.push(`Mode: ${state.mode}`);
+    overlay.title.message.textContent = parts.join(' • ');
+  }
+
+  function updatePauseOverlay(reason = 'user') {
+    const overlay = state.overlay;
+    if (!overlay?.pause?.message) return;
+    overlay.pause.message.textContent = reason === 'shell'
+      ? 'Paused by system overlay. Return to resume.'
+      : 'Game paused';
+    if (overlay.pause.resumeBtn) overlay.pause.resumeBtn.disabled = reason === 'shell';
+  }
+
+  function updateGameOverOverlay(info = {}) {
+    const overlay = state.overlay;
+    if (!overlay?.gameover) return;
+    const left = info.left ?? state.score?.p1 ?? 0;
+    const right = info.right ?? state.score?.p2 ?? 0;
+    const winner = info.winner ?? (left === right ? null : left > right ? 'p1' : 'p2');
+    if (overlay.gameover.heading) {
+      overlay.gameover.heading.textContent = winner === 'p1'
+        ? 'Player 1 Wins!'
+        : winner === 'p2'
+          ? 'Player 2 Wins!'
+          : 'Match Over';
+    }
+    if (overlay.gameover.detail) {
+      overlay.gameover.detail.textContent = `Mode: ${state.mode}`;
+    }
+    if (overlay.gameover.score) {
+      overlay.gameover.score.textContent = `Score ${left} – ${right}`;
+    }
+  }
+
+  function togglePause(opts = {}) {
+    dispatchAction('pause', { ...opts, source: opts.source || 'legacy', reason: opts.reason || 'user' });
+  }
+
+  function pauseForShell(){
+    const top = scenes.currentId;
+    if (top !== 'gameplay' && top !== 'pause') return;
+    dispatchAction('pause', { source: 'shell', reason: 'shell' });
+  }
+
   function resumeFromShell(){
-    if(!state.shellPaused || state.over) return;
-    state.shellPaused=false;
-    state.paused=false;
-    state.last=performance.now();
+    const top = scenes.currentId;
+    if (top === 'pause') {
+      dispatchAction('resume', { source: 'shell' });
+    }
+  }
+
+  function createTitleScene() {
+    return {
+      id: 'title',
+      transition: {
+        enter: () => showOverlay('title'),
+        exit: () => hideOverlay(),
+      },
+      onEnter(ctx) {
+        state.running = false;
+        state.over = false;
+        state.paused = false;
+        state.shellPaused = false;
+        reset();
+        ctx.setInputs({
+          async start(currentCtx) {
+            try {
+              await currentCtx.manager.replace(createGameScene);
+            } catch (err) {
+              console.error('[pong] start match failed', err);
+            }
+          },
+          async pause(currentCtx, info) {
+            if (info?.reason === 'shell') return;
+            try {
+              await currentCtx.manager.replace(createGameScene);
+            } catch (err) {
+              console.error('[pong] start match failed', err);
+            }
+          },
+          resume() {},
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.replace(createGameScene);
+            } catch (err) {
+              console.error('[pong] start match failed', err);
+            }
+          },
+          menu() {},
+        });
+      },
+    };
+  }
+
+  function createGameScene() {
+    return {
+      id: 'gameplay',
+      transition: {
+        enter: () => hideOverlay(),
+        resume: () => hideOverlay(),
+      },
+      onEnter(ctx) {
+        reset();
+        state.running = true;
+        state.over = false;
+        state.shellPaused = false;
+        state.paused = false;
+        state.last = performance.now();
+        ctx.setInputs({
+          async pause(currentCtx, info) {
+            const reason = info?.reason === 'shell' ? 'shell' : 'user';
+            try {
+              await currentCtx.manager.push(() => createPauseScene({ reason }));
+            } catch (err) {
+              console.error('[pong] pause scene failed', err);
+            }
+          },
+          resume() {},
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.replace(createGameScene);
+            } catch (err) {
+              console.error('[pong] restart failed', err);
+            }
+          },
+          async menu(currentCtx) {
+            try {
+              await currentCtx.manager.replace(createTitleScene);
+            } catch (err) {
+              console.error('[pong] return to menu failed', err);
+            }
+          },
+          async start(currentCtx, info) {
+            const reason = info?.reason === 'shell' ? 'shell' : 'user';
+            try {
+              await currentCtx.manager.push(() => createPauseScene({ reason }));
+            } catch (err) {
+              console.error('[pong] pause scene failed', err);
+            }
+          },
+        });
+      },
+      onPause() {
+        state.paused = true;
+      },
+      onResume() {
+        state.paused = false;
+        state.shellPaused = false;
+        state.last = performance.now();
+      },
+      onExit() {
+        state.running = false;
+      },
+    };
+  }
+
+  function createPauseScene({ reason = 'user' } = {}) {
+    let currentReason = reason;
+    const scene = {
+      id: 'pause',
+      setReason(nextReason) {
+        currentReason = nextReason || 'user';
+        state.shellPaused = currentReason === 'shell';
+        updatePauseOverlay(currentReason);
+      },
+      transition: {
+        enter: () => showOverlay('pause', { reason: currentReason }),
+        exit: () => hideOverlay(),
+      },
+      onEnter(ctx) {
+        state.paused = true;
+        state.shellPaused = currentReason === 'shell';
+        updatePauseOverlay(currentReason);
+        ctx.setInputs({
+          async pause(currentCtx, info) {
+            if (info?.reason === 'shell') {
+              scene.setReason('shell');
+              return;
+            }
+            try {
+              await currentCtx.manager.pop();
+            } catch (err) {
+              console.error('[pong] resume failed', err);
+            }
+          },
+          async resume(currentCtx, info) {
+            if (currentReason === 'shell' && info?.source !== 'shell') return;
+            try {
+              await currentCtx.manager.pop();
+            } catch (err) {
+              console.error('[pong] resume failed', err);
+            }
+          },
+          async start(currentCtx, info) {
+            if (currentReason === 'shell' && info?.source !== 'shell') return;
+            try {
+              await currentCtx.manager.pop();
+            } catch (err) {
+              console.error('[pong] resume failed', err);
+            }
+          },
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(createGameScene);
+            } catch (err) {
+              console.error('[pong] restart failed', err);
+            }
+          },
+          async menu(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(createTitleScene);
+            } catch (err) {
+              console.error('[pong] menu failed', err);
+            }
+          },
+        });
+      },
+      onExit() {
+        state.shellPaused = false;
+        state.last = performance.now();
+      },
+    };
+    return scene;
+  }
+
+  function createGameOverScene(details = {}) {
+    const payload = { ...details };
+    const scene = {
+      id: 'gameover',
+      transition: {
+        enter: () => showOverlay('gameover', payload),
+        exit: () => hideOverlay(),
+      },
+      onEnter(ctx) {
+        state.paused = true;
+        state.over = true;
+        updateGameOverOverlay(payload);
+        ctx.setInputs({
+          async start(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(createGameScene);
+            } catch (err) {
+              console.error('[pong] restart failed', err);
+            }
+          },
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(createGameScene);
+            } catch (err) {
+              console.error('[pong] restart failed', err);
+            }
+          },
+          async pause(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(createGameScene);
+            } catch (err) {
+              console.error('[pong] restart failed', err);
+            }
+          },
+          async resume(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+            } catch (err) {
+              console.error('[pong] dismiss failed', err);
+            }
+          },
+          async menu(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(createTitleScene);
+            } catch (err) {
+              console.error('[pong] menu failed', err);
+            }
+          },
+        });
+      },
+      onExit() {
+        hideOverlay();
+      },
+    };
+    return scene;
   }
   // Replay
   function playReplay(){
@@ -922,29 +1319,25 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     };
   }
 
-  function startGame(){
-    reset();
-    state.running=true;
-    state.over=false;
-    state.shellPaused=false;
-    state.paused=false;
-    state.last=performance.now();
+  async function startGame(){
+    try {
+      await scenes.clear();
+      await scenes.push(createGameScene);
+    } catch (err) {
+      console.error('[pong] startGame failed', err);
+    }
   }
 
-  function pauseGame(){
-    if(state.over || state.paused) return;
-    state.shellPaused=false;
-    togglePause();
+  function pauseGame(reason = 'user'){
+    if (scenes.currentId !== 'gameplay') return;
+    dispatchAction('pause', { source: 'api', reason });
   }
 
   function resumeGame(){
-    if(state.over || !state.paused) return;
-    if(state.shellPaused){
-      resumeFromShell();
-      return;
+    const top = scenes.currentId;
+    if (top === 'pause' || top === 'gameover') {
+      dispatchAction('resume', { source: 'api' });
     }
-    state.shellPaused=false;
-    togglePause();
   }
 
   if(globalScope){
@@ -1039,7 +1432,11 @@ import { play as playSfx } from "../../shared/juice/audio.js";
     window.addEventListener("message", onMessage, {passive:true});
     window.addEventListener("keydown", e=>{
       pressed.add(e.code);
-      if(e.code===state.keys.pause){ togglePause(); e.preventDefault(); }
+      let handled = false;
+      if(e.code===state.keys.pause){
+        handled = dispatchAction('pause', { source: 'keyboard', reason: 'user', event: e });
+      } else if (e.code === 'Enter'){ handled = dispatchAction('start', { source: 'keyboard', event: e }); }
+      if(handled) e.preventDefault();
       bindMove();
     }, {passive:false});
     window.addEventListener("keyup", e=>{ pressed.delete(e.code); bindMove(); });
@@ -1058,8 +1455,17 @@ import { play as playSfx } from "../../shared/juice/audio.js";
       const app = document.getElementById("app");
       app.innerHTML="";
       buildUI(app);
-      reset(); saveLS();
-      state.running=true; state.paused=false; state.over=false; state.last=performance.now(); requestAnimationFrame(frame);
+      reset();
+      saveLS();
+      state.running=false;
+      state.paused=false;
+      state.over=false;
+      state.shellPaused=false;
+      state.last=performance.now();
+      requestAnimationFrame(frame);
+      scenes.clear()
+        .then(() => scenes.push(createTitleScene))
+        .catch(err => console.error('[pong] scene init failed', err));
       post("GAME_READY");
     }catch(err){
       console.error("[pong] boot error", err);
