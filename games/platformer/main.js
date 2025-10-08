@@ -631,17 +631,491 @@ export async function boot() {
   const H = VIRTUAL_HEIGHT;
   let postedReady = false;
 
-  const overlay = document.getElementById('overlay');
-  const overlayTitle = document.getElementById('over-title');
-  const overlayInfo = document.getElementById('over-info');
-  const restartBtn = document.getElementById('restartBtn');
-  const shareBtn = document.getElementById('shareBtn');
+  const OVERLAY_FADE_MS = 220;
+
+  function buildPlatformerOverlay(existingRoot) {
+    let root = existingRoot;
+    if (!root) {
+      root = document.createElement('div');
+      document.body.appendChild(root);
+    }
+    root.className = 'platformer-overlay';
+    root.dataset.scene = '';
+    root.setAttribute('aria-hidden', 'true');
+    root.innerHTML = '';
+
+    const makeButton = (label, id) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'platformer-overlay__btn';
+      if (id) btn.id = id;
+      btn.textContent = label;
+      return btn;
+    };
+
+    const titlePanel = document.createElement('div');
+    titlePanel.className = 'platformer-overlay__panel';
+    titlePanel.dataset.scene = 'title';
+    const titleHeading = document.createElement('h2');
+    titleHeading.className = 'platformer-overlay__heading';
+    titleHeading.textContent = 'Retro Platformer';
+    const titleInfo = document.createElement('p');
+    titleInfo.className = 'platformer-overlay__text';
+    titleInfo.id = 'platformer-overlay-title';
+    const titleActions = document.createElement('div');
+    titleActions.className = 'platformer-overlay__actions';
+    const titleStart = makeButton('Start Adventure', 'platformer-overlay-start');
+    titleActions.append(titleStart);
+    titlePanel.append(titleHeading, titleInfo, titleActions);
+
+    const pausePanel = document.createElement('div');
+    pausePanel.className = 'platformer-overlay__panel';
+    pausePanel.dataset.scene = 'pause';
+    const pauseHeading = document.createElement('h2');
+    pauseHeading.className = 'platformer-overlay__heading';
+    pauseHeading.textContent = 'Paused';
+    const pauseInfo = document.createElement('p');
+    pauseInfo.className = 'platformer-overlay__text';
+    pauseInfo.id = 'platformer-overlay-pause';
+    const pauseActions = document.createElement('div');
+    pauseActions.className = 'platformer-overlay__actions';
+    const pauseResume = makeButton('Resume', 'platformer-overlay-resume');
+    const pauseRestart = makeButton('Restart', 'platformer-overlay-restart');
+    const pauseMenu = makeButton('Main Menu', 'platformer-overlay-menu');
+    pauseActions.append(pauseResume, pauseRestart, pauseMenu);
+    pausePanel.append(pauseHeading, pauseInfo, pauseActions);
+
+    const gameoverPanel = document.createElement('div');
+    gameoverPanel.className = 'platformer-overlay__panel';
+    gameoverPanel.dataset.scene = 'gameover';
+    const gameoverHeading = document.createElement('h2');
+    gameoverHeading.className = 'platformer-overlay__heading';
+    gameoverHeading.id = 'platformer-overlay-gameover-heading';
+    const gameoverInfo = document.createElement('p');
+    gameoverInfo.className = 'platformer-overlay__text';
+    gameoverInfo.id = 'platformer-overlay-gameover-detail';
+    const gameoverScore = document.createElement('p');
+    gameoverScore.className = 'platformer-overlay__score';
+    gameoverScore.id = 'platformer-overlay-gameover-score';
+    const gameoverActions = document.createElement('div');
+    gameoverActions.className = 'platformer-overlay__actions';
+    const gameoverRestart = makeButton('Play Again', 'platformer-overlay-gameover-restart');
+    const gameoverMenu = makeButton('Main Menu', 'platformer-overlay-gameover-menu');
+    const gameoverShare = makeButton('Share Run', 'shareBtn');
+    gameoverActions.append(gameoverRestart, gameoverMenu, gameoverShare);
+    gameoverPanel.append(gameoverHeading, gameoverInfo, gameoverScore, gameoverActions);
+
+    root.append(titlePanel, pausePanel, gameoverPanel);
+
+    return {
+      root,
+      title: { panel: titlePanel, info: titleInfo, startBtn: titleStart },
+      pause: { panel: pausePanel, info: pauseInfo, resumeBtn: pauseResume, restartBtn: pauseRestart, menuBtn: pauseMenu },
+      gameover: {
+        panel: gameoverPanel,
+        heading: gameoverHeading,
+        detail: gameoverInfo,
+        score: gameoverScore,
+        restartBtn: gameoverRestart,
+        menuBtn: gameoverMenu,
+        shareBtn: gameoverShare,
+      },
+    };
+  }
+
+  const overlayElements = buildPlatformerOverlay(document.getElementById('overlay'));
+  const overlayRoot = overlayElements?.root;
+  const shareBtn = overlayElements?.gameover?.shareBtn;
   const startCoopBtn = document.getElementById('startCoop');
   const connStatus = document.getElementById('connStatus');
   const netHud = document.getElementById('netHud');
   const hud = document.querySelector('.hud');
   const defaultShareLabel = shareBtn?.textContent?.trim() ?? 'Share';
+  const titleControls = overlayElements?.title;
+  const pauseControls = overlayElements?.pause;
+  const gameoverControls = overlayElements?.gameover;
+
+  function setOverlayScene(kind) {
+    if (!overlayRoot) return;
+    overlayRoot.dataset.scene = kind || '';
+    overlayRoot.setAttribute('aria-hidden', kind ? 'false' : 'true');
+  }
+
+  function animateOverlayVisibility(kind, immediate = false) {
+    if (!overlayRoot) return Promise.resolve();
+    if (immediate) {
+      if (kind) overlayRoot.classList.add('show');
+      else overlayRoot.classList.remove('show');
+      return Promise.resolve();
+    }
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        overlayRoot.removeEventListener('transitionend', onEnd);
+        resolve();
+      };
+      const onEnd = event => {
+        if (event.target === overlayRoot) finish();
+      };
+      overlayRoot.addEventListener('transitionend', onEnd);
+      requestAnimationFrame(() => {
+        if (kind) overlayRoot.classList.add('show');
+        else overlayRoot.classList.remove('show');
+      });
+      setTimeout(finish, OVERLAY_FADE_MS + 120);
+    });
+  }
+
+  function updateTitleOverlay() {
+    if (!titleControls?.info) return;
+    titleControls.info.textContent = 'Collect all coins and reach the goal. Press P to pause, R to restart.';
+  }
+
+  function updatePauseOverlay(reason = 'user') {
+    if (!pauseControls?.info) return;
+    pauseControls.info.textContent = reason === 'shell'
+      ? 'Paused by system overlay. Return to resume.'
+      : 'Take a breather, hero!';
+    if (pauseControls.resumeBtn) {
+      pauseControls.resumeBtn.disabled = reason === 'shell';
+    }
+  }
+
+  function updateGameOverOverlay(data = {}) {
+    if (!gameoverControls) return;
+    const title = data.title || 'Run Complete';
+    const info = data.info || '';
+    if (gameoverControls.heading) gameoverControls.heading.textContent = title;
+    if (gameoverControls.detail) gameoverControls.detail.textContent = info;
+    if (gameoverControls.score) {
+      const coins = Number.isFinite(data.coins) ? data.coins : (localPlayer?.collected ?? 0);
+      const totalCoins = Number.isFinite(data.totalCoins)
+        ? data.totalCoins
+        : Number.isFinite(data.coins)
+          ? data.coins + Math.max(0, data.missed ?? 0)
+          : coins;
+      const coinsLabel = Number.isFinite(totalCoins) && totalCoins >= coins
+        ? `${coins}/${totalCoins}`
+        : String(coins);
+      const timeText = Number.isFinite(data.time)
+        ? `Time ${data.time.toFixed(2)}s`
+        : `Time ${secondsElapsed().toFixed(2)}s`;
+      gameoverControls.score.textContent = `Coins ${coinsLabel} • ${timeText}`;
+    }
+  }
+
+  function showOverlay(kind, data = {}, immediate = false) {
+    if (kind === 'title') updateTitleOverlay();
+    if (kind === 'pause') updatePauseOverlay(data.reason);
+    if (kind === 'gameover') updateGameOverOverlay(data);
+    setOverlayScene(kind);
+    return animateOverlayVisibility(kind, immediate);
+  }
+
+  function hideOverlay(immediate = false) {
+    setOverlayScene(null);
+    return animateOverlayVisibility(null, immediate);
+  }
+
+  const scenes = createSceneManager({ id: 'platformer-scenes' });
+
+  function dispatchAction(action, payload) {
+    try {
+      return scenes.handle(action, payload);
+    } catch (err) {
+      console.error('[platformer] dispatch action failed', err);
+      return false;
+    }
+  }
+
+  titleControls?.startBtn?.addEventListener('click', () => dispatchAction('start', { source: 'ui' }));
+  pauseControls?.resumeBtn?.addEventListener('click', () => dispatchAction('resume', { source: 'ui' }));
+  pauseControls?.restartBtn?.addEventListener('click', () => dispatchAction('restart', { source: 'ui' }));
+  pauseControls?.menuBtn?.addEventListener('click', () => dispatchAction('menu', { source: 'ui' }));
+  gameoverControls?.restartBtn?.addEventListener('click', () => dispatchAction('restart', { source: 'ui' }));
+  gameoverControls?.menuBtn?.addEventListener('click', () => dispatchAction('menu', { source: 'ui' }));
+  gameoverControls?.shareBtn?.addEventListener('click', () => shareRun());
   const defaultCoopLabel = startCoopBtn?.textContent?.trim() ?? 'Start Co-op';
+
+  function applyPause(reason = 'user', opts = {}) {
+    const { emitEvent = true } = opts || {};
+    pauseReason = reason;
+    paused = true;
+    setAudioPaused(true);
+    if (net.isConnected()) sendState();
+    if (emitEvent) emitState('paused', { reason });
+  }
+
+  function applyResume(opts = {}) {
+    const { emitEvent = true } = opts || {};
+    paused = false;
+    pauseReason = 'user';
+    setAudioPaused(false);
+    lastFrame = performance.now();
+    if (net.isConnected()) sendState();
+    if (emitEvent) emitState('running');
+  }
+
+  function initializeScenes() {
+    scenes.clear({ transition: null }).catch(() => {});
+    scenes.push(() => createTitleScene()).catch(err => {
+      console.error('[platformer] failed to enter title scene', err);
+    });
+  }
+
+  function createTitleScene() {
+    return {
+      id: 'title',
+      transition: {
+        enter: () => showOverlay('title', {}, true),
+        exit: () => hideOverlay(),
+      },
+      onEnter(ctx) {
+        resetState({ autoStart: false });
+        gameOver = false;
+        pausedByShell = false;
+        pauseReason = 'menu';
+        updateTitleOverlay();
+        ctx.setInputs({
+          async start(currentCtx) {
+            try {
+              await currentCtx.manager.replace(() => createGameScene({ reset: true, reason: 'start' }));
+            } catch (err) {
+              console.error('[platformer] start failed', err);
+            }
+          },
+          pause() {},
+          async resume(currentCtx) {
+            try {
+              await currentCtx.manager.replace(() => createGameScene({ reset: true, reason: 'start' }));
+            } catch (err) {
+              console.error('[platformer] start failed', err);
+            }
+          },
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.replace(() => createGameScene({ reset: true, reason: 'start' }));
+            } catch (err) {
+              console.error('[platformer] start failed', err);
+            }
+          },
+          menu() {},
+          gameover() {},
+        });
+      },
+    };
+  }
+
+  function createGameScene(options = {}) {
+    return {
+      id: 'gameplay',
+      transition: {
+        enter: () => hideOverlay(),
+        resume: () => hideOverlay(),
+      },
+      onEnter(ctx) {
+        const shouldReset = options.reset !== false;
+        const reason = options.reason || 'resume';
+        if (shouldReset) {
+          resetState({ autoStart: false });
+          if (net.isConnected()) {
+            net.sendAssist();
+            sendState();
+          }
+          if (reason === 'start') {
+            emitState('start', { reason });
+          } else {
+            emitState('restart', { reason });
+            emitScore('reset', { reason });
+          }
+        }
+        gameOver = false;
+        pausedByShell = false;
+        pauseReason = 'user';
+        applyResume();
+        ctx.setInputs({
+          async pause(currentCtx, info) {
+            const reason = info?.reason === 'shell' ? 'shell' : 'user';
+            try {
+              await currentCtx.manager.push(() => createPauseScene({ reason }));
+            } catch (err) {
+              console.error('[platformer] pause failed', err);
+            }
+          },
+          resume() {},
+          async start(currentCtx, info) {
+            const reason = info?.reason === 'shell' ? 'shell' : 'user';
+            try {
+              await currentCtx.manager.push(() => createPauseScene({ reason }));
+            } catch (err) {
+              console.error('[platformer] pause failed', err);
+            }
+          },
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.replace(() => createGameScene({ reset: true, reason: 'restart' }));
+            } catch (err) {
+              console.error('[platformer] restart failed', err);
+            }
+          },
+          async menu(currentCtx) {
+            try {
+              await currentCtx.manager.replace(() => createTitleScene());
+            } catch (err) {
+              console.error('[platformer] menu failed', err);
+            }
+          },
+          async gameover(currentCtx, details) {
+            try {
+              await currentCtx.manager.push(() => createGameOverScene(details || {}));
+            } catch (err) {
+              console.error('[platformer] gameover scene failed', err);
+            }
+          },
+        });
+      },
+      onResume() {
+        applyResume();
+      },
+      onExit() {
+        setAudioPaused(true);
+      },
+    };
+  }
+
+  function createPauseScene({ reason = 'user' } = {}) {
+    let currentReason = reason;
+    return {
+      id: 'pause',
+      transition: {
+        enter: () => showOverlay('pause', { reason: currentReason }),
+        exit: () => hideOverlay(),
+      },
+      onEnter(ctx) {
+        applyPause(currentReason, { emitEvent: currentReason !== 'shell' });
+        ctx.setInputs({
+          async pause(currentCtx, info) {
+            if (info?.reason === 'shell') {
+              currentReason = 'shell';
+              updatePauseOverlay(currentReason);
+              pauseReason = currentReason;
+              return;
+            }
+            try {
+              await currentCtx.manager.pop();
+            } catch (err) {
+              console.error('[platformer] resume failed', err);
+            }
+          },
+          async resume(currentCtx, info) {
+            if (currentReason === 'shell' && info?.source !== 'shell') return;
+            try {
+              await currentCtx.manager.pop();
+            } catch (err) {
+              console.error('[platformer] resume failed', err);
+            }
+          },
+          async start(currentCtx, info) {
+            if (currentReason === 'shell' && info?.source !== 'shell') return;
+            try {
+              await currentCtx.manager.pop();
+            } catch (err) {
+              console.error('[platformer] resume failed', err);
+            }
+          },
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => createGameScene({ reset: true, reason: 'restart' }));
+            } catch (err) {
+              console.error('[platformer] restart failed', err);
+            }
+          },
+          async menu(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => createTitleScene());
+            } catch (err) {
+              console.error('[platformer] menu failed', err);
+            }
+          },
+          async gameover(currentCtx, details) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.push(() => createGameOverScene(details || {}));
+            } catch (err) {
+              console.error('[platformer] pause -> gameover failed', err);
+            }
+          },
+        });
+      },
+      onExit() {
+        pauseReason = 'user';
+      },
+    };
+  }
+
+  function createGameOverScene(details = {}) {
+    const payload = { ...details };
+    return {
+      id: 'gameover',
+      transition: {
+        enter: () => showOverlay('gameover', payload),
+        exit: () => hideOverlay(),
+      },
+      onEnter(ctx) {
+        pauseReason = 'gameover';
+        updateGameOverOverlay(payload);
+        ctx.setInputs({
+          async start(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => createGameScene({ reset: true, reason: 'restart' }));
+            } catch (err) {
+              console.error('[platformer] restart failed', err);
+            }
+          },
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => createGameScene({ reset: true, reason: 'restart' }));
+            } catch (err) {
+              console.error('[platformer] restart failed', err);
+            }
+          },
+          async pause(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => createGameScene({ reset: true, reason: 'restart' }));
+            } catch (err) {
+              console.error('[platformer] restart failed', err);
+            }
+          },
+          async resume(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+            } catch (err) {
+              console.error('[platformer] dismiss gameover failed', err);
+            }
+          },
+          async menu(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => createTitleScene());
+            } catch (err) {
+              console.error('[platformer] return to menu failed', err);
+            }
+          },
+          gameover() {},
+        });
+      },
+      onExit() {
+        pauseReason = 'user';
+      },
+    };
+  }
 
   if (hud && !hud.dataset.platformerAugmented) {
     hud.dataset.platformerAugmented = 'true';
@@ -1305,6 +1779,8 @@ export async function boot() {
   let paused = false;
   let pausedByShell = false;
   let gameOver = false;
+  let pauseReason = 'user';
+  const lastGameOver = { title: '', info: '', coins: 0, totalCoins: 0, time: 0 };
   let finalTime = null;
   let rafId = 0;
   let lastFrame = performance.now();
@@ -1346,25 +1822,20 @@ export async function boot() {
     playerRunState.remote.frame = 0;
     playerRunState.remote.lastAdvance = now;
     gameOver = false;
-    paused = false;
-    setAudioPaused(false);
+    paused = !autoStart;
+    pauseReason = autoStart ? 'user' : 'menu';
+    setAudioPaused(!autoStart ? true : false);
     finalTime = null;
     runStart = performance.now();
     keys.clear();
-    hideOverlay();
     if (connStatus) connStatus.textContent = net.isConnected() ? connectionLabel() : 'Offline';
-  }
-
-  function showOverlay(title, info, { showShare = true } = {}) {
-    if (!overlay) return;
-    overlay.classList.add('show');
-    if (overlayTitle) overlayTitle.textContent = title;
-    if (overlayInfo) overlayInfo.textContent = info;
-    if (shareBtn) shareBtn.style.display = showShare ? 'inline-block' : 'none';
-  }
-
-  function hideOverlay() {
-    overlay?.classList.remove('show');
+    clearTimeout(shareResetTimer);
+    shareResetTimer = 0;
+    if (shareBtn) {
+      shareBtn.textContent = defaultShareLabel;
+      shareBtn.style.pointerEvents = 'auto';
+      shareBtn.removeAttribute('aria-disabled');
+    }
   }
 
   function secondsElapsed() {
@@ -1409,37 +1880,42 @@ export async function boot() {
     playSfx('powerdown', { allowWhilePaused: true });
     gameOver = true;
     paused = true;
+    pauseReason = 'gameover';
     setAudioPaused(true);
     finalTime = performance.now();
-    showOverlay(title, info, { showShare: true });
+    lastGameOver.title = title;
+    lastGameOver.info = info;
+    lastGameOver.coins = localPlayer.collected;
+    lastGameOver.totalCoins = coins.length;
+    lastGameOver.time = secondsElapsed();
     if (net.isConnected()) sendState();
     emitState('gameover', { title, info });
     emitScore('final', { title, info });
+    dispatchAction('gameover', {
+      source: 'engine',
+      title,
+      info,
+      coins: localPlayer.collected,
+      totalCoins: coins.length,
+      time: secondsElapsed(),
+    });
   }
 
-  function togglePause(forceState) {
+  function togglePause(forceState, options = {}) {
     if (gameOver) return;
     const next = typeof forceState === 'boolean' ? forceState : !paused;
     if (next === paused) return;
-    paused = next;
-    setAudioPaused(paused);
-    if (paused) {
-      showOverlay('Paused', 'Press P to resume or R to restart.', { showShare: false });
+    const source = options.source || 'keyboard';
+    const reason = options.reason || 'user';
+    if (next) {
+      dispatchAction('pause', { source, reason });
     } else {
-      hideOverlay();
+      dispatchAction('resume', { source });
     }
-    if (net.isConnected()) sendState();
   }
 
-  function restartGame() {
-    resetState();
-    setAudioPaused(false);
-    if (net.isConnected()) {
-      net.sendAssist();
-      sendState();
-    }
-    emitState('restart', { reason: 'restart' });
-    emitScore('reset', { reason: 'restart' });
+  function restartGame(source = 'ui') {
+    dispatchAction('restart', { source });
   }
 
   if (platformerApi) {
@@ -1449,19 +1925,19 @@ export async function boot() {
         return;
       }
       if (gameOver) {
-        restartGame();
+        restartGame('api');
       } else if (paused) {
-        togglePause(false);
+        togglePause(false, { source: 'api' });
       }
     };
     platformerApi.pause = () => {
-      if (!gameOver) togglePause(true);
+      if (!gameOver) togglePause(true, { source: 'api', reason: 'user' });
     };
     platformerApi.resume = () => {
-      if (!gameOver) togglePause(false);
+      if (!gameOver) togglePause(false, { source: 'api' });
     };
     platformerApi.restartGame = () => {
-      restartGame();
+      restartGame('api');
     };
     platformerApi.localPlayer = localPlayer;
     platformerApi.coins = coins;
@@ -1472,7 +1948,8 @@ export async function boot() {
     if (!shareBtn) return;
     const coinsInfo = `${localPlayer.collected}/${coins.length}`;
     const seconds = secondsElapsed().toFixed(1);
-    const result = gameOver && overlayTitle?.textContent?.includes('Clear') ? 'cleared the stage' : 'took a spill';
+    const cleared = gameOver && (lastGameOver.title || '').toLowerCase().includes('clear');
+    const result = cleared ? 'cleared the stage' : 'took a spill';
     const text = `I ${result} in Retro Platformer with ${coinsInfo} coins in ${seconds}s! ${location.href}`;
 
     shareBtn.style.pointerEvents = 'none';
@@ -1583,9 +2060,9 @@ export async function boot() {
 
   function handleAssist() {
     if (gameOver) {
-      restartGame();
+      restartGame('network');
     } else if (paused) {
-      togglePause(false);
+      togglePause(false, { source: 'network' });
     }
   }
 
@@ -1644,6 +2121,21 @@ export async function boot() {
     const key = normKey(event.key);
     if (!key) return;
 
+    const sceneId = scenes.currentId;
+
+    if (key === 'enter') {
+      if (sceneId === 'title' || sceneId === 'gameover') {
+        event.preventDefault();
+        dispatchAction('start', { source: 'keyboard' });
+        return;
+      }
+      if (sceneId === 'pause') {
+        event.preventDefault();
+        dispatchAction('resume', { source: 'keyboard' });
+        return;
+      }
+    }
+
     if (key === 'p') {
       event.preventDefault();
       togglePause();
@@ -1651,7 +2143,7 @@ export async function boot() {
     }
     if (key === 'r') {
       event.preventDefault();
-      restartGame();
+      restartGame('keyboard');
       return;
     }
 
@@ -1934,21 +2426,19 @@ export async function boot() {
 
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keyup', handleKeyUp);
-  restartBtn?.addEventListener('click', restartGame);
-  shareBtn?.addEventListener('click', shareRun);
   if (netHud) initNet();
 
   function pauseForShell() {
     if (gameOver) return;
     if (paused) { pausedByShell = false; return; }
     pausedByShell = true;
-    togglePause(true);
+    togglePause(true, { source: 'shell', reason: 'shell' });
   }
 
   function resumeFromShell() {
     if (!pausedByShell || document.hidden) return;
     pausedByShell = false;
-    if (paused && !gameOver) togglePause(false);
+    if (paused && !gameOver) togglePause(false, { source: 'shell' });
   }
 
   const onShellPause = () => pauseForShell();
@@ -1966,7 +2456,8 @@ export async function boot() {
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('message', onShellMessage, { passive: true });
 
-  resetState();
+  resetState({ autoStart: false });
+  initializeScenes();
   lastFrame = performance.now();
   markPhase('boot:ready', { lastFrameAt: lastFrame });
   logBoot('info', 'Boot complete', { lastFrameAt: lastFrame });

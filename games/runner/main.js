@@ -2,6 +2,7 @@ import { Controls } from '../../src/runtime/controls.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerRunnerAdapter } from './adapter.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
+import { createSceneManager } from '../../src/engine/scenes.js';
 import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
 
 const VIRTUAL_WIDTH = 960;
@@ -175,6 +176,94 @@ function emitStateEvent(game, status, extra = {}) {
   });
 }
 
+const OVERLAY_FADE_MS = 220;
+
+function buildRunnerOverlay() {
+  if (typeof document === 'undefined') return null;
+  const root = document.createElement('div');
+  root.className = 'runner-overlay';
+  root.dataset.scene = '';
+  root.setAttribute('aria-hidden', 'true');
+
+  const makeButton = (text, id) => {
+    const btn = document.createElement('button');
+    btn.className = 'runner-overlay__btn';
+    btn.type = 'button';
+    if (id) btn.id = id;
+    btn.textContent = text;
+    return btn;
+  };
+
+  const titlePanel = document.createElement('div');
+  titlePanel.className = 'runner-overlay__panel';
+  titlePanel.dataset.scene = 'title';
+  const titleHeading = document.createElement('h2');
+  titleHeading.className = 'runner-overlay__heading';
+  titleHeading.textContent = 'City Runner';
+  const titleMessage = document.createElement('p');
+  titleMessage.className = 'runner-overlay__text';
+  titleMessage.id = 'runner-overlay-title';
+  const titleActions = document.createElement('div');
+  titleActions.className = 'runner-overlay__actions';
+  const startBtn = makeButton('Start Run', 'runner-overlay-start');
+  titleActions.append(startBtn);
+  titlePanel.append(titleHeading, titleMessage, titleActions);
+
+  const pausePanel = document.createElement('div');
+  pausePanel.className = 'runner-overlay__panel';
+  pausePanel.dataset.scene = 'pause';
+  const pauseHeading = document.createElement('h2');
+  pauseHeading.className = 'runner-overlay__heading';
+  pauseHeading.textContent = 'Paused';
+  const pauseMessage = document.createElement('p');
+  pauseMessage.className = 'runner-overlay__text';
+  pauseMessage.id = 'runner-overlay-pause';
+  const pauseActions = document.createElement('div');
+  pauseActions.className = 'runner-overlay__actions';
+  const resumeBtn = makeButton('Resume', 'runner-overlay-resume');
+  const pauseRestartBtn = makeButton('Restart', 'runner-overlay-restart');
+  const pauseMenuBtn = makeButton('Main Menu', 'runner-overlay-menu');
+  pauseActions.append(resumeBtn, pauseRestartBtn, pauseMenuBtn);
+  pausePanel.append(pauseHeading, pauseMessage, pauseActions);
+
+  const gameOverPanel = document.createElement('div');
+  gameOverPanel.className = 'runner-overlay__panel';
+  gameOverPanel.dataset.scene = 'gameover';
+  const gameOverHeading = document.createElement('h2');
+  gameOverHeading.className = 'runner-overlay__heading';
+  gameOverHeading.id = 'runner-overlay-gameover-heading';
+  gameOverHeading.textContent = 'Run Complete';
+  const gameOverDetail = document.createElement('p');
+  gameOverDetail.className = 'runner-overlay__text';
+  gameOverDetail.id = 'runner-overlay-gameover-detail';
+  const gameOverScore = document.createElement('p');
+  gameOverScore.className = 'runner-overlay__score';
+  gameOverScore.id = 'runner-overlay-gameover-score';
+  const gameOverActions = document.createElement('div');
+  gameOverActions.className = 'runner-overlay__actions';
+  const gameOverRestart = makeButton('Run Again', 'runner-overlay-gameover-restart');
+  const gameOverMenu = makeButton('Main Menu', 'runner-overlay-gameover-menu');
+  gameOverActions.append(gameOverRestart, gameOverMenu);
+  gameOverPanel.append(gameOverHeading, gameOverDetail, gameOverScore, gameOverActions);
+
+  root.append(titlePanel, pausePanel, gameOverPanel);
+  document.body.appendChild(root);
+
+  return {
+    root,
+    title: { panel: titlePanel, message: titleMessage, startBtn },
+    pause: { panel: pausePanel, message: pauseMessage, resumeBtn, restartBtn: pauseRestartBtn, menuBtn: pauseMenuBtn },
+    gameover: {
+      panel: gameOverPanel,
+      heading: gameOverHeading,
+      detail: gameOverDetail,
+      score: gameOverScore,
+      restartBtn: gameOverRestart,
+      menuBtn: gameOverMenu,
+    },
+  };
+}
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -214,6 +303,7 @@ class RunnerGame {
     this.gameOver = false;
     this.paused = false;
     this.wasPausedByVisibility = false;
+    this.pauseReason = 'user';
 
     this.gravity = 0.9;
     this.jumpImpulse = 15.5;
@@ -291,6 +381,8 @@ class RunnerGame {
       startTime: 0,
     };
 
+    this.overlay = buildRunnerOverlay();
+
     this.boundLoop = this.loop.bind(this);
     this.onResize = this.resize.bind(this);
     this.onKeyDown = this.handleKeyDown.bind(this);
@@ -303,15 +395,25 @@ class RunnerGame {
     this.onShellResume = this.handleShellResume.bind(this);
     this.onShellMessage = this.handleShellMessage.bind(this);
 
-    setAudioPaused(false);
+    this.scenes = createSceneManager({ id: 'runner-scenes' });
+
+    this.overlay?.title?.startBtn?.addEventListener('click', () => this.dispatchAction('start', { source: 'ui' }));
+    this.overlay?.pause?.resumeBtn?.addEventListener('click', () => this.dispatchAction('resume', { source: 'ui' }));
+    this.overlay?.pause?.restartBtn?.addEventListener('click', () => this.dispatchAction('restart', { source: 'ui' }));
+    this.overlay?.pause?.menuBtn?.addEventListener('click', () => this.dispatchAction('menu', { source: 'ui' }));
+    this.overlay?.gameover?.restartBtn?.addEventListener('click', () => this.dispatchAction('restart', { source: 'ui' }));
+    this.overlay?.gameover?.menuBtn?.addEventListener('click', () => this.dispatchAction('menu', { source: 'ui' }));
+
+    setAudioPaused(true);
     this.attachEvents();
     this.readPreferences(context);
     this.resize();
     this.restoreBestScore();
     this.setDifficulty(this.difficulty);
-    this.loadLevel(DEFAULT_LEVEL, { resetScore: true, silent: true });
-    this.updateMission();
-    this.start();
+    this.loadLevel(DEFAULT_LEVEL, { resetScore: true, silent: true, autoStart: false });
+    this.updateMission('Select a difficulty and press Start');
+    this.draw();
+    this.initializeScenes();
   }
 
   attachEvents() {
@@ -327,8 +429,8 @@ class RunnerGame {
     window.addEventListener('ggshell:resume', this.onShellResume);
     window.addEventListener('message', this.onShellMessage, { passive: true });
 
-    this.hud.pauseBtn?.addEventListener('click', () => this.togglePause());
-    this.hud.restartBtn?.addEventListener('click', () => this.restart());
+    this.hud.pauseBtn?.addEventListener('click', () => this.handlePauseButton());
+    this.hud.restartBtn?.addEventListener('click', () => this.dispatchAction('restart', { source: 'hud' }));
     this.hud.shareBtn?.addEventListener('click', () => this.share());
     this.hud.diffSel?.addEventListener('change', e => {
       const value = e.target?.value;
@@ -348,6 +450,403 @@ class RunnerGame {
     window.removeEventListener('ggshell:pause', this.onShellPause);
     window.removeEventListener('ggshell:resume', this.onShellResume);
     window.removeEventListener('message', this.onShellMessage);
+  }
+
+  initializeScenes() {
+    if (!this.scenes) return;
+    this.scenes.clear({ transition: null }).catch(() => {});
+    this.scenes.push(() => this.createTitleScene()).catch(err => {
+      console.error('[runner] failed to enter title scene', err);
+    });
+  }
+
+  dispatchAction(action, payload) {
+    if (!this.scenes) return false;
+    try {
+      return this.scenes.handle(action, payload);
+    } catch (err) {
+      console.error('[runner] dispatch action failed', err);
+      return false;
+    }
+  }
+
+  setOverlayScene(kind) {
+    const overlay = this.overlay;
+    if (!overlay?.root) return;
+    overlay.current = kind || null;
+    overlay.root.dataset.scene = kind || '';
+    overlay.root.setAttribute('aria-hidden', kind ? 'false' : 'true');
+  }
+
+  animateOverlayVisibility(kind, immediate = false) {
+    const overlay = this.overlay?.root;
+    if (!overlay) return Promise.resolve();
+    if (immediate) {
+      if (kind) overlay.classList.add('show');
+      else overlay.classList.remove('show');
+      return Promise.resolve();
+    }
+    return new Promise(resolve => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        overlay.removeEventListener('transitionend', onEnd);
+        resolve();
+      };
+      const onEnd = event => {
+        if (event.target === overlay) finish();
+      };
+      overlay.addEventListener('transitionend', onEnd);
+      requestAnimationFrame(() => {
+        if (kind) overlay.classList.add('show');
+        else overlay.classList.remove('show');
+      });
+      setTimeout(finish, OVERLAY_FADE_MS + 120);
+    });
+  }
+
+  showOverlay(kind, data = {}, immediate = false) {
+    if (kind === 'title') this.updateTitleOverlay();
+    if (kind === 'pause') this.updatePauseOverlay(data.reason);
+    if (kind === 'gameover') this.updateGameOverOverlay(data);
+    this.setOverlayScene(kind);
+    return this.animateOverlayVisibility(kind, immediate);
+  }
+
+  hideOverlay(immediate = false) {
+    this.setOverlayScene(null);
+    return this.animateOverlayVisibility(null, immediate);
+  }
+
+  updateTitleOverlay() {
+    const overlay = this.overlay;
+    if (!overlay?.title?.message) return;
+    const parts = [];
+    const best = Math.max(0, Math.floor(this.bestScore || 0));
+    const diffLabel = this.difficulty
+      ? this.difficulty.charAt(0).toUpperCase() + this.difficulty.slice(1)
+      : 'Medium';
+    if (this.levelName) parts.push(this.levelName);
+    parts.push(`Best ${best} m`);
+    parts.push(`Difficulty ${diffLabel}`);
+    overlay.title.message.textContent = parts.join(' • ');
+  }
+
+  updatePauseOverlay(reason = 'user') {
+    const overlay = this.overlay;
+    if (!overlay?.pause?.message) return;
+    const message = reason === 'shell'
+      ? 'Paused by system overlay. Return to resume.'
+      : 'Run paused';
+    overlay.pause.message.textContent = message;
+    if (overlay.pause.resumeBtn) {
+      overlay.pause.resumeBtn.disabled = reason === 'shell';
+    }
+  }
+
+  updateGameOverOverlay(data = {}) {
+    const overlay = this.overlay;
+    if (!overlay?.gameover) return;
+    const score = Math.max(0, Number.isFinite(data.score) ? data.score : this.score || 0);
+    const best = Math.max(0, Number.isFinite(data.bestScore) ? data.bestScore : this.bestScore || 0);
+    const distance = Math.max(0, Number.isFinite(data.distance) ? data.distance : Math.floor(this.distance || 0));
+    const diffLabel = this.difficulty
+      ? this.difficulty.charAt(0).toUpperCase() + this.difficulty.slice(1)
+      : 'Medium';
+    const levelLabel = this.levelName ? this.levelName : (data.levelName || 'Standard Course');
+    if (overlay.gameover.heading) {
+      overlay.gameover.heading.textContent = 'Run Complete';
+    }
+    if (overlay.gameover.detail) {
+      overlay.gameover.detail.textContent = `${levelLabel} • Difficulty ${diffLabel}`;
+    }
+    if (overlay.gameover.score) {
+      const distanceLabel = Number.isFinite(distance) ? `${distance} m travelled` : '';
+      const summary = distanceLabel ? ` • ${distanceLabel}` : '';
+      overlay.gameover.score.textContent = `Distance ${score} m • Best ${best} m${summary}`;
+    }
+  }
+
+  handlePauseButton() {
+    const top = this.scenes?.currentId;
+    if (top === 'pause') {
+      this.dispatchAction('resume', { source: 'hud' });
+    } else if (top === 'gameplay') {
+      this.dispatchAction('pause', { source: 'hud', reason: 'user' });
+    } else {
+      this.dispatchAction('start', { source: 'hud' });
+    }
+  }
+
+  ensureLoop() {
+    if (!this.running) {
+      this.start();
+    }
+  }
+
+  applyPause(reason = 'user', opts = {}) {
+    const { emitEvent = true } = opts || {};
+    this.pauseReason = reason;
+    this.paused = true;
+    setAudioPaused(true);
+    if (this.hud.pauseBtn) this.hud.pauseBtn.textContent = '▶️';
+    this.updateMission();
+    if (emitEvent) {
+      emitStateEvent(this, 'paused', { reason });
+    }
+  }
+
+  applyResume(opts = {}) {
+    const { emitEvent = true } = opts || {};
+    this.paused = false;
+    this.pauseReason = 'user';
+    this.lastTime = performance.now();
+    setAudioPaused(false);
+    if (this.hud.pauseBtn) this.hud.pauseBtn.textContent = '⏸️';
+    this.updateMission();
+    if (emitEvent) {
+      emitStateEvent(this, 'running');
+    }
+  }
+
+  createTitleScene() {
+    const game = this;
+    return {
+      id: 'title',
+      transition: {
+        enter: () => this.showOverlay('title', {}, true),
+        exit: () => this.hideOverlay(),
+      },
+      onEnter: ctx => {
+        this.gameOver = false;
+        this.pauseReason = 'menu';
+        this.paused = true;
+        setAudioPaused(true);
+        this.updateTitleOverlay();
+        this.updateMission('Select a difficulty and press Start');
+        const startRun = async () => {
+          try {
+            await ctx.manager.replace(() => game.createGameScene({ reset: true }));
+          } catch (err) {
+            console.error('[runner] start run failed', err);
+          }
+        };
+        ctx.setInputs({
+          start: () => startRun(),
+          pause() {},
+          resume: () => startRun(),
+          restart: () => startRun(),
+          menu() {},
+          gameover() {},
+        });
+      },
+    };
+  }
+
+  createGameScene(options = {}) {
+    const game = this;
+    return {
+      id: 'gameplay',
+      transition: {
+        enter: () => this.hideOverlay(),
+        resume: () => this.hideOverlay(),
+      },
+      onEnter: ctx => {
+        const shouldReset = options.reset !== false;
+        if (shouldReset) {
+          const level = this.currentLevel || this.sanitizeLevel(DEFAULT_LEVEL);
+          this.loadLevel(level, { resetScore: true, silent: true, autoStart: false });
+        }
+        this.gameOver = false;
+        this.pauseReason = 'user';
+        this.wasPausedByVisibility = false;
+        this.applyResume();
+        this.ensureLoop();
+        ctx.setInputs({
+          async pause(currentCtx, info) {
+            const reason = info?.reason === 'shell' ? 'shell' : 'user';
+            try {
+              await currentCtx.manager.push(() => game.createPauseScene({ reason }));
+            } catch (err) {
+              console.error('[runner] pause failed', err);
+            }
+          },
+          resume() {},
+          async start(currentCtx, info) {
+            const reason = info?.reason === 'shell' ? 'shell' : 'user';
+            try {
+              await currentCtx.manager.push(() => game.createPauseScene({ reason }));
+            } catch (err) {
+              console.error('[runner] pause failed', err);
+            }
+          },
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.replace(() => game.createGameScene({ reset: true }));
+            } catch (err) {
+              console.error('[runner] restart failed', err);
+            }
+          },
+          async menu(currentCtx) {
+            try {
+              await currentCtx.manager.replace(() => game.createTitleScene());
+            } catch (err) {
+              console.error('[runner] return to menu failed', err);
+            }
+          },
+          async gameover(currentCtx, details) {
+            try {
+              await currentCtx.manager.push(() => game.createGameOverScene(details || {}));
+            } catch (err) {
+              console.error('[runner] game over scene failed', err);
+            }
+          },
+        });
+      },
+      onResume: () => {
+        this.applyResume();
+      },
+      onExit: () => {
+        setAudioPaused(true);
+      },
+    };
+  }
+
+  createPauseScene({ reason = 'user' } = {}) {
+    let currentReason = reason;
+    const game = this;
+    return {
+      id: 'pause',
+      transition: {
+        enter: () => this.showOverlay('pause', { reason: currentReason }),
+        exit: () => this.hideOverlay(),
+      },
+      onEnter: ctx => {
+        this.applyPause(currentReason, { emitEvent: currentReason !== 'shell' });
+        ctx.setInputs({
+          async pause(currentCtx, info) {
+            if (info?.reason === 'shell') {
+              currentReason = 'shell';
+              game.updatePauseOverlay(currentReason);
+              game.pauseReason = currentReason;
+              return;
+            }
+            try {
+              await currentCtx.manager.pop();
+            } catch (err) {
+              console.error('[runner] resume from pause failed', err);
+            }
+          },
+          async resume(currentCtx, info) {
+            if (currentReason === 'shell' && info?.source !== 'shell') return;
+            try {
+              await currentCtx.manager.pop();
+            } catch (err) {
+              console.error('[runner] resume from pause failed', err);
+            }
+          },
+          async start(currentCtx, info) {
+            if (currentReason === 'shell' && info?.source !== 'shell') return;
+            try {
+              await currentCtx.manager.pop();
+            } catch (err) {
+              console.error('[runner] resume from pause failed', err);
+            }
+          },
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => game.createGameScene({ reset: true }));
+            } catch (err) {
+              console.error('[runner] restart from pause failed', err);
+            }
+          },
+          async menu(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => game.createTitleScene());
+            } catch (err) {
+              console.error('[runner] menu from pause failed', err);
+            }
+          },
+          async gameover(currentCtx, details) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.push(() => game.createGameOverScene(details || {}));
+            } catch (err) {
+              console.error('[runner] pause to gameover failed', err);
+            }
+          },
+        });
+      },
+      onExit: () => {
+        this.pauseReason = 'user';
+      },
+    };
+  }
+
+  createGameOverScene(details = {}) {
+    const payload = { ...details };
+    const game = this;
+    return {
+      id: 'gameover',
+      transition: {
+        enter: () => this.showOverlay('gameover', payload),
+        exit: () => this.hideOverlay(),
+      },
+      onEnter: ctx => {
+        this.gameOver = true;
+        this.pauseReason = 'gameover';
+        this.paused = true;
+        this.updateGameOverOverlay(payload);
+        ctx.setInputs({
+          async start(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => game.createGameScene({ reset: true }));
+            } catch (err) {
+              console.error('[runner] restart run failed', err);
+            }
+          },
+          async restart(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => game.createGameScene({ reset: true }));
+            } catch (err) {
+              console.error('[runner] restart run failed', err);
+            }
+          },
+          async pause(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => game.createGameScene({ reset: true }));
+            } catch (err) {
+              console.error('[runner] restart run failed', err);
+            }
+          },
+          async resume(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+            } catch (err) {
+              console.error('[runner] dismiss gameover failed', err);
+            }
+          },
+          async menu(currentCtx) {
+            try {
+              await currentCtx.manager.pop({ resume: false });
+              await currentCtx.manager.replace(() => game.createTitleScene());
+            } catch (err) {
+              console.error('[runner] return to menu failed', err);
+            }
+          },
+          gameover() {},
+        });
+      },
+      onExit: () => {
+        this.pauseReason = 'user';
+      },
+    };
   }
 
   readPreferences(context) {
@@ -496,7 +995,7 @@ class RunnerGame {
   }
 
   loadLevel(level, opts = {}) {
-    const { resetScore = false, silent = false, name = '' } = opts;
+    const { resetScore = false, silent = false, name = '', autoStart = true } = opts;
     const prepared = this.sanitizeLevel(level);
     this.currentLevel = prepared;
     this.levelName = name || prepared.name || this.levelName || '';
@@ -524,7 +1023,8 @@ class RunnerGame {
       this.input.jumpHeld = false;
       this.input.slideHeld = false;
       this.gameOver = false;
-      this.paused = false;
+      this.pauseReason = autoStart ? 'user' : 'menu';
+      this.paused = !autoStart;
       if (this.hud.shareBtn) this.hud.shareBtn.hidden = true;
       this.updateScoreDisplay(true);
       this.analytics.nearMisses = 0;
@@ -538,11 +1038,20 @@ class RunnerGame {
     if (!silent) {
       this.updateMission();
     }
-    this.resume();
-    this.start();
+    if (autoStart) {
+      this.applyResume();
+      this.start();
+    } else {
+      setAudioPaused(true);
+      this.updateMission();
+    }
   }
 
   restart() {
+    if (this.scenes) {
+      this.dispatchAction('restart', { source: 'method' });
+      return;
+    }
     const level = this.currentLevel || this.sanitizeLevel(DEFAULT_LEVEL);
     this.loadLevel(level, { resetScore: true, silent: true });
     this.updateMission();
@@ -588,7 +1097,12 @@ class RunnerGame {
     } catch (err) {
       // ignore storage
     }
-    this.updateMission();
+    if (this.scenes?.currentId === 'title') {
+      this.updateTitleOverlay();
+      this.updateMission('Select a difficulty and press Start');
+    } else {
+      this.updateMission();
+    }
   }
 
   updateMission(customText) {
@@ -602,7 +1116,13 @@ class RunnerGame {
     if (this.gameOver) {
       this.hud.mission.textContent = `${levelLabel}Game Over • Best ${this.bestScore} m`;
     } else if (this.paused) {
-      this.hud.mission.textContent = `${levelLabel}Paused`;
+      const reason = this.pauseReason;
+      const label = reason === 'shell'
+        ? 'Paused by system overlay'
+        : reason === 'menu'
+          ? 'Paused'
+          : 'Paused';
+      this.hud.mission.textContent = `${levelLabel}${label}`;
     } else {
       this.hud.mission.textContent = `${levelLabel}Difficulty: ${difficultyLabel} • Best ${this.bestScore} m`;
     }
@@ -610,29 +1130,31 @@ class RunnerGame {
 
   togglePause() {
     if (this.gameOver) return;
-    if (this.paused) {
-      this.resume();
+    const top = this.scenes?.currentId;
+    if (top === 'pause') {
+      this.dispatchAction('resume', { source: 'toggle' });
+    } else if (top === 'gameplay') {
+      this.dispatchAction('pause', { source: 'toggle', reason: 'user' });
     } else {
-      this.pause();
+      this.dispatchAction('start', { source: 'toggle' });
     }
   }
 
-  pause() {
+  pause(reason = 'user') {
     if (this.gameOver) return;
-    this.paused = true;
-    setAudioPaused(true);
-    if (this.hud.pauseBtn) this.hud.pauseBtn.textContent = '▶️';
-    this.updateMission();
-    emitStateEvent(this, 'paused');
+    if (this.scenes) {
+      this.dispatchAction('pause', { source: 'method', reason });
+      return;
+    }
+    this.applyPause(reason);
   }
 
-  resume() {
-    this.paused = false;
-    this.lastTime = performance.now();
-    setAudioPaused(false);
-    if (this.hud.pauseBtn) this.hud.pauseBtn.textContent = '⏸️';
-    this.updateMission();
-    emitStateEvent(this, 'running');
+  resume(source = 'method') {
+    if (this.scenes) {
+      this.dispatchAction('resume', { source });
+      return;
+    }
+    this.applyResume();
   }
 
   share() {
@@ -1274,7 +1796,8 @@ class RunnerGame {
     if (this.gameOver) return;
     playSfx('powerdown', { allowWhilePaused: true });
     this.gameOver = true;
-    this.paused = false;
+    this.paused = true;
+    this.pauseReason = 'gameover';
     setAudioPaused(true);
     if (this.hud.shareBtn) this.hud.shareBtn.hidden = false;
     if (this.score > this.bestScore) {
@@ -1292,37 +1815,87 @@ class RunnerGame {
       perfects: this.analytics.perfects,
       coins: this.analytics.coins,
     });
+    if (this.scenes) {
+      const payload = {
+        score: this.score,
+        bestScore: this.bestScore,
+        distance: Math.floor(this.distance || 0),
+        difficulty: this.difficulty,
+        levelName: this.levelName,
+      };
+      this.dispatchAction('gameover', { source: 'engine', ...payload });
+    }
   }
 
   handleKeyDown(e) {
     const key = e.key;
-    if (key === ' ' || key === 'Spacebar' || key === 'ArrowUp' || key === 'w' || key === 'W') {
+    const top = this.scenes?.currentId;
+    if (key === 'p' || key === 'P') {
+      e.preventDefault();
+      this.togglePause();
+      return;
+    }
+    if (key === 'Enter') {
+      if (top === 'title' || top === 'gameover') {
+        e.preventDefault();
+        this.dispatchAction('start', { source: 'keyboard' });
+        return;
+      }
+      if (top === 'pause') {
+        e.preventDefault();
+        this.dispatchAction('resume', { source: 'keyboard' });
+        return;
+      }
+    }
+    if (key === 'r' || key === 'R') {
+      if (top === 'gameover' || this.gameOver) {
+        e.preventDefault();
+        this.dispatchAction('restart', { source: 'keyboard' });
+        return;
+      }
+    }
+    const isJumpKey = key === ' ' || key === 'Spacebar' || key === 'ArrowUp' || key === 'w' || key === 'W';
+    if (isJumpKey) {
+      if (top !== 'gameplay') {
+        if (top === 'title') {
+          e.preventDefault();
+          this.dispatchAction('start', { source: 'keyboard' });
+        } else if (top === 'pause' && this.pauseReason !== 'shell') {
+          e.preventDefault();
+          this.dispatchAction('resume', { source: 'keyboard' });
+        }
+        return;
+      }
       if (!this.input.jumpHeld) this.queueJump();
       this.input.jumpHeld = true;
       e.preventDefault();
-    } else if (key === 'ArrowDown' || key === 's' || key === 'S') {
+      return;
+    }
+    if (key === 'ArrowDown' || key === 's' || key === 'S') {
+      if (top !== 'gameplay') return;
       this.input.slideHeld = true;
       e.preventDefault();
-    } else if (key === 'p' || key === 'P') {
-      e.preventDefault();
-      this.togglePause();
-    } else if ((key === 'r' || key === 'R') && this.gameOver) {
-      e.preventDefault();
-      this.restart();
     }
   }
 
   handleKeyUp(e) {
     const key = e.key;
+    const top = this.scenes?.currentId;
     if (key === ' ' || key === 'Spacebar' || key === 'ArrowUp' || key === 'w' || key === 'W') {
+      if (top !== 'gameplay') return;
       this.input.jumpHeld = false;
     }
     if (key === 'ArrowDown' || key === 's' || key === 'S') {
+      if (top !== 'gameplay') return;
       this.input.slideHeld = false;
     }
   }
 
   handlePointerDown(e) {
+    if (this.scenes?.currentId !== 'gameplay') {
+      e.preventDefault();
+      return;
+    }
     if (typeof this.canvas.setPointerCapture === 'function') {
       try { this.canvas.setPointerCapture(e.pointerId); } catch (err) {}
     }
@@ -1375,6 +1948,10 @@ class RunnerGame {
   }
 
   handlePointerUp(e) {
+    if (this.scenes?.currentId !== 'gameplay') {
+      e.preventDefault();
+      return;
+    }
     if (typeof this.canvas.releasePointerCapture === 'function') {
       try { this.canvas.releasePointerCapture(e.pointerId); } catch (err) {}
     }
@@ -1421,16 +1998,16 @@ class RunnerGame {
   }
 
   handleShellPause() {
-    if (this.gameOver || this.paused) return;
+    if (this.gameOver || this.scenes?.currentId === 'pause') return;
     this.wasPausedByVisibility = true;
-    this.pause();
+    this.dispatchAction('pause', { source: 'shell', reason: 'shell' });
   }
 
   handleShellResume() {
     if (document.hidden) return;
     if (!this.wasPausedByVisibility) return;
     this.wasPausedByVisibility = false;
-    if (!this.gameOver) this.resume();
+    if (!this.gameOver) this.dispatchAction('resume', { source: 'shell' });
   }
 
   handleShellMessage(event) {
@@ -1829,7 +2406,13 @@ async function maybeLoadExternalLevel(game) {
     const levelData = await levelRes.json();
     if (!levelData || typeof levelData !== 'object' || !Array.isArray(levelData.obstacles)) return;
     communityLevelLoaded = true;
-    game.loadLevel(levelData, { resetScore: true, silent: false, name: first.name || levelData.name || '' });
+    const autoStart = game?.scenes?.currentId === 'gameplay';
+    game.loadLevel(levelData, {
+      resetScore: true,
+      silent: false,
+      name: first.name || levelData.name || '',
+      autoStart,
+    });
   } catch (err) {
     // ignore fetch failures
   }
@@ -1840,7 +2423,8 @@ if (typeof window !== 'undefined') {
     if (!instance) {
       boot();
     }
-    instance?.loadLevel(level, { resetScore: true, silent: false });
+    const autoStart = instance?.scenes?.currentId === 'gameplay';
+    instance?.loadLevel(level, { resetScore: true, silent: false, autoStart });
   };
 
   window.addEventListener('beforeunload', () => instance?.stop());

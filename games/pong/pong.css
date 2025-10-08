@@ -55,8 +55,21 @@
 .pong-btn:hover{background:#172334}
 .pong-btn[aria-pressed="true"]{outline:2px solid var(--pong-accent); box-shadow:0 0 0 6px var(--pong-glow);}
 
-.pong-canvas-wrap{display:grid; place-items:center; padding:10px}
+.pong-canvas-wrap{display:grid; place-items:center; padding:10px; position:relative}
 .pong-canvas{width:100%; max-width:1100px; aspect-ratio:16/9; touch-action:none; background:var(--pong-bg); border-radius:16px; box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.03);}
+
+.pong-overlay{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; opacity:0; transition:opacity .22s ease-in-out;}
+.pong-overlay.show{opacity:1; pointer-events:auto;}
+.pong-overlay__panel{display:none; flex-direction:column; gap:0.75rem; padding:1.5rem; border-radius:18px; max-width:min(420px, 92%); background:rgba(9,15,26,0.9); border:1px solid rgba(105,225,255,0.25); box-shadow:0 18px 46px rgba(0,0,0,0.55); text-align:center;}
+.pong-overlay[data-scene="title"] .pong-overlay__panel[data-scene="title"],
+.pong-overlay[data-scene="pause"] .pong-overlay__panel[data-scene="pause"],
+.pong-overlay[data-scene="gameover"] .pong-overlay__panel[data-scene="gameover"]{display:flex;}
+.pong-overlay__heading{font-size:1.4rem; font-weight:700; margin:0;}
+.pong-overlay__text{margin:0; font-size:1rem; color:var(--pong-muted);}
+.pong-overlay__score{margin:0; font-weight:700; font-size:1.1rem; color:var(--pong-fg);}
+.pong-overlay__actions{display:flex; flex-wrap:wrap; gap:0.5rem; justify-content:center; margin-top:0.5rem;}
+.pong-overlay__btn{cursor:pointer; border:1px solid #243043; background:#111a28; color:var(--pong-fg); border-radius:.6rem; padding:.5rem .9rem; font:inherit; min-width:120px; transition:background .15s ease-in-out;}
+.pong-overlay__btn:hover{background:#172334;}
 
 .pong-hud{display:flex; align-items:center; justify-content:center; gap:2rem; padding:.4rem 0; font-weight:700}
 .pong-score{font-size:1.25rem}

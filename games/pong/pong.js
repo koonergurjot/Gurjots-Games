@@ -102,6 +102,8 @@ import "./pauseOverlay.js";
 
   preloadFirstFrameAssets(SLUG).catch(()=>{});
 
+  const OVERLAY_FADE_MS = 220;
+
   function createImage(src){
     const img = new Image();
     img.decoding = "async";
@@ -385,6 +387,7 @@ import "./pauseOverlay.js";
         if(layer) layer.offset = 0;
       }
     }
+    updateTitleOverlay();
   }
 
   function spawnBall(dir=1, speed=360){
@@ -409,7 +412,16 @@ import "./pauseOverlay.js";
     return false;
   }
 
-  function endMatch(){ state.over=true; state.paused=true; toast("Match over"); playSound("explode"); }
+  function endMatch(){
+    if (state.over) return;
+    state.over=true;
+    state.paused=true;
+    toast("Match over");
+    playSound("explode");
+    const winner = state.score.p1 === state.score.p2 ? null : state.score.p1 > state.score.p2 ? 'p1' : 'p2';
+    const details = { winner, left: state.score.p1, right: state.score.p2, mode: state.mode };
+    scenes.push(() => createGameOverScene(details)).catch(err => console.error('[pong] gameover scene failed', err));
+  }
 
   function toast(msg){
     pushEvent("game", { level:"info", message:`[${SLUG}] ${msg}` });
@@ -998,6 +1010,7 @@ import "./pauseOverlay.js";
     state.last = t;
 
     updateParallax(delta);
+    try { scenes.update(delta); } catch (err) { console.error('[pong] scene update failed', err); }
 
     if(!state.running){
       state.dt = 0;
@@ -1045,13 +1058,46 @@ import "./pauseOverlay.js";
       h("div",{class:"pong-title"},"Pong"),
       h("span",{class:"pong-spacer"}),
       h("span",{class:"pong-kbd"},"Pause: Space"),
-      h("button",{class:"pong-btn",onclick:togglePause},"Pause"),
+      h("button",{class:"pong-btn",onclick:()=>dispatchAction('pause',{source:'ui', reason:'user'})},"Pause"),
       h("button",{class:"pong-btn",onclick:openKeybinds},"Keys")
     );
 
-    const wrap = h("div",{class:"pong-canvas-wrap"},
-      h("canvas",{class:"pong-canvas", id:"game", width:String(W), height:String(H), role:"img", "aria-label":"Pong gameplay"})
+    const canvasEl = h("canvas",{class:"pong-canvas", id:"game", width:String(W), height:String(H), role:"img", "aria-label":"Pong gameplay"});
+
+    const overlayRoot = h("div",{class:"pong-overlay", id:"pong-overlay", "aria-live":"polite", "aria-hidden":"true"});
+    const overlayTitleMessage = h("p",{class:"pong-overlay__text", id:"pong-overlay-title"},"");
+    const overlayStartBtn = h("button",{class:"pong-overlay__btn", id:"pong-overlay-start"},"Start Match");
+    const overlayTitlePanel = h("div",{class:"pong-overlay__panel", "data-scene":"title"},
+      h("h2",{class:"pong-overlay__heading"},"Pong Classic"),
+      overlayTitleMessage,
+      h("div",{class:"pong-overlay__actions"}, overlayStartBtn)
     );
+
+    const overlayPauseMessage = h("p",{class:"pong-overlay__text", id:"pong-overlay-pause"},"Game paused");
+    const overlayResumeBtn = h("button",{class:"pong-overlay__btn", id:"pong-overlay-resume"},"Resume");
+    const overlayRestartBtn = h("button",{class:"pong-overlay__btn", id:"pong-overlay-restart"},"Restart");
+    const overlayMenuBtn = h("button",{class:"pong-overlay__btn", id:"pong-overlay-menu"},"Main Menu");
+    const overlayPausePanel = h("div",{class:"pong-overlay__panel", "data-scene":"pause"},
+      h("h2",{class:"pong-overlay__heading"},"Paused"),
+      overlayPauseMessage,
+      h("div",{class:"pong-overlay__actions"}, overlayResumeBtn, overlayRestartBtn, overlayMenuBtn)
+    );
+
+    const overlayGameOverHeading = h("h2",{class:"pong-overlay__heading", id:"pong-overlay-gameover-heading"},"Match Over");
+    const overlayGameOverDetail = h("p",{class:"pong-overlay__text", id:"pong-overlay-gameover-detail"},"");
+    const overlayGameOverScore = h("p",{class:"pong-overlay__score", id:"pong-overlay-gameover-score"},"");
+    const overlayGameOverRestart = h("button",{class:"pong-overlay__btn", id:"pong-overlay-gameover-restart"},"Play Again");
+    const overlayGameOverMenu = h("button",{class:"pong-overlay__btn", id:"pong-overlay-gameover-menu"},"Main Menu");
+    const overlayGameOverPanel = h("div",{class:"pong-overlay__panel", "data-scene":"gameover"},
+      overlayGameOverHeading,
+      overlayGameOverDetail,
+      overlayGameOverScore,
+      h("div",{class:"pong-overlay__actions"}, overlayGameOverRestart, overlayGameOverMenu)
+    );
+
+    overlayRoot.append(overlayTitlePanel, overlayPausePanel, overlayGameOverPanel);
+
+    const wrap = h("div",{class:"pong-canvas-wrap"}, canvasEl, overlayRoot);
 
     const hud = h("div",{class:"pong-hud"},
       h("div",{class:"pong-score", id:"score-p1"},"0"),
@@ -1061,48 +1107,39 @@ import "./pauseOverlay.js";
     );
 
     const menu = h("div",{class:"pong-menu"},
-      // Mode
       h("div",{class:"pong-row"},
         h("label",{},"Mode:"),
         select(["1P","2P","Endless","Mayhem"], state.mode, v=>{state.mode=v; saveLS(); reset(); emitStateChange("mode", v);})
       ),
-      // AI
       h("div",{class:"pong-row"},
         h("label",{},"AI:"),
         select(["Easy","Medium","Hard"], state.ai, v=>{state.ai=v; saveLS(); emitStateChange("difficulty", v);})
       ),
-      // Score to
       h("div",{class:"pong-row"},
         h("label",{},"To Score:"),
-        number(state.toScore, v=>{state.toScore=v; saveLS();})
+        number(state.toScore, v=>{state.toScore=v; saveLS(); updateTitleOverlay();})
       ),
-      // Powerups
       h("div",{class:"pong-row"},
         h("label",{},"Powerups:"),
         toggle(state.powerups, v=>{state.powerups=v; saveLS();})
       ),
-      // SFX
       h("div",{class:"pong-row"},
         h("label",{},"SFX:"),
         toggle(state.sfx, v=>{state.sfx=v; saveLS();})
       ),
-      // Theme
       h("div",{class:"pong-row"},
         h("label",{},"Theme:"),
         select(["neon","vapor","crt","minimal"], state.theme, v=>{state.theme=v; saveLS();
-          // Preserve shell/host classes on <body>; only swap the theme-specific class.
           document.body.classList.remove("theme-neon","theme-vapor","theme-crt","theme-minimal");
           document.body.classList.add(themeToClass(v));
         })
       ),
-      // Reduce motion
       h("div",{class:"pong-row"},
         h("label",{},"Reduce motion:"),
         toggle(state.reduceMotion, v=>{state.reduceMotion=v; saveLS();})
       ),
-      // Replay btn
       h("button",{class:"pong-btn",onclick:playReplay},"Instant Replay"),
-      h("button",{class:"pong-btn",onclick:()=>{reset();}},"Reset Match")
+      h("button",{class:"pong-btn",onclick:()=>dispatchAction('restart',{source:'ui'})},"Reset Match")
     );
 
     const keyModal = state.keyModal = h("div",{class:"pong-modal", id:"key-modal"},
@@ -1122,10 +1159,26 @@ import "./pauseOverlay.js";
 
     root.append(bar, wrap, hud, menu, keyModal);
     state.hud = {p1: hud.querySelector("#score-p1"), p2: hud.querySelector("#score-p2")};
+    state.overlay = {
+      root: overlayRoot,
+      current: null,
+      title: { panel: overlayTitlePanel, message: overlayTitleMessage, startBtn: overlayStartBtn },
+      pause: { panel: overlayPausePanel, message: overlayPauseMessage, resumeBtn: overlayResumeBtn, restartBtn: overlayRestartBtn, menuBtn: overlayMenuBtn },
+      gameover: { panel: overlayGameOverPanel, heading: overlayGameOverHeading, detail: overlayGameOverDetail, score: overlayGameOverScore, restartBtn: overlayGameOverRestart, menuBtn: overlayGameOverMenu },
+    };
+
+    overlayStartBtn.addEventListener('click', () => dispatchAction('start', { source: 'ui' }));
+    overlayResumeBtn.addEventListener('click', () => dispatchAction('resume', { source: 'ui' }));
+    overlayRestartBtn.addEventListener('click', () => dispatchAction('restart', { source: 'ui' }));
+    overlayMenuBtn.addEventListener('click', () => dispatchAction('menu', { source: 'ui' }));
+    overlayGameOverRestart.addEventListener('click', () => dispatchAction('restart', { source: 'ui' }));
+    overlayGameOverMenu.addEventListener('click', () => dispatchAction('menu', { source: 'ui' }));
+
     installCanvas();
     ensureContext();
     addEvents();
     onResize();
+    updateTitleOverlay();
   }
 
   function themeToClass(t){ return {"neon":"theme-neon","vapor":"theme-vapor","crt":"theme-crt","minimal":"theme-minimal"}[t]||"theme-neon"; }
@@ -1225,6 +1278,7 @@ import "./pauseOverlay.js";
     if(state.over) return;
     setPaused(true, "shell");
   }
+
   function resumeFromShell(){
     if(state.over || !state.paused) return;
     if(state.shellPaused){
@@ -1338,13 +1392,13 @@ import "./pauseOverlay.js";
     };
   }
 
-  function startGame(){
-    reset();
-    state.running=true;
-    state.over=false;
-    state.shellPaused=false;
-    state.paused=false;
-    state.last=performance.now();
+  async function startGame(){
+    try {
+      await scenes.clear();
+      await scenes.push(createGameScene);
+    } catch (err) {
+      console.error('[pong] startGame failed', err);
+    }
   }
 
   function pauseGame(){
@@ -1353,10 +1407,9 @@ import "./pauseOverlay.js";
   }
 
   function resumeGame(){
-    if(state.over || !state.paused) return;
-    if(state.shellPaused){
-      resumeFromShell();
-      return;
+    const top = scenes.currentId;
+    if (top === 'pause' || top === 'gameover') {
+      dispatchAction('resume', { source: 'api' });
     }
     setPaused(false, "manual");
   }
@@ -1458,7 +1511,11 @@ import "./pauseOverlay.js";
         return;
       }
       pressed.add(e.code);
-      if(e.code===state.keys.pause){ togglePause(); e.preventDefault(); }
+      let handled = false;
+      if(e.code===state.keys.pause){
+        handled = dispatchAction('pause', { source: 'keyboard', reason: 'user', event: e });
+      } else if (e.code === 'Enter'){ handled = dispatchAction('start', { source: 'keyboard', event: e }); }
+      if(handled) e.preventDefault();
       bindMove();
     }, {passive:false});
     window.addEventListener("keyup", e=>{ pressed.delete(e.code); bindMove(); });
@@ -1481,8 +1538,17 @@ import "./pauseOverlay.js";
       const app = document.getElementById("app");
       app.innerHTML="";
       buildUI(app);
-      reset(); saveLS();
-      state.running=true; state.paused=false; state.over=false; state.last=performance.now(); requestAnimationFrame(frame);
+      reset();
+      saveLS();
+      state.running=false;
+      state.paused=false;
+      state.over=false;
+      state.shellPaused=false;
+      state.last=performance.now();
+      requestAnimationFrame(frame);
+      scenes.clear()
+        .then(() => scenes.push(createTitleScene))
+        .catch(err => console.error('[pong] scene init failed', err));
       post("GAME_READY");
     }catch(err){
       console.error("[pong] boot error", err);

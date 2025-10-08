@@ -44,6 +44,7 @@
       display: flex;
       flex-wrap: wrap;
       gap: 6px 12px;
+      z-index: 5;
     }
     #netHud {
       left: auto;
@@ -61,28 +62,83 @@
       cursor: pointer;
       font-weight: 700;
     }
-    .overlay {
+    .platformer-overlay {
       position: fixed;
       inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.22s ease-in-out;
+      z-index: 40;
+    }
+    .platformer-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .platformer-overlay__panel {
       display: none;
-      place-items: center;
-      background: rgba(0, 0, 0, .35);
-      font-weight: 800;
-      letter-spacing: .4px;
+      flex-direction: column;
+      gap: 0.75rem;
+      padding: 1.5rem 1.75rem;
+      background: rgba(15, 18, 28, 0.92);
+      border: 1px solid rgba(99, 102, 241, 0.32);
+      border-radius: 20px;
+      box-shadow: 0 24px 48px rgba(2, 6, 23, 0.6);
+      max-width: min(420px, 92vw);
+      width: min(420px, 92vw);
       text-align: center;
+      backdrop-filter: blur(6px);
     }
-    .overlay.show {
-      display: grid;
+    .platformer-overlay[data-scene="title"] .platformer-overlay__panel[data-scene="title"],
+    .platformer-overlay[data-scene="pause"] .platformer-overlay__panel[data-scene="pause"],
+    .platformer-overlay[data-scene="gameover"] .platformer-overlay__panel[data-scene="gameover"] {
+      display: flex;
     }
-    .panel {
-      background: #111522;
-      border: 1px solid #27314b;
-      padding: 18px 22px;
-      border-radius: 16px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, .5);
+    .platformer-overlay__heading {
+      margin: 0;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #f8fafc;
     }
-    .panel h2 {
-      margin: 0 0 6px 0;
+    .platformer-overlay__text {
+      margin: 0;
+      font-size: 1rem;
+      color: rgba(224, 231, 255, 0.82);
+    }
+    .platformer-overlay__score {
+      margin: 0;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #f8fafc;
+    }
+    .platformer-overlay__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      justify-content: center;
+    }
+    .platformer-overlay__btn {
+      cursor: pointer;
+      background: rgba(17, 24, 39, 0.82);
+      color: #e2e8f0;
+      border: 1px solid rgba(99, 102, 241, 0.42);
+      border-radius: 0.75rem;
+      padding: 0.55rem 1.15rem;
+      font: inherit;
+      min-width: 140px;
+      transition: background 0.18s ease-in-out, border-color 0.18s ease-in-out;
+    }
+    .platformer-overlay__btn:hover {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: rgba(99, 102, 241, 0.6);
+    }
+    .platformer-overlay__btn:disabled,
+    .platformer-overlay__btn[aria-disabled="true"] {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     @media (max-width: 600px) {
       .hud {
@@ -97,6 +153,15 @@
         bottom: 72px;
         left: 12px;
         right: 12px;
+      }
+    }
+    @media (max-width: 560px) {
+      .platformer-overlay__panel {
+        width: min(360px, 100%);
+        padding: 1.35rem;
+      }
+      .platformer-overlay__btn {
+        min-width: 120px;
       }
     }
   </style>
@@ -121,12 +186,7 @@
       </div>
     </div>
   </main>
-  <div id="overlay" class="overlay"><div class="panel">
-    <h2 id="over-title">Game Over</h2>
-    <div id="over-info" style="margin-bottom:10px"></div>
-    <div class="btn" id="restartBtn">Restart</div>
-    <div class="btn" id="shareBtn" style="margin-top:8px">Share</div>
-  </div></div>
+  <div id="overlay" class="platformer-overlay" data-scene="" aria-hidden="true"></div>
 
   <script type="module" src="./main.js"></script>
   <script type="module" src="../../shared/juice/overlay.js" data-game="platformer"></script>
