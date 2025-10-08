@@ -387,8 +387,9 @@ const PLAYER_RUN_FRAME_DURATION = 100; // ms between run frames
 const PLAYER_MOVE_EPSILON = 0.05;
 
 const PARALLAX_LAYER_CONFIG = [
-  { src: '/assets/backgrounds/parallax/forest_layer1.png', factor: 0.1 },
-  { src: '/assets/backgrounds/parallax/forest_layer2.png', factor: 0.25 },
+  { factor: 0.2, baseHeight: 0.5, amplitudeRange: [40, 70], color: '#1f355b', segments: 5 },
+  { factor: 0.5, baseHeight: 0.65, amplitudeRange: [65, 95], color: '#15263f', segments: 6 },
+  { factor: 1.0, baseHeight: 0.78, amplitudeRange: [90, 120], color: '#0d182b', segments: 7 },
 ];
 
 const PLAYER_SPRITE_SPECS = {
@@ -409,6 +410,10 @@ function aabb(a, b) {
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
+}
+
+function randomInRange(min, max) {
+  return Math.random() * (max - min) + min;
 }
 
 function createStateMachine(states, initialState, initialContext = null) {
@@ -472,10 +477,11 @@ export async function boot() {
     return;
   }
   const assetCache = new Map();
-  const parallaxLayers = PARALLAX_LAYER_CONFIG.map(({ src, factor }) => ({
-    src,
-    factor,
-    image: null,
+  const parallaxLayers = PARALLAX_LAYER_CONFIG.map((config) => ({
+    ...config,
+    canvas: null,
+    width: 0,
+    height: 0,
   }));
   const playerSprites = Object.entries(PLAYER_SPRITE_SPECS).reduce((acc, [key, spec]) => {
     acc[key] = { ...spec, image: null, strip: null };
@@ -485,36 +491,118 @@ export async function boot() {
     local: { frame: 0, lastAdvance: 0 },
     remote: { frame: 0, lastAdvance: 0 },
   };
+  const VIRTUAL_WIDTH = 960;
+  const VIRTUAL_HEIGHT = 540;
 
-  function loadImageAsset(src) {
-    const existing = assetCache.get(src);
-    if (existing) {
-      if (existing.image) return Promise.resolve(existing.image);
-      return existing.promise;
+  function createOffscreenCanvas(width, height) {
+    if (typeof globalScope?.OffscreenCanvas === 'function') {
+      return new globalScope.OffscreenCanvas(width, height);
     }
-    if (!globalScope?.Image) return Promise.resolve(null);
-    const img = new globalScope.Image();
-    try {
-      img.decoding = 'async';
-    } catch (_) {
-      /* noop */
+    if (globalScope?.document?.createElement) {
+      const offscreen = globalScope.document.createElement('canvas');
+      offscreen.width = width;
+      offscreen.height = height;
+      return offscreen;
     }
-    if ('loading' in img) {
-      img.loading = 'eager';
+    return null;
+  }
+
+  function regenerateParallaxLayer(layer) {
+    const patternWidth = Math.max(VIRTUAL_WIDTH * 3, VIRTUAL_WIDTH + 240);
+    const patternHeight = VIRTUAL_HEIGHT;
+    const canvas = createOffscreenCanvas(patternWidth, patternHeight);
+    if (!canvas) {
+      layer.canvas = null;
+      layer.width = 0;
+      layer.height = 0;
+      return null;
     }
-    const promise = new Promise((resolve) => {
-      img.onload = () => {
-        assetCache.set(src, { image: img });
-        resolve(img);
-      };
-      img.onerror = () => {
-        assetCache.delete(src);
-        resolve(null);
-      };
-    });
-    assetCache.set(src, { promise });
-    img.src = src;
-    return promise;
+    const layerCtx = canvas.getContext('2d');
+    if (!layerCtx) {
+      layer.canvas = null;
+      layer.width = 0;
+      layer.height = 0;
+      return null;
+    }
+
+    layerCtx.clearRect(0, 0, patternWidth, patternHeight);
+
+    const amplitudeMin = layer.amplitudeRange?.[0] ?? 40;
+    const amplitudeMax = layer.amplitudeRange?.[1] ?? 120;
+    const amplitude = clamp(randomInRange(amplitudeMin, amplitudeMax), 40, 120);
+    const baselineRatio = clamp(layer.baseHeight ?? 0.7, 0.3, 0.9);
+    const baseline = clamp(patternHeight * baselineRatio, amplitude, patternHeight - 20);
+    const minY = clamp(baseline - amplitude, patternHeight * 0.15, patternHeight - amplitude - 20);
+    const maxY = clamp(baseline + amplitude, baseline, patternHeight - 10);
+    const segmentCount = Math.max(3, Math.floor(layer.segments ?? patternWidth / 240));
+    const points = [];
+    const startY = clamp(baseline + randomInRange(-amplitude * 0.5, amplitude * 0.5), minY, maxY);
+    points.push({ x: 0, y: startY });
+    for (let i = 1; i <= segmentCount; i += 1) {
+      const x = (i / segmentCount) * patternWidth;
+      const y = i === segmentCount
+        ? startY
+        : clamp(baseline + randomInRange(-amplitude, amplitude), minY, maxY);
+      points.push({ x, y });
+    }
+
+    const controlVariance = amplitude * 0.6;
+    layerCtx.beginPath();
+    layerCtx.moveTo(0, patternHeight);
+    layerCtx.lineTo(points[0].x, points[0].y);
+    let firstSegmentDelta = 0;
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const current = points[i];
+      const next = points[i + 1];
+      const segmentWidth = next.x - current.x;
+      let cp1Y;
+      if (i === 0) {
+        const maxUp = Math.min(controlVariance, maxY - current.y);
+        const maxDown = Math.min(controlVariance, current.y - minY);
+        const delta = randomInRange(-maxDown, maxUp);
+        cp1Y = clamp(current.y + delta, minY, maxY);
+        firstSegmentDelta = delta;
+      } else {
+        cp1Y = clamp(current.y + randomInRange(-controlVariance, controlVariance), minY, maxY);
+      }
+      let cp2Y;
+      if (i === points.length - 2) {
+        cp2Y = clamp(next.y - firstSegmentDelta, minY, maxY);
+      } else {
+        cp2Y = clamp(next.y + randomInRange(-controlVariance, controlVariance), minY, maxY);
+      }
+      const cp1 = { x: current.x + segmentWidth / 3, y: cp1Y };
+      const cp2 = { x: current.x + (segmentWidth * 2) / 3, y: cp2Y };
+      layerCtx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, next.x, next.y);
+    }
+    layerCtx.lineTo(patternWidth, patternHeight);
+    layerCtx.closePath();
+    layerCtx.fillStyle = layer.color ?? '#101820';
+    layerCtx.fill();
+
+    layer.canvas = canvas;
+    layer.width = patternWidth;
+    layer.height = patternHeight;
+    return canvas;
+  }
+
+  function regenerateAllParallaxLayers() {
+    for (const layer of parallaxLayers) {
+      regenerateParallaxLayer(layer);
+    }
+  }
+
+  function ensureParallaxLayerCanvas(layer) {
+    const expectedWidth = Math.max(VIRTUAL_WIDTH * 3, VIRTUAL_WIDTH + 240);
+    const expectedHeight = VIRTUAL_HEIGHT;
+    if (
+      layer.canvas &&
+      layer.canvas.width === expectedWidth &&
+      layer.canvas.height === expectedHeight
+    ) {
+      return layer.canvas;
+    }
+    return regenerateParallaxLayer(layer);
   }
 
   function cachedImage(src) {
@@ -523,14 +611,8 @@ export async function boot() {
   }
 
   function preloadParallaxLayers() {
-    return Promise.all(
-      parallaxLayers.map((layer) =>
-        loadImageAsset(layer.src).then((img) => {
-          layer.image = img;
-          return img;
-        }),
-      ),
-    );
+    regenerateAllParallaxLayers();
+    return Promise.resolve(parallaxLayers.map((layer) => layer.canvas));
   }
 
   function ensureStripForSpec(spec) {
@@ -573,8 +655,6 @@ export async function boot() {
   }).catch(() => {});
   preloadParallaxLayers().catch(() => {});
   preloadPlayerSprites().catch(() => {});
-  const VIRTUAL_WIDTH = 960;
-  const VIRTUAL_HEIGHT = 540;
   let cssWidth = VIRTUAL_WIDTH;
   let cssHeight = VIRTUAL_HEIGHT;
   let renderScale = 1;
@@ -1750,21 +1830,17 @@ export async function boot() {
 
   function drawParallaxBackground() {
     for (const layer of parallaxLayers) {
-      const image = layer.image || cachedImage(layer.src);
+      const image = ensureParallaxLayerCanvas(layer);
       if (!image) continue;
-      const sourceWidth = image.naturalWidth || image.width || 0;
-      const sourceHeight = image.naturalHeight || image.height || 0;
-      if (!sourceWidth || !sourceHeight) continue;
-      const scale = H / sourceHeight;
-      const drawWidth = sourceWidth * scale;
-      const drawHeight = sourceHeight * scale;
+      const drawWidth = image.width || 0;
+      const drawHeight = image.height || 0;
       if (!drawWidth || !drawHeight) continue;
       let offset = (camera.x * layer.factor) % drawWidth;
       if (offset < 0) offset += drawWidth;
       let drawX = -offset;
       const drawY = H - drawHeight;
       while (drawX < W) {
-        ctx.drawImage(image, 0, 0, sourceWidth, sourceHeight, drawX, drawY, drawWidth, drawHeight);
+        ctx.drawImage(image, 0, 0, drawWidth, drawHeight, drawX, drawY, drawWidth, drawHeight);
         drawX += drawWidth;
       }
     }
