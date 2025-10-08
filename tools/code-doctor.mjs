@@ -562,6 +562,7 @@ function findImportSpecifiers(content) {
   const fromRegex = /from\s+['"]([^'"]+)['"]/g;
   const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
   const importCallRegex = /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  const bareImportRegex = /import\s+['"]([^'"]+)['"]/g;
   const specifiers = [];
   let match;
   while ((match = fromRegex.exec(content)) != null) {
@@ -571,6 +572,9 @@ function findImportSpecifiers(content) {
     specifiers.push(match[1]);
   }
   while ((match = importCallRegex.exec(content)) != null) {
+    specifiers.push(match[1]);
+  }
+  while ((match = bareImportRegex.exec(content)) != null) {
     specifiers.push(match[1]);
   }
   return specifiers;
@@ -904,6 +908,135 @@ function canonicalizeCycle(nodes) {
   return { key: ordered.join(' -> '), path: ordered };
 }
 
+function findStronglyConnectedComponents(graph) {
+  const indices = new Map();
+  const lowLinks = new Map();
+  const stack = [];
+  const onStack = new Set();
+  const components = [];
+  let index = 0;
+
+  const visit = (node) => {
+    indices.set(node, index);
+    lowLinks.set(node, index);
+    index += 1;
+    stack.push(node);
+    onStack.add(node);
+
+    const neighbors = graph.get(node) || new Set();
+    for (const neighbor of neighbors) {
+      if (!graph.has(neighbor)) {
+        continue;
+      }
+      if (!indices.has(neighbor)) {
+        visit(neighbor);
+        const currentLow = lowLinks.get(node) ?? index;
+        const neighborLow = lowLinks.get(neighbor) ?? index;
+        lowLinks.set(node, Math.min(currentLow, neighborLow));
+      } else if (onStack.has(neighbor)) {
+        const currentLow = lowLinks.get(node) ?? index;
+        const neighborIndex = indices.get(neighbor) ?? index;
+        lowLinks.set(node, Math.min(currentLow, neighborIndex));
+      }
+    }
+
+    if (lowLinks.get(node) === indices.get(node)) {
+      const component = [];
+      let current;
+      do {
+        current = stack.pop();
+        if (current === undefined) {
+          break;
+        }
+        onStack.delete(current);
+        component.push(current);
+      } while (current !== node);
+      if (component.length > 0) {
+        components.push(component);
+      }
+    }
+  };
+
+  for (const node of graph.keys()) {
+    if (!indices.has(node)) {
+      visit(node);
+    }
+  }
+
+  return components;
+}
+
+function findShortestCycleInComponent(component, graph) {
+  const componentSet = new Set(component);
+  let best = null;
+
+  const considerCycle = (candidate) => {
+    const canonical = canonicalizeCycle(candidate);
+    if (!canonical.key) {
+      return;
+    }
+    if (
+      !best ||
+      canonical.path.length < best.path.length ||
+      (canonical.path.length === best.path.length && canonical.key.localeCompare(best.key) < 0)
+    ) {
+      best = { path: canonical.path, key: canonical.key };
+    }
+  };
+
+  for (const node of component) {
+    const neighbors = graph.get(node) || new Set();
+    if (neighbors.has(node)) {
+      considerCycle([node, node]);
+    }
+  }
+  if (best) {
+    return best.path;
+  }
+
+  const sortNeighbors = (neighbors) =>
+    Array.from(neighbors)
+      .filter((neighbor) => componentSet.has(neighbor))
+      .sort((a, b) => relativePath(a).localeCompare(relativePath(b)));
+
+  for (const start of component) {
+    const initialNeighbors = sortNeighbors(graph.get(start) || new Set());
+    if (initialNeighbors.length === 0) {
+      continue;
+    }
+
+    const visited = new Set([start]);
+    const queue = [];
+    let head = 0;
+
+    for (const neighbor of initialNeighbors) {
+      visited.add(neighbor);
+      queue.push({ node: neighbor, path: [start, neighbor] });
+    }
+
+    while (head < queue.length) {
+      const { node, path } = queue[head++];
+      if (best && path.length + 1 > best.path.length) {
+        break;
+      }
+
+      const neighbors = sortNeighbors(graph.get(node) || new Set());
+      for (const neighbor of neighbors) {
+        if (neighbor === start) {
+          considerCycle(path.concat(start));
+          continue;
+        }
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push({ node: neighbor, path: path.concat(neighbor) });
+        }
+      }
+    }
+  }
+
+  return best ? best.path : null;
+}
+
 async function checkCircularDependencies(files, result) {
   const candidates = files.filter((filePath) =>
     IMPORT_EXTENSIONS.has(path.extname(filePath)),
@@ -979,47 +1112,40 @@ async function checkCircularDependencies(files, result) {
     }
   }
 
-  const visiting = new Set();
-  const visited = new Set();
-  const stack = [];
+  const components = findStronglyConnectedComponents(graph);
   const cycles = [];
-  const seenCycles = new Set();
 
-  const dfs = (node) => {
-    if (visiting.has(node)) {
-      const cycleStart = stack.indexOf(node);
-      if (cycleStart !== -1) {
-        const cycleNodes = stack.slice(cycleStart).concat(node);
-        const canonical = canonicalizeCycle(cycleNodes);
-        if (canonical.key && !seenCycles.has(canonical.key)) {
-          seenCycles.add(canonical.key);
-          cycles.push(canonical.path);
-        }
-      }
-      return;
+  for (const component of components) {
+    if (component.length === 0) {
+      continue;
     }
-    if (visited.has(node)) {
-      return;
-    }
-    visiting.add(node);
-    stack.push(node);
-    const neighbors = graph.get(node) || new Set();
-    for (const neighbor of neighbors) {
-      if (!graph.has(neighbor)) {
+    if (component.length === 1) {
+      const [single] = component;
+      const deps = graph.get(single) || new Set();
+      if (!deps.has(single)) {
         continue;
       }
-      dfs(neighbor);
     }
-    stack.pop();
-    visiting.delete(node);
-    visited.add(node);
-  };
-
-  for (const node of graph.keys()) {
-    if (!visited.has(node)) {
-      dfs(node);
+    const cyclePath = findShortestCycleInComponent(component, graph);
+    if (cyclePath && cyclePath.length > 0) {
+      cycles.push(cyclePath);
     }
   }
+
+  cycles.sort((a, b) => a.join(' -> ').localeCompare(b.join(' -> ')));
+
+  const relativeGraph = {};
+  for (const [node, deps] of graph.entries()) {
+    const relNode = relativePath(node);
+    const sortedDeps = Array.from(deps)
+      .filter((dep) => graph.has(dep))
+      .map((dep) => relativePath(dep))
+      .sort((a, b) => a.localeCompare(b));
+    relativeGraph[relNode] = sortedDeps;
+  }
+
+  result.graph = relativeGraph;
+  result.cycles = cycles;
 
   const issues = [];
   if (cycles.length > 0) {
