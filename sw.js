@@ -16,6 +16,7 @@ const CORE_SHELL_ASSETS = [
   '/js/three-global-shim.js',
   '/shared/gg-shim.js',
   '/shared/game-paths.js',
+  '/shared/game-sandbox.js',
   '/shared/quest-widget.js',
   '/games.json',
 ];
