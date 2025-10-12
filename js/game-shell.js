@@ -3,7 +3,8 @@ const qs = new URLSearchParams(location.search);
 const DEBUG = qs.get('debug') === '1' || qs.get('debug') === 'true';
 const FORCE = qs.get('force'); // 'iframe' | 'script'
 const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
-const DIAG_V2 = (localStorage.getItem('diag_v2') !== '0');
+// Feature flag for Diagnostics v2
+const DIAG_V2 = (localStorage.getItem('diag_v2') === '1');
 const slug = qs.get('slug') || qs.get('id') || qs.get('game');
 var $ = function(s){ return document.querySelector(s); };
 
@@ -239,6 +240,18 @@ function renderShell(info){
   document.addEventListener('visibilitychange', function(){
     if(document.hidden){ try { window.postMessage({type:'GAME_PAUSE'}, '*'); } catch(_){ } }
   });
+
+  if (DIAG_V2) {
+    // Remove any legacy UI that might have been left behind
+    ['#diag-btn', '#diag-panel'].forEach(function(sel){
+      try {
+        var el = document.querySelector(sel);
+        if (el && typeof el.remove === 'function') {
+          el.remove();
+        }
+      } catch(_){ }
+    });
+  }
 }
 
 function resolveLaunchEntry(info) {
