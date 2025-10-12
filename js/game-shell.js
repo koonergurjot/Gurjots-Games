@@ -11,7 +11,25 @@ function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className 
 
 var state = { timer:null, failTimer:null, muted:true, gameInfo:null, iframe:null };
 var diagState = { sink:null, listenerBound:false, errorListenerBound:false };
-var diagV2State = { initialized:false, pending:[], bus:null, loadPromise:null, overlay:null, altBound:false, consoleWrapped:false, errorBound:false, buttonReady:false };
+var diagV2State = {
+  initialized: false,
+  pending: [],
+  bus: null,
+  loadPromise: null,
+  overlay: null,
+  overlayPromise: null,
+  overlayApi: null,
+  overlayQueue: [],
+  overlayScriptPromise: null,
+  altBound: false,
+  consoleWrapped: false,
+  errorBound: false,
+  buttonReady: false,
+  stylesLoaded: false,
+  loadStartedAt: null,
+  mountDuration: null,
+  currentSlug: slug || '—'
+};
 
 async function fetchCatalogJSON(init){
   var urls = ['/games.json', '/public/games.json'];
@@ -279,6 +297,15 @@ function loadGame(info){
   var stage = $('#stage');
   var overlays = ensureOverlays();
   var loader = overlays.loader, err = overlays.err;
+  diagV2State.loadStartedAt = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function') ? performance.now() : Date.now();
+  diagV2State.mountDuration = null;
+  var slugValue = (info && (info.slug || info.id || info.game)) || slug || '—';
+  diagV2State.currentSlug = slugValue;
+  if (diagV2State.overlayApi && typeof diagV2State.overlayApi.setMeta === 'function') {
+    try {
+      diagV2State.overlayApi.setMeta({ mountTimeMs: null, slug: diagV2State.currentSlug });
+    } catch(_){ }
+  }
   setErrorVisibility(err, false);
   if (err) {
     err.setAttribute('role', 'status');
@@ -535,6 +562,15 @@ window.addEventListener('message', function(ev){
       _ov.err.setAttribute('aria-live', 'polite');
     }
     ensureCanvasLabels(document);
+    if (diagV2State.loadStartedAt != null) {
+      var now = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function') ? performance.now() : Date.now();
+      diagV2State.mountDuration = now - diagV2State.loadStartedAt;
+      if (diagV2State.overlayApi && typeof diagV2State.overlayApi.setMeta === 'function') {
+        try {
+          diagV2State.overlayApi.setMeta({ mountTimeMs: diagV2State.mountDuration });
+        } catch(_){ }
+      }
+    }
   } else if(data.type === 'GAME_ERROR'){
     clearBootTimers();
     renderError('Game error', {message: data.message || 'Unknown error'});
@@ -632,6 +668,14 @@ function emitDiagV2Event(evt){
       diagV2State.pending.shift();
     }
   }
+  if (diagV2State.overlayApi && typeof diagV2State.overlayApi.ingest === 'function') {
+    try { diagV2State.overlayApi.ingest(payload); } catch(_){ }
+  } else {
+    diagV2State.overlayQueue.push(payload);
+    if (diagV2State.overlayQueue.length > 2000) {
+      diagV2State.overlayQueue.shift();
+    }
+  }
 }
 
 function bindDiagV2ErrorHandlers(){
@@ -714,49 +758,127 @@ function wrapConsoleForDiagnostics(){
   });
 }
 
-function ensureDiagV2Overlay(){
-  if (diagV2State.overlay && diagV2State.overlay.isConnected) {
-    return diagV2State.overlay;
+function ensureDiagnosticsStyles(){
+  if (diagV2State.stylesLoaded) return;
+  if (document.getElementById('diagnostics-overlay-styles')) {
+    diagV2State.stylesLoaded = true;
+    return;
   }
-  var overlay = document.getElementById('diag-v2');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'diag-v2';
-    overlay.hidden = true;
-    overlay.style.position = 'fixed';
-    overlay.style.inset = '0';
-    overlay.style.zIndex = '1100';
-    overlay.style.background = 'rgba(6, 11, 28, 0.9)';
-    overlay.style.color = '#f5f7ff';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-    overlay.style.fontFamily = 'ui-sans-serif, system-ui';
-    overlay.style.fontSize = '15px';
-    overlay.style.padding = '24px';
-    overlay.textContent = 'Diagnostics overlay (beta)';
+  try {
+    var link = document.createElement('link');
+    link.id = 'diagnostics-overlay-styles';
+    link.rel = 'stylesheet';
+    link.href = '/css/diagnostics.css';
+    link.onload = function(){ diagV2State.stylesLoaded = true; };
+    link.onerror = function(){ };
+    (document.head || document.documentElement || document.body).appendChild(link);
+    diagV2State.stylesLoaded = true;
+  } catch(_){ }
+}
+
+function loadDiagnosticsOverlayScript(){
+  if (diagV2State.overlayScriptPromise) {
+    return diagV2State.overlayScriptPromise;
   }
-  if (!overlay.parentNode) {
-    var attach = function(){
-      if (!overlay.parentNode) {
-        (document.body || document.documentElement).appendChild(overlay);
-      }
-    };
-    if (document.body) {
-      attach();
-    } else {
-      document.addEventListener('DOMContentLoaded', attach, { once: true });
+  if (typeof window !== 'undefined' && window.DiagnosticsOverlay && typeof window.DiagnosticsOverlay.create === 'function') {
+    diagV2State.overlayScriptPromise = Promise.resolve(true);
+    return diagV2State.overlayScriptPromise;
+  }
+  diagV2State.overlayScriptPromise = new Promise(function(resolve){
+    try {
+      var script = document.createElement('script');
+      script.src = '/js/diagnostics/overlay.js';
+      script.async = false;
+      script.onload = function(){ resolve(true); };
+      script.onerror = function(){ resolve(false); };
+      (document.head || document.body || document.documentElement).appendChild(script);
+    } catch(_){
+      resolve(false);
     }
+  });
+  return diagV2State.overlayScriptPromise;
+}
+
+function ensureDiagV2Overlay(){
+  if (diagV2State.overlayApi && diagV2State.overlayApi.root && diagV2State.overlayApi.root.isConnected) {
+    return Promise.resolve(diagV2State.overlayApi);
   }
-  diagV2State.overlay = overlay;
-  return overlay;
+  if (diagV2State.overlayPromise) {
+    return diagV2State.overlayPromise;
+  }
+
+  ensureDiagnosticsStyles();
+
+  var createOverlay = function(){
+    if (!window.DiagnosticsOverlay || typeof window.DiagnosticsOverlay.create !== 'function') return null;
+    var api = null;
+    try {
+      api = window.DiagnosticsOverlay.create({
+        slug: diagV2State.currentSlug || slug || '—',
+        mountTime: diagV2State.mountDuration,
+        bus: diagV2State.bus,
+        initialEvents: diagV2State.overlayQueue.slice()
+      });
+    } catch(_){
+      api = null;
+    }
+    if (api) {
+      diagV2State.overlayApi = api;
+      diagV2State.overlay = api.root || null;
+      diagV2State.overlayQueue.length = 0;
+      try {
+        api.setMeta({ slug: diagV2State.currentSlug || slug || '—', mountTimeMs: diagV2State.mountDuration });
+      } catch(_){ }
+      if (diagV2State.bus && typeof api.setBus === 'function') {
+        try { api.setBus(diagV2State.bus); } catch(_){ }
+      }
+    }
+    return api;
+  };
+
+  if (typeof window !== 'undefined' && window.DiagnosticsOverlay && typeof window.DiagnosticsOverlay.create === 'function') {
+    var existing = createOverlay();
+    var resolved = Promise.resolve(existing).then(function(result){
+      if (!result) {
+        diagV2State.overlayPromise = null;
+      }
+      return result;
+    });
+    diagV2State.overlayPromise = resolved;
+    return resolved;
+  }
+
+  var loading = loadDiagnosticsOverlayScript().then(function(loaded){
+    if (!loaded) {
+      diagV2State.overlayPromise = null;
+      return null;
+    }
+    var created = createOverlay();
+    if (!created) {
+      diagV2State.overlayPromise = null;
+    }
+    return created;
+  });
+  diagV2State.overlayPromise = loading;
+  return loading;
 }
 
 function toggleDiagV2Overlay(forceShow){
-  var overlay = ensureDiagV2Overlay();
-  if (!overlay) return;
-  var shouldShow = typeof forceShow === 'boolean' ? forceShow : overlay.hidden;
-  overlay.hidden = !shouldShow;
+  ensureDiagV2Overlay().then(function(api){
+    if (!api || typeof api.open !== 'function' || typeof api.close !== 'function') return;
+    var shouldShow;
+    var currentlyOpen = false;
+    if (typeof api.isOpen === 'function') {
+      try { currentlyOpen = !!api.isOpen(); } catch(_){ currentlyOpen = false; }
+    }
+    if (typeof forceShow === 'boolean') {
+      shouldShow = forceShow;
+    } else {
+      shouldShow = !currentlyOpen;
+    }
+    if (shouldShow) api.open();
+    else api.close();
+  }).catch(function(){ });
 }
 
 function ensureDiagV2Button(){
@@ -811,7 +933,8 @@ function bindDiagV2Shortcut(){
 function setupDiagnosticsV2(){
   if (diagV2State.initialized) return;
   diagV2State.initialized = true;
-  ensureDiagV2Overlay();
+  ensureDiagnosticsStyles();
+  ensureDiagV2Overlay().catch(function(){ });
   ensureDiagV2Button();
   bindDiagV2Shortcut();
   bindDiagV2ErrorHandlers();
@@ -819,6 +942,15 @@ function setupDiagnosticsV2(){
   ensureDiagnosticsBus().then(function(){
     if (typeof window !== 'undefined' && window.DiagnosticsBus) {
       diagV2State.bus = window.DiagnosticsBus;
+    }
+    if (diagV2State.overlayApi && typeof diagV2State.overlayApi.setBus === 'function') {
+      try { diagV2State.overlayApi.setBus(diagV2State.bus); } catch(_){ }
+    } else if (diagV2State.overlayPromise) {
+      diagV2State.overlayPromise.then(function(api){
+        if (api && typeof api.setBus === 'function') {
+          try { api.setBus(diagV2State.bus); } catch(_){ }
+        }
+      }).catch(function(){ });
     }
     flushDiagV2Pending();
   });
