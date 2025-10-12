@@ -94,9 +94,48 @@
     return '—';
   }
 
+  function stableStringify(value, seen) {
+    if (value == null) return '';
+    var type = typeof value;
+    if (type === 'string') return value;
+    if (type === 'number' || type === 'boolean') return String(value);
+    if (type === 'object') {
+      seen = seen || [];
+      if (seen.indexOf(value) !== -1) return '';
+      seen.push(value);
+      if (Array.isArray(value)) {
+        var arrParts = [];
+        for (var i = 0; i < value.length; i++) {
+          arrParts.push(stableStringify(value[i], seen.slice()));
+        }
+        return '[' + arrParts.join(',') + ']';
+      }
+      var keys = Object.keys(value).sort();
+      var objParts = [];
+      for (var k = 0; k < keys.length; k++) {
+        var key = keys[k];
+        objParts.push(key + ':' + stableStringify(value[key], seen.slice()));
+      }
+      return '{' + objParts.join(',') + '}';
+    }
+    try {
+      return JSON.stringify(value);
+    } catch(_){
+      return '';
+    }
+  }
+
   function createEventKey(event) {
     if (!event) return '';
-    return [event.ts, event.topic || '', event.source || '', event.message || '', event.stack || '', (event.args && event.args.length) || 0].join('|');
+    return [
+      event.ts,
+      event.topic || '',
+      event.source || '',
+      event.message || '',
+      event.stack || '',
+      (event.args && event.args.length) || 0,
+      stableStringify(event.details)
+    ].join('|');
   }
 
   function copyToClipboard(text) {
