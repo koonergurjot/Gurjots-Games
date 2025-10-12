@@ -94,6 +94,7 @@ const bootStatus = (() => {
 const nativeBootLog = typeof bootStatus.log === 'function' ? bootStatus.log.bind(bootStatus) : null;
 const bootLogEntries = [];
 const MAX_DIAGNOSTIC_LOGS = 40;
+const DIAGNOSTICS_KEY = 'snake:diagnostics';
 let diagnosticsEnabled = false;
 let pendingDiagnosticsFrame = false;
 
@@ -592,7 +593,6 @@ let FRUIT_ART = FRUITS.map(icon => ({ icon, label: icon, spriteKey: 'fruit' }));
 let gemSpriteIndex = 0;
 const PROGRESS_KEY = 'snake:progress';
 const SKIN_KEY = 'snake:skin';
-const DIAGNOSTICS_KEY = 'snake:diagnostics';
 const MISSIONS = [
   {
     id: 'score-30',
