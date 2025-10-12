@@ -29,7 +29,8 @@ var diagV2State = {
   loadStartedAt: null,
   mountDuration: null,
   currentSlug: slug || '—',
-  assetsModulePromise: null
+  assetsModulePromise: null,
+  supportScriptsPromise: null
 };
 
 async function fetchCatalogJSON(init){
@@ -614,6 +615,7 @@ function ensureDiagListeners() {
 }
 
 function ensureDiagnosticsBus(){
+  ensureDiagnosticsSupportScripts();
   if (diagV2State.bus && typeof diagV2State.bus.emit === 'function') {
     return Promise.resolve(diagV2State.bus);
   }
@@ -631,6 +633,7 @@ function ensureDiagnosticsBus(){
       script.async = false;
       script.onload = function(){
         diagV2State.bus = (window && window.DiagnosticsBus) || null;
+        ensureDiagnosticsSupportScripts();
         resolve(diagV2State.bus);
       };
       script.onerror = function(){ resolve(null); };
@@ -665,6 +668,39 @@ function ensureDiagnosticsAssetsModule(){
     }
   });
   return diagV2State.assetsModulePromise;
+}
+
+function ensureDiagnosticsSupportScripts() {
+  if (diagV2State.supportScriptsPromise) {
+    return diagV2State.supportScriptsPromise;
+  }
+  if (typeof document === 'undefined') {
+    diagV2State.supportScriptsPromise = Promise.resolve(false);
+    return diagV2State.supportScriptsPromise;
+  }
+  var urls = ['/js/diagnostics/network.js', '/js/diagnostics/perf.js'];
+  diagV2State.supportScriptsPromise = new Promise(function(resolve){
+    var index = 0;
+    function next() {
+      if (index >= urls.length) {
+        resolve(true);
+        return;
+      }
+      var src = urls[index++];
+      try {
+        var script = document.createElement('script');
+        script.src = src;
+        script.async = false;
+        script.onload = function(){ next(); };
+        script.onerror = function(){ next(); };
+        (document.head || document.body || document.documentElement).appendChild(script);
+      } catch(_){
+        next();
+      }
+    }
+    next();
+  });
+  return diagV2State.supportScriptsPromise;
 }
 
 function flushDiagV2Pending(){
