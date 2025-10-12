@@ -1,1 +1,100 @@
-(function(){function fitCanvasToParent(canvas,maxW=1000,maxH=700,padding=16){const pr=window.devicePixelRatio||1;const desiredW=canvas.dataset.basew?parseInt(canvas.dataset.basew):canvas.width;const desiredH=canvas.dataset.baseh?parseInt(canvas.dataset.baseh):canvas.height;const ar=desiredW/desiredH;const W=Math.min(window.innerWidth-padding*2,maxW);const H=Math.min(window.innerHeight-padding*2,maxH);let vw=W,vh=W/ar;if(vh>H){vh=H;vw=H*ar}canvas.style.width=vw+'px';canvas.style.height=vh+'px';canvas.width=Math.round(vw*pr);canvas.height=Math.round(vh*pr);const ctx=canvas.getContext('2d');ctx.setTransform(canvas.width/vw,0,0,canvas.height/vh,0,0);}window.fitCanvasToParent=fitCanvasToParent;})();
+(function(){
+  function resolveCanvasBaseSize(canvas){
+    if(!canvas) return { width: 0, height: 0 };
+    const baseWidth = Number.parseInt(canvas.dataset?.basew, 10);
+    const baseHeight = Number.parseInt(canvas.dataset?.baseh, 10);
+    if(Number.isFinite(baseWidth) && Number.isFinite(baseHeight)){
+      return { width: baseWidth, height: baseHeight };
+    }
+    return { width: canvas.width, height: canvas.height };
+  }
+
+  function resolveOptions(canvas, arg1, arg2, arg3){
+    if(typeof arg1 === 'object' && arg1 !== null){
+      return arg1;
+    }
+    return {
+      maxWidth: Number.isFinite(arg1) ? arg1 : undefined,
+      maxHeight: Number.isFinite(arg2) ? arg2 : undefined,
+      padding: Number.isFinite(arg3) ? arg3 : undefined,
+      canvas,
+    };
+  }
+
+  function measureContainer(options){
+    const padding = Number.isFinite(options.padding) ? options.padding : 16;
+    let width;
+    let height;
+
+    if(options.container && typeof options.container.getBoundingClientRect === 'function'){
+      const rect = options.container.getBoundingClientRect();
+      width = rect.width - padding * 2;
+      height = rect.height - padding * 2;
+    }
+
+    if(Number.isFinite(options.width)) width = options.width;
+    if(Number.isFinite(options.height)) height = options.height;
+
+    const viewportWidth = Math.max(0, window.innerWidth - padding * 2);
+    const viewportHeight = Math.max(0, window.innerHeight - padding * 2);
+
+    if(!Number.isFinite(width)){
+      width = viewportWidth;
+      if(Number.isFinite(options.maxWidth)){
+        width = Math.min(width, options.maxWidth);
+      }
+    }
+
+    if(!Number.isFinite(height)){
+      height = viewportHeight;
+      if(Number.isFinite(options.maxHeight)){
+        height = Math.min(height, options.maxHeight);
+      }
+    }
+
+    return {
+      width: Math.max(0, width),
+      height: Math.max(0, height),
+      padding,
+    };
+  }
+
+  function fitCanvasToParent(canvas, arg1, arg2, arg3){
+    if(!canvas) return;
+
+    const { width: baseWidth, height: baseHeight } = resolveCanvasBaseSize(canvas);
+    const aspectRatio = baseHeight === 0 ? 1 : baseWidth / baseHeight;
+    const options = resolveOptions(canvas, arg1, arg2, arg3);
+    const minWidth = Number.isFinite(options.minWidth) ? options.minWidth : baseWidth;
+    const minHeight = Number.isFinite(options.minHeight) ? options.minHeight : baseHeight;
+
+    const { width: measuredWidth, height: measuredHeight } = measureContainer(options);
+    const availableWidth = Math.max(minWidth, measuredWidth);
+    const availableHeight = Math.max(minHeight, measuredHeight);
+
+    let targetWidth = availableWidth;
+    let targetHeight = aspectRatio === 0 ? availableHeight : targetWidth / aspectRatio;
+    if(targetHeight > availableHeight){
+      targetHeight = availableHeight;
+      targetWidth = availableHeight * aspectRatio;
+    }
+
+    targetWidth = Math.max(minWidth, targetWidth);
+    targetHeight = Math.max(minHeight, targetHeight);
+
+    const pixelRatio = window.devicePixelRatio || 1;
+    canvas.style.width = targetWidth + 'px';
+    canvas.style.height = targetHeight + 'px';
+    canvas.width = Math.round(targetWidth * pixelRatio);
+    canvas.height = Math.round(targetHeight * pixelRatio);
+
+    const ctx = canvas.getContext('2d');
+    if(ctx && typeof ctx.setTransform === 'function'){
+      const scaleX = targetWidth === 0 ? 1 : canvas.width / targetWidth;
+      const scaleY = targetHeight === 0 ? 1 : canvas.height / targetHeight;
+      ctx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+    }
+  }
+
+  window.fitCanvasToParent = fitCanvasToParent;
+})();
