@@ -4,7 +4,30 @@ const DEBUG = qs.get('debug') === '1' || qs.get('debug') === 'true';
 const FORCE = qs.get('force'); // 'iframe' | 'script'
 const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
 // Feature flag for Diagnostics v2
-const DIAG_V2 = (localStorage.getItem('diag_v2') === '1');
+let diagV2Flag = false;
+try {
+  const stored = localStorage.getItem('diag_v2');
+  diagV2Flag = stored === '1' || stored === 'true';
+} catch (_err) {
+  diagV2Flag = false;
+}
+const DIAG_V2 = diagV2Flag;
+
+if (typeof window !== 'undefined') {
+  try {
+    const features = (typeof window.__GG_FEATURES === 'object' && window.__GG_FEATURES) ? window.__GG_FEATURES : {};
+    features.diag_v2 = DIAG_V2;
+    window.__GG_FEATURES = features;
+    const existingOpts = (typeof window.__GG_DIAG_OPTS === 'object' && window.__GG_DIAG_OPTS) ? window.__GG_DIAG_OPTS : {};
+    const mergedOpts = Object.assign({}, existingOpts, { diagV2: DIAG_V2 });
+    if (DIAG_V2) {
+      mergedOpts.suppressButton = true;
+    }
+    window.__GG_DIAG_OPTS = mergedOpts;
+  } catch (_err) {
+    // ignore
+  }
+}
 const slug = qs.get('slug') || qs.get('id') || qs.get('game');
 var $ = function(s){ return document.querySelector(s); };
 
@@ -1247,11 +1270,23 @@ function ensureDiagV2Button(){
       button.style.zIndex = '1150';
       document.body.appendChild(button);
     }
-    button.title = 'Open diagnostics (Ctrl+Shift+D)';
-    button.setAttribute('aria-label', 'Open diagnostics (Ctrl+Shift+D)');
+    button.title = 'Open diagnostics (Alt+D)';
+    button.setAttribute('aria-label', 'Open diagnostics (Alt+D)');
+    button.setAttribute('aria-haspopup', 'dialog');
+    button.setAttribute('aria-expanded', 'false');
     if (!button._diagV2Bound) {
       button._diagV2Bound = true;
-      button.addEventListener('click', function(){
+      button.addEventListener('click', function(event){
+        if (event && typeof event.preventDefault === 'function') {
+          event.preventDefault();
+        }
+        var diag = null;
+        try {
+          if (typeof window !== 'undefined') diag = window.__GG_DIAG;
+        } catch(_){ diag = null; }
+        if (diag && typeof diag.toggle === 'function') {
+          try { diag.toggle(); return; } catch(_){ }
+        }
         openDiagV2Overlay();
       });
     }
@@ -1270,8 +1305,7 @@ function bindDiagV2Shortcut(){
   window.addEventListener('keydown', function(event){
     var key = event.key || '';
     var lower = key.toLowerCase ? key.toLowerCase() : key;
-    var hasPrimaryModifier = event.ctrlKey || event.metaKey;
-    if (!hasPrimaryModifier || !event.shiftKey) return;
+    if (!event.altKey || event.ctrlKey || event.metaKey) return;
     if (lower === 'd') {
       event.preventDefault();
       openDiagV2Overlay();

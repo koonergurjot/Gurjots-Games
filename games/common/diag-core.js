@@ -9,13 +9,53 @@
   }
 
   const existingQueue = Array.isArray(global.__GG_DIAG_QUEUE) ? global.__GG_DIAG_QUEUE.splice(0) : [];
-  global.__GG_DIAG_OPTS = Object.assign({}, { suppressButton: false }, global.__GG_DIAG_OPTS || {});
+
+  const featureFlags = resolveFeatureFlags();
+  const diagV2Enabled = !!featureFlags.diag_v2;
+
+  const mergedOpts = Object.assign({}, global.__GG_DIAG_OPTS || {});
+  if (!Object.prototype.hasOwnProperty.call(mergedOpts, "suppressButton")) {
+    mergedOpts.suppressButton = false;
+  }
+  if (diagV2Enabled) {
+    mergedOpts.suppressButton = true;
+  }
+  mergedOpts.diagV2 = diagV2Enabled;
+  global.__GG_DIAG_OPTS = mergedOpts;
 
   const ADAPTER_READY_TIMEOUT_MS = 5000;
   const ADAPTER_READY_POLL_INTERVAL_MS = 50;
   const adapterReadyWaiters = [];
   let adapterReadyTimer = null;
   let adapterReadyDeadline = 0;
+
+  function resolveFeatureFlags(){
+    const flags = {};
+    try {
+      const globalFlags = global.__GG_FEATURES;
+      if (globalFlags && typeof globalFlags === "object") {
+        if (Object.prototype.hasOwnProperty.call(globalFlags, "diag_v2")) {
+          flags.diag_v2 = !!globalFlags.diag_v2;
+        }
+      }
+    } catch (_) {}
+    if (!Object.prototype.hasOwnProperty.call(flags, "diag_v2")) {
+      try {
+        if (typeof global.localStorage !== "undefined" && global.localStorage) {
+          const stored = global.localStorage.getItem("diag_v2");
+          if (stored === "1" || stored === "true") {
+            flags.diag_v2 = true;
+          } else if (stored === "0" || stored === "false") {
+            flags.diag_v2 = false;
+          }
+        }
+      } catch (_) {}
+    }
+    if (!Object.prototype.hasOwnProperty.call(flags, "diag_v2")) {
+      flags.diag_v2 = false;
+    }
+    return flags;
+  }
 
   function ensureDiagnosticsAdapterModule(){
     const resolved = resolveDiagnosticsAdapterModule();
@@ -144,7 +184,9 @@
 
   const TABS = [
     { id: "summary", label: "Summary" },
+    { id: "errors", label: "Errors" },
     { id: "console", label: "Console" },
+    { id: "assets", label: "Assets" },
     { id: "probes", label: "Probes" },
     { id: "network", label: "Network" },
     { id: "env", label: "Env" },
@@ -166,6 +208,8 @@
     summaryRefs: {},
     probesList: null,
     networkList: null,
+    errorsList: null,
+    assetsList: null,
     envContainer: null,
     autoScroll: true,
     isOpen: false,
@@ -186,6 +230,12 @@
     probeRunner: null,
     probeRunPromise: null,
     probeAutoTriggered: false,
+    externalButton: null,
+    buttonObserver: null,
+    shortcutHandler: null,
+    busBound: false,
+    busPollTimer: null,
+    busSeenEvents: typeof Set === "function" ? new Set() : null,
   };
 
   state.adapterModule = ensureDiagnosticsAdapterModule();
@@ -193,6 +243,12 @@
   state.probesModule = ensureDiagnosticsProbesModule();
   setupAdapterIntegration(state.adapterModule);
   whenDiagnosticsAdapterReady(setupAdapterIntegration);
+
+  if (diagV2Enabled) {
+    setupExternalDiagnosticsButton();
+    setupAltShortcut();
+    setupDiagnosticsBusIntegration();
+  }
 
   const LEVEL_ORDER = ["debug", "info", "warn", "error"];
   const LEGACY_SELECTORS = [
@@ -233,6 +289,7 @@
     state.lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     state.backdrop?.setAttribute("data-open", "true");
     state.fab?.setAttribute("aria-expanded", "true");
+    syncExternalButtonState();
     state.isOpen = true;
     document.body.classList.add("gg-diag-scroll-locked");
     requestAnimationFrame(() => {
@@ -247,6 +304,7 @@
     state.isOpen = false;
     state.backdrop?.setAttribute("data-open", "false");
     state.fab?.setAttribute("aria-expanded", "false");
+    syncExternalButtonState();
     document.body.classList.remove("gg-diag-scroll-locked");
     document.removeEventListener("keydown", trapKeydown, true);
     if (state.lastFocus && document.contains(state.lastFocus)) {
@@ -268,8 +326,10 @@
     appendConsoleEntry(normalized);
     updateMetaCounts(snapshot.summary);
     renderSummaryPanel(snapshot.summary);
+    renderErrorsPanel(snapshot);
     renderProbesPanel(snapshot.probes || []);
     renderNetworkPanel(snapshot.network || []);
+    renderAssetsPanel(snapshot.assets || []);
     renderEnvironmentPanel(snapshot.environment || null);
   }
 
@@ -588,6 +648,240 @@
     return { createProbeRunner };
   }
 
+  function setupExternalDiagnosticsButton(){
+    if (typeof document === "undefined") return;
+    const doc = document;
+
+    const attach = () => {
+      if (state.externalButton && doc.contains(state.externalButton)) {
+        syncExternalButtonState();
+        return true;
+      }
+      const button = doc.getElementById?.("diagnostics-btn");
+      if (!button || !doc.contains(button)) {
+        state.externalButton = null;
+        return false;
+      }
+      state.externalButton = button;
+      try {
+        button.setAttribute("aria-haspopup", "dialog");
+        button.setAttribute("aria-expanded", state.isOpen ? "true" : "false");
+        button.dataset.ggDiagCoreManaged = "true";
+      } catch (_) {}
+      syncExternalButtonState();
+      return true;
+    };
+
+    const ensureObserver = () => {
+      if (state.buttonObserver || typeof MutationObserver !== "function") return;
+      try {
+        const observer = new MutationObserver(() => {
+          if (attach()) {
+            observer.disconnect();
+            state.buttonObserver = null;
+          }
+        });
+        observer.observe(doc.documentElement || doc.body || doc, { childList: true, subtree: true });
+        state.buttonObserver = observer;
+      } catch (_) {}
+    };
+
+    const init = () => {
+      if (!attach()) {
+        ensureObserver();
+      } else if (state.buttonObserver) {
+        try { state.buttonObserver.disconnect(); } catch (_) {}
+        state.buttonObserver = null;
+      }
+    };
+
+    if (doc.readyState === "loading") {
+      doc.addEventListener("DOMContentLoaded", init, { once: true });
+    } else {
+      init();
+    }
+  }
+
+  function syncExternalButtonState(){
+    if (typeof document === "undefined") return;
+    const button = state.externalButton;
+    if (!button) return;
+    if (!document.contains(button)) {
+      state.externalButton = null;
+      setupExternalDiagnosticsButton();
+      return;
+    }
+    try {
+      button.setAttribute("aria-expanded", state.isOpen ? "true" : "false");
+    } catch (_) {}
+  }
+
+  function setupAltShortcut(){
+    if (state.shortcutHandler || typeof document === "undefined") return;
+    const handler = (event) => {
+      if (!event) return;
+      if (!event.altKey || event.ctrlKey || event.metaKey) return;
+      const key = event.key || event.code || "";
+      if (typeof key !== "string") return;
+      const normalized = key.toLowerCase();
+      if (normalized === "d" || normalized === "keyd") {
+        event.preventDefault();
+        open();
+      }
+    };
+    document.addEventListener("keydown", handler, true);
+    state.shortcutHandler = handler;
+  }
+
+  function setupDiagnosticsBusIntegration(){
+    if (state.busBound) return;
+    if (bindDiagnosticsBus(global.DiagnosticsBus)) {
+      return;
+    }
+    const scheduler = typeof global.setTimeout === "function"
+      ? global.setTimeout
+      : (typeof setTimeout === "function" ? setTimeout : null);
+    if (!scheduler) return;
+    const poll = () => {
+      state.busPollTimer = null;
+      if (state.busBound) return;
+      if (!bindDiagnosticsBus(global.DiagnosticsBus)) {
+        state.busPollTimer = scheduler(poll, 500);
+      }
+    };
+    state.busPollTimer = scheduler(poll, 500);
+  }
+
+  function bindDiagnosticsBus(bus){
+    if (!bus || typeof bus.emit !== "function") return false;
+    if (!bus.__ggDiagPatched) {
+      const originalEmit = bus.emit.bind(bus);
+      bus.emit = function patchedEmit(event){
+        const result = originalEmit(event);
+        try {
+          ingestBusEvent(event);
+        } catch (err) {
+          if (typeof console !== "undefined" && console && typeof console.warn === "function") {
+            console.warn("[gg-diag] bus ingest failed", err);
+          }
+        }
+        return result;
+      };
+      bus.__ggDiagPatched = true;
+    }
+    state.busBound = true;
+    try {
+      if (typeof bus.getAll === "function") {
+        const existing = bus.getAll();
+        if (Array.isArray(existing)) {
+          for (const event of existing){
+            ingestBusEvent(event);
+          }
+        }
+      }
+    } catch (err) {
+      if (typeof console !== "undefined" && console && typeof console.warn === "function") {
+        console.warn("[gg-diag] bus history fetch failed", err);
+      }
+    }
+    return true;
+  }
+
+  function ingestBusEvent(event){
+    const normalized = normalizeBusEvent(event);
+    if (!normalized) return;
+    log(normalized);
+  }
+
+  function normalizeBusEvent(event){
+    if (!event || typeof event !== "object") return null;
+    const key = busEventKey(event);
+    if (state.busSeenEvents && key) {
+      if (state.busSeenEvents.has(key)) return null;
+      state.busSeenEvents.add(key);
+    }
+    const category = typeof event.topic === "string" && event.topic
+      ? event.topic
+      : (typeof event.category === "string" && event.category ? event.category : "bus");
+    const level = typeof event.level === "string" && event.level
+      ? normalizeLevel(event.level)
+      : deriveBusLevelFromEvent(event, category);
+    const message = deriveBusMessage(event, category);
+    const timestamp = typeof event.ts === "number" && Number.isFinite(event.ts)
+      ? event.ts
+      : Date.now();
+    const details = normalizeBusDetails(event);
+    return { category, level, message, details, timestamp };
+  }
+
+  function busEventKey(event){
+    try {
+      const ts = typeof event.ts === "number" ? event.ts : 0;
+      const topic = event.topic || event.category || "";
+      const source = event.source || "";
+      const message = event.message || "";
+      const detailUrl = event.details?.url || event.data?.url || "";
+      return `${ts}|${topic}|${source}|${message}|${detailUrl}`;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function deriveBusLevelFromEvent(event, category){
+    if (category === "error" || category === "promise") return "error";
+    if (event && typeof event.level === "string") {
+      return normalizeLevel(event.level);
+    }
+    if (event && typeof event.status === "number" && event.status >= 400) return "error";
+    const details = event && typeof event.details === "object" ? event.details : null;
+    if (details && typeof details.status === "number" && details.status >= 400) return "error";
+    if (details && typeof details.duration === "number" && details.duration >= 2000) return "warn";
+    if (event && event.stack) return "error";
+    if (event && (event.warn || event.warning)) return "warn";
+    return "info";
+  }
+
+  function deriveBusMessage(event, category){
+    if (!event) return category || "event";
+    if (event.message) return String(event.message);
+    if (event.source) return String(event.source);
+    const details = event.details || event.data;
+    if (details && typeof details === "object") {
+      if (details.message) return String(details.message);
+      if (details.url) return String(details.url);
+    }
+    if (Array.isArray(event.args) && event.args.length) {
+      try {
+        return event.args.map((arg) => {
+          if (arg === null || arg === undefined) return String(arg);
+          if (typeof arg === "string") return arg;
+          return JSON.stringify(arg);
+        }).join(" ");
+      } catch (_) {}
+    }
+    return category || "event";
+  }
+
+  function normalizeBusDetails(event){
+    const details = event && typeof event.details === "object" ? event.details : null;
+    if (details) {
+      return safeCloneDetails(details);
+    }
+    const data = event && typeof event.data === "object" ? event.data : null;
+    if (data) {
+      return safeCloneDetails(data);
+    }
+    const output = {};
+    if (event?.source) output.source = event.source;
+    if (event?.stack) output.stack = event.stack;
+    if (event?.args) output.args = safeCloneDetails(event.args);
+    if (event?.error) output.error = safeCloneError(event.error);
+    if (event?.url) output.url = event.url;
+    if (typeof event?.status === "number") output.status = event.status;
+    if (typeof event?.duration === "number") output.duration = event.duration;
+    return Object.keys(output).length ? output : null;
+  }
+
   function ensureUI(){
     if (state.injected) return;
     state.injected = true;
@@ -692,8 +986,12 @@
 
       if (tab.id === "summary") {
         buildSummaryPanel(doc, panel);
+      } else if (tab.id === "errors") {
+        buildErrorsPanel(doc, panel);
       } else if (tab.id === "console") {
         buildConsolePanel(doc, panel);
+      } else if (tab.id === "assets") {
+        buildAssetsPanel(doc, panel);
       } else if (tab.id === "probes") {
         buildProbesPanel(doc, panel);
       } else if (tab.id === "network") {
@@ -755,8 +1053,10 @@
       rebuildConsole(snapshot.console || []);
       updateMetaCounts(snapshot.summary);
       renderSummaryPanel(snapshot.summary);
+      renderErrorsPanel(snapshot);
       renderProbesPanel(snapshot.probes || []);
       renderNetworkPanel(snapshot.network || []);
+      renderAssetsPanel(snapshot.assets || []);
       renderEnvironmentPanel(snapshot.environment || null);
     }
     if (state.activeTab === "probes") {
@@ -870,6 +1170,48 @@
     state.logList.scrollTop = state.logList.scrollHeight;
   }
 
+  function renderErrorsPanel(snapshot){
+    if (!state.errorsList) return;
+    state.errorsList.innerHTML = "";
+    const entries = collectErrorEntries(snapshot);
+    if (!entries.length) {
+      state.errorsList.appendChild(createEmptyListItem("No errors captured."));
+      return;
+    }
+    for (const entry of entries){
+      state.errorsList.appendChild(createEntryListItem(entry, {
+        showBadge: true,
+        label: (item) => item?.details?.url || `${item?.category || "error"} / ${item?.level || "error"}`,
+      }));
+    }
+  }
+
+  function collectErrorEntries(snapshot){
+    if (!snapshot || typeof snapshot !== "object") return [];
+    const pools = [];
+    if (Array.isArray(snapshot.console)) pools.push(snapshot.console);
+    if (Array.isArray(snapshot.network)) pools.push(snapshot.network);
+    if (Array.isArray(snapshot.probes)) pools.push(snapshot.probes);
+    if (Array.isArray(snapshot.assets)) pools.push(snapshot.assets);
+    const entries = [];
+    for (const pool of pools){
+      for (const entry of pool){
+        if (isErrorEntry(entry)) entries.push(entry);
+      }
+    }
+    entries.sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0));
+    const limit = 200;
+    return entries.slice(0, limit);
+  }
+
+  function isErrorEntry(entry){
+    if (!entry) return false;
+    const level = typeof entry.level === "string" ? entry.level.toLowerCase() : "";
+    if (level === "error") return true;
+    const category = typeof entry.category === "string" ? entry.category.toLowerCase() : "";
+    return category === "error" || category === "promise" || category === "resource";
+  }
+
   function renderProbesPanel(probes){
     if (!state.probesList) return;
     state.probesList.innerHTML = "";
@@ -891,6 +1233,24 @@
     }
     for (const entry of networkEntries){
       state.networkList.appendChild(createEntryListItem(entry, { showBadge: true }));
+    }
+  }
+
+  function renderAssetsPanel(assetEntries){
+    if (!state.assetsList) return;
+    state.assetsList.innerHTML = "";
+    if (!Array.isArray(assetEntries) || !assetEntries.length) {
+      state.assetsList.appendChild(createEmptyListItem("No asset checks recorded yet."));
+      return;
+    }
+    const limit = Math.min(assetEntries.length, 200);
+    for (let idx = 0; idx < limit; idx += 1){
+      const i = assetEntries.length - 1 - idx;
+      const entry = assetEntries[i];
+      state.assetsList.appendChild(createEntryListItem(entry, {
+        showBadge: true,
+        label: (item) => item?.details?.url || `${item?.category || "asset"} / ${item?.level || "info"}`,
+      }));
     }
   }
 
@@ -937,6 +1297,15 @@
     if (state.summaryRefs.logsTotal) state.summaryRefs.logsTotal.textContent = String(summary.total || 0);
     if (state.summaryRefs.logsWarn) state.summaryRefs.logsWarn.textContent = String(summary.warns || 0);
     if (state.summaryRefs.logsError) state.summaryRefs.logsError.textContent = String(summary.errors || 0);
+    const assetSummary = summary.assets || null;
+    if (state.summaryRefs.assetsBadge) {
+      const assetStatus = deriveAssetSummaryStatus(assetSummary);
+      const assetLabel = assetSummary?.statusLabel || assetStatusLabel(assetStatus);
+      setBadgeStatus(state.summaryRefs.assetsBadge, assetStatus, assetLabel);
+    }
+    if (state.summaryRefs.assetsMessage) {
+      state.summaryRefs.assetsMessage.textContent = formatAssetSummaryMessage(assetSummary);
+    }
     if (state.summaryRefs.networkTotal) state.summaryRefs.networkTotal.textContent = String(summary.network?.total || 0);
     if (state.summaryRefs.networkWarn) state.summaryRefs.networkWarn.textContent = String(summary.network?.warnings || 0);
     if (state.summaryRefs.networkFail) state.summaryRefs.networkFail.textContent = String(summary.network?.failures || 0);
@@ -1310,7 +1679,10 @@
 
   function setBadgeStatus(badge, status, text){
     if (!badge) return;
-    badge.className = `gg-diag-badge gg-diag-badge--${status}`;
+    const normalized = typeof status === "string" ? status.toLowerCase() : "pass";
+    const known = normalized === "fail" || normalized === "warn" || normalized === "pass";
+    const applied = known ? normalized : (normalized === "pending" || normalized === "none" ? "pending" : "pass");
+    badge.className = `gg-diag-badge gg-diag-badge--${applied}`;
     badge.textContent = text;
     badge.dataset.status = status;
   }
@@ -1326,6 +1698,49 @@
     if (status === "fail") return "Errors detected";
     if (status === "warn") return "Warnings detected";
     return "Healthy";
+  }
+
+  function deriveAssetSummaryStatus(assetSummary){
+    if (!assetSummary) return "pending";
+    const status = typeof assetSummary.status === "string" ? assetSummary.status.toLowerCase() : null;
+    if (status === "fail" || status === "warn" || status === "pass" || status === "pending" || status === "none") {
+      return status;
+    }
+    if ((assetSummary.errors || 0) > 0) return "fail";
+    if ((assetSummary.warns || 0) > 0) return "warn";
+    if ((assetSummary.total || 0) > 0) return "pass";
+    return "pending";
+  }
+
+  function assetStatusLabel(status){
+    if (status === "fail") return "Asset errors";
+    if (status === "warn") return "Asset warnings";
+    if (status === "pass") return "Assets healthy";
+    if (status === "none") return "No assets";
+    return "Pending scan";
+  }
+
+  function formatAssetSummaryMessage(assetSummary){
+    if (!assetSummary) return "Waiting for asset scan…";
+    if ((assetSummary.total || 0) === 0) {
+      if (assetSummary.status === "none") return "No assets declared.";
+      return "Waiting for asset scan…";
+    }
+    if (assetSummary.last) {
+      const last = assetSummary.last;
+      const parts = [];
+      if (last.message) parts.push(last.message);
+      const url = last.details?.url;
+      if (url) parts.push(url);
+      const duration = last.details?.duration;
+      if (typeof duration === "number" && Number.isFinite(duration)) {
+        parts.push(`${Math.round(duration)} ms`);
+      }
+      const timestamp = typeof last.timestamp === "number" ? formatDateTime(last.timestamp) : null;
+      if (timestamp) parts.push(timestamp);
+      return parts.length ? parts.join(" · ") : "Asset scan recorded";
+    }
+    return "Asset checks recorded.";
   }
 
   function activateTab(tabId){
@@ -1429,6 +1844,19 @@
     logsSub.append("Warn: ", logsWarn, document.createTextNode(" • Error: "), logsError);
     logsCard.append(logsLabel, logsValue, logsSub);
 
+    const assetsCard = doc.createElement("div");
+    assetsCard.className = "gg-diag-summary-card";
+    const assetsLabel = doc.createElement("span");
+    assetsLabel.className = "gg-diag-summary-label";
+    assetsLabel.textContent = "Assets";
+    const assetsBadge = doc.createElement("span");
+    assetsBadge.className = "gg-diag-badge gg-diag-badge--pending";
+    assetsBadge.textContent = "Pending";
+    const assetsMessage = doc.createElement("div");
+    assetsMessage.className = "gg-diag-summary-sub";
+    assetsMessage.textContent = "Waiting for asset scan…";
+    assetsCard.append(assetsLabel, assetsBadge, assetsMessage);
+
     const networkCard = doc.createElement("div");
     networkCard.className = "gg-diag-summary-card";
     const networkLabel = doc.createElement("span");
@@ -1464,7 +1892,7 @@
     errorTime.textContent = "";
     errorCard.append(errorLabel, errorMessage, errorTime);
 
-    grid.append(logsCard, networkCard, errorCard);
+    grid.append(logsCard, assetsCard, networkCard, errorCard);
     wrapper.append(statusRow, grid);
     panel.append(wrapper);
 
@@ -1475,6 +1903,8 @@
       logsTotal: logsValue,
       logsWarn,
       logsError,
+      assetsBadge,
+      assetsMessage,
       networkTotal: networkValue,
       networkWarn,
       networkFail,
@@ -1499,6 +1929,13 @@
     }
   }
 
+  function buildErrorsPanel(doc, panel){
+    const list = doc.createElement("ul");
+    list.className = "gg-diag-loglist gg-diag-panel-list";
+    panel.appendChild(list);
+    state.errorsList = list;
+  }
+
   function buildConsolePanel(doc, panel){
     const list = doc.createElement("ul");
     list.className = "gg-diag-loglist";
@@ -1521,6 +1958,13 @@
     list.className = "gg-diag-loglist gg-diag-panel-list";
     panel.appendChild(list);
     state.networkList = list;
+  }
+
+  function buildAssetsPanel(doc, panel){
+    const list = doc.createElement("ul");
+    list.className = "gg-diag-loglist gg-diag-panel-list gg-diag-assets-list";
+    panel.appendChild(list);
+    state.assetsList = list;
   }
 
   function buildEnvPanel(doc, panel){
@@ -1571,6 +2015,7 @@
       maxEntries: 500,
       maxConsole: 500,
       maxNetwork: 200,
+      maxAssets: 200,
       maxProbes: 200,
       maxEnvHistory: 12,
     };
@@ -1587,6 +2032,7 @@
         maxEntries,
         maxConsole: sanitizeLimit(options.maxConsole, maxEntries),
         maxNetwork: sanitizeLimit(options.maxNetwork, DEFAULTS.maxNetwork),
+        maxAssets: sanitizeLimit(options.maxAssets, DEFAULTS.maxAssets),
         maxProbes: sanitizeLimit(options.maxProbes, DEFAULTS.maxProbes),
         maxEnvHistory: sanitizeLimit(options.maxEnvHistory, DEFAULTS.maxEnvHistory),
       };
@@ -1603,6 +2049,7 @@
         statusLabel: "Healthy",
         categories: {},
         network: { total: 0, failures: 0, warnings: 0, last: null },
+        assets: { total: 0, errors: 0, warns: 0, last: null, status: "pending", statusLabel: "Pending scan" },
         lastError: null,
         lastWarn: null,
       };
@@ -1610,6 +2057,7 @@
       const state = {
         console: [],
         network: [],
+        assets: [],
         probes: [],
         envHistory: [],
         environment: null,
@@ -1628,6 +2076,7 @@
         return {
           summary: cloneSummary(),
           console: state.console.slice(),
+          assets: state.assets.slice(),
           probes: state.probes.slice(),
           network: state.network.slice(),
           environment: state.environment ? { ...state.environment } : null,
@@ -1641,6 +2090,7 @@
           generatedAt: new Date().toISOString(),
           summary: snap.summary,
           console: snap.console,
+          assets: snap.assets,
           probes: snap.probes,
           network: snap.network,
           environment: snap.environment,
@@ -1684,6 +2134,13 @@
           lines.push("No network requests recorded.");
         }
         lines.push("");
+        lines.push("=== Assets ===");
+        if (snap.assets.length) {
+          snap.assets.forEach((entry) => lines.push(formatLine(entry)));
+        } else {
+          lines.push("No asset checks recorded.");
+        }
+        lines.push("");
         lines.push("=== Environment ===");
         if (snap.environment) {
           lines.push(safeStringify(snap.environment.details ?? snap.environment));
@@ -1697,6 +2154,10 @@
         const categoryKey = entry.category.toLowerCase();
         if (categoryKey === "network") {
           pushLimited(state.network, entry, config.maxNetwork);
+          return;
+        }
+        if (categoryKey === "asset") {
+          pushLimited(state.assets, entry, config.maxAssets);
           return;
         }
         if (categoryKey === "environment") {
@@ -1732,6 +2193,14 @@
           if (level === "error") summary.network.failures += 1;
           else if (level === "warn") summary.network.warnings += 1;
           summary.network.last = summarizeEntry(entry);
+        } else if (categoryKey === "asset") {
+          summary.assets.total += 1;
+          if (level === "error") summary.assets.errors += 1;
+          else if (level === "warn") summary.assets.warns += 1;
+          summary.assets.last = summarizeEntry(entry, true);
+          const assetStatus = deriveAssetStatus(summary.assets);
+          summary.assets.status = assetStatus;
+          summary.assets.statusLabel = assetStatusLabel(assetStatus);
         }
         summary.status = deriveSummaryStatus(summary);
         summary.statusLabel = statusLabelFromSummaryStatus(summary.status);
@@ -1750,6 +2219,7 @@
           statusLabel: summary.statusLabel,
           categories: Object.assign({}, summary.categories),
           network: Object.assign({}, summary.network, { last: summary.network.last ? { ...summary.network.last } : null }),
+          assets: Object.assign({}, summary.assets, { last: summary.assets.last ? { ...summary.assets.last } : null }),
           lastError: summary.lastError ? { ...summary.lastError } : null,
           lastWarn: summary.lastWarn ? { ...summary.lastWarn } : null,
         };
@@ -1803,6 +2273,23 @@
         if (status === "fail") return "Errors detected";
         if (status === "warn") return "Warnings detected";
         return "Healthy";
+      }
+
+      function deriveAssetStatus(assetSummary){
+        if (!assetSummary) return "pending";
+        if ((assetSummary.errors || 0) > 0) return "fail";
+        if ((assetSummary.warns || 0) > 0) return "warn";
+        if ((assetSummary.total || 0) > 0) return "pass";
+        if (assetSummary.status === "none") return "none";
+        return "pending";
+      }
+
+      function assetStatusLabel(status){
+        if (status === "fail") return "Asset errors";
+        if (status === "warn") return "Asset warnings";
+        if (status === "pass") return "Assets healthy";
+        if (status === "none") return "No assets";
+        return "Pending scan";
       }
 
       function safeStringify(value){
