@@ -33,7 +33,7 @@
           style="position:absolute;left:0;top:0;pointer-events:none;"
         ></canvas>
       </div>
-      <aside style="max-width:260px;">
+      <aside style="max-width:320px;display:flex;flex-direction:column;gap:16px;">
         <h1 style="margin:0 0 8px 0;font-size:1.5rem;">Chess</h1>
         <p style="margin:0 0 12px;">
           Click a piece, then a target square.<br />
@@ -47,11 +47,90 @@
           <option value="3">Hard</option>
           <option value="4">Expert</option>
         </select>
+        <label for="time-control">Time Control:</label>
+        <select id="time-control" style="display:block;margin:4px 0 4px;">
+          <option value="none">Free Play (∞)</option>
+          <option value="rapid" selected>Rapid 10 | 5</option>
+          <option value="blitz">Blitz 5 | 3</option>
+          <option value="bullet">Bullet 1 | 0</option>
+          <option value="classic">Classical 15 | 10</option>
+        </select>
+        <div id="clock-mode-label" style="font-size:0.9rem;color:#9ca3af;">Rapid 10 | 5</div>
+        <section
+          aria-label="Match clock"
+          style="display:grid;gap:8px;padding:8px;border:1px solid #243047;border-radius:8px;background:#111827;"
+        >
+          <div
+            id="clock-player-white"
+            data-color="w"
+            style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:6px;background:#1f2937;"
+          >
+            <span>White</span>
+            <div style="text-align:right;">
+              <div id="clock-w-time" style="font-variant-numeric:tabular-nums;">--:--</div>
+              <div id="clock-w-increment" style="font-size:0.75rem;color:#9ca3af;"></div>
+            </div>
+          </div>
+          <div
+            id="clock-player-black"
+            data-color="b"
+            style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:6px;background:#111827;"
+          >
+            <span>Black</span>
+            <div style="text-align:right;">
+              <div id="clock-b-time" style="font-variant-numeric:tabular-nums;">--:--</div>
+              <div id="clock-b-increment" style="font-size:0.75rem;color:#9ca3af;"></div>
+            </div>
+          </div>
+        </section>
         <label for="puzzle-select">Puzzles:</label>
         <select id="puzzle-select" style="display:block;margin:4px 0 12px;">
           <option value="-1">Free Play</option>
         </select>
         <div id="status" role="status" aria-live="polite" style="min-height:1.5em;"></div>
+        <section
+          aria-label="Evaluation insights"
+          style="padding:8px;border:1px solid #243047;border-radius:8px;background:#111827;display:grid;gap:8px;"
+        >
+          <div style="display:flex;height:160px;flex-direction:column;justify-content:space-between;">
+            <div
+              id="evaluation-bar-fill"
+              style="flex:1;background:linear-gradient(#38bdf8,#22d3ee);border-radius:4px 4px 0 0;margin-bottom:auto;height:50%;"
+            ></div>
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#9ca3af;">
+              <span>White</span>
+              <span>Black</span>
+            </div>
+          </div>
+          <div id="evaluation-score" style="font-size:1.25rem;text-align:center;">+0.0</div>
+          <canvas
+            id="evaluation-history"
+            width="240"
+            height="80"
+            aria-hidden="true"
+            style="width:100%;height:80px;border-radius:4px;background:#0f172a;"
+          ></canvas>
+          <div style="font-size:0.75rem;color:#9ca3af;">Advantage swings</div>
+          <ul id="evaluation-swings" style="list-style:none;margin:0;padding:0;display:grid;gap:4px;"></ul>
+        </section>
+        <section
+          style="padding:8px;border:1px solid #243047;border-radius:8px;background:#111827;display:grid;gap:8px;"
+          aria-label="Training ladder"
+        >
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span>Training Ladder</span>
+            <span id="training-streak" style="font-size:0.75rem;color:#9ca3af;">Streak 0</span>
+          </div>
+          <p id="training-status" style="margin:0;font-size:0.85rem;">Start a guided challenge to sharpen your tactics.</p>
+          <div
+            id="training-progress"
+            style="height:6px;border-radius:999px;background:#1f2937;overflow:hidden;"
+          ></div>
+          <div style="display:flex;gap:8px;">
+            <button id="training-start" type="button" style="flex:1;">Start Ladder</button>
+            <button id="training-hint" type="button" style="flex:1;" disabled>Hint</button>
+          </div>
+        </section>
         <section id="lobby" aria-label="Online play" style="margin-top:16px;">
           <button id="find-match" type="button">Find Match</button>
           <div id="lobby-status" style="min-height:1.5em;"></div>
@@ -69,7 +148,24 @@
         ensureCanvas("fx");
         ensureElement("#status");
         ensureElement("#difficulty");
+        ensureElement("#time-control");
+        ensureElement("#clock-mode-label");
+        ensureElement("#clock-player-white");
+        ensureElement("#clock-w-time");
+        ensureElement("#clock-w-increment");
+        ensureElement("#clock-player-black");
+        ensureElement("#clock-b-time");
+        ensureElement("#clock-b-increment");
         ensureElement("#puzzle-select");
+        ensureElement("#training-start");
+        ensureElement("#training-hint");
+        ensureElement("#training-status");
+        ensureElement("#training-progress");
+        ensureElement("#training-streak");
+        ensureElement("#evaluation-bar-fill");
+        ensureElement("#evaluation-score");
+        ensureCanvas("evaluation-history");
+        ensureElement("#evaluation-swings");
         ensureElement("#lobby");
         ensureElement("#lobby-status");
         ensureElement("#rankings");
