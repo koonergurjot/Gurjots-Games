@@ -31,6 +31,7 @@
     maxEntries: 500,
     maxConsole: 500,
     maxNetwork: 200,
+    maxAssets: 200,
     maxProbes: 200,
     maxEnvHistory: 12,
   };
@@ -47,6 +48,7 @@
       maxEntries,
       maxConsole: sanitizeLimit(options.maxConsole, maxEntries),
       maxNetwork: sanitizeLimit(options.maxNetwork, DEFAULTS.maxNetwork),
+      maxAssets: sanitizeLimit(options.maxAssets, DEFAULTS.maxAssets),
       maxProbes: sanitizeLimit(options.maxProbes, DEFAULTS.maxProbes),
       maxEnvHistory: sanitizeLimit(options.maxEnvHistory, DEFAULTS.maxEnvHistory),
     };
@@ -63,6 +65,7 @@
       statusLabel: 'Healthy',
       categories: {},
       network: { total: 0, failures: 0, warnings: 0, last: null },
+      assets: { total: 0, errors: 0, warns: 0, last: null, status: 'pending', statusLabel: 'Pending scan' },
       lastError: null,
       lastWarn: null,
     };
@@ -71,6 +74,7 @@
       all: [],
       console: [],
       network: [],
+      assets: [],
       probes: [],
       envHistory: [],
       environment: null,
@@ -90,6 +94,7 @@
       return {
         summary: cloneSummary(),
         console: state.console.slice(),
+        assets: state.assets.slice(),
         probes: state.probes.slice(),
         network: state.network.slice(),
         environment: state.environment ? { ...state.environment } : null,
@@ -103,6 +108,7 @@
         generatedAt: new Date().toISOString(),
         summary: snap.summary,
         console: snap.console,
+        assets: snap.assets,
         probes: snap.probes,
         network: snap.network,
         environment: snap.environment,
@@ -146,6 +152,13 @@
         lines.push('No network requests recorded.');
       }
       lines.push('');
+      lines.push('=== Assets ===');
+      if (snap.assets.length) {
+        snap.assets.forEach((entry) => lines.push(formatLine(entry)));
+      } else {
+        lines.push('No asset checks recorded.');
+      }
+      lines.push('');
       lines.push('=== Environment ===');
       if (snap.environment) {
         lines.push(safeStringify(snap.environment.details ?? snap.environment));
@@ -159,6 +172,10 @@
       const categoryKey = entry.category.toLowerCase();
       if (categoryKey === 'network') {
         pushLimited(state.network, entry, config.maxNetwork);
+        return;
+      }
+      if (categoryKey === 'asset') {
+        pushLimited(state.assets, entry, config.maxAssets);
         return;
       }
       if (categoryKey === 'environment') {
@@ -194,6 +211,14 @@
         if (level === 'error') summary.network.failures += 1;
         else if (level === 'warn') summary.network.warnings += 1;
         summary.network.last = summarizeEntry(entry);
+      } else if (categoryKey === 'asset') {
+        summary.assets.total += 1;
+        if (level === 'error') summary.assets.errors += 1;
+        else if (level === 'warn') summary.assets.warns += 1;
+        summary.assets.last = summarizeEntry(entry, true);
+        const assetStatus = deriveAssetStatus(summary.assets);
+        summary.assets.status = assetStatus;
+        summary.assets.statusLabel = assetStatusLabel(assetStatus);
       }
       summary.status = deriveSummaryStatus(summary);
       summary.statusLabel = statusLabelFromSummaryStatus(summary.status);
@@ -212,6 +237,7 @@
         statusLabel: summary.statusLabel,
         categories: Object.assign({}, summary.categories),
         network: Object.assign({}, summary.network, { last: summary.network.last ? { ...summary.network.last } : null }),
+        assets: Object.assign({}, summary.assets, { last: summary.assets.last ? { ...summary.assets.last } : null }),
         lastError: summary.lastError ? { ...summary.lastError } : null,
         lastWarn: summary.lastWarn ? { ...summary.lastWarn } : null,
       };
@@ -260,6 +286,23 @@
       if (status === 'fail') return 'Errors detected';
       if (status === 'warn') return 'Warnings detected';
       return 'Healthy';
+    }
+
+    function deriveAssetStatus(assetSummary){
+      if (!assetSummary) return 'pending';
+      if (assetSummary.errors > 0) return 'fail';
+      if (assetSummary.warns > 0) return 'warn';
+      if (assetSummary.total > 0) return 'pass';
+      if (assetSummary.status === 'none') return 'none';
+      return 'pending';
+    }
+
+    function assetStatusLabel(status){
+      if (status === 'fail') return 'Asset errors';
+      if (status === 'warn') return 'Asset warnings';
+      if (status === 'pass') return 'Assets healthy';
+      if (status === 'none') return 'No assets';
+      return 'Pending scan';
     }
 
     function safeStringify(value){

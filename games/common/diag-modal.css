@@ -331,6 +331,12 @@ body.gg-diag-scroll-locked {
   color: #fecaca;
 }
 
+.gg-diag-badge--pending {
+  background: rgba(148, 163, 184, 0.2);
+  border-color: rgba(148, 163, 184, 0.45);
+  color: rgba(226, 232, 240, 0.82);
+}
+
 .gg-diag-summary {
   display: flex;
   flex-direction: column;
@@ -395,6 +401,10 @@ body.gg-diag-scroll-locked {
 .gg-diag-summary-metric {
   font-weight: 600;
   color: rgba(244, 244, 245, 0.9);
+}
+
+.gg-diag-assets-list .gg-diag-logitem-body {
+  word-break: break-word;
 }
 
 .gg-diag-env {
