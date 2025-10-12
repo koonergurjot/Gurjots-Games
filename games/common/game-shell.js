@@ -10,21 +10,16 @@ const toAbsoluteUrl = (value) => {
 const findOwningScript = () => {
   if (document.currentScript) return document.currentScript;
 
-  let moduleUrl = null;
-  try {
-    moduleUrl = eval('import.meta && import.meta.url');
-  } catch (_) {
-    moduleUrl = null;
+  const potentialOwners = Array.from(document.querySelectorAll('script[src]')).filter((script) => {
+    const normalizedSrc = toAbsoluteUrl(script.src);
+    return Boolean(normalizedSrc && /(?:^|\/)game-shell\.js(\?|$)/.test(normalizedSrc));
+  });
+  if (potentialOwners.length === 1) {
+    return potentialOwners[0];
   }
-  if (moduleUrl) {
-    const normalizedModuleUrl = toAbsoluteUrl(moduleUrl);
-    if (normalizedModuleUrl) {
-      const match = Array.from(document.querySelectorAll('script[src]')).find((script) => {
-        const normalizedSrc = toAbsoluteUrl(script.src);
-        return normalizedSrc && normalizedSrc === normalizedModuleUrl;
-      });
-      if (match) return match;
-    }
+  const dataMatched = potentialOwners.find((script) => script.dataset?.game || script.dataset?.slug);
+  if (dataMatched) {
+    return dataMatched;
   }
 
   const fallback =
