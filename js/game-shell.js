@@ -1035,6 +1035,27 @@ function toggleDiagV2Overlay(forceShow){
   }).catch(function(){ });
 }
 
+function openDiagV2Overlay(){
+  var diag = null;
+  try {
+    if (typeof window !== 'undefined') {
+      diag = window.__GG_DIAG;
+    }
+  } catch(_){ diag = null; }
+  var opened = false;
+  if (diag && typeof diag.open === 'function') {
+    try {
+      diag.open();
+      opened = true;
+    } catch(_){ opened = false; }
+  }
+  if (opened) return;
+  ensureDiagV2Overlay().then(function(api){
+    if (!api || typeof api.open !== 'function') return;
+    try { api.open(); } catch(_){ }
+  }).catch(function(){ });
+}
+
 function ensureDiagV2Button(){
   var init = function(){
     var buttons = document.querySelectorAll('#diagnostics-btn');
@@ -1059,7 +1080,7 @@ function ensureDiagV2Button(){
     if (!button._diagV2Bound) {
       button._diagV2Bound = true;
       button.addEventListener('click', function(){
-        toggleDiagV2Overlay();
+        openDiagV2Overlay();
       });
     }
     diagV2State.buttonReady = true;
@@ -1079,7 +1100,7 @@ function bindDiagV2Shortcut(){
     var key = event.key || '';
     if (key.toLowerCase && key.toLowerCase() === 'd') {
       event.preventDefault();
-      toggleDiagV2Overlay();
+      openDiagV2Overlay();
     }
   });
 }
