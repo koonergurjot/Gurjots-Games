@@ -120,8 +120,21 @@ if(c){
   c.width=BASE_W;
   c.height=BASE_H;
   const CANVAS_PADDING=24;
-  const MAX_CANVAS_WIDTH=720;
-  const MAX_CANVAS_HEIGHT=1440;
+  const viewportNode=c.closest('[data-game-viewport]')||c.parentElement||document.body;
+  let viewportNeedsSync=false;
+
+  function measureViewport(){
+    if(!viewportNode) return { width: window.innerWidth, height: window.innerHeight };
+    if(viewportNode===document.body||viewportNode===document.documentElement){
+      return {
+        width: Math.max(document.documentElement?.clientWidth||0, window.innerWidth||0),
+        height: Math.max(document.documentElement?.clientHeight||0, window.innerHeight||0),
+      };
+    }
+    const width=Math.max(viewportNode.clientWidth||0, viewportNode.getBoundingClientRect?.().width||0);
+    const height=Math.max(viewportNode.clientHeight||0, viewportNode.getBoundingClientRect?.().height||0);
+    return { width, height };
+  }
 
   function syncHudLayout(){
     const doc=document.documentElement;
@@ -183,14 +196,32 @@ if(c){
   }
 
   function applyResponsiveCanvas(){
-    const availableW=Math.max(BASE_W,Math.min(window.innerWidth-CANVAS_PADDING*2,MAX_CANVAS_WIDTH));
-    const availableH=Math.max(BASE_H,Math.min(window.innerHeight-CANVAS_PADDING*2,MAX_CANVAS_HEIGHT));
-    fitCanvasToParent(c,availableW,availableH,CANVAS_PADDING);
+    const { width, height }=measureViewport();
+    const availableW=Math.max(BASE_W,width);
+    const availableH=Math.max(BASE_H,height);
+    fitCanvasToParent(c,{
+      width:availableW,
+      height:availableH,
+      minWidth:BASE_W,
+      minHeight:BASE_H,
+    });
     syncHudLayout();
   }
 
   applyResponsiveCanvas();
   addEventListener('resize',applyResponsiveCanvas);
+  if(typeof ResizeObserver==='function'&&viewportNode?.nodeType===1){
+    const observer=new ResizeObserver(()=>{
+      if(viewportNeedsSync) return;
+      viewportNeedsSync=true;
+      requestAnimationFrame(()=>{
+        viewportNeedsSync=false;
+        applyResponsiveCanvas();
+      });
+    });
+    try{ observer.observe(viewportNode); }
+    catch(err){ console.warn('Tetris viewport ResizeObserver failed',err); }
+  }
 }else{
   const error=new Error('Tetris: unable to locate a canvas element (#t or #gameCanvas).');
   console.error(error);
