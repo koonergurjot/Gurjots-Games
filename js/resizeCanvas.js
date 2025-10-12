@@ -9,8 +9,12 @@ export function fitCanvasToParent(canvas, arg1, arg2, arg3) {
   const aspectRatio = fallbackHeight === 0 ? 1 : fallbackWidth / fallbackHeight;
 
   const options = resolveOptions(canvas, arg1, arg2, arg3);
-  const minWidth = Number.isFinite(options.minWidth) ? options.minWidth : fallbackWidth;
-  const minHeight = Number.isFinite(options.minHeight) ? options.minHeight : fallbackHeight;
+  const minWidth = Number.isFinite(options.minWidth)
+    ? Math.max(0, options.minWidth)
+    : 0;
+  const minHeight = Number.isFinite(options.minHeight)
+    ? Math.max(0, options.minHeight)
+    : 0;
 
   const { width: measuredWidth, height: measuredHeight } = measureContainer(options);
   const availableWidth = Math.max(minWidth, measuredWidth);
