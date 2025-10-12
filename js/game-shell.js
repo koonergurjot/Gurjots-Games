@@ -31,7 +31,11 @@ var diagV2State = {
   mountDuration: null,
   currentSlug: slug || '—',
   assetsModulePromise: null,
-  supportScriptsPromise: null
+  supportScriptsPromise: null,
+  assetPreflightPromise: null,
+  assetScanState: null,
+  assetScanToken: 0,
+  assetScanRefreshTimer: null
 };
 
 function cleanupLegacyDiagnosticsUI() {
@@ -688,6 +692,66 @@ function ensureDiagnosticsAssetsModule(){
   return diagV2State.assetsModulePromise;
 }
 
+function scheduleAssetScanIndicatorRefresh(){
+  if (!diagV2State.assetScanState) return;
+  if (diagV2State.assetScanRefreshTimer) {
+    try { clearTimeout(diagV2State.assetScanRefreshTimer); } catch(_){ }
+    diagV2State.assetScanRefreshTimer = null;
+  }
+  diagV2State.assetScanRefreshTimer = setTimeout(function(){
+    diagV2State.assetScanRefreshTimer = null;
+    applyAssetScanState();
+  }, 32);
+}
+
+function applyAssetScanState(){
+  var override = diagV2State.assetScanState;
+  if (!override) return;
+  var api = diagV2State.overlayApi;
+  var root = api && api.root;
+  if (!root || !root.querySelector) return;
+  try {
+    var summary = root.querySelector('#diagnostics-assets-summary');
+    if (!summary) return;
+    var textNode = summary.querySelector('.diagnostics-assets-text');
+    if (textNode) {
+      textNode.textContent = override.text || '';
+    }
+    var indicator = summary.querySelector('.diagnostics-assets-indicator');
+    var color = override.color || '#9aa3c7';
+    if (indicator) {
+      indicator.style.backgroundColor = color;
+      indicator.style.boxShadow = '0 0 12px ' + color;
+    }
+  } catch(_){ }
+}
+
+function setAssetScanState(next){
+  if (!next) {
+    if (diagV2State.assetScanRefreshTimer) {
+      try { clearTimeout(diagV2State.assetScanRefreshTimer); } catch(_){ }
+      diagV2State.assetScanRefreshTimer = null;
+    }
+    diagV2State.assetScanState = null;
+    return;
+  }
+  var colorMap = {
+    pending: '#9aa3c7',
+    none: '#9aa3c7',
+    warn: '#f6c945',
+    warning: '#f6c945',
+    error: '#ff5f56',
+    ok: '#37d67a'
+  };
+  var normalized = {
+    status: next.status || 'pending',
+    text: next.text || '',
+    color: next.color || colorMap[next.status] || colorMap.pending
+  };
+  diagV2State.assetScanState = normalized;
+  scheduleAssetScanIndicatorRefresh();
+}
+
 function ensureDiagnosticsSupportScripts() {
   if (diagV2State.supportScriptsPromise) {
     return diagV2State.supportScriptsPromise;
@@ -756,12 +820,45 @@ function collectDeclaredAssets(input, bucket){
 
 function gatherDeclaredAssets(info){
   var collected = [];
-  collectDeclaredAssets(info && info.assets, collected);
+  var baseSources = [];
+  if (info && typeof info === 'object') {
+    baseSources.push(info.assets);
+    baseSources.push(info.firstFrame);
+    baseSources.push(info.preload);
+    baseSources.push(info.preloads);
+    baseSources.push(info.resources);
+    baseSources.push(info.assetManifest);
+    baseSources.push(info.assetManifestUrl);
+    baseSources.push(info.assetList);
+    baseSources.push(info.assetBundle);
+    baseSources.push(info.media && info.media.assets);
+    baseSources.push(info.media && info.media.preload);
+    baseSources.push(info.manifest && info.manifest.assets);
+    baseSources.push(info.manifest && info.manifest.preload);
+    baseSources.push(info.bundle && info.bundle.assets);
+    baseSources.push(info.diagnostics && info.diagnostics.assets);
+    baseSources.push(info.diagnostics && info.diagnostics.preload);
+    if (info.launch && typeof info.launch === 'object') {
+      baseSources.push(info.launch.assets);
+      baseSources.push(info.launch.preload);
+      baseSources.push(info.launch.resources);
+    }
+    if (info.data && typeof info.data === 'object') {
+      baseSources.push(info.data.assets);
+      baseSources.push(info.data.preload);
+    }
+  }
+  for (var idx = 0; idx < baseSources.length; idx++) {
+    collectDeclaredAssets(baseSources[idx], collected);
+  }
   try {
     if (typeof window !== 'undefined' && window.game && typeof window.game.getMeta === 'function') {
       var meta = window.game.getMeta();
       if (meta && meta.assets) {
         collectDeclaredAssets(meta.assets, collected);
+      }
+      if (meta && meta.preload) {
+        collectDeclaredAssets(meta.preload, collected);
       }
     }
   } catch(_){ }
@@ -781,23 +878,90 @@ function gatherDeclaredAssets(info){
 
 function triggerAssetPreflight(info){
   var assets = gatherDeclaredAssets(info);
-  if (!assets.length) return;
+  diagV2State.assetScanToken += 1;
+  var token = diagV2State.assetScanToken;
+  if (!assets.length) {
+    setAssetScanState({ status: 'none', text: 'No assets declared' });
+    diagV2State.assetPreflightPromise = null;
+    return;
+  }
+
+  var countText = assets.length === 1 ? 'Scanning 1 asset…' : ('Scanning ' + assets.length + ' assets…');
+  setAssetScanState({ status: 'pending', text: countText });
+
   ensureDiagnosticsBus();
-  ensureDiagnosticsAssetsModule().then(function(module){
-    if (!module || typeof module.preflight !== 'function') return null;
-    return module.preflight(assets).then(function(result){
-      if (!result || !Array.isArray(result.events) || !result.events.length) return;
-      var skipBus = !!(result && result.emitted);
-      for (var i = 0; i < result.events.length; i++) {
-        var evt = result.events[i];
-        if (!evt || typeof evt !== 'object') continue;
-        if (skipBus) emitDiagV2Event(evt, { skipBus: true });
-        else emitDiagV2Event(evt);
+
+  var preflight = ensureDiagnosticsAssetsModule().then(function(module){
+    if (!module || typeof module.preflight !== 'function') {
+      if (diagV2State.assetScanToken === token) {
+        setAssetScanState({ status: 'warn', text: 'Asset scan unavailable' });
       }
+      return null;
+    }
+    return module.preflight(assets, 5000).then(function(result){
+      if (diagV2State.assetScanToken !== token) return result;
+      var hasEvents = result && Array.isArray(result.events) && result.events.length;
+      if (hasEvents) {
+        var skipBus = !!(result && result.emitted);
+        for (var i = 0; i < result.events.length; i++) {
+          var evt = result.events[i];
+          if (!evt || typeof evt !== 'object') continue;
+          if (skipBus) emitDiagV2Event(evt, { skipBus: true });
+          else emitDiagV2Event(evt);
+        }
+        setAssetScanState(null);
+      } else if (result && result.error) {
+        setAssetScanState({ status: 'error', text: 'Asset scan failed' });
+        emitDiagV2Event({
+          topic: 'asset',
+          level: 'error',
+          message: 'Asset preflight failed',
+          details: {
+            url: '[preflight]',
+            status: result.error && result.error.name ? result.error.name : 'error',
+            duration: 0,
+            error: result.error ? String(result.error) : null
+          }
+        });
+      } else {
+        setAssetScanState({ status: 'warn', text: 'No scan results' });
+      }
+      return result;
     }).catch(function(err){
-      try { console.warn('Asset preflight failed', err); } catch(_){ }
+      if (diagV2State.assetScanToken !== token) return null;
+      setAssetScanState({ status: 'error', text: 'Asset scan failed' });
+      emitDiagV2Event({
+        topic: 'asset',
+        level: 'error',
+        message: err && err.message ? 'Asset preflight failed: ' + err.message : 'Asset preflight failed',
+        details: {
+          url: '[preflight]',
+          status: err && err.name ? err.name : 'error',
+          duration: 0,
+          error: err ? String(err) : null
+        }
+      });
+      return null;
     });
-  }).catch(function(){ });
+  }).catch(function(err){
+    if (diagV2State.assetScanToken !== token) return null;
+    setAssetScanState({ status: 'warn', text: 'Asset scan unavailable' });
+    try { if (err) console.warn('Asset preflight unavailable', err); } catch(_){ }
+    return null;
+  });
+
+  diagV2State.assetPreflightPromise = preflight;
+  if (preflight && typeof preflight.then === 'function') {
+    preflight.then(function(){
+      if (diagV2State.assetScanToken === token) {
+        diagV2State.assetPreflightPromise = null;
+      }
+    }, function(){
+      if (diagV2State.assetScanToken === token) {
+        diagV2State.assetPreflightPromise = null;
+      }
+    });
+  }
 }
 
 function emitDiagV2Event(evt, options){
@@ -829,6 +993,9 @@ function emitDiagV2Event(evt, options){
     if (diagV2State.overlayQueue.length > 2000) {
       diagV2State.overlayQueue.shift();
     }
+  }
+  if (diagV2State.assetScanState) {
+    scheduleAssetScanIndicatorRefresh();
   }
 }
 
@@ -985,6 +1152,9 @@ function ensureDiagV2Overlay(){
       } catch(_){ }
       if (diagV2State.bus && typeof api.setBus === 'function') {
         try { api.setBus(diagV2State.bus); } catch(_){ }
+      }
+      if (diagV2State.assetScanState) {
+        scheduleAssetScanIndicatorRefresh();
       }
     }
     return api;
