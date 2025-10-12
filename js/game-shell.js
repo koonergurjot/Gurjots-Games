@@ -34,6 +34,21 @@ var diagV2State = {
   supportScriptsPromise: null
 };
 
+function cleanupLegacyDiagnosticsUI() {
+  if (!DIAG_V2) return;
+
+  ['#diag-btn', '#diag-panel'].forEach(function(sel){
+    try {
+      var node = document.querySelector(sel);
+      if (node && typeof node.remove === 'function') {
+        node.remove();
+      }
+    } catch(_){ }
+  });
+
+  diagState.sink = null;
+}
+
 async function fetchCatalogJSON(init){
   var urls = ['/games.json', '/public/games.json'];
   var lastError = null;
@@ -241,17 +256,7 @@ function renderShell(info){
     if(document.hidden){ try { window.postMessage({type:'GAME_PAUSE'}, '*'); } catch(_){ } }
   });
 
-  if (DIAG_V2) {
-    // Remove any legacy UI that might have been left behind
-    ['#diag-btn', '#diag-panel'].forEach(function(sel){
-      try {
-        var el = document.querySelector(sel);
-        if (el && typeof el.remove === 'function') {
-          el.remove();
-        }
-      } catch(_){ }
-    });
-  }
+  cleanupLegacyDiagnosticsUI();
 }
 
 function resolveLaunchEntry(info) {
@@ -1107,6 +1112,7 @@ function setupDiagnosticsV2(){
 
 function createDiagUI(info, type, resolvedEntry, loadedEntry) {
   if (DIAG_V2) {
+    cleanupLegacyDiagnosticsUI();
     return;
   }
 
