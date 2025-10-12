@@ -224,6 +224,261 @@ body.gg-diag-scroll-locked {
   font-size: 0.8125rem;
 }
 
+.gg-diag-network {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gg-diag-network-tablewrap {
+  border-radius: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  background: rgba(17, 27, 42, 0.74);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+  overflow: hidden;
+  overflow-x: auto;
+}
+
+.gg-diag-network-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  min-width: 100%;
+}
+
+.gg-diag-network-table thead {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.gg-diag-network-table th,
+.gg-diag-network-table td {
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gg-diag-network-table th.gg-diag-network-col--right,
+.gg-diag-network-table td.gg-diag-network-cell--status,
+.gg-diag-network-table td.gg-diag-network-cell--duration,
+.gg-diag-network-table td.gg-diag-network-cell--bytes {
+  text-align: right;
+}
+
+.gg-diag-network-table th.gg-diag-network-col--url,
+.gg-diag-network-table td.gg-diag-network-cell--url {
+  white-space: normal;
+}
+
+.gg-diag-network-table td {
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  color: rgba(226, 232, 240, 0.86);
+}
+
+.gg-diag-network-table tbody tr:nth-child(even) td {
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.gg-diag-network-table tbody tr[data-level="warn"] td {
+  background: rgba(120, 53, 15, 0.55);
+  color: #fde68a;
+}
+
+.gg-diag-network-table tbody tr[data-level="error"] td {
+  background: rgba(127, 29, 29, 0.6);
+  color: #fecaca;
+}
+
+.gg-diag-network-table tbody tr[data-level="warn"] .gg-diag-network-duration-fill {
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.9), rgba(217, 119, 6, 0.8));
+}
+
+.gg-diag-network-table tbody tr[data-level="error"] .gg-diag-network-duration-fill {
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.95), rgba(220, 38, 38, 0.85));
+}
+
+.gg-diag-network-cell--url {
+  max-width: 0;
+  width: 48%;
+  word-break: break-word;
+}
+
+.gg-diag-network-duration {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.gg-diag-network-duration-value {
+  min-width: 2.6rem;
+  text-align: right;
+  font-weight: 600;
+  color: #f8fbff;
+}
+
+.gg-diag-network-duration-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(96, 165, 250, 0.18);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.gg-diag-network-duration-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.9), rgba(37, 99, 235, 0.7));
+  border-radius: 999px;
+  transition: width 160ms ease;
+}
+
+.gg-diag-network-sort {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0;
+}
+
+.gg-diag-network-sort:hover {
+  color: #f8fbff;
+}
+
+.gg-diag-network-sort:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.6);
+  outline-offset: 2px;
+}
+
+.gg-diag-network-sort::after {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid rgba(191, 219, 254, 0.55);
+  transform: translateY(1px);
+  opacity: 0.5;
+}
+
+.gg-diag-network-sort[data-sort="asc"]::after {
+  border-top: none;
+  border-bottom: 5px solid rgba(191, 219, 254, 0.85);
+  transform: translateY(-1px);
+  opacity: 0.95;
+}
+
+.gg-diag-network-sort[data-sort="desc"]::after {
+  border-top: 5px solid rgba(191, 219, 254, 0.85);
+  border-bottom: none;
+  opacity: 0.95;
+}
+
+.gg-diag-network-empty {
+  margin: 0;
+}
+
+.gg-diag-perf {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.gg-diag-perf-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.gg-diag-perf-card {
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: rgba(17, 27, 42, 0.74);
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.gg-diag-perf-card-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(148, 163, 184, 0.78);
+}
+
+.gg-diag-perf-card-value {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #f8fbff;
+  font-variant-numeric: tabular-nums;
+}
+
+.gg-diag-perf-samples-wrapper {
+  border-radius: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  background: rgba(13, 20, 32, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+  padding: 0.85rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.gg-diag-perf-samples-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(148, 163, 184, 0.78);
+}
+
+.gg-diag-perf-samples-count {
+  font-variant-numeric: tabular-nums;
+  color: rgba(191, 219, 254, 0.85);
+}
+
+.gg-diag-perf-samples {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 72px;
+  position: relative;
+}
+
+.gg-diag-perf-samples--empty {
+  align-items: center;
+  justify-content: center;
+  color: rgba(191, 219, 254, 0.65);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+.gg-diag-perf-samples--empty::before {
+  content: "Waiting for samples…";
+}
+
+.gg-diag-perf-sample {
+  width: 4px;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.9), rgba(37, 99, 235, 0.6));
+  opacity: 0.85;
+  transition: height 160ms ease, opacity 160ms ease;
+}
+
+.gg-diag-perf-sample[data-alert="true"] {
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.9), rgba(220, 38, 38, 0.65));
+  opacity: 1;
+}
+
 .gg-diag-panel-list {
   padding-bottom: 0.5rem;
 }

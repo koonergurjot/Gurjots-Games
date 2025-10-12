@@ -173,6 +173,194 @@
     }
   }
 
+  const COLLECTOR_CONFIG = {
+    network: { path: "./diagnostics/network.js" },
+    perf: { path: "./diagnostics/perf.js" },
+  };
+  const COLLECTOR_RETRY_DELAY_MS = 800;
+
+  function ensureDiagnosticsCollector(name){
+    const resolved = resolveDiagnosticsCollector(name);
+    if (resolved) return resolved;
+    const required = loadDiagnosticsCollector(name);
+    const normalized = normalizeDiagnosticsCollector(required);
+    if (normalized) {
+      return attachDiagnosticsCollector(name, normalized);
+    }
+    requestDiagnosticsCollectorScript(name);
+    return resolveDiagnosticsCollector(name);
+  }
+
+  function resolveDiagnosticsCollector(name){
+    if (!name) return null;
+    const store = global.GGDiagCollectors;
+    if (!store || typeof store !== "object") return null;
+    const direct = store[name];
+    if (direct) return normalizeDiagnosticsCollector(direct);
+    if (store.default && store.default !== store) {
+      const fallback = store.default[name];
+      if (fallback) return normalizeDiagnosticsCollector(fallback);
+    }
+    return null;
+  }
+
+  function normalizeDiagnosticsCollector(candidate){
+    if (!candidate) return null;
+    if (typeof candidate.install === "function") return candidate;
+    if (candidate.default && candidate.default !== candidate) {
+      return normalizeDiagnosticsCollector(candidate.default);
+    }
+    return null;
+  }
+
+  function attachDiagnosticsCollector(name, moduleApi){
+    if (!name || !moduleApi) return null;
+    const existing = global.GGDiagCollectors && typeof global.GGDiagCollectors === "object"
+      ? global.GGDiagCollectors
+      : {};
+    const merged = Object.assign({}, existing, { [name]: moduleApi });
+    global.GGDiagCollectors = merged;
+    return merged[name];
+  }
+
+  function loadDiagnosticsCollector(name){
+    const config = COLLECTOR_CONFIG[name];
+    if (!config) return null;
+    const path = config.path;
+    let required = null;
+    if (typeof module === "object" && module && typeof module.require === "function") {
+      try { required = module.require(path); } catch (_) {}
+    }
+    if (!required && typeof require === "function") {
+      try { required = require(path); } catch (_) {}
+    }
+    if (!required) {
+      requestDiagnosticsCollectorScript(name);
+    }
+    return required;
+  }
+
+  function requestDiagnosticsCollectorScript(name){
+    if (typeof document === "undefined") return;
+    const config = COLLECTOR_CONFIG[name];
+    if (!config) return;
+    try {
+      const selector = `script[data-gg-diag-collector="${name}"]`;
+      if (document.querySelector(selector)) return;
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = `/games/common/diagnostics/${name}.js`;
+      script.setAttribute("data-gg-diag-collector", name);
+      script.setAttribute("data-origin", "diag-core");
+      const parent = document.head || document.documentElement || document.body;
+      parent?.appendChild(script);
+    } catch (_) {}
+  }
+
+  function registerDiagnosticsCollector(name){
+    const collector = ensureDiagnosticsCollector(name);
+    if (!collector || typeof collector.install !== "function") {
+      scheduleCollectorRetry(name);
+      return;
+    }
+    let teardown = null;
+    try {
+      const result = collector.install({ scope: global, emit: emitCollectorEvent });
+      if (result && typeof result.teardown === "function") {
+        teardown = result.teardown;
+      } else if (typeof collector.teardown === "function") {
+        teardown = collector.teardown.bind(collector);
+      }
+    } catch (err) {
+      if (typeof console !== "undefined" && console && typeof console.warn === "function") {
+        console.warn(`[gg-diag] ${name} collector install failed`, err);
+      }
+      scheduleCollectorRetry(name);
+      return;
+    }
+    if (typeof teardown === "function") {
+      state.collectorTeardowns.push(() => {
+        try { teardown(); }
+        catch (error) {
+          if (typeof console !== "undefined" && console && typeof console.warn === "function") {
+            console.warn(`[gg-diag] ${name} collector teardown failed`, error);
+          }
+        }
+      });
+    }
+  }
+
+  function scheduleCollectorRetry(name){
+    if (!name || !COLLECTOR_CONFIG[name]) return;
+    if (state.collectorRetryTimers[name]) return;
+    const scheduler = typeof global.setTimeout === "function"
+      ? global.setTimeout
+      : (typeof setTimeout === "function" ? setTimeout : null);
+    if (!scheduler) return;
+    state.collectorRetryTimers[name] = scheduler(() => {
+      state.collectorRetryTimers[name] = null;
+      registerDiagnosticsCollector(name);
+    }, COLLECTOR_RETRY_DELAY_MS);
+  }
+
+  function setupCollectorCleanupListeners(){
+    if (state.collectorCleanupHandler || typeof global.addEventListener !== "function") return;
+    const handler = () => cleanupCollectors();
+    try {
+      global.addEventListener("beforeunload", handler);
+      global.addEventListener("pagehide", handler);
+      state.collectorCleanupHandler = handler;
+    } catch (_) {}
+  }
+
+  function cleanupCollectors(){
+    if (state.collectorCleanupHandler && typeof global.removeEventListener === "function") {
+      try { global.removeEventListener("beforeunload", state.collectorCleanupHandler); } catch (_) {}
+      try { global.removeEventListener("pagehide", state.collectorCleanupHandler); } catch (_) {}
+      state.collectorCleanupHandler = null;
+    }
+    const teardowns = state.collectorTeardowns.splice(0);
+    for (const teardown of teardowns){
+      try { teardown(); }
+      catch (err) {
+        if (typeof console !== "undefined" && console && typeof console.warn === "function") {
+          console.warn("[gg-diag] collector teardown failed", err);
+        }
+      }
+    }
+    const clearTimer = typeof global.clearTimeout === "function"
+      ? global.clearTimeout
+      : (typeof clearTimeout === "function" ? clearTimeout : null);
+    if (state.collectorRetryTimers) {
+      for (const key of Object.keys(state.collectorRetryTimers)){
+        const timer = state.collectorRetryTimers[key];
+        if (timer && clearTimer) {
+          try { clearTimer(timer); } catch (_) {}
+        }
+        state.collectorRetryTimers[key] = null;
+      }
+    }
+  }
+
+  function emitCollectorEvent(entry){
+    if (!entry) return;
+    try {
+      log(entry);
+    } catch (err) {
+      safeEnqueue(entry);
+      if (typeof console !== "undefined" && console && typeof console.warn === "function") {
+        console.warn("[gg-diag] collector emit failed", err);
+      }
+    }
+  }
+
+  function safeEnqueue(entry){
+    try {
+      const queue = global.__GG_DIAG_QUEUE || (global.__GG_DIAG_QUEUE = []);
+      queue.push(entry);
+    } catch (_) {}
+  }
+
   const reportStoreModule = ensureReportStoreModule();
   const reportStore = reportStoreModule.createReportStore({
     maxEntries: 500,
@@ -189,6 +377,7 @@
     { id: "assets", label: "Assets" },
     { id: "probes", label: "Probes" },
     { id: "network", label: "Network" },
+    { id: "perf", label: "Performance" },
     { id: "env", label: "Env" },
   ];
 
@@ -207,10 +396,15 @@
     metaCounts: {},
     summaryRefs: {},
     probesList: null,
-    networkList: null,
+    networkTable: null,
+    networkSort: { key: "timestamp", dir: "desc" },
+    lastNetworkEntries: [],
     errorsList: null,
     assetsList: null,
     envContainer: null,
+    perfPanel: null,
+    perfRefs: null,
+    lastPerfSnapshot: null,
     autoScroll: true,
     isOpen: false,
     activeTab: "summary",
@@ -236,6 +430,9 @@
     busBound: false,
     busPollTimer: null,
     busSeenEvents: typeof Set === "function" ? new Set() : null,
+    collectorTeardowns: [],
+    collectorRetryTimers: {},
+    collectorCleanupHandler: null,
   };
 
   state.adapterModule = ensureDiagnosticsAdapterModule();
@@ -248,6 +445,9 @@
     setupExternalDiagnosticsButton();
     setupAltShortcut();
     setupDiagnosticsBusIntegration();
+    setupCollectorCleanupListeners();
+    registerDiagnosticsCollector("network");
+    registerDiagnosticsCollector("perf");
   }
 
   const LEVEL_ORDER = ["debug", "info", "warn", "error"];
@@ -323,6 +523,10 @@
     ensureUI();
     const normalized = normalizeEntry(entry);
     const snapshot = state.store.add(normalized);
+    const category = typeof normalized.category === "string" ? normalized.category.toLowerCase() : "";
+    if (category === "perf") {
+      handlePerfEntry(normalized);
+    }
     appendConsoleEntry(normalized);
     updateMetaCounts(snapshot.summary);
     renderSummaryPanel(snapshot.summary);
@@ -331,6 +535,9 @@
     renderNetworkPanel(snapshot.network || []);
     renderAssetsPanel(snapshot.assets || []);
     renderEnvironmentPanel(snapshot.environment || null);
+    if (category !== "perf") {
+      renderPerfPanel();
+    }
   }
 
   function exportJSON(){
@@ -996,6 +1203,8 @@
         buildProbesPanel(doc, panel);
       } else if (tab.id === "network") {
         buildNetworkPanel(doc, panel);
+      } else if (tab.id === "perf") {
+        buildPerfPanel(doc, panel);
       } else if (tab.id === "env") {
         buildEnvPanel(doc, panel);
       }
@@ -1058,6 +1267,7 @@
       renderNetworkPanel(snapshot.network || []);
       renderAssetsPanel(snapshot.assets || []);
       renderEnvironmentPanel(snapshot.environment || null);
+      renderPerfPanel();
     }
     if (state.activeTab === "probes") {
       triggerAutoProbeRun("ui-ready");
@@ -1138,8 +1348,16 @@
     }
   }
 
+  function shouldDisplayInConsole(entry){
+    if (!entry) return false;
+    const category = typeof entry.category === "string" ? entry.category.toLowerCase() : "";
+    if (category === "perf") return false;
+    return true;
+  }
+
   function appendConsoleEntry(entry){
     if (!state.logList) return;
+    if (!shouldDisplayInConsole(entry)) return;
     const item = createEntryListItem(entry);
     const shouldStick = state.autoScroll && isScrolledToBottom();
     state.logList.appendChild(item);
@@ -1162,9 +1380,11 @@
     if (!state.logList) return;
     state.logList.innerHTML = "";
     if (!Array.isArray(entries) || !entries.length) return;
-    const start = Math.max(0, entries.length - state.maxLogs);
-    for (let i = start; i < entries.length; i += 1) {
-      const entry = entries[i];
+    const filtered = entries.filter((entry) => shouldDisplayInConsole(entry));
+    if (!filtered.length) return;
+    const start = Math.max(0, filtered.length - state.maxLogs);
+    for (let i = start; i < filtered.length; i += 1) {
+      const entry = filtered[i];
       state.logList.appendChild(createEntryListItem(entry));
     }
     state.logList.scrollTop = state.logList.scrollHeight;
@@ -1225,15 +1445,356 @@
   }
 
   function renderNetworkPanel(networkEntries){
-    if (!state.networkList) return;
-    state.networkList.innerHTML = "";
-    if (!Array.isArray(networkEntries) || !networkEntries.length) {
-      state.networkList.appendChild(createEmptyListItem("No network requests recorded."));
+    if (Array.isArray(networkEntries)) {
+      state.lastNetworkEntries = networkEntries.slice();
+    }
+    const tableState = state.networkTable;
+    if (!tableState || !tableState.tbody) return;
+    const entries = Array.isArray(state.lastNetworkEntries) ? state.lastNetworkEntries : [];
+    const tbody = tableState.tbody;
+    tbody.innerHTML = "";
+    if (!entries.length) {
+      if (tableState.empty) tableState.empty.hidden = false;
+      updateNetworkSortIndicators();
       return;
     }
-    for (const entry of networkEntries){
-      state.networkList.appendChild(createEntryListItem(entry, { showBadge: true }));
+    const rows = [];
+    for (const entry of entries){
+      const normalized = normalizeNetworkEntry(entry);
+      if (normalized) rows.push(normalized);
     }
+    if (!rows.length) {
+      if (tableState.empty) tableState.empty.hidden = false;
+      updateNetworkSortIndicators();
+      return;
+    }
+    const sortedRows = sortNetworkRows(rows, state.networkSort);
+    const maxDuration = sortedRows.reduce((max, row) => {
+      const value = Number.isFinite(row.duration) ? row.duration : 0;
+      return value > max ? value : max;
+    }, 0);
+    const doc = tbody.ownerDocument || document;
+    const fragment = doc.createDocumentFragment();
+    for (const row of sortedRows){
+      fragment.appendChild(createNetworkRowElement(doc, row, maxDuration));
+    }
+    tbody.appendChild(fragment);
+    if (tableState.empty) tableState.empty.hidden = true;
+    updateNetworkSortIndicators();
+  }
+
+  function normalizeNetworkEntry(entry){
+    if (!entry || typeof entry !== "object") return null;
+    const details = entry.details && typeof entry.details === "object" ? entry.details : {};
+    const methodSource = typeof details.method === "string" && details.method ? details.method : entry.method;
+    const method = typeof methodSource === "string" && methodSource
+      ? methodSource.toUpperCase()
+      : "GET";
+    const url = typeof details.url === "string" && details.url
+      ? details.url
+      : (typeof entry.message === "string" ? entry.message : "");
+    const status = toFiniteNumber(details.status ?? entry.status);
+    const duration = toFiniteNumber(details.durationMs ?? details.duration);
+    const bytes = toFiniteNumber(details.bytes ?? details.size);
+    const timestamp = toFiniteNumber(entry.timestamp) ?? Date.now();
+    const level = normalizeLevel(entry.level);
+    const statusText = typeof details.statusText === "string" && details.statusText ? details.statusText : null;
+    return { method, url, status, duration, bytes, timestamp, level, statusText };
+  }
+
+  function toFiniteNumber(value){
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  function sortNetworkRows(rows, sort){
+    const config = sort && typeof sort === "object" ? sort : { key: "timestamp", dir: "desc" };
+    const key = config.key || "timestamp";
+    const dir = config.dir === "asc" ? "asc" : "desc";
+    const multiplier = dir === "asc" ? 1 : -1;
+    const fallbackKey = key === "timestamp" ? "method" : "timestamp";
+    const sorted = rows.slice();
+    sorted.sort((a, b) => {
+      const primary = compareNetworkField(a, b, key, multiplier);
+      if (primary !== 0) return primary;
+      return compareNetworkField(a, b, fallbackKey, multiplier === 1 && fallbackKey === "timestamp" ? -1 : multiplier);
+    });
+    return sorted;
+  }
+
+  function compareNetworkField(a, b, key, multiplier){
+    switch (key) {
+      case "method":
+        return compareStrings(a.method, b.method) * multiplier;
+      case "url":
+        return compareStrings(a.url, b.url) * multiplier;
+      case "status":
+        return compareNumbers(a.status, b.status, multiplier);
+      case "duration":
+        return compareNumbers(a.duration, b.duration, multiplier);
+      case "bytes":
+        return compareNumbers(a.bytes, b.bytes, multiplier);
+      case "timestamp":
+      default:
+        return compareNumbers(a.timestamp, b.timestamp, multiplier);
+    }
+  }
+
+  function compareNumbers(a, b, multiplier){
+    const dir = multiplier === 1 ? 1 : -1;
+    const valA = Number.isFinite(a) ? a : (dir === 1 ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
+    const valB = Number.isFinite(b) ? b : (dir === 1 ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY);
+    if (valA === valB) return 0;
+    return valA > valB ? multiplier : -multiplier;
+  }
+
+  function compareStrings(a, b){
+    const strA = typeof a === "string" ? a : (a === null || a === undefined ? "" : String(a));
+    const strB = typeof b === "string" ? b : (b === null || b === undefined ? "" : String(b));
+    return strA.localeCompare(strB);
+  }
+
+  function createNetworkRowElement(doc, row, maxDuration){
+    const tr = doc.createElement("tr");
+    if (row.level) tr.dataset.level = row.level;
+
+    const methodCell = doc.createElement("td");
+    methodCell.className = "gg-diag-network-cell gg-diag-network-cell--method";
+    methodCell.textContent = row.method || "—";
+    tr.appendChild(methodCell);
+
+    const urlCell = doc.createElement("td");
+    urlCell.className = "gg-diag-network-cell gg-diag-network-cell--url";
+    urlCell.textContent = row.url || "—";
+    if (row.url) urlCell.title = row.url;
+    tr.appendChild(urlCell);
+
+    const statusCell = doc.createElement("td");
+    statusCell.className = "gg-diag-network-cell gg-diag-network-cell--status";
+    statusCell.textContent = Number.isFinite(row.status) ? String(row.status) : "—";
+    if (row.statusText) statusCell.title = row.statusText;
+    tr.appendChild(statusCell);
+
+    const durationCell = doc.createElement("td");
+    durationCell.className = "gg-diag-network-cell gg-diag-network-cell--duration";
+    const durationWrap = doc.createElement("div");
+    durationWrap.className = "gg-diag-network-duration";
+    const durationValue = doc.createElement("span");
+    durationValue.className = "gg-diag-network-duration-value";
+    durationValue.textContent = formatDurationValue(row.duration);
+    const durationBar = doc.createElement("span");
+    durationBar.className = "gg-diag-network-duration-bar";
+    const durationFill = doc.createElement("span");
+    durationFill.className = "gg-diag-network-duration-fill";
+    const percent = computeDurationPercent(row.duration, maxDuration);
+    durationFill.style.width = `${percent}%`;
+    durationBar.appendChild(durationFill);
+    durationWrap.append(durationValue, durationBar);
+    durationCell.appendChild(durationWrap);
+    tr.appendChild(durationCell);
+
+    const bytesCell = doc.createElement("td");
+    bytesCell.className = "gg-diag-network-cell gg-diag-network-cell--bytes";
+    bytesCell.textContent = formatBytes(row.bytes);
+    if (Number.isFinite(row.bytes)) {
+      bytesCell.title = `${Math.round(row.bytes)} bytes`;
+    }
+    tr.appendChild(bytesCell);
+
+    return tr;
+  }
+
+  function computeDurationPercent(value, max){
+    if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(max) || max <= 0) {
+      return 0;
+    }
+    const ratio = value / max;
+    const percent = Math.max(4, Math.min(100, Math.round(ratio * 100)));
+    return percent;
+  }
+
+  function formatDurationValue(value){
+    if (!Number.isFinite(value) || value < 0) return "—";
+    if (value < 100) {
+      return value.toFixed(1).replace(/\.0$/, "");
+    }
+    return String(Math.round(value));
+  }
+
+  function formatBytes(bytes){
+    if (bytes === 0) return "0 B";
+    if (!Number.isFinite(bytes) || bytes < 0) return "—";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let value = bytes;
+    let index = 0;
+    while (value >= 1024 && index < units.length - 1){
+      value /= 1024;
+      index += 1;
+    }
+    const formatted = value >= 100 ? Math.round(value) : value >= 10 ? value.toFixed(1) : value.toFixed(2);
+    return `${formatted} ${units[index]}`;
+  }
+
+  function handleNetworkSort(key){
+    if (!key) return;
+    const defaultDir = key === "method" || key === "url" ? "asc" : "desc";
+    const current = state.networkSort || { key: "timestamp", dir: "desc" };
+    const dir = current.key === key ? (current.dir === "asc" ? "desc" : "asc") : defaultDir;
+    state.networkSort = { key, dir };
+    renderNetworkPanel();
+  }
+
+  function updateNetworkSortIndicators(){
+    const tableState = state.networkTable;
+    if (!tableState || !tableState.headers) return;
+    const current = state.networkSort || { key: "timestamp", dir: "desc" };
+    for (const [key, header] of Object.entries(tableState.headers)){
+      if (!header || !header.button || !header.th) continue;
+      if (current.key === key) {
+        header.button.dataset.sort = current.dir;
+        header.th.setAttribute("aria-sort", current.dir === "asc" ? "ascending" : "descending");
+      } else {
+        header.button.removeAttribute("data-sort");
+        header.th.setAttribute("aria-sort", "none");
+      }
+    }
+  }
+
+  function handlePerfEntry(entry){
+    if (!entry || typeof entry !== "object") return;
+    const category = typeof entry.category === "string" ? entry.category.toLowerCase() : "";
+    if (category !== "perf") return;
+    const details = entry.details && typeof entry.details === "object" ? entry.details : {};
+    const fpsDetails = details.fps && typeof details.fps === "object" ? details.fps : {};
+
+    const samples = [];
+    if (Array.isArray(details.samples)) {
+      for (const sample of details.samples){
+        const numeric = toFiniteNumber(sample);
+        if (Number.isFinite(numeric)) {
+          samples.push(Number(numeric.toFixed(1)));
+        }
+      }
+      if (samples.length > 120) {
+        samples.splice(0, samples.length - 120);
+      }
+    }
+
+    const avg = normalizePerfNumber(toFiniteNumber(fpsDetails.avg));
+    const min = normalizePerfNumber(toFiniteNumber(fpsDetails.min));
+    const max = normalizePerfNumber(toFiniteNumber(fpsDetails.max));
+    const fallbackAvg = !Number.isFinite(avg) && samples.length
+      ? normalizePerfNumber(samples.reduce((sum, value) => sum + value, 0) / samples.length)
+      : avg;
+    const fallbackMin = !Number.isFinite(min) && samples.length
+      ? normalizePerfNumber(Math.min(...samples))
+      : min;
+    const fallbackMax = !Number.isFinite(max) && samples.length
+      ? normalizePerfNumber(Math.max(...samples))
+      : max;
+
+    const previousLongTasks = Number.isFinite(state.lastPerfSnapshot?.longTasks)
+      ? state.lastPerfSnapshot.longTasks
+      : 0;
+    const longTasksRaw = toFiniteNumber(details.longTasks);
+    const longTasks = Number.isFinite(longTasksRaw)
+      ? Math.max(0, Math.floor(longTasksRaw))
+      : previousLongTasks;
+
+    state.lastPerfSnapshot = {
+      fps: {
+        avg: Number.isFinite(fallbackAvg) ? fallbackAvg : null,
+        min: Number.isFinite(fallbackMin) ? fallbackMin : null,
+        max: Number.isFinite(fallbackMax) ? fallbackMax : null,
+      },
+      longTasks,
+      samples,
+      timestamp: typeof entry.timestamp === "number" ? entry.timestamp : Date.now(),
+    };
+
+    renderPerfPanel();
+  }
+
+  function normalizePerfNumber(value){
+    if (!Number.isFinite(value)) return null;
+    return Number(value.toFixed(1));
+  }
+
+  function renderPerfPanel(perfData){
+    if (perfData && typeof perfData === "object") {
+      state.lastPerfSnapshot = perfData;
+    }
+    const refs = state.perfRefs;
+    if (!refs) return;
+    const snapshot = state.lastPerfSnapshot;
+    if (!snapshot) {
+      updatePerfMetric(refs.avg, null);
+      updatePerfMetric(refs.min, null);
+      updatePerfMetric(refs.max, null);
+      updatePerfLong(refs.long, null);
+      if (refs.samplesCount) refs.samplesCount.textContent = "Samples: 0";
+      renderPerfSamples([]);
+      return;
+    }
+    updatePerfMetric(refs.avg, snapshot.fps?.avg ?? null);
+    updatePerfMetric(refs.min, snapshot.fps?.min ?? null);
+    updatePerfMetric(refs.max, snapshot.fps?.max ?? null);
+    updatePerfLong(refs.long, snapshot.longTasks);
+    const samples = Array.isArray(snapshot.samples) ? snapshot.samples.slice(-120) : [];
+    if (refs.samplesCount) refs.samplesCount.textContent = `Samples: ${samples.length}`;
+    renderPerfSamples(samples);
+  }
+
+  function updatePerfMetric(element, value){
+    if (!element) return;
+    if (!Number.isFinite(value)) {
+      element.textContent = "—";
+      return;
+    }
+    const formatted = value < 100 ? value.toFixed(1).replace(/\.0$/, "") : String(Math.round(value));
+    element.textContent = formatted;
+  }
+
+  function updatePerfLong(element, value){
+    if (!element) return;
+    if (!Number.isFinite(value)) {
+      element.textContent = "—";
+      return;
+    }
+    element.textContent = String(Math.max(0, Math.floor(value)));
+  }
+
+  function renderPerfSamples(samples){
+    const refs = state.perfRefs;
+    if (!refs || !refs.samplesContainer) return;
+    const container = refs.samplesContainer;
+    container.innerHTML = "";
+    if (!Array.isArray(samples) || !samples.length) {
+      container.classList.add("gg-diag-perf-samples--empty");
+      return;
+    }
+    container.classList.remove("gg-diag-perf-samples--empty");
+    const doc = container.ownerDocument || document;
+    const fragment = doc.createDocumentFragment();
+    const clamped = samples.slice(-120);
+    const maxValue = clamped.reduce((max, sample) => {
+      const numeric = Number.isFinite(sample) ? sample : 0;
+      return numeric > max ? numeric : max;
+    }, 0) || 60;
+    const baseline = Math.max(30, Math.min(120, maxValue));
+    for (const sample of clamped){
+      const numeric = Number.isFinite(sample) ? sample : 0;
+      const bar = doc.createElement("span");
+      bar.className = "gg-diag-perf-sample";
+      const ratio = baseline <= 0 ? 0 : Math.min(1, Math.max(0, numeric / baseline));
+      bar.style.height = `${Math.round(ratio * 100)}%`;
+      bar.title = `${numeric.toFixed(1)} fps`;
+      if (numeric > 0 && numeric < 30) {
+        bar.dataset.alert = "true";
+      }
+      fragment.appendChild(bar);
+    }
+    container.appendChild(fragment);
   }
 
   function renderAssetsPanel(assetEntries){
@@ -1954,10 +2515,120 @@
   }
 
   function buildNetworkPanel(doc, panel){
-    const list = doc.createElement("ul");
-    list.className = "gg-diag-loglist gg-diag-panel-list";
-    panel.appendChild(list);
-    state.networkList = list;
+    const container = doc.createElement("div");
+    container.className = "gg-diag-network";
+
+    const tableWrap = doc.createElement("div");
+    tableWrap.className = "gg-diag-network-tablewrap";
+
+    const table = doc.createElement("table");
+    table.className = "gg-diag-network-table";
+
+    const thead = doc.createElement("thead");
+    const headerRow = doc.createElement("tr");
+    const columns = [
+      { key: "method", label: "Method" },
+      { key: "url", label: "URL" },
+      { key: "status", label: "Status", align: "right" },
+      { key: "duration", label: "ms", align: "right" },
+      { key: "bytes", label: "Size", align: "right" },
+    ];
+    const headerRefs = {};
+    for (const column of columns){
+      const th = doc.createElement("th");
+      th.scope = "col";
+      th.className = `gg-diag-network-col gg-diag-network-col--${column.key}`;
+      if (column.align === "right") th.classList.add("gg-diag-network-col--right");
+      th.setAttribute("aria-sort", "none");
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.className = "gg-diag-network-sort";
+      button.textContent = column.label;
+      button.setAttribute("aria-label", `Sort by ${column.label}`);
+      button.addEventListener("click", () => handleNetworkSort(column.key));
+      th.appendChild(button);
+      headerRow.appendChild(th);
+      headerRefs[column.key] = { button, th };
+    }
+    thead.appendChild(headerRow);
+
+    const tbody = doc.createElement("tbody");
+
+    table.append(thead, tbody);
+    tableWrap.appendChild(table);
+
+    const empty = doc.createElement("p");
+    empty.className = "gg-diag-panel-empty gg-diag-network-empty";
+    empty.textContent = "No network requests recorded.";
+
+    container.append(tableWrap, empty);
+    panel.append(container);
+
+    state.networkTable = { container, table, tbody, empty, headers: headerRefs };
+    updateNetworkSortIndicators();
+    renderNetworkPanel();
+  }
+
+  function buildPerfPanel(doc, panel){
+    const wrapper = doc.createElement("div");
+    wrapper.className = "gg-diag-perf";
+
+    const grid = doc.createElement("div");
+    grid.className = "gg-diag-perf-grid";
+
+    const metrics = [
+      { key: "avg", label: "Avg FPS" },
+      { key: "min", label: "Min FPS" },
+      { key: "max", label: "Max FPS" },
+      { key: "long", label: "Long tasks" },
+    ];
+
+    const refs = {};
+    for (const metric of metrics){
+      const card = doc.createElement("div");
+      card.className = "gg-diag-perf-card";
+      const label = doc.createElement("span");
+      label.className = "gg-diag-perf-card-label";
+      label.textContent = metric.label;
+      const value = doc.createElement("span");
+      value.className = "gg-diag-perf-card-value";
+      value.textContent = "—";
+      card.append(label, value);
+      grid.appendChild(card);
+      refs[metric.key] = value;
+    }
+
+    const samplesWrapper = doc.createElement("div");
+    samplesWrapper.className = "gg-diag-perf-samples-wrapper";
+
+    const samplesHeader = doc.createElement("div");
+    samplesHeader.className = "gg-diag-perf-samples-header";
+    const samplesTitle = doc.createElement("span");
+    samplesTitle.textContent = "Frame samples";
+    const samplesCount = doc.createElement("span");
+    samplesCount.className = "gg-diag-perf-samples-count";
+    samplesCount.textContent = "Samples: 0";
+    samplesHeader.append(samplesTitle, samplesCount);
+
+    const samplesContainer = doc.createElement("div");
+    samplesContainer.className = "gg-diag-perf-samples gg-diag-perf-samples--empty";
+
+    samplesWrapper.append(samplesHeader, samplesContainer);
+
+    wrapper.append(grid, samplesWrapper);
+    panel.append(wrapper);
+
+    state.perfPanel = wrapper;
+    state.perfRefs = {
+      avg: refs.avg,
+      min: refs.min,
+      max: refs.max,
+      long: refs.long,
+      samplesCount,
+      samplesContainer,
+    };
+
+    renderPerfPanel();
   }
 
   function buildAssetsPanel(doc, panel){
