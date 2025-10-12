@@ -184,11 +184,28 @@
     });
   }
 
+  function now(){
+    const perf = global.performance;
+    if (perf && typeof perf.now === "function") {
+      try {
+        return perf.now();
+      } catch (_) {}
+    }
+    return Date.now();
+  }
+
+  function measureDuration(start){
+    if (typeof start !== "number" || !Number.isFinite(start)) return null;
+    const end = now();
+    const value = Math.round(end - start);
+    return Number.isFinite(value) ? value : null;
+  }
+
   function wrapFetch(){
     if (typeof global.fetch !== "function") return;
     const original = global.fetch;
     global.fetch = function(input, init){
-      const start = performance.now();
+      const start = now();
       return original.apply(this, arguments).then((response) => {
         emit({
           category: "network",
@@ -198,7 +215,7 @@
             statusText: response.statusText,
             url: response.url,
             ok: response.ok,
-            duration: Math.round(performance.now() - start),
+            duration: measureDuration(start),
           },
           timestamp: Date.now(),
         });
@@ -209,7 +226,7 @@
           level: "error",
           message: `fetch ${serializeRequestInfo(input)} failed`,
           details: {
-            duration: Math.round(performance.now() - start),
+            duration: measureDuration(start),
             error: safeSerialize(error),
           },
           timestamp: Date.now(),
@@ -229,7 +246,7 @@
       return open.apply(this, arguments);
     };
     proto.send = function(){
-      const started = performance.now();
+      const started = now();
       const context = this.__ggDiag || { method: "GET", url: this.responseURL };
       const done = (status, statusText, level, extra) => {
         emit({
@@ -239,7 +256,7 @@
           details: Object.assign({
             status,
             statusText,
-            duration: Math.round(performance.now() - started),
+            duration: measureDuration(started),
           }, extra || {}),
           timestamp: Date.now(),
         });
@@ -255,7 +272,7 @@
   function serializeRequestInfo(input){
     try {
       if (typeof input === "string") return input;
-      if (input instanceof Request) return input.url;
+      if (typeof Request !== "undefined" && input instanceof Request) return input.url;
       if (input && typeof input === "object" && "url" in input) return String(input.url);
       return JSON.stringify(safeSerialize(input));
     } catch (_) {
@@ -285,10 +302,11 @@
 
   function reportPerformance(){
     try {
-      const navEntries = performance.getEntriesByType?.("navigation") || [];
+      const perf = global.performance;
+      const navEntries = perf?.getEntriesByType?.("navigation") || [];
       const nav = navEntries[0];
-      const timing = performance.timing || {};
-      const memory = performance.memory || null;
+      const timing = perf?.timing || {};
+      const memory = perf?.memory || null;
       emit({
         category: "performance",
         level: "info",
