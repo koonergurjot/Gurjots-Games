@@ -3,6 +3,7 @@ const qs = new URLSearchParams(location.search);
 const DEBUG = qs.get('debug') === '1' || qs.get('debug') === 'true';
 const FORCE = qs.get('force'); // 'iframe' | 'script'
 const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
+const DIAG_V2 = (localStorage.getItem('diag_v2') === '1');
 const slug = qs.get('slug') || qs.get('id') || qs.get('game');
 var $ = function(s){ return document.querySelector(s); };
 
@@ -10,6 +11,7 @@ function el(tag, cls){ var e = document.createElement(tag); if(cls) e.className 
 
 var state = { timer:null, failTimer:null, muted:true, gameInfo:null, iframe:null };
 var diagState = { sink:null, listenerBound:false, errorListenerBound:false };
+var diagV2State = { initialized:false, pending:[], bus:null, loadPromise:null, overlay:null, altBound:false, consoleWrapped:false, errorBound:false, buttonReady:false };
 
 async function fetchCatalogJSON(init){
   var urls = ['/games.json', '/public/games.json'];
@@ -339,7 +341,9 @@ function loadGame(info){
     if (stage) stage.innerHTML = '';
     (stage || document.body).appendChild(iframe);
     state.iframe = iframe;
-    createDiagUI(info, type, resolvedEntry, loadTarget);
+    if (!DIAG_V2) {
+      createDiagUI(info, type, resolvedEntry, loadTarget);
+    }
   } else {
     if (stage) stage.innerHTML = '<div id="game-root"></div><canvas id="gameCanvas" width="800" height="600" aria-label="Game canvas" role="img"></canvas>';
     ensureRuntimeDiagnostics(document);
@@ -349,7 +353,9 @@ function loadGame(info){
     s.src = cachedTarget;
     s.onerror = function(e){ renderError('Failed to load game script', e); };
     document.body.appendChild(s);
-    createDiagUI(info, type, resolvedEntry, loadTarget);
+    if (!DIAG_V2) {
+      createDiagUI(info, type, resolvedEntry, loadTarget);
+    }
     ensureCanvasLabels(stage || document);
   }
 
@@ -569,6 +575,255 @@ function ensureDiagListeners() {
   }
 }
 
+function ensureDiagnosticsBus(){
+  if (diagV2State.bus && typeof diagV2State.bus.emit === 'function') {
+    return Promise.resolve(diagV2State.bus);
+  }
+  if (typeof window !== 'undefined' && window.DiagnosticsBus && typeof window.DiagnosticsBus.emit === 'function') {
+    diagV2State.bus = window.DiagnosticsBus;
+    return Promise.resolve(diagV2State.bus);
+  }
+  if (diagV2State.loadPromise) {
+    return diagV2State.loadPromise;
+  }
+  diagV2State.loadPromise = new Promise(function(resolve){
+    try {
+      var script = document.createElement('script');
+      script.src = '/js/diagnostics/bus.js';
+      script.async = false;
+      script.onload = function(){
+        diagV2State.bus = (window && window.DiagnosticsBus) || null;
+        resolve(diagV2State.bus);
+      };
+      script.onerror = function(){ resolve(null); };
+      (document.head || document.body || document.documentElement).appendChild(script);
+    } catch(_) {
+      resolve(null);
+    }
+  });
+  return diagV2State.loadPromise;
+}
+
+function flushDiagV2Pending(){
+  if (!diagV2State.bus || typeof diagV2State.bus.emit !== 'function') return;
+  if (!diagV2State.pending.length) return;
+  for (var i = 0; i < diagV2State.pending.length; i++) {
+    try { diagV2State.bus.emit(diagV2State.pending[i]); } catch(_){ }
+  }
+  diagV2State.pending.length = 0;
+}
+
+function emitDiagV2Event(evt){
+  if (!evt || typeof evt !== 'object') return;
+  var payload = {};
+  for (var key in evt) {
+    if (Object.prototype.hasOwnProperty.call(evt, key)) {
+      payload[key] = evt[key];
+    }
+  }
+  if (payload.ts == null) {
+    payload.ts = Date.now();
+  }
+  if (diagV2State.bus && typeof diagV2State.bus.emit === 'function') {
+    try { diagV2State.bus.emit(payload); } catch(_){ }
+  } else {
+    diagV2State.pending.push(payload);
+    if (diagV2State.pending.length > 2000) {
+      diagV2State.pending.shift();
+    }
+  }
+}
+
+function bindDiagV2ErrorHandlers(){
+  if (diagV2State.errorBound) return;
+  diagV2State.errorBound = true;
+  window.addEventListener('error', function(event){
+    var message = event && event.message ? event.message : 'Unknown error';
+    var error = event && event.error;
+    emitDiagV2Event({
+      topic: 'error',
+      source: 'window.error',
+      message: message,
+      stack: error && error.stack ? String(error.stack) : null,
+      data: {
+        filename: event && event.filename,
+        lineno: event && event.lineno,
+        colno: event && event.colno
+      }
+    });
+  });
+  window.addEventListener('unhandledrejection', function(event){
+    var reason = event && event.reason;
+    var message = 'Unhandled promise rejection';
+    var stack = null;
+    if (reason && typeof reason === 'object') {
+      if (reason.message) message = reason.message;
+      if (reason.stack) stack = String(reason.stack);
+    } else if (typeof reason === 'string') {
+      message = reason;
+    }
+    emitDiagV2Event({
+      topic: 'error',
+      source: 'unhandledrejection',
+      message: message,
+      stack: stack
+    });
+  });
+}
+
+function normalizeDiagArg(value){
+  if (value instanceof Error) {
+    return {
+      name: value.name || 'Error',
+      message: value.message || '',
+      stack: value.stack ? String(value.stack) : null
+    };
+  }
+  if (value === null || value === undefined) return value;
+  var type = typeof value;
+  if (type === 'string' || type === 'number' || type === 'boolean') return value;
+  if (type === 'object') {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch(_){
+      try { return String(value); } catch(__){ return '[unserializable]'; }
+    }
+  }
+  try { return String(value); } catch(_){ return '[unserializable]'; }
+}
+
+function wrapConsoleForDiagnostics(){
+  if (diagV2State.consoleWrapped) return;
+  diagV2State.consoleWrapped = true;
+  var methods = ['log', 'info', 'warn', 'error', 'debug'];
+  methods.forEach(function(method){
+    var original = console && console[method];
+    if (typeof original !== 'function') return;
+    console[method] = function(){
+      var args = Array.prototype.slice.call(arguments);
+      try {
+        var topic = (method === 'error' || method === 'warn') ? 'error' : 'launch';
+        emitDiagV2Event({
+          topic: topic,
+          source: 'console.' + method,
+          args: args.map(normalizeDiagArg)
+        });
+      } catch(_){ }
+      return original.apply(console, arguments);
+    };
+  });
+}
+
+function ensureDiagV2Overlay(){
+  if (diagV2State.overlay && diagV2State.overlay.isConnected) {
+    return diagV2State.overlay;
+  }
+  var overlay = document.getElementById('diag-v2');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'diag-v2';
+    overlay.hidden = true;
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.zIndex = '1100';
+    overlay.style.background = 'rgba(6, 11, 28, 0.9)';
+    overlay.style.color = '#f5f7ff';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.fontFamily = 'ui-sans-serif, system-ui';
+    overlay.style.fontSize = '15px';
+    overlay.style.padding = '24px';
+    overlay.textContent = 'Diagnostics overlay (beta)';
+  }
+  if (!overlay.parentNode) {
+    var attach = function(){
+      if (!overlay.parentNode) {
+        (document.body || document.documentElement).appendChild(overlay);
+      }
+    };
+    if (document.body) {
+      attach();
+    } else {
+      document.addEventListener('DOMContentLoaded', attach, { once: true });
+    }
+  }
+  diagV2State.overlay = overlay;
+  return overlay;
+}
+
+function toggleDiagV2Overlay(forceShow){
+  var overlay = ensureDiagV2Overlay();
+  if (!overlay) return;
+  var shouldShow = typeof forceShow === 'boolean' ? forceShow : overlay.hidden;
+  overlay.hidden = !shouldShow;
+}
+
+function ensureDiagV2Button(){
+  var init = function(){
+    var buttons = document.querySelectorAll('#diagnostics-btn');
+    var button = buttons.length ? buttons[0] : null;
+    if (buttons.length > 1) {
+      for (var i = 1; i < buttons.length; i++) {
+        try { buttons[i].remove(); } catch(_){ }
+      }
+    }
+    if (!button) {
+      button = document.createElement('button');
+      button.id = 'diagnostics-btn';
+      button.type = 'button';
+      button.textContent = 'Diagnostics';
+      button.className = 'btn';
+      button.style.position = 'fixed';
+      button.style.right = '12px';
+      button.style.bottom = '12px';
+      button.style.zIndex = '1150';
+      document.body.appendChild(button);
+    }
+    if (!button._diagV2Bound) {
+      button._diagV2Bound = true;
+      button.addEventListener('click', function(){
+        toggleDiagV2Overlay();
+      });
+    }
+    diagV2State.buttonReady = true;
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
+}
+
+function bindDiagV2Shortcut(){
+  if (diagV2State.altBound) return;
+  diagV2State.altBound = true;
+  window.addEventListener('keydown', function(event){
+    if (!event.altKey) return;
+    var key = event.key || '';
+    if (key.toLowerCase && key.toLowerCase() === 'd') {
+      event.preventDefault();
+      toggleDiagV2Overlay();
+    }
+  });
+}
+
+function setupDiagnosticsV2(){
+  if (diagV2State.initialized) return;
+  diagV2State.initialized = true;
+  ensureDiagV2Overlay();
+  ensureDiagV2Button();
+  bindDiagV2Shortcut();
+  bindDiagV2ErrorHandlers();
+  wrapConsoleForDiagnostics();
+  ensureDiagnosticsBus().then(function(){
+    if (typeof window !== 'undefined' && window.DiagnosticsBus) {
+      diagV2State.bus = window.DiagnosticsBus;
+    }
+    flushDiagV2Pending();
+  });
+}
+
 function createDiagUI(info, type, resolvedEntry, loadedEntry) {
   var btn = document.getElementById('diag-btn');
   var panel = document.getElementById('diag-panel');
@@ -765,11 +1020,15 @@ function handleDiagCopy(button, sink) {
     });
   }
 
-  copyPromise.then(function(){
+copyPromise.then(function(){
     setFeedback('Copied!', true);
   }).catch(function(){
     setFeedback('Copy failed', false);
   });
+}
+
+if (DIAG_V2) {
+  setupDiagnosticsV2();
 }
 
 boot();
