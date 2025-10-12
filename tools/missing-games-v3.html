@@ -8,6 +8,7 @@
   :root{--bg:#0b0f1a;--fg:#e6edf3;--muted:#9aa4b2;--bad:#ff6b6b;--ok:#8de77b;--warn:#ffd166;--card:#111726;}
   body{margin:0;font-family:system-ui,Segoe UI,Roboto,Ubuntu;color:var(--fg);background:radial-gradient(900px 600px at 50% -150px,#162042,var(--bg));}
   header{padding:1rem 1.25rem;background:linear-gradient(180deg,#0f1730,var(--card));border-bottom:1px solid #1b2440;}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
   h1{margin:0;font-size:1.25rem}
   main{padding:1rem 1.25rem;max-width:1100px;margin:auto}
   .row{display:grid;grid-template-columns:1fr auto auto auto;gap:.75rem;align-items:center;padding:.6rem .75rem;border:1px solid #1b2440;background:#0f1426;border-radius:.75rem;margin:.5rem 0}
@@ -50,7 +51,8 @@
       <span class="pill">../assets/games.json</span>
       <span class="pill">../public/games.json (legacy)</span>
     </div>
-    <input id="jsonUrl" type="text" placeholder="../games.json" value="../games.json"/>
+    <label class="sr-only" for="jsonUrl">games.json URL</label>
+    <input id="jsonUrl" name="jsonUrl" type="text" placeholder="../games.json" value="../games.json" />
     <div class="controls">
       <button id="btn-load">Load from URL</button>
       <button id="btn-test">Test candidates</button>
@@ -62,7 +64,8 @@
 
   <div class="card">
     <div class="small">Or paste slugs (comma/space/newline separated), or a JSON array/object with slug fields:</div>
-    <textarea id="manual" placeholder="e.g. pong,snake,tetris  OR  [{&quot;slug&quot;:&quot;pong&quot;},{&quot;id&quot;:&quot;snake&quot;}]"></textarea>
+    <label class="sr-only" for="manual">Manual game list input</label>
+    <textarea id="manual" name="manual" placeholder="e.g. pong,snake,tetris  OR  [{&quot;slug&quot;:&quot;pong&quot;},{&quot;id&quot;:&quot;snake&quot;}]"></textarea>
     <div class="controls">
       <button id="btn-run">Run check on pasted list</button>
     </div>

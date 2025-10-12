@@ -61,12 +61,21 @@ export default async function(outlet, params, context){
     <h2 class="game-preferences__title">Game settings</h2>
     <div class="game-preferences__controls">
       <label class="game-preferences__toggle">
-        <input type="checkbox" data-sound-toggle />
+        <input
+          type="checkbox"
+          id="game-sound-toggle"
+          name="gameSoundToggle"
+          data-sound-toggle
+        />
         <span>Sound enabled</span>
       </label>
       <label class="game-preferences__select">
         <span>Difficulty</span>
-        <select data-difficulty-select></select>
+        <select
+          id="game-difficulty"
+          name="gameDifficulty"
+          data-difficulty-select
+        ></select>
       </label>
     </div>
     <p class="game-preferences__summary" data-preference-summary></p>
