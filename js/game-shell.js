@@ -1106,154 +1106,160 @@ function setupDiagnosticsV2(){
 }
 
 function createDiagUI(info, type, resolvedEntry, loadedEntry) {
-  var btn = document.getElementById('diag-btn');
-  var panel = document.getElementById('diag-panel');
-  if (!btn || !panel) {
-    if (btn) try { btn.remove(); } catch(_){}
-    if (panel) try { panel.remove(); } catch(_){}
-
-    btn = document.createElement('button');
-    btn.id = 'diag-btn';
-    btn.textContent = '🧪 Diagnostics';
-    btn.style.position='fixed'; btn.style.right='12px'; btn.style.bottom='12px';
-    btn.style.zIndex='1000'; btn.className='btn';
-    document.body.appendChild(btn);
-
-    panel = document.createElement('div');
-    panel.id = 'diag-panel';
-    panel.style.position='fixed'; panel.style.right='12px'; panel.style.bottom='56px';
-    panel.style.background='#0b0f2a'; panel.style.color='#e8eefc';
-    panel.style.border='1px solid #25305a'; panel.style.borderRadius='10px';
-    panel.style.padding='10px'; panel.style.width='360px'; panel.style.maxHeight='60vh'; panel.style.overflow='auto';
-    panel.style.display='none'; panel.style.boxShadow='0 10px 30px rgba(0,0,0,.4)';
-
-    var metaWrap = document.createElement('div');
-    metaWrap.id = 'diag-meta';
-    metaWrap.style.fontFamily = 'ui-sans-serif,system-ui';
-    metaWrap.style.fontSize = '13px';
-    metaWrap.style.lineHeight = '1.4';
-    panel.appendChild(metaWrap);
-
-    var hr = document.createElement('hr');
-    hr.className = 'diag-separator';
-    hr.style.borderColor = '#25305a';
-    panel.appendChild(hr);
-
-    var logsHeader = document.createElement('div');
-    logsHeader.id = 'diag-logs-header';
-    logsHeader.style.display = 'flex';
-    logsHeader.style.alignItems = 'center';
-    logsHeader.style.justifyContent = 'space-between';
-    logsHeader.style.gap = '10px';
-    logsHeader.style.marginBottom = '6px';
-
-    var logsLabel = document.createElement('div');
-    logsLabel.textContent = 'Logs';
-    logsLabel.style.fontWeight = '600';
-    logsHeader.appendChild(logsLabel);
-
-    var copyBtn = document.createElement('button');
-    copyBtn.id = 'diag-copy-btn';
-    copyBtn.textContent = 'Copy logs';
-    copyBtn.className = 'btn';
-    copyBtn.style.padding = '4px 8px';
-    copyBtn.style.fontSize = '12px';
-    copyBtn.style.flexShrink = '0';
-    logsHeader.appendChild(copyBtn);
-
-    panel.appendChild(logsHeader);
-
-    var sink = document.createElement('div');
-    sink.id = 'diag-logs';
-    sink.style.fontFamily = 'ui-monospace,monospace';
-    sink.style.fontSize = '12px';
-    sink.style.whiteSpace = 'pre-wrap';
-    sink.style.border = '1px solid #25305a';
-    sink.style.borderRadius = '8px';
-    sink.style.padding = '8px';
-    sink.style.background = '#070b20';
-    panel.appendChild(sink);
-
-    document.body.appendChild(panel);
-
-    btn.onclick = function(){ panel.style.display = (panel.style.display==='none'?'block':'none'); };
+  if (DIAG_V2) {
+    return;
   }
 
-  var meta = panel.querySelector('#diag-meta');
-  if (!meta) {
-    meta = document.createElement('div');
-    meta.id = 'diag-meta';
-    panel.insertBefore(meta, panel.firstChild);
+  if (!DIAG_V2) {
+    var btn = document.getElementById('diag-btn');
+    var panel = document.getElementById('diag-panel');
+    if (!btn || !panel) {
+      if (btn) try { btn.remove(); } catch(_){}
+      if (panel) try { panel.remove(); } catch(_){}
+
+      btn = document.createElement('button');
+      btn.id = 'diag-btn';
+      btn.textContent = '🧪 Diagnostics';
+      btn.style.position='fixed'; btn.style.right='12px'; btn.style.bottom='12px';
+      btn.style.zIndex='1000'; btn.className='btn';
+      document.body.appendChild(btn);
+
+      panel = document.createElement('div');
+      panel.id = 'diag-panel';
+      panel.style.position='fixed'; panel.style.right='12px'; panel.style.bottom='56px';
+      panel.style.background='#0b0f2a'; panel.style.color='#e8eefc';
+      panel.style.border='1px solid #25305a'; panel.style.borderRadius='10px';
+      panel.style.padding='10px'; panel.style.width='360px'; panel.style.maxHeight='60vh'; panel.style.overflow='auto';
+      panel.style.display='none'; panel.style.boxShadow='0 10px 30px rgba(0,0,0,.4)';
+
+      var metaWrap = document.createElement('div');
+      metaWrap.id = 'diag-meta';
+      metaWrap.style.fontFamily = 'ui-sans-serif,system-ui';
+      metaWrap.style.fontSize = '13px';
+      metaWrap.style.lineHeight = '1.4';
+      panel.appendChild(metaWrap);
+
+      var hr = document.createElement('hr');
+      hr.className = 'diag-separator';
+      hr.style.borderColor = '#25305a';
+      panel.appendChild(hr);
+
+      var logsHeader = document.createElement('div');
+      logsHeader.id = 'diag-logs-header';
+      logsHeader.style.display = 'flex';
+      logsHeader.style.alignItems = 'center';
+      logsHeader.style.justifyContent = 'space-between';
+      logsHeader.style.gap = '10px';
+      logsHeader.style.marginBottom = '6px';
+
+      var logsLabel = document.createElement('div');
+      logsLabel.textContent = 'Logs';
+      logsLabel.style.fontWeight = '600';
+      logsHeader.appendChild(logsLabel);
+
+      var copyBtn = document.createElement('button');
+      copyBtn.id = 'diag-copy-btn';
+      copyBtn.textContent = 'Copy logs';
+      copyBtn.className = 'btn';
+      copyBtn.style.padding = '4px 8px';
+      copyBtn.style.fontSize = '12px';
+      copyBtn.style.flexShrink = '0';
+      logsHeader.appendChild(copyBtn);
+
+      panel.appendChild(logsHeader);
+
+      var sink = document.createElement('div');
+      sink.id = 'diag-logs';
+      sink.style.fontFamily = 'ui-monospace,monospace';
+      sink.style.fontSize = '12px';
+      sink.style.whiteSpace = 'pre-wrap';
+      sink.style.border = '1px solid #25305a';
+      sink.style.borderRadius = '8px';
+      sink.style.padding = '8px';
+      sink.style.background = '#070b20';
+      panel.appendChild(sink);
+
+      document.body.appendChild(panel);
+
+      btn.onclick = function(){ panel.style.display = (panel.style.display==='none'?'block':'none'); };
+    }
+
+    var meta = panel.querySelector('#diag-meta');
+    if (!meta) {
+      meta = document.createElement('div');
+      meta.id = 'diag-meta';
+      panel.insertBefore(meta, panel.firstChild);
+    }
+
+    var logsHeaderEl = panel.querySelector('#diag-logs-header');
+    if (!logsHeaderEl) {
+      logsHeaderEl = document.createElement('div');
+      logsHeaderEl.id = 'diag-logs-header';
+      logsHeaderEl.style.display = 'flex';
+      logsHeaderEl.style.alignItems = 'center';
+      logsHeaderEl.style.justifyContent = 'space-between';
+      logsHeaderEl.style.gap = '10px';
+      logsHeaderEl.style.marginBottom = '6px';
+
+      var logsLabelEl = document.createElement('div');
+      logsLabelEl.textContent = 'Logs';
+      logsLabelEl.style.fontWeight = '600';
+      logsHeaderEl.appendChild(logsLabelEl);
+
+      var copyBtnEl = document.createElement('button');
+      copyBtnEl.id = 'diag-copy-btn';
+      copyBtnEl.textContent = 'Copy logs';
+      copyBtnEl.className = 'btn';
+      copyBtnEl.style.padding = '4px 8px';
+      copyBtnEl.style.fontSize = '12px';
+      copyBtnEl.style.flexShrink = '0';
+      logsHeaderEl.appendChild(copyBtnEl);
+
+      panel.appendChild(logsHeaderEl);
+    }
+
+    var sinkEl = panel.querySelector('#diag-logs');
+    if (!sinkEl) {
+      sinkEl = document.createElement('div');
+      sinkEl.id = 'diag-logs';
+      sinkEl.style.fontFamily = 'ui-monospace,monospace';
+      sinkEl.style.fontSize = '12px';
+      sinkEl.style.whiteSpace = 'pre-wrap';
+      sinkEl.style.border = '1px solid #25305a';
+      sinkEl.style.borderRadius = '8px';
+      sinkEl.style.padding = '8px';
+      sinkEl.style.background = '#070b20';
+      panel.appendChild(sinkEl);
+    }
+
+    var copyBtnFinal = panel.querySelector('#diag-copy-btn');
+    if (copyBtnFinal && !copyBtnFinal._copyBound) {
+      copyBtnFinal._copyBound = true;
+      copyBtnFinal.dataset.label = copyBtnFinal.textContent;
+      copyBtnFinal.addEventListener('click', function(){
+        handleDiagCopy(copyBtnFinal, sinkEl);
+      });
+    }
+
+    var forced = FORCE ? ' (forced)' : '';
+    var resolved = resolvedEntry || 'n/a';
+    var loaded = loadedEntry || resolvedEntry || 'n/a';
+    meta.innerHTML = ''+
+      '<div style="font-weight:700;margin-bottom:6px">Game Diagnostics</div>'+
+      '<div><b>Slug</b>: ' + (info.slug || 'n/a') + '</div>'+
+      '<div><b>Title</b>: ' + (info.title || 'n/a') + '</div>'+
+      '<div><b>Resolved Entry</b>: ' + resolved + '</div>'+
+      '<div><b>Loaded URL</b>: ' + loaded + '</div>'+
+      '<div><b>Type</b>: ' + type + forced + '</div>'+
+      '<div><b>Module</b>: ' + String((info.launch && info.launch.module) || info.module || false) + '</div>';
+
+    sinkEl.textContent = '';
+    diagState.sink = sinkEl;
+
+    ensureDiagListeners();
+    appendDiag('[shell] resolved entry: ' + resolved + '\n');
+    appendDiag('[shell] diagnostics ready\n');
   }
-
-  var logsHeaderEl = panel.querySelector('#diag-logs-header');
-  if (!logsHeaderEl) {
-    logsHeaderEl = document.createElement('div');
-    logsHeaderEl.id = 'diag-logs-header';
-    logsHeaderEl.style.display = 'flex';
-    logsHeaderEl.style.alignItems = 'center';
-    logsHeaderEl.style.justifyContent = 'space-between';
-    logsHeaderEl.style.gap = '10px';
-    logsHeaderEl.style.marginBottom = '6px';
-
-    var logsLabelEl = document.createElement('div');
-    logsLabelEl.textContent = 'Logs';
-    logsLabelEl.style.fontWeight = '600';
-    logsHeaderEl.appendChild(logsLabelEl);
-
-    var copyBtnEl = document.createElement('button');
-    copyBtnEl.id = 'diag-copy-btn';
-    copyBtnEl.textContent = 'Copy logs';
-    copyBtnEl.className = 'btn';
-    copyBtnEl.style.padding = '4px 8px';
-    copyBtnEl.style.fontSize = '12px';
-    copyBtnEl.style.flexShrink = '0';
-    logsHeaderEl.appendChild(copyBtnEl);
-
-    panel.appendChild(logsHeaderEl);
-  }
-
-  var sinkEl = panel.querySelector('#diag-logs');
-  if (!sinkEl) {
-    sinkEl = document.createElement('div');
-    sinkEl.id = 'diag-logs';
-    sinkEl.style.fontFamily = 'ui-monospace,monospace';
-    sinkEl.style.fontSize = '12px';
-    sinkEl.style.whiteSpace = 'pre-wrap';
-    sinkEl.style.border = '1px solid #25305a';
-    sinkEl.style.borderRadius = '8px';
-    sinkEl.style.padding = '8px';
-    sinkEl.style.background = '#070b20';
-    panel.appendChild(sinkEl);
-  }
-
-  var copyBtnFinal = panel.querySelector('#diag-copy-btn');
-  if (copyBtnFinal && !copyBtnFinal._copyBound) {
-    copyBtnFinal._copyBound = true;
-    copyBtnFinal.dataset.label = copyBtnFinal.textContent;
-    copyBtnFinal.addEventListener('click', function(){
-      handleDiagCopy(copyBtnFinal, sinkEl);
-    });
-  }
-
-  var forced = FORCE ? ' (forced)' : '';
-  var resolved = resolvedEntry || 'n/a';
-  var loaded = loadedEntry || resolvedEntry || 'n/a';
-  meta.innerHTML = ''+
-    '<div style="font-weight:700;margin-bottom:6px">Game Diagnostics</div>'+
-    '<div><b>Slug</b>: ' + (info.slug || 'n/a') + '</div>'+
-    '<div><b>Title</b>: ' + (info.title || 'n/a') + '</div>'+
-    '<div><b>Resolved Entry</b>: ' + resolved + '</div>'+
-    '<div><b>Loaded URL</b>: ' + loaded + '</div>'+
-    '<div><b>Type</b>: ' + type + forced + '</div>'+
-    '<div><b>Module</b>: ' + String((info.launch && info.launch.module) || info.module || false) + '</div>';
-
-  sinkEl.textContent = '';
-  diagState.sink = sinkEl;
-
-  ensureDiagListeners();
-  appendDiag('[shell] resolved entry: ' + resolved + '\n');
-  appendDiag('[shell] diagnostics ready\n');
 }
 
 function handleDiagCopy(button, sink) {
