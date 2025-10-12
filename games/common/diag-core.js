@@ -378,6 +378,7 @@
     { id: "probes", label: "Probes" },
     { id: "network", label: "Network" },
     { id: "perf", label: "Performance" },
+    { id: "visuals", label: "Visuals" },
     { id: "env", label: "Env" },
   ];
 
@@ -424,6 +425,11 @@
     probeRunner: null,
     probeRunPromise: null,
     probeAutoTriggered: false,
+    visualsModule: null,
+    visualsManager: null,
+    visualsPanel: null,
+    visualsRefs: null,
+    visualsMetricsUnsub: null,
     externalButton: null,
     buttonObserver: null,
     shortcutHandler: null,
@@ -438,6 +444,7 @@
   state.adapterModule = ensureDiagnosticsAdapterModule();
   state.gameSlug = detectGameSlug();
   state.probesModule = ensureDiagnosticsProbesModule();
+  state.visualsModule = ensureDiagnosticsVisualsModule();
   setupAdapterIntegration(state.adapterModule);
   whenDiagnosticsAdapterReady(setupAdapterIntegration);
 
@@ -497,6 +504,7 @@
       (first || state.modal)?.focus({ preventScroll: true });
     });
     document.addEventListener("keydown", trapKeydown, true);
+    syncVisualsMetricsSubscription();
   }
 
   function close(){
@@ -507,6 +515,7 @@
     syncExternalButtonState();
     document.body.classList.remove("gg-diag-scroll-locked");
     document.removeEventListener("keydown", trapKeydown, true);
+    syncVisualsMetricsSubscription();
     if (state.lastFocus && document.contains(state.lastFocus)) {
       try { state.lastFocus.focus({ preventScroll: true }); } catch(_){}
     } else {
@@ -853,6 +862,67 @@
       };
     }
     return { createProbeRunner };
+  }
+
+  function ensureDiagnosticsVisualsModule(){
+    if (global.GGDiagVisuals && typeof global.GGDiagVisuals.createVisualsManager === "function") {
+      return global.GGDiagVisuals;
+    }
+    if (typeof module === "object" && module && typeof module.require === "function") {
+      try {
+        const required = module.require("./diagnostics/visuals.js");
+        if (required && typeof required.createVisualsManager === "function") {
+          global.GGDiagVisuals = required;
+          return required;
+        }
+      } catch (_) {}
+    }
+    if (typeof require === "function") {
+      try {
+        const required = require("./diagnostics/visuals.js");
+        if (required && typeof required.createVisualsManager === "function") {
+          global.GGDiagVisuals = required;
+          return required;
+        }
+      } catch (_) {}
+    }
+    const fallback = createFallbackVisualsModule();
+    global.GGDiagVisuals = fallback;
+    return fallback;
+  }
+
+  function createFallbackVisualsModule(){
+    const EMPTY_METRICS = {
+      cssWidth: null,
+      cssHeight: null,
+      pixelWidth: null,
+      pixelHeight: null,
+      dpr: null,
+      preferredRatio: null,
+    };
+
+    function noop(){}
+
+    function createVisualsManager(){
+      return {
+        isLayoutEnabled(){ return false; },
+        setLayoutEnabled(){ return false; },
+        isCanvasGridEnabled(){ return false; },
+        setCanvasGridEnabled(){ return false; },
+        isHitboxesEnabled(){ return false; },
+        setHitboxesEnabled(){ return false; },
+        destroy: noop,
+        onMetricsUpdate(callback){
+          if (typeof callback === "function") {
+            try { callback({ ...EMPTY_METRICS }); } catch (_) {}
+          }
+          return noop;
+        },
+        getLatestMetrics(){ return { ...EMPTY_METRICS }; },
+      };
+    }
+
+    return { createVisualsManager };
   }
 
   function setupExternalDiagnosticsButton(){
@@ -1205,6 +1275,8 @@
         buildNetworkPanel(doc, panel);
       } else if (tab.id === "perf") {
         buildPerfPanel(doc, panel);
+      } else if (tab.id === "visuals") {
+        buildVisualsPanel(doc, panel);
       } else if (tab.id === "env") {
         buildEnvPanel(doc, panel);
       }
@@ -2327,6 +2399,10 @@
         state.autoScroll = isScrolledToBottom();
       });
     }
+    if (tabId === "visuals") {
+      syncVisualsToggleState();
+    }
+    syncVisualsMetricsSubscription();
   }
 
   function handleTabKeydown(event, tabId){
@@ -2631,6 +2707,119 @@
     renderPerfPanel();
   }
 
+  function buildVisualsPanel(doc, panel){
+    const wrapper = doc.createElement("div");
+    wrapper.className = "gg-diag-visuals";
+
+    const overlaysSection = doc.createElement("div");
+    overlaysSection.className = "gg-diag-visuals-section";
+
+    const overlaysTitle = doc.createElement("h3");
+    overlaysTitle.className = "gg-diag-visuals-heading";
+    overlaysTitle.textContent = "Overlays";
+    overlaysSection.appendChild(overlaysTitle);
+
+    const overlaysList = doc.createElement("ul");
+    overlaysList.className = "gg-diag-visuals-toggles";
+    overlaysSection.appendChild(overlaysList);
+
+    const toggleDefs = [
+      {
+        key: "layout",
+        label: "Layout bounds",
+        description: "Outline #game-root, the main canvas, and HUD layers.",
+      },
+      {
+        key: "grid",
+        label: "Canvas grid",
+        description: "Display a 10×10 overlay grid aligned to the main canvas.",
+      },
+      {
+        key: "hitboxes",
+        label: "Collision boxes",
+        description: "Render hitboxes from window.__GAME_DEBUG__.hitboxes().",
+      },
+    ];
+
+    const toggleRefs = {};
+
+    for (const def of toggleDefs){
+      const item = doc.createElement("li");
+      item.className = "gg-diag-visuals-toggle-item";
+
+      const label = doc.createElement("label");
+      label.className = "gg-diag-visuals-toggle";
+
+      const input = doc.createElement("input");
+      input.type = "checkbox";
+      input.className = "gg-diag-visuals-checkbox";
+      input.dataset.ggDiagVisualToggle = def.key;
+      input.addEventListener("change", () => handleVisualToggleChange(def.key, input.checked));
+
+      const textWrap = doc.createElement("div");
+      textWrap.className = "gg-diag-visuals-toggle-text";
+
+      const heading = doc.createElement("span");
+      heading.className = "gg-diag-visuals-toggle-label";
+      heading.textContent = def.label;
+
+      const description = doc.createElement("span");
+      description.className = "gg-diag-visuals-toggle-desc";
+      description.textContent = def.description;
+
+      textWrap.append(heading, description);
+      label.append(input, textWrap);
+      item.append(label);
+      overlaysList.append(item);
+      toggleRefs[def.key] = input;
+    }
+
+    const metricsSection = doc.createElement("div");
+    metricsSection.className = "gg-diag-visuals-section";
+
+    const metricsTitle = doc.createElement("h3");
+    metricsTitle.className = "gg-diag-visuals-heading";
+    metricsTitle.textContent = "Live metrics";
+    metricsSection.appendChild(metricsTitle);
+
+    const metricsList = doc.createElement("dl");
+    metricsList.className = "gg-diag-visuals-metrics";
+    metricsSection.appendChild(metricsList);
+
+    const metricDefs = [
+      { key: "css", label: "CSS size" },
+      { key: "pixels", label: "Canvas pixels" },
+      { key: "dpr", label: "Device pixel ratio" },
+      { key: "ratio", label: "Preferred ratio" },
+    ];
+
+    const metricRefs = {};
+    for (const metric of metricDefs){
+      const dt = doc.createElement("dt");
+      dt.className = "gg-diag-visuals-metric-label";
+      dt.textContent = metric.label;
+      const dd = doc.createElement("dd");
+      dd.className = "gg-diag-visuals-metric-value";
+      dd.textContent = "—";
+      metricsList.append(dt, dd);
+      metricRefs[metric.key] = dd;
+    }
+
+    wrapper.append(overlaysSection, metricsSection);
+    panel.append(wrapper);
+
+    state.visualsPanel = panel;
+    state.visualsRefs = { toggles: toggleRefs, metrics: metricRefs };
+
+    ensureVisualsManager();
+    syncVisualsToggleState();
+    const latestMetrics = state.visualsManager && typeof state.visualsManager.getLatestMetrics === "function"
+      ? state.visualsManager.getLatestMetrics()
+      : null;
+    updateVisualsMetricsDisplay(latestMetrics);
+    syncVisualsMetricsSubscription();
+  }
+
   function buildAssetsPanel(doc, panel){
     const list = doc.createElement("ul");
     list.className = "gg-diag-loglist gg-diag-panel-list gg-diag-assets-list";
@@ -2650,6 +2839,181 @@
     wrapper.append(message, pre);
     panel.append(wrapper);
     state.envContainer = { messageEl: message, detailsEl: pre };
+  }
+
+  function ensureVisualsManager(){
+    if (state.visualsManager) return state.visualsManager;
+    if (!state.visualsModule || typeof state.visualsModule.createVisualsManager !== "function") {
+      state.visualsModule = ensureDiagnosticsVisualsModule();
+    }
+    if (!state.visualsModule || typeof state.visualsModule.createVisualsManager !== "function") {
+      return null;
+    }
+    const manager = state.visualsModule.createVisualsManager({
+      window: global,
+      document,
+      getPreferredRatio(){
+        const api = state.gameAdapter?.api;
+        if (!api || typeof api !== "object") return null;
+        if (typeof api.getPreferredRatio === "function") {
+          try {
+            const value = api.getPreferredRatio();
+            if (value !== undefined) return value;
+          } catch (_) {}
+        }
+        if (api && Object.prototype.hasOwnProperty.call(api, "preferredRatio")) {
+          return api.preferredRatio;
+        }
+        return null;
+      },
+    });
+    state.visualsManager = manager;
+    return manager;
+  }
+
+  function handleVisualToggleChange(key, checked){
+    const manager = ensureVisualsManager();
+    if (!manager) {
+      syncVisualsToggleState();
+      return;
+    }
+    const value = !!checked;
+    if (key === "layout" && typeof manager.setLayoutEnabled === "function") {
+      manager.setLayoutEnabled(value);
+    } else if (key === "grid" && typeof manager.setCanvasGridEnabled === "function") {
+      manager.setCanvasGridEnabled(value);
+    } else if (key === "hitboxes" && typeof manager.setHitboxesEnabled === "function") {
+      manager.setHitboxesEnabled(value);
+    }
+    syncVisualsToggleState();
+    if (typeof manager.getLatestMetrics === "function") {
+      updateVisualsMetricsDisplay(manager.getLatestMetrics());
+    }
+  }
+
+  function syncVisualsToggleState(){
+    const toggles = state.visualsRefs?.toggles;
+    if (!toggles) return;
+    const manager = ensureVisualsManager();
+    const layoutEnabled = manager && typeof manager.isLayoutEnabled === "function" ? !!manager.isLayoutEnabled() : false;
+    const gridEnabled = manager && typeof manager.isCanvasGridEnabled === "function" ? !!manager.isCanvasGridEnabled() : false;
+    const hitboxesEnabled = manager && typeof manager.isHitboxesEnabled === "function" ? !!manager.isHitboxesEnabled() : false;
+    if (toggles.layout) toggles.layout.checked = layoutEnabled;
+    if (toggles.grid) toggles.grid.checked = gridEnabled;
+    if (toggles.hitboxes) toggles.hitboxes.checked = hitboxesEnabled;
+  }
+
+  function updateVisualsMetricsDisplay(metrics){
+    const refs = state.visualsRefs?.metrics;
+    if (!refs) return;
+    const data = metrics || {};
+    const cssLabel = formatVisualsSize(data.cssWidth, data.cssHeight, " CSS");
+    const pixelLabel = formatVisualsSize(data.pixelWidth, data.pixelHeight, " px");
+    const dprLabel = formatVisualsDPR(data.dpr);
+    const ratioLabel = formatVisualsRatioDisplay(data.preferredRatio);
+    if (refs.css) refs.css.textContent = cssLabel || "—";
+    if (refs.pixels) refs.pixels.textContent = pixelLabel || "—";
+    if (refs.dpr) refs.dpr.textContent = dprLabel || "—";
+    if (refs.ratio) refs.ratio.textContent = ratioLabel || "—";
+  }
+
+  function setVisualsMetricsSubscription(shouldSubscribe){
+    if (!state.visualsRefs) return;
+    if (!shouldSubscribe) {
+      if (typeof state.visualsMetricsUnsub === "function") {
+        try { state.visualsMetricsUnsub(); } catch (_) {}
+      }
+      state.visualsMetricsUnsub = null;
+      return;
+    }
+    if (state.visualsMetricsUnsub) return;
+    const manager = ensureVisualsManager();
+    if (!manager || typeof manager.onMetricsUpdate !== "function") return;
+    const handler = (metrics) => {
+      updateVisualsMetricsDisplay(metrics);
+    };
+    let unsubscribe = null;
+    try {
+      unsubscribe = manager.onMetricsUpdate(handler);
+    } catch (_) {
+      unsubscribe = null;
+    }
+    if (typeof unsubscribe === "function") {
+      state.visualsMetricsUnsub = () => {
+        try { unsubscribe(); } catch (_) {}
+        state.visualsMetricsUnsub = null;
+      };
+    } else if (unsubscribe && typeof unsubscribe.unsubscribe === "function") {
+      state.visualsMetricsUnsub = () => {
+        try { unsubscribe.unsubscribe(); } catch (_) {}
+        state.visualsMetricsUnsub = null;
+      };
+    } else {
+      state.visualsMetricsUnsub = null;
+    }
+    const latest = typeof manager.getLatestMetrics === "function" ? manager.getLatestMetrics() : null;
+    updateVisualsMetricsDisplay(latest);
+  }
+
+  function syncVisualsMetricsSubscription(){
+    const shouldSubscribe = !!(state.isOpen && state.activeTab === "visuals");
+    setVisualsMetricsSubscription(shouldSubscribe);
+  }
+
+  function formatVisualsSize(width, height, suffix){
+    const w = formatVisualsDimension(width);
+    const h = formatVisualsDimension(height);
+    if (!w || !h) return null;
+    return `${w}×${h}${suffix || ""}`;
+  }
+
+  function formatVisualsDimension(value){
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    const abs = Math.abs(num);
+    if (abs >= 1000) return String(Math.round(num));
+    if (abs >= 10) return trimVisualsDecimal(num.toFixed(1));
+    if (abs >= 1) return trimVisualsDecimal(num.toFixed(2));
+    return trimVisualsDecimal(num.toFixed(3));
+  }
+
+  function formatVisualsDPR(value){
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    if (Math.abs(num) >= 10) return trimVisualsDecimal(num.toFixed(1));
+    return trimVisualsDecimal(num.toFixed(2));
+  }
+
+  function formatVisualsRatioDisplay(value){
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      return trimmed || null;
+    }
+    if (typeof value === "number") {
+      return formatVisualsRatioNumber(value);
+    }
+    if (typeof value === "object") {
+      const w = formatVisualsDimension(value.width ?? value.w ?? value.x);
+      const h = formatVisualsDimension(value.height ?? value.h ?? value.y);
+      if (w && h) return `${w}:${h}`;
+    }
+    return null;
+  }
+
+  function formatVisualsRatioNumber(value){
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    const abs = Math.abs(num);
+    if (abs >= 10) return trimVisualsDecimal(num.toFixed(1));
+    if (abs >= 1) return trimVisualsDecimal(num.toFixed(3));
+    return trimVisualsDecimal(num.toFixed(4));
+  }
+
+  function trimVisualsDecimal(str){
+    const trimmed = String(str).replace(/0+$/, "").replace(/\.$/, "");
+    if (trimmed === "" || trimmed === "-0") return "0";
+    return trimmed;
   }
 
   function ensureReportStoreModule(){
