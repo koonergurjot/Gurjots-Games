@@ -1,13 +1,28 @@
 (function(global){
   if (!global || !global.document) return;
 
-  var TAB_IDS = ['overview', 'assets', 'errors', 'export'];
+  var TAB_IDS = ['overview', 'assets', 'network', 'performance', 'errors', 'export'];
   var FOCUSABLE_SELECTOR = 'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
   function createElement(tag, className) {
     var el = document.createElement(tag);
     if (className) el.className = className;
     return el;
+  }
+
+  function formatBytes(bytes) {
+    if (typeof bytes !== 'number' || !isFinite(bytes) || bytes < 0) return '—';
+    if (bytes === 0) return '0 B';
+    var units = ['B', 'KB', 'MB', 'GB'];
+    var value = bytes;
+    var unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value = value / 1024;
+      unitIndex += 1;
+    }
+    if (unitIndex === 0) return Math.round(value) + ' ' + units[unitIndex];
+    var precision = value >= 10 ? 1 : 2;
+    return value.toFixed(precision) + ' ' + units[unitIndex];
   }
 
   function formatDateTime(ts) {
@@ -281,6 +296,115 @@
     assetsWrap.appendChild(assetsGroups);
     assetsPanel.appendChild(assetsWrap);
 
+    var networkPanel = tabPanels.network;
+    var networkWrap = createElement('div', 'diagnostics-network');
+    networkWrap.style.display = 'flex';
+    networkWrap.style.flexDirection = 'column';
+    networkWrap.style.gap = '12px';
+    var networkTable = createElement('table', 'diagnostics-network__table');
+    networkTable.style.width = '100%';
+    networkTable.style.borderCollapse = 'collapse';
+    var networkHead = createElement('thead');
+    var networkHeadRow = createElement('tr');
+    var networkColumns = [
+      { key: 'ts', label: 'Time' },
+      { key: 'method', label: 'Method' },
+      { key: 'status', label: 'Status' },
+      { key: 'duration', label: 'Duration (ms)' },
+      { key: 'bytes', label: 'Transfer' },
+      { key: 'url', label: 'URL' }
+    ];
+    var networkHeaderButtons = {};
+    networkColumns.forEach(function(column){
+      var th = createElement('th');
+      th.scope = 'col';
+      th.style.textAlign = column.key === 'url' ? 'left' : 'center';
+      th.style.padding = '8px';
+      th.style.fontSize = '0.85rem';
+      th.style.color = 'rgba(211, 220, 255, 0.85)';
+      var button = createElement('button', 'diagnostics-network__sort');
+      button.type = 'button';
+      button.textContent = column.label;
+      button.style.background = 'none';
+      button.style.border = 'none';
+      button.style.color = 'inherit';
+      button.style.font = 'inherit';
+      button.style.cursor = 'pointer';
+      button.style.padding = '0';
+      button.setAttribute('data-sort-key', column.key);
+      button.addEventListener('click', handleNetworkSortClick);
+      th.appendChild(button);
+      networkHeaderButtons[column.key] = th;
+      networkHeadRow.appendChild(th);
+    });
+    networkHead.appendChild(networkHeadRow);
+    networkTable.appendChild(networkHead);
+    var networkBody = createElement('tbody');
+    networkBody.id = 'diagnostics-network-body';
+    networkTable.appendChild(networkBody);
+    networkWrap.appendChild(networkTable);
+    if (networkPanel) {
+      networkPanel.appendChild(networkWrap);
+    }
+
+    var perfPanel = tabPanels.performance;
+    var perfWrap = createElement('div', 'diagnostics-performance');
+    perfWrap.style.display = 'flex';
+    perfWrap.style.flexDirection = 'column';
+    perfWrap.style.gap = '16px';
+    var perfTop = createElement('div', 'diagnostics-performance__current');
+    perfTop.style.display = 'flex';
+    perfTop.style.alignItems = 'baseline';
+    perfTop.style.gap = '12px';
+    var perfTitle = createElement('h3', 'diagnostics-performance__heading');
+    perfTitle.textContent = 'Frame Rate';
+    perfTitle.style.margin = '0';
+    perfTitle.style.fontSize = '1.1rem';
+    perfTop.appendChild(perfTitle);
+    var perfCurrent = createElement('span', 'diagnostics-performance__fps-current');
+    perfCurrent.textContent = '—';
+    perfCurrent.style.fontSize = '2rem';
+    perfCurrent.style.fontWeight = '600';
+    perfTop.appendChild(perfCurrent);
+    perfWrap.appendChild(perfTop);
+
+    var perfStatsList = createElement('div', 'diagnostics-performance__stats');
+    perfStatsList.style.display = 'grid';
+    perfStatsList.style.gridTemplateColumns = 'repeat(auto-fit, minmax(120px, 1fr))';
+    perfStatsList.style.gap = '12px';
+
+    function makePerfStat(label) {
+      var box = createElement('div', 'diagnostics-performance__stat');
+      box.style.background = 'rgba(16, 22, 48, 0.85)';
+      box.style.border = '1px solid rgba(86, 111, 186, 0.25)';
+      box.style.borderRadius = '10px';
+      box.style.padding = '10px 12px';
+      var lbl = createElement('div', 'diagnostics-performance__stat-label');
+      lbl.textContent = label;
+      lbl.style.fontSize = '0.75rem';
+      lbl.style.color = 'rgba(211, 220, 255, 0.65)';
+      var value = createElement('div', 'diagnostics-performance__stat-value');
+      value.textContent = '—';
+      value.style.fontSize = '1.25rem';
+      value.style.fontWeight = '600';
+      value.style.marginTop = '4px';
+      box.appendChild(lbl);
+      box.appendChild(value);
+      perfStatsList.appendChild(box);
+      return value;
+    }
+
+    var perfMin = makePerfStat('Min FPS');
+    var perfMax = makePerfStat('Max FPS');
+    var perfAvg = makePerfStat('Avg FPS');
+    var perfLongLast = makePerfStat('Long Tasks (1s)');
+    var perfLongTotal = makePerfStat('Long Tasks (Total)');
+
+    perfWrap.appendChild(perfStatsList);
+    if (perfPanel) {
+      perfPanel.appendChild(perfWrap);
+    }
+
     var errorsPanel = tabPanels.errors;
     var errorsTableWrap = createElement('div', 'diagnostics-errors');
     var errorsTable = createElement('table', 'diagnostics-errors__table');
@@ -338,6 +462,21 @@
       exportStatus: exportStatus,
       copyTextBtn: copyTextBtn,
       copyJsonBtn: copyJsonBtn,
+      networkColumns: networkColumns,
+      networkBody: networkBody,
+      networkHeaderButtons: networkHeaderButtons,
+      networkEvents: [],
+      networkSort: { key: 'ts', dir: 'desc' },
+      perfCurrentEl: perfCurrent,
+      perfMinEl: perfMin,
+      perfMaxEl: perfMax,
+      perfAvgEl: perfAvg,
+      perfLongLastEl: perfLongLast,
+      perfLongTotalEl: perfLongTotal,
+      perfStats: {
+        fps: { latest: null, min: null, max: null, avg: null },
+        longTasks: { interval: 0, total: 0 }
+      },
       meta: {
         slug: options.slug || '—',
         mountTimeMs: typeof options.mountTime === 'number' ? options.mountTime : null,
@@ -675,6 +814,247 @@
       recalcAssetCounts();
     }
 
+    function getNetworkSortValue(entry, key) {
+      if (!entry) return null;
+      if (key === 'duration') return typeof entry.duration === 'number' ? entry.duration : null;
+      if (key === 'bytes') return typeof entry.bytes === 'number' ? entry.bytes : null;
+      if (key === 'status') return typeof entry.status === 'number' ? entry.status : null;
+      if (key === 'method') return entry.method || '';
+      if (key === 'url') return entry.url || '';
+      if (key === 'ts') return entry.ts || 0;
+      return null;
+    }
+
+    function updateNetworkSortIndicators() {
+      if (!state.networkHeaderButtons) return;
+      for (var key in state.networkHeaderButtons) {
+        if (!Object.prototype.hasOwnProperty.call(state.networkHeaderButtons, key)) continue;
+        var th = state.networkHeaderButtons[key];
+        if (!th) continue;
+        if (key === state.networkSort.key) {
+          th.setAttribute('aria-sort', state.networkSort.dir === 'asc' ? 'ascending' : 'descending');
+        } else {
+          th.removeAttribute('aria-sort');
+        }
+      }
+    }
+
+    function renderNetwork() {
+      if (!state.networkBody) return;
+      updateNetworkSortIndicators();
+      var events = state.networkEvents.slice();
+      var sortKey = state.networkSort.key;
+      var dir = state.networkSort.dir === 'asc' ? 1 : -1;
+      events.sort(function(a, b){
+        var aVal = getNetworkSortValue(a, sortKey);
+        var bVal = getNetworkSortValue(b, sortKey);
+        var aIsNum = typeof aVal === 'number' && isFinite(aVal);
+        var bIsNum = typeof bVal === 'number' && isFinite(bVal);
+        if (aIsNum && bIsNum) {
+          if (aVal === bVal) return 0;
+          return (aVal - bVal) * dir;
+        }
+        if (aIsNum && !bIsNum) return -1;
+        if (!aIsNum && bIsNum) return 1;
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return 1 * dir;
+        if (bVal == null) return -1 * dir;
+        return String(aVal).localeCompare(String(bVal)) * dir;
+      });
+
+      state.networkBody.innerHTML = '';
+      if (!events.length) {
+        var emptyRow = createElement('tr');
+        var emptyCell = createElement('td');
+        emptyCell.colSpan = state.networkColumns.length;
+        emptyCell.textContent = 'No network activity yet.';
+        emptyCell.style.padding = '12px';
+        emptyCell.style.textAlign = 'center';
+        emptyCell.style.color = 'rgba(211, 220, 255, 0.65)';
+        emptyRow.appendChild(emptyCell);
+        state.networkBody.appendChild(emptyRow);
+        return;
+      }
+
+      var maxDuration = 0;
+      for (var idx = 0; idx < events.length; idx++) {
+        var duration = events[idx] && typeof events[idx].duration === 'number' ? events[idx].duration : 0;
+        if (duration > maxDuration) maxDuration = duration;
+      }
+      if (maxDuration <= 0) maxDuration = 1;
+
+      events.forEach(function(entry){
+        var row = createElement('tr');
+        row.style.borderBottom = '1px solid rgba(86, 111, 186, 0.2)';
+
+        var timeCell = createElement('td');
+        timeCell.textContent = formatDateTime(entry.ts);
+        timeCell.style.padding = '8px';
+        timeCell.style.fontSize = '0.8rem';
+        row.appendChild(timeCell);
+
+        var methodCell = createElement('td');
+        methodCell.textContent = entry.method || '—';
+        methodCell.style.padding = '8px';
+        methodCell.style.textAlign = 'center';
+        methodCell.style.fontWeight = '600';
+        row.appendChild(methodCell);
+
+        var statusCell = createElement('td');
+        var statusValue = entry.status != null ? String(entry.status) : '—';
+        statusCell.textContent = statusValue;
+        if (entry.error) {
+          statusCell.title = String(entry.error);
+        }
+        statusCell.style.padding = '8px';
+        statusCell.style.textAlign = 'center';
+        var statusNumber = typeof entry.status === 'number' ? entry.status : null;
+        var isErrorStatus = statusNumber != null && (statusNumber === 0 || statusNumber >= 400);
+        if (statusNumber == null) {
+          statusCell.style.color = 'rgba(211, 220, 255, 0.85)';
+        } else {
+          statusCell.style.color = isErrorStatus ? '#ff5f56' : '#6cf596';
+        }
+        row.appendChild(statusCell);
+
+        var durationCell = createElement('td');
+        durationCell.style.padding = '8px';
+        durationCell.style.minWidth = '120px';
+        var durationWrap = createElement('div');
+        durationWrap.style.display = 'flex';
+        durationWrap.style.flexDirection = 'column';
+        durationWrap.style.gap = '4px';
+        var durationValue = createElement('span');
+        durationValue.textContent = typeof entry.duration === 'number' && isFinite(entry.duration)
+          ? entry.duration.toFixed(1)
+          : '—';
+        durationValue.style.fontSize = '0.85rem';
+        var barContainer = createElement('div');
+        barContainer.style.height = '6px';
+        barContainer.style.background = 'rgba(86, 111, 186, 0.25)';
+        barContainer.style.borderRadius = '999px';
+        var bar = createElement('div');
+        bar.style.height = '100%';
+        bar.style.borderRadius = 'inherit';
+        var fraction = typeof entry.duration === 'number' && entry.duration > 0
+          ? Math.min(entry.duration / maxDuration, 1)
+          : 0;
+        bar.style.width = (fraction * 100).toFixed(1) + '%';
+        bar.style.background = 'linear-gradient(90deg, #5f8bff, #37d67a)';
+        barContainer.appendChild(bar);
+        durationWrap.appendChild(durationValue);
+        durationWrap.appendChild(barContainer);
+        durationCell.appendChild(durationWrap);
+        row.appendChild(durationCell);
+
+        var bytesCell = createElement('td');
+        bytesCell.textContent = formatBytes(entry.bytes);
+        bytesCell.style.padding = '8px';
+        bytesCell.style.textAlign = 'center';
+        row.appendChild(bytesCell);
+
+        var urlCell = createElement('td');
+        urlCell.textContent = entry.url || '—';
+        urlCell.style.padding = '8px';
+        urlCell.style.wordBreak = 'break-all';
+        urlCell.style.maxWidth = '320px';
+        row.appendChild(urlCell);
+
+        state.networkBody.appendChild(row);
+      });
+    }
+
+    function renderPerformance() {
+      var stats = state.perfStats;
+      if (!stats) return;
+      if (state.perfCurrentEl) {
+        state.perfCurrentEl.textContent = stats.fps && stats.fps.latest != null
+          ? stats.fps.latest.toFixed(1)
+          : '—';
+      }
+      if (state.perfMinEl) {
+        state.perfMinEl.textContent = stats.fps && stats.fps.min != null
+          ? stats.fps.min.toFixed(1)
+          : '—';
+      }
+      if (state.perfMaxEl) {
+        state.perfMaxEl.textContent = stats.fps && stats.fps.max != null
+          ? stats.fps.max.toFixed(1)
+          : '—';
+      }
+      if (state.perfAvgEl) {
+        state.perfAvgEl.textContent = stats.fps && stats.fps.avg != null
+          ? stats.fps.avg.toFixed(1)
+          : '—';
+      }
+      if (state.perfLongLastEl) {
+        state.perfLongLastEl.textContent = stats.longTasks ? String(stats.longTasks.interval || 0) : '0';
+      }
+      if (state.perfLongTotalEl) {
+        state.perfLongTotalEl.textContent = stats.longTasks && stats.longTasks.total != null
+          ? String(stats.longTasks.total)
+          : '0';
+      }
+    }
+
+    function handleNetworkSortClick(event) {
+      var btn = event && event.currentTarget;
+      if (!btn) return;
+      var key = btn.getAttribute('data-sort-key');
+      if (!key) return;
+      if (state.networkSort.key === key) {
+        state.networkSort.dir = state.networkSort.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.networkSort.key = key;
+        state.networkSort.dir = key === 'url' ? 'asc' : 'desc';
+      }
+      renderNetwork();
+    }
+
+    function trackNetworkEvent(event) {
+      if (!event || !event.details) return;
+      var details = event.details;
+      var entry = {
+        ts: event.ts || Date.now(),
+        method: details.method ? String(details.method).toUpperCase() : 'GET',
+        url: details.url || '',
+        status: typeof details.status === 'number' ? details.status : null,
+        duration: typeof details.duration === 'number' ? details.duration : null,
+        bytes: typeof details.bytes === 'number' ? details.bytes : null
+      };
+      if (details.error) {
+        var errText;
+        try { errText = String(details.error); } catch(_){ errText = 'error'; }
+        if (errText === 'error') errText = 'Network error';
+        else if (errText === 'abort') errText = 'Request aborted';
+        else if (errText === 'timeout') errText = 'Request timed out';
+        entry.error = errText;
+      }
+      state.networkEvents.push(entry);
+      if (state.networkEvents.length > 400) {
+        state.networkEvents.splice(0, state.networkEvents.length - 400);
+      }
+    }
+
+    function trackPerformanceEvent(event) {
+      if (!event || !event.details) return;
+      var details = event.details;
+      var fps = details.fps || {};
+      var longTasks = details.longTasks || {};
+      state.perfStats = {
+        fps: {
+          latest: typeof fps.latest === 'number' && isFinite(fps.latest) ? fps.latest : null,
+          min: typeof fps.min === 'number' && isFinite(fps.min) ? fps.min : null,
+          max: typeof fps.max === 'number' && isFinite(fps.max) ? fps.max : null,
+          avg: typeof fps.avg === 'number' && isFinite(fps.avg) ? fps.avg : null
+        },
+        longTasks: {
+          interval: typeof longTasks.interval === 'number' && longTasks.interval >= 0 ? longTasks.interval : 0,
+          total: typeof longTasks.total === 'number' && longTasks.total >= 0 ? longTasks.total : 0
+        }
+      };
+    }
+
     function handleCopyResult(btn, message, isError) {
       if (!state.exportStatus) return;
       state.exportStatus.textContent = message;
@@ -775,6 +1155,8 @@
       updateOverview();
       renderErrors();
       renderAssets();
+      renderNetwork();
+      renderPerformance();
       setActiveTab(state.activeTab || 'overview');
       panel.addEventListener('keydown', handleKeydown);
       tablist.addEventListener('keydown', handleTabKey);
@@ -824,6 +1206,12 @@
       if (event.topic === 'asset') {
         handleAssetEvent(event);
       }
+      if (event.topic === 'network') {
+        trackNetworkEvent(event);
+      }
+      if (event.topic === 'performance') {
+        trackPerformanceEvent(event);
+      }
       if (event.topic === 'error') {
         state.meta.totalErrors += 1;
         state.meta.lastErrorTs = event.ts || Date.now();
@@ -864,6 +1252,8 @@
         updateOverview();
         renderErrors();
         renderAssets();
+        renderNetwork();
+        renderPerformance();
       }
     }
 
@@ -918,6 +1308,8 @@
     updateOverview();
     renderErrors();
     renderAssets();
+    renderNetwork();
+    renderPerformance();
 
     return api;
   }
