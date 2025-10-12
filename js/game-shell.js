@@ -22,7 +22,7 @@ var diagV2State = {
   overlayApi: null,
   overlayQueue: [],
   overlayScriptPromise: null,
-  altBound: false,
+  shortcutBound: false,
   consoleWrapped: false,
   errorBound: false,
   buttonReady: false,
@@ -1247,6 +1247,8 @@ function ensureDiagV2Button(){
       button.style.zIndex = '1150';
       document.body.appendChild(button);
     }
+    button.title = 'Open diagnostics (Ctrl+Shift+D)';
+    button.setAttribute('aria-label', 'Open diagnostics (Ctrl+Shift+D)');
     if (!button._diagV2Bound) {
       button._diagV2Bound = true;
       button.addEventListener('click', function(){
@@ -1263,12 +1265,14 @@ function ensureDiagV2Button(){
 }
 
 function bindDiagV2Shortcut(){
-  if (diagV2State.altBound) return;
-  diagV2State.altBound = true;
+  if (diagV2State.shortcutBound) return;
+  diagV2State.shortcutBound = true;
   window.addEventListener('keydown', function(event){
-    if (!event.altKey) return;
     var key = event.key || '';
-    if (key.toLowerCase && key.toLowerCase() === 'd') {
+    var lower = key.toLowerCase ? key.toLowerCase() : key;
+    var hasPrimaryModifier = event.ctrlKey || event.metaKey;
+    if (!hasPrimaryModifier || !event.shiftKey) return;
+    if (lower === 'd') {
       event.preventDefault();
       openDiagV2Overlay();
     }
