@@ -159,14 +159,16 @@
     </div>
   </main>
   <div class="room-ui">
-    <input id="roomName" placeholder="room" />
+    <label class="game-shell__sr-only" for="roomName">Room name</label>
+    <input id="roomName" name="roomName" placeholder="room" />
     <button id="joinRoom">Join</button>
     <button id="leaveRoom">Leave</button>
     <button id="voiceToggle" data-voice>Voice</button>
   </div>
   <div id="chat" data-chat>
     <div id="chatLog" data-chat-log></div>
-    <input id="chatInput" placeholder="Chat..." data-chat-input />
+    <label class="game-shell__sr-only" for="chatInput">Chat message</label>
+    <input id="chatInput" name="chatMessage" placeholder="Chat..." data-chat-input />
   </div>
   <div id="overlay" class="overlay"><div class="panel">
     <h2 id="over-title">Game Over</h2>

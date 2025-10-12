@@ -342,7 +342,8 @@
   <!-- Legacy lobby (hidden) -->
   <div id="lobby" style="display: none;">
     <h2>2048 Multiplayer</h2>
-    <input id="roomInput" placeholder="Room code"/>
+    <label class="game-shell__sr-only" for="roomInput">Room code</label>
+    <input id="roomInput" name="roomCode" placeholder="Room code" />
     <button id="joinBtn">Join</button>
     <button id="readyBtn" style="display:none;">Ready</button>
     <p id="lobbyStatus"></p>
