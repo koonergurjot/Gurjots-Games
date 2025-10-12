@@ -28,7 +28,8 @@ var diagV2State = {
   stylesLoaded: false,
   loadStartedAt: null,
   mountDuration: null,
-  currentSlug: slug || '—'
+  currentSlug: slug || '—',
+  assetsModulePromise: null
 };
 
 async function fetchCatalogJSON(init){
@@ -306,6 +307,7 @@ function loadGame(info){
       diagV2State.overlayApi.setMeta({ mountTimeMs: null, slug: diagV2State.currentSlug });
     } catch(_){ }
   }
+  triggerAssetPreflight(info);
   setErrorVisibility(err, false);
   if (err) {
     err.setAttribute('role', 'status');
@@ -640,6 +642,31 @@ function ensureDiagnosticsBus(){
   return diagV2State.loadPromise;
 }
 
+function ensureDiagnosticsAssetsModule(){
+  if (diagV2State.assetsModulePromise) {
+    return diagV2State.assetsModulePromise;
+  }
+  if (typeof window !== 'undefined' && window.DiagnosticsAssets && typeof window.DiagnosticsAssets.preflight === 'function') {
+    diagV2State.assetsModulePromise = Promise.resolve(window.DiagnosticsAssets);
+    return diagV2State.assetsModulePromise;
+  }
+  diagV2State.assetsModulePromise = new Promise(function(resolve){
+    try {
+      var script = document.createElement('script');
+      script.src = '/js/diagnostics/assets.js';
+      script.async = false;
+      script.onload = function(){
+        resolve((typeof window !== 'undefined' && window.DiagnosticsAssets) || null);
+      };
+      script.onerror = function(){ resolve(null); };
+      (document.head || document.body || document.documentElement).appendChild(script);
+    } catch(_){
+      resolve(null);
+    }
+  });
+  return diagV2State.assetsModulePromise;
+}
+
 function flushDiagV2Pending(){
   if (!diagV2State.bus || typeof diagV2State.bus.emit !== 'function') return;
   if (!diagV2State.pending.length) return;
@@ -649,7 +676,77 @@ function flushDiagV2Pending(){
   diagV2State.pending.length = 0;
 }
 
-function emitDiagV2Event(evt){
+function collectDeclaredAssets(input, bucket){
+  if (!bucket) bucket = [];
+  if (input == null) return bucket;
+  if (typeof input === 'string') {
+    var trimmed = input.trim();
+    if (trimmed) bucket.push(trimmed);
+    return bucket;
+  }
+  if (Array.isArray(input)) {
+    for (var i = 0; i < input.length; i++) {
+      collectDeclaredAssets(input[i], bucket);
+    }
+    return bucket;
+  }
+  if (typeof input === 'object') {
+    for (var key in input) {
+      if (Object.prototype.hasOwnProperty.call(input, key)) {
+        collectDeclaredAssets(input[key], bucket);
+      }
+    }
+  }
+  return bucket;
+}
+
+function gatherDeclaredAssets(info){
+  var collected = [];
+  collectDeclaredAssets(info && info.assets, collected);
+  try {
+    if (typeof window !== 'undefined' && window.game && typeof window.game.getMeta === 'function') {
+      var meta = window.game.getMeta();
+      if (meta && meta.assets) {
+        collectDeclaredAssets(meta.assets, collected);
+      }
+    }
+  } catch(_){ }
+  var seen = Object.create(null);
+  var deduped = [];
+  for (var i = 0; i < collected.length; i++) {
+    var item = collected[i];
+    if (!item) continue;
+    var key = String(item);
+    if (key && !seen[key]) {
+      seen[key] = true;
+      deduped.push(key);
+    }
+  }
+  return deduped;
+}
+
+function triggerAssetPreflight(info){
+  var assets = gatherDeclaredAssets(info);
+  if (!assets.length) return;
+  ensureDiagnosticsBus();
+  ensureDiagnosticsAssetsModule().then(function(module){
+    if (!module || typeof module.preflight !== 'function') return null;
+    return module.preflight(assets).then(function(result){
+      if (!result || !Array.isArray(result.events) || !result.events.length) return;
+      var skipBus = !!(result && result.emitted);
+      for (var i = 0; i < result.events.length; i++) {
+        var evt = result.events[i];
+        if (!evt || typeof evt !== 'object') continue;
+        if (skipBus) emitDiagV2Event(evt, { skipBus: true });
+        else emitDiagV2Event(evt);
+      }
+    }).catch(function(err){
+      try { console.warn('Asset preflight failed', err); } catch(_){ }
+    });
+  }).catch(function(){ });
+}
+
+function emitDiagV2Event(evt, options){
   if (!evt || typeof evt !== 'object') return;
   var payload = {};
   for (var key in evt) {
@@ -660,12 +757,15 @@ function emitDiagV2Event(evt){
   if (payload.ts == null) {
     payload.ts = Date.now();
   }
-  if (diagV2State.bus && typeof diagV2State.bus.emit === 'function') {
-    try { diagV2State.bus.emit(payload); } catch(_){ }
-  } else {
-    diagV2State.pending.push(payload);
-    if (diagV2State.pending.length > 2000) {
-      diagV2State.pending.shift();
+  var skipBus = options && options.skipBus === true;
+  if (!skipBus) {
+    if (diagV2State.bus && typeof diagV2State.bus.emit === 'function') {
+      try { diagV2State.bus.emit(payload); } catch(_){ }
+    } else {
+      diagV2State.pending.push(payload);
+      if (diagV2State.pending.length > 2000) {
+        diagV2State.pending.shift();
+      }
     }
   }
   if (diagV2State.overlayApi && typeof diagV2State.overlayApi.ingest === 'function') {

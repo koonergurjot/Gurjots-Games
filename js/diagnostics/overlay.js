@@ -1,7 +1,7 @@
 (function(global){
   if (!global || !global.document) return;
 
-  var TAB_IDS = ['overview', 'errors', 'export'];
+  var TAB_IDS = ['overview', 'assets', 'errors', 'export'];
   var FOCUSABLE_SELECTOR = 'a[href], area[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
   function createElement(tag, className) {
@@ -220,6 +220,28 @@
     statSlug.appendChild(statSlugLabel);
     statSlug.appendChild(statSlugValue);
 
+    var statAssets = createElement('div', 'diagnostics-stat');
+    var statAssetsLabel = createElement('div', 'diagnostics-stat__label');
+    statAssetsLabel.textContent = 'Assets';
+    var statAssetsValue = createElement('div', 'diagnostics-stat__value');
+    statAssetsValue.id = 'diagnostics-assets-summary';
+    statAssetsValue.style.display = 'flex';
+    statAssetsValue.style.alignItems = 'center';
+    statAssetsValue.style.gap = '10px';
+    var statAssetsIndicator = createElement('span', 'diagnostics-assets-indicator');
+    statAssetsIndicator.style.display = 'inline-block';
+    statAssetsIndicator.style.width = '14px';
+    statAssetsIndicator.style.height = '14px';
+    statAssetsIndicator.style.borderRadius = '50%';
+    statAssetsIndicator.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
+    statAssetsIndicator.style.backgroundColor = '#9aa3c7';
+    var statAssetsText = createElement('span', 'diagnostics-assets-text');
+    statAssetsText.textContent = 'Pending scan';
+    statAssetsValue.appendChild(statAssetsIndicator);
+    statAssetsValue.appendChild(statAssetsText);
+    statAssets.appendChild(statAssetsLabel);
+    statAssets.appendChild(statAssetsValue);
+
     var statMount = createElement('div', 'diagnostics-stat');
     var statMountLabel = createElement('div', 'diagnostics-stat__label');
     statMountLabel.textContent = 'Mount time';
@@ -232,8 +254,32 @@
     overviewGrid.appendChild(statTotal);
     overviewGrid.appendChild(statLast);
     overviewGrid.appendChild(statSlug);
+    overviewGrid.appendChild(statAssets);
     overviewGrid.appendChild(statMount);
     overviewPanel.appendChild(overviewGrid);
+
+    var assetsPanel = tabPanels.assets;
+    var assetsWrap = createElement('div', 'diagnostics-assets');
+    assetsWrap.style.display = 'flex';
+    assetsWrap.style.flexDirection = 'column';
+    assetsWrap.style.gap = '16px';
+    var assetsSearch = createElement('input', 'diagnostics-assets__search');
+    assetsSearch.type = 'search';
+    assetsSearch.placeholder = 'Search assets…';
+    assetsSearch.setAttribute('aria-label', 'Search assets');
+    assetsSearch.style.padding = '10px 12px';
+    assetsSearch.style.borderRadius = '10px';
+    assetsSearch.style.border = '1px solid rgba(136, 163, 245, 0.35)';
+    assetsSearch.style.background = 'rgba(14, 20, 44, 0.85)';
+    assetsSearch.style.color = '#f5f7ff';
+    assetsSearch.style.width = '100%';
+    var assetsGroups = createElement('div', 'diagnostics-assets__groups');
+    assetsGroups.style.display = 'flex';
+    assetsGroups.style.flexDirection = 'column';
+    assetsGroups.style.gap = '12px';
+    assetsWrap.appendChild(assetsSearch);
+    assetsWrap.appendChild(assetsGroups);
+    assetsPanel.appendChild(assetsWrap);
 
     var errorsPanel = tabPanels.errors;
     var errorsTableWrap = createElement('div', 'diagnostics-errors');
@@ -281,6 +327,13 @@
       lastErrorEl: statLastValue,
       slugEl: statSlugValue,
       mountTimeEl: statMountValue,
+      assetIndicatorEl: statAssetsIndicator,
+      assetSummaryTextEl: statAssetsText,
+      assetSearchInput: assetsSearch,
+      assetGroupsEl: assetsGroups,
+      assetSearchQuery: '',
+      assetMap: Object.create(null),
+      assetCounts: { info: 0, warn: 0, error: 0 },
       errorsBody: errorsBody,
       exportStatus: exportStatus,
       copyTextBtn: copyTextBtn,
@@ -300,6 +353,10 @@
       keyHandler: null,
       previousFocus: null
     };
+
+    if (state.assetSearchInput) {
+      state.assetSearchInput.addEventListener('input', handleAssetSearchInput);
+    }
 
     function setActiveTab(id) {
       state.activeTab = id;
@@ -344,6 +401,50 @@
       if (nextBtn) nextBtn.focus();
     }
 
+    function recalcAssetCounts() {
+      var counts = { info: 0, warn: 0, error: 0 };
+      if (state.assetMap) {
+        for (var key in state.assetMap) {
+          if (!Object.prototype.hasOwnProperty.call(state.assetMap, key)) continue;
+          var entry = state.assetMap[key];
+          if (!entry) continue;
+          var lvl = entry.level === 'error' ? 'error' : (entry.level === 'warn' ? 'warn' : 'info');
+          counts[lvl] += 1;
+        }
+      }
+      state.assetCounts = counts;
+      return counts;
+    }
+
+    function computeAssetSummary() {
+      var counts = state.assetCounts || { info: 0, warn: 0, error: 0 };
+      var total = counts.info + counts.warn + counts.error;
+      if (!total) {
+        return { status: 'none', text: 'Pending scan' };
+      }
+      if (counts.error > 0) {
+        return { status: 'error', text: counts.error + ' missing of ' + total };
+      }
+      if (counts.warn > 0) {
+        return { status: 'warn', text: counts.warn + ' slow of ' + total };
+      }
+      return { status: 'ok', text: 'All ' + total + ' OK' };
+    }
+
+    function applyAssetIndicator(summary) {
+      if (!state.assetIndicatorEl || !state.assetSummaryTextEl) return;
+      var colorMap = {
+        ok: '#37d67a',
+        warn: '#f6c945',
+        error: '#ff5f56',
+        none: '#9aa3c7'
+      };
+      var color = colorMap[summary.status] || colorMap.none;
+      state.assetIndicatorEl.style.backgroundColor = color;
+      state.assetIndicatorEl.style.boxShadow = '0 0 12px ' + color;
+      state.assetSummaryTextEl.textContent = summary.text;
+    }
+
     function updateOverview() {
       if (state.totalErrorsEl) {
         state.totalErrorsEl.textContent = String(state.meta.totalErrors || 0);
@@ -356,6 +457,9 @@
       }
       if (state.mountTimeEl) {
         state.mountTimeEl.textContent = state.meta.mountTimeMs != null ? formatDuration(state.meta.mountTimeMs) : '—';
+      }
+      if (state.assetIndicatorEl && state.assetSummaryTextEl) {
+        applyAssetIndicator(computeAssetSummary());
       }
     }
 
@@ -427,6 +531,148 @@
         row.appendChild(detailsCell);
         state.errorsBody.appendChild(row);
       });
+    }
+
+    function renderAssets() {
+      if (!state.assetGroupsEl) return;
+      var query = (state.assetSearchQuery || '').toLowerCase();
+      var groups = { error: [], warn: [], info: [] };
+      if (state.assetMap) {
+        for (var key in state.assetMap) {
+          if (!Object.prototype.hasOwnProperty.call(state.assetMap, key)) continue;
+          var entry = state.assetMap[key];
+          if (!entry) continue;
+          var combined = ((entry.url || '') + ' ' + (entry.message || '') + ' ' + (entry.status != null ? String(entry.status) : '')).toLowerCase();
+          if (query && combined.indexOf(query) === -1) {
+            continue;
+          }
+          var lvl = entry.level === 'error' ? 'error' : (entry.level === 'warn' ? 'warn' : 'info');
+          groups[lvl].push(entry);
+        }
+      }
+
+      state.assetGroupsEl.innerHTML = '';
+      var total = groups.error.length + groups.warn.length + groups.info.length;
+      if (!total) {
+        var empty = createElement('p', 'diagnostics-assets__empty');
+        empty.textContent = query ? 'No assets match your search.' : 'No assets scanned yet.';
+        empty.style.color = 'rgba(211, 220, 255, 0.65)';
+        empty.style.textAlign = 'center';
+        empty.style.padding = '20px 0';
+        state.assetGroupsEl.appendChild(empty);
+        return;
+      }
+
+      var order = ['error', 'warn', 'info'];
+      var labels = { error: 'Missing', warn: 'Slow (>2s)', info: 'OK' };
+      for (var i = 0; i < order.length; i++) {
+        var keyName = order[i];
+        var section = createElement('section', 'diagnostics-assets__group');
+        section.style.background = 'rgba(16, 22, 48, 0.85)';
+        section.style.border = '1px solid rgba(86, 111, 186, 0.25)';
+        section.style.borderRadius = '12px';
+        section.style.padding = '14px 16px';
+
+        var title = createElement('h3', 'diagnostics-assets__group-title');
+        title.textContent = labels[keyName] + ' (' + groups[keyName].length + ')';
+        title.style.margin = '0';
+        title.style.fontSize = '1rem';
+        section.appendChild(title);
+
+        var list = createElement('ul', 'diagnostics-assets__list');
+        list.style.listStyle = 'none';
+        list.style.margin = '12px 0 0';
+        list.style.padding = '0';
+
+        var entriesList = groups[keyName].slice();
+        if (!entriesList.length) {
+          var none = createElement('li', 'diagnostics-assets__item--empty');
+          none.textContent = 'No entries.';
+          none.style.color = 'rgba(211, 220, 255, 0.6)';
+          none.style.padding = '6px 0';
+          list.appendChild(none);
+        } else {
+          entriesList.sort(function(a, b){
+            return String(a.url || '').localeCompare(String(b.url || ''));
+          });
+          for (var j = 0; j < entriesList.length; j++) {
+            var asset = entriesList[j];
+            var item = createElement('li', 'diagnostics-assets__item');
+            item.style.padding = '12px';
+            item.style.borderRadius = '10px';
+            item.style.marginBottom = '10px';
+            var borderColor;
+            var backgroundColor;
+            if (keyName === 'error') {
+              borderColor = 'rgba(255, 95, 86, 0.4)';
+              backgroundColor = 'rgba(255, 95, 86, 0.12)';
+            } else if (keyName === 'warn') {
+              borderColor = 'rgba(246, 201, 69, 0.35)';
+              backgroundColor = 'rgba(246, 201, 69, 0.12)';
+            } else {
+              borderColor = 'rgba(95, 231, 162, 0.35)';
+              backgroundColor = 'rgba(55, 214, 122, 0.12)';
+            }
+            item.style.border = '1px solid ' + borderColor;
+            item.style.background = backgroundColor;
+
+            var urlRow = createElement('div', 'diagnostics-assets__item-url');
+            urlRow.textContent = asset.url || '—';
+            urlRow.style.fontWeight = '600';
+            urlRow.style.wordBreak = 'break-word';
+
+            var messageRow = null;
+            if (asset.message) {
+              messageRow = createElement('div', 'diagnostics-assets__item-message');
+              messageRow.textContent = asset.message;
+              messageRow.style.fontSize = '0.95rem';
+              messageRow.style.marginTop = '6px';
+              messageRow.style.color = '#e5e9ff';
+            }
+
+            var metaRow = createElement('div', 'diagnostics-assets__item-meta');
+            var statusText = asset.status != null ? String(asset.status) : 'n/a';
+            var durationText = typeof asset.duration === 'number' ? formatDuration(asset.duration) : '—';
+            metaRow.textContent = 'Status: ' + statusText + ' · Duration: ' + durationText;
+            metaRow.style.fontSize = '0.85rem';
+            metaRow.style.marginTop = '4px';
+            metaRow.style.color = 'rgba(211, 220, 255, 0.7)';
+
+            item.appendChild(urlRow);
+            if (messageRow) item.appendChild(messageRow);
+            item.appendChild(metaRow);
+            list.appendChild(item);
+          }
+          if (list.lastChild) {
+            list.lastChild.style.marginBottom = '0';
+          }
+        }
+
+        section.appendChild(list);
+        state.assetGroupsEl.appendChild(section);
+      }
+    }
+
+    function handleAssetSearchInput(event) {
+      state.assetSearchQuery = event && event.target ? String(event.target.value || '') : '';
+      renderAssets();
+    }
+
+    function handleAssetEvent(event) {
+      if (!event || !event.details) return;
+      var details = event.details;
+      var url = details && details.url != null ? String(details.url) : '';
+      if (!url) return;
+      var level = event.level === 'error' ? 'error' : (event.level === 'warn' ? 'warn' : 'info');
+      state.assetMap[url] = {
+        url: url,
+        level: level,
+        status: details.status != null ? details.status : null,
+        duration: typeof details.duration === 'number' ? details.duration : null,
+        message: event.message || '',
+        ts: event.ts || Date.now()
+      };
+      recalcAssetCounts();
     }
 
     function handleCopyResult(btn, message, isError) {
@@ -528,6 +774,7 @@
       state.previousFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
       updateOverview();
       renderErrors();
+      renderAssets();
       setActiveTab(state.activeTab || 'overview');
       panel.addEventListener('keydown', handleKeydown);
       tablist.addEventListener('keydown', handleTabKey);
@@ -574,6 +821,9 @@
       if (state.seenEvents[key]) return;
       state.seenEvents[key] = true;
       state.events.push(event);
+      if (event.topic === 'asset') {
+        handleAssetEvent(event);
+      }
       if (event.topic === 'error') {
         state.meta.totalErrors += 1;
         state.meta.lastErrorTs = event.ts || Date.now();
@@ -613,6 +863,7 @@
       if (!root.hidden) {
         updateOverview();
         renderErrors();
+        renderAssets();
       }
     }
 
@@ -666,6 +917,7 @@
 
     updateOverview();
     renderErrors();
+    renderAssets();
 
     return api;
   }
