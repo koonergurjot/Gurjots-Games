@@ -3,7 +3,7 @@ const qs = new URLSearchParams(location.search);
 const DEBUG = qs.get('debug') === '1' || qs.get('debug') === 'true';
 const FORCE = qs.get('force'); // 'iframe' | 'script'
 const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
-const DIAG_V2 = (localStorage.getItem('diag_v2') === '1');
+const DIAG_V2 = (localStorage.getItem('diag_v2') !== '0');
 const slug = qs.get('slug') || qs.get('id') || qs.get('game');
 var $ = function(s){ return document.querySelector(s); };
 
