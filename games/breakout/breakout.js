@@ -47,6 +47,9 @@ const breakoutReadyQueue = (() => {
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
+const BASE_W=1000;
+const BASE_H=800;
+
 const GAME_ID='breakout';GG.incPlays();
 preloadFirstFrameAssets(GAME_ID).catch(()=>{});
 
@@ -530,8 +533,6 @@ primeImages();
 function playSound(name){
   try{playSfx(name);}catch(err){console.warn('[breakout] sfx failed',err);}
 }
-const BASE_W=1000;
-const BASE_H=800;
 const MIN_BALL_SPEED=300;
 const MAX_BALL_SPEED=860;
 const BALL_PADDLE_MAX_ANGLE=Math.PI*0.35;
