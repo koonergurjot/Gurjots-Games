@@ -90,6 +90,53 @@
       }
     }
 
+    function notifyMetricsListeners(metrics){
+      if (!metrics) return;
+      for (const listener of state.metricsListeners){
+        try {
+          listener(clonePublicMetrics(metrics));
+        } catch (_) {}
+      }
+    }
+
+    function metricsEqual(prev, next){
+      if (prev === next) return true;
+      if (!prev || !next) return false;
+      const keys = ['cssWidth', 'cssHeight', 'pixelWidth', 'pixelHeight', 'dpr', 'preferredRatio'];
+      for (const key of keys){
+        const a = prev[key];
+        const b = next[key];
+        if (typeof a === 'number' || typeof b === 'number'){
+          if (Number.isNaN(a) && Number.isNaN(b)) continue;
+          if (a !== b) return false;
+        } else if (a !== b) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function clonePublicMetrics(metrics){
+      if (!metrics) {
+        return {
+          cssWidth: null,
+          cssHeight: null,
+          pixelWidth: null,
+          pixelHeight: null,
+          dpr: null,
+          preferredRatio: null,
+        };
+      }
+      return {
+        cssWidth: metrics.cssWidth ?? null,
+        cssHeight: metrics.cssHeight ?? null,
+        pixelWidth: metrics.pixelWidth ?? null,
+        pixelHeight: metrics.pixelHeight ?? null,
+        dpr: metrics.dpr ?? null,
+        preferredRatio: metrics.preferredRatio ?? null,
+      };
+    }
+
     function isVisualNode(node){
       return !!(node && node.dataset && node.dataset.ggDiagVisual);
     }
@@ -120,6 +167,35 @@
         return canvas;
       }
       return null;
+    }
+
+    function findHudNodes(root){
+      if (!doc || !doc.querySelectorAll) return [];
+      const seen = new Set();
+      const results = [];
+
+      function add(node){
+        if (!node || seen.has(node) || isVisualNode(node)) return;
+        if (root && node !== root && !root.contains(node)) return;
+        seen.add(node);
+        results.push(node);
+      }
+
+      const byId = doc.getElementById ? doc.getElementById('hud') : null;
+      if (byId) add(byId);
+
+      const selectors = ['.hud', '[data-hud]', '[data-game-hud]', '[data-gg-hud]', '[data-hud-root]'];
+      const scope = root && typeof root.querySelectorAll === 'function' ? root : doc;
+      for (const selector of selectors){
+        try {
+          const nodes = scope.querySelectorAll(selector);
+          for (let i = 0; i < nodes.length; i += 1){
+            add(nodes[i]);
+          }
+        } catch (_) {}
+      }
+
+      return results;
     }
 
     function getRect(node){
@@ -242,6 +318,232 @@
         }
       }
       return null;
+    }
+
+    function collectMetrics(){
+      const rootNode = findGameRoot();
+      const canvasNode = findGameCanvas(rootNode);
+      const hudNodes = findHudNodes(rootNode);
+
+      const rootRect = getRect(rootNode);
+      const canvasRect = getRect(canvasNode);
+      const hudRects = [];
+      for (let i = 0; i < hudNodes.length; i += 1){
+        hudRects.push({ node: hudNodes[i], rect: getRect(hudNodes[i]), index: i });
+      }
+
+      const cssWidth = canvasRect ? canvasRect.width : (rootRect ? rootRect.width : null);
+      const cssHeight = canvasRect ? canvasRect.height : (rootRect ? rootRect.height : null);
+      let pixelWidth = null;
+      let pixelHeight = null;
+      if (canvasNode) {
+        const w = Number(canvasNode.width);
+        const h = Number(canvasNode.height);
+        if (Number.isFinite(w) && w > 0) pixelWidth = w;
+        if (Number.isFinite(h) && h > 0) pixelHeight = h;
+      }
+      const dpr = Number.isFinite(win.devicePixelRatio) && win.devicePixelRatio > 0 ? win.devicePixelRatio : null;
+      const preferredRatio = resolvePreferredRatio();
+
+      const publicMetrics = {
+        cssWidth: Number.isFinite(cssWidth) ? cssWidth : null,
+        cssHeight: Number.isFinite(cssHeight) ? cssHeight : null,
+        pixelWidth: Number.isFinite(pixelWidth) ? pixelWidth : null,
+        pixelHeight: Number.isFinite(pixelHeight) ? pixelHeight : null,
+        dpr: Number.isFinite(dpr) ? dpr : null,
+        preferredRatio: preferredRatio || null,
+      };
+
+      return {
+        rootNode,
+        rootRect,
+        canvasNode,
+        canvasRect,
+        hudRects,
+        cssWidth: publicMetrics.cssWidth,
+        cssHeight: publicMetrics.cssHeight,
+        pixelWidth: publicMetrics.pixelWidth,
+        pixelHeight: publicMetrics.pixelHeight,
+        dpr: publicMetrics.dpr,
+        preferredRatio: publicMetrics.preferredRatio,
+        publicMetrics,
+      };
+    }
+
+    function ensureLayoutOverlay(){
+      if (state.layout.container && state.layout.container.parentNode) {
+        return state.layout;
+      }
+      if (!doc || !doc.body) return state.layout;
+      const container = doc.createElement('div');
+      container.dataset.ggDiagVisual = 'layout';
+      container.style.position = 'fixed';
+      container.style.pointerEvents = 'none';
+      container.style.left = '0';
+      container.style.top = '0';
+      container.style.width = '0';
+      container.style.height = '0';
+      container.style.zIndex = '2147482998';
+      container.style.display = 'none';
+      doc.body.appendChild(container);
+      state.layout.container = container;
+      if (!(state.layout.items instanceof Map)) {
+        state.layout.items = new Map();
+      }
+      return state.layout;
+    }
+
+    function teardownLayoutOverlay(){
+      if (state.layout.items && typeof state.layout.items.clear === 'function') {
+        state.layout.items.forEach((entry) => {
+          if (entry && entry.node && entry.node.parentNode) {
+            entry.node.parentNode.removeChild(entry.node);
+          }
+        });
+        state.layout.items.clear();
+      }
+      const container = state.layout.container;
+      if (container && container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
+      state.layout.container = null;
+    }
+
+    function ensureLayoutItem(key){
+      if (!(state.layout.items instanceof Map)) {
+        state.layout.items = new Map();
+      }
+      let entry = state.layout.items.get(key);
+      if (entry && entry.node && entry.node.parentNode) {
+        return entry;
+      }
+      ensureLayoutOverlay();
+      if (!state.layout.container) return { node: null, label: null };
+      const node = doc.createElement('div');
+      node.dataset.ggDiagVisual = `layout-${key}`;
+      node.style.position = 'absolute';
+      node.style.pointerEvents = 'none';
+      node.style.left = '0';
+      node.style.top = '0';
+      node.style.display = 'none';
+      node.style.boxSizing = 'border-box';
+      const label = doc.createElement('div');
+      label.dataset.ggDiagVisual = `layout-${key}-label`;
+      label.style.position = 'absolute';
+      label.style.left = '0';
+      label.style.top = '-24px';
+      label.style.padding = '2px 6px';
+      label.style.font = '11px "Segoe UI", system-ui, sans-serif';
+      label.style.background = 'rgba(15, 23, 42, 0.82)';
+      label.style.borderRadius = '4px';
+      label.style.pointerEvents = 'none';
+      label.style.whiteSpace = 'nowrap';
+      label.style.maxWidth = '260px';
+      label.style.overflow = 'hidden';
+      label.style.textOverflow = 'ellipsis';
+      node.appendChild(label);
+      state.layout.container.appendChild(node);
+      entry = { node, label };
+      state.layout.items.set(key, entry);
+      return entry;
+    }
+
+    function describeLayoutNode(node, fallback){
+      if (!node) return fallback;
+      if (node.id) return `#${node.id}`;
+      if (node.dataset) {
+        if (node.dataset.hudRole) return `[data-hud-role="${node.dataset.hudRole}"]`;
+        if (node.dataset.gameHud) return `[data-game-hud="${node.dataset.gameHud}"]`;
+        if (node.dataset.hud) return `[data-hud="${node.dataset.hud}"]`;
+      }
+      if (node.classList && node.classList.length) {
+        return `.${node.classList[0]}`;
+      }
+      if (node.tagName) return node.tagName.toLowerCase();
+      return fallback;
+    }
+
+    function buildLayoutLabel(kind, node, rect, metrics, index){
+      const parts = [];
+      const descriptor = describeLayoutNode(node, kind);
+      if (kind === 'hud' && typeof index === 'number' && index > 0) {
+        parts.push(`${descriptor} [${index + 1}]`);
+      } else {
+        parts.push(descriptor);
+      }
+      if (rect) {
+        const cssLabel = formatSize(rect.width, rect.height);
+        if (cssLabel) parts.push(`${cssLabel} CSS`);
+      }
+      if (kind === 'canvas') {
+        const pixelLabel = formatSize(metrics.pixelWidth, metrics.pixelHeight);
+        if (pixelLabel) parts.push(`${pixelLabel} px`);
+        if (metrics.preferredRatio) parts.push(`pref ${metrics.preferredRatio}`);
+      } else if (kind === 'root' && metrics.preferredRatio) {
+        parts.push(`pref ${metrics.preferredRatio}`);
+      }
+      return parts.join(' • ');
+    }
+
+    function updateLayoutOverlay(metrics){
+      const layout = ensureLayoutOverlay();
+      const container = layout && layout.container;
+      if (!container) return;
+      const activeKeys = new Set();
+      let visible = 0;
+
+      function render(key, rect, label, palette){
+        activeKeys.add(key);
+        const entry = ensureLayoutItem(key);
+        if (!entry.node) return;
+        const colors = palette || LAYOUT_STYLES.root;
+        entry.node.style.border = `1px solid ${colors.border}`;
+        entry.node.style.backgroundColor = colors.fill;
+        if (entry.label) entry.label.style.color = colors.label;
+        if (!rect || rect.width <= 0 || rect.height <= 0) {
+          entry.node.style.display = 'none';
+          return;
+        }
+        entry.node.style.display = 'block';
+        entry.node.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`;
+        entry.node.style.width = `${rect.width}px`;
+        entry.node.style.height = `${rect.height}px`;
+        if (entry.label) {
+          entry.label.textContent = label || '';
+          entry.label.title = label || '';
+        }
+        visible += 1;
+      }
+
+      if (metrics.rootRect) {
+        render('root', metrics.rootRect, buildLayoutLabel('root', metrics.rootNode, metrics.rootRect, metrics), LAYOUT_STYLES.root);
+      }
+
+      if (metrics.canvasRect) {
+        render('canvas', metrics.canvasRect, buildLayoutLabel('canvas', metrics.canvasNode, metrics.canvasRect, metrics), LAYOUT_STYLES.canvas);
+      }
+
+      for (let i = 0; i < metrics.hudRects.length; i += 1){
+        const info = metrics.hudRects[i];
+        render(`hud-${i}`, info.rect, buildLayoutLabel('hud', info.node, info.rect, metrics, i), LAYOUT_STYLES.hud);
+      }
+
+      const toRemove = [];
+      if (state.layout.items && typeof state.layout.items.forEach === 'function') {
+        state.layout.items.forEach((entry, key) => {
+          if (!activeKeys.has(key)) {
+            if (entry && entry.node && entry.node.parentNode) {
+              entry.node.parentNode.removeChild(entry.node);
+            }
+            toRemove.push(key);
+          }
+        });
+      }
+      for (const key of toRemove){
+        state.layout.items.delete(key);
+      }
+
+      container.style.display = visible > 0 ? 'block' : 'none';
     }
 
     function ensureGridOverlay(){
