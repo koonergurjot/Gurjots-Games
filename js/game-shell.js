@@ -5,18 +5,33 @@ const FORCE = qs.get('force'); // 'iframe' | 'script'
 const FORCE_MODULE = qs.has('module') ? (qs.get('module') === '1' || qs.get('module') === 'true') : null;
 // Feature flag for Diagnostics v2
 let diagV2Flag = false;
+let diagV2Override = false;
 try {
   const stored = localStorage.getItem('diag_v2');
-  diagV2Flag = stored === '1' || stored === 'true';
+  if (stored !== null) {
+    diagV2Override = true;
+    diagV2Flag = stored === '1' || stored === 'true';
+  }
 } catch (_err) {
   diagV2Flag = false;
+  diagV2Override = false;
 }
-const DIAG_V2 = diagV2Flag;
+let DIAG_V2 = diagV2Flag;
 
 if (typeof window !== 'undefined') {
   try {
     const features = (typeof window.__GG_FEATURES === 'object' && window.__GG_FEATURES) ? window.__GG_FEATURES : {};
-    features.diag_v2 = DIAG_V2;
+    const existingDiagV2 = !!features.diag_v2;
+    if (!diagV2Override && existingDiagV2) {
+      DIAG_V2 = true;
+    } else {
+      DIAG_V2 = diagV2Flag;
+    }
+    if (diagV2Override) {
+      features.diag_v2 = DIAG_V2;
+    } else if (DIAG_V2) {
+      features.diag_v2 = true;
+    }
     window.__GG_FEATURES = features;
     const existingOpts = (typeof window.__GG_DIAG_OPTS === 'object' && window.__GG_DIAG_OPTS) ? window.__GG_DIAG_OPTS : {};
     const mergedOpts = Object.assign({}, existingOpts, { diagV2: DIAG_V2 });
