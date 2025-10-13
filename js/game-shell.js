@@ -794,12 +794,24 @@ function flushDiagV2Pending(){
   diagV2State.pending.length = 0;
 }
 
+function looksLikeAssetUrl(str){
+  if (!str || typeof str !== 'string') return false;
+  var trimmed = str.trim();
+  if (!trimmed) return false;
+  if (/^(?:https?:|data:|blob:|\/{2})/i.test(trimmed)) return true;
+  if (trimmed.charAt(0) === '/' || trimmed.indexOf('/') !== -1) return true;
+  if (/\.\w{2,5}(?:$|[?#])/i.test(trimmed)) return true;
+  return false;
+}
+
 function collectDeclaredAssets(input, bucket){
   if (!bucket) bucket = [];
   if (input == null) return bucket;
   if (typeof input === 'string') {
-    var trimmed = input.trim();
-    if (trimmed) bucket.push(trimmed);
+    if (looksLikeAssetUrl(input)) {
+      var trimmed = input.trim();
+      if (trimmed) bucket.push(trimmed);
+    }
     return bucket;
   }
   if (Array.isArray(input)) {
@@ -809,9 +821,33 @@ function collectDeclaredAssets(input, bucket){
     return bucket;
   }
   if (typeof input === 'object') {
-    for (var key in input) {
-      if (Object.prototype.hasOwnProperty.call(input, key)) {
-        collectDeclaredAssets(input[key], bucket);
+    var stringKeys = ['url', 'href', 'src', 'path', 'file'];
+    for (var i = 0; i < stringKeys.length; i++) {
+      if (typeof input[stringKeys[i]] === 'string') {
+        collectDeclaredAssets(input[stringKeys[i]], bucket);
+      }
+    }
+    var arrayKeys = ['urls', 'files', 'assets', 'preload', 'preloads', 'resources', 'items', 'entries', 'list'];
+    for (var j = 0; j < arrayKeys.length; j++) {
+      if (Array.isArray(input[arrayKeys[j]])) {
+        collectDeclaredAssets(input[arrayKeys[j]], bucket);
+      }
+    }
+    var objectKeys = ['assets', 'preload', 'preloads', 'resources', 'files', 'urls', 'items', 'entries', 'list'];
+    for (var k = 0; k < objectKeys.length; k++) {
+      var candidate = input[objectKeys[k]];
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
+      var nested = [];
+      for (var prop in candidate) {
+        if (!Object.prototype.hasOwnProperty.call(candidate, prop)) continue;
+        if (typeof candidate[prop] === 'string' && looksLikeAssetUrl(candidate[prop])) {
+          nested.push(candidate[prop]);
+        } else if (Array.isArray(candidate[prop])) {
+          collectDeclaredAssets(candidate[prop], nested);
+        }
+      }
+      if (nested.length) {
+        collectDeclaredAssets(nested, bucket);
       }
     }
   }
@@ -820,45 +856,68 @@ function collectDeclaredAssets(input, bucket){
 
 function gatherDeclaredAssets(info){
   var collected = [];
-  var baseSources = [];
+  function addSource(source){
+    collectDeclaredAssets(source, collected);
+  }
+  function addFromDescriptor(desc){
+    if (!desc || typeof desc !== 'object') return;
+    addSource(desc.assets);
+    addSource(desc.preload);
+    addSource(desc.preloads);
+    addSource(desc.resources);
+    addSource(desc.urls);
+    addSource(desc.files);
+  }
   if (info && typeof info === 'object') {
-    baseSources.push(info.assets);
-    baseSources.push(info.firstFrame);
-    baseSources.push(info.preload);
-    baseSources.push(info.preloads);
-    baseSources.push(info.resources);
-    baseSources.push(info.assetManifest);
-    baseSources.push(info.assetManifestUrl);
-    baseSources.push(info.assetList);
-    baseSources.push(info.assetBundle);
-    baseSources.push(info.media && info.media.assets);
-    baseSources.push(info.media && info.media.preload);
-    baseSources.push(info.manifest && info.manifest.assets);
-    baseSources.push(info.manifest && info.manifest.preload);
-    baseSources.push(info.bundle && info.bundle.assets);
-    baseSources.push(info.diagnostics && info.diagnostics.assets);
-    baseSources.push(info.diagnostics && info.diagnostics.preload);
+    addSource(info.assets);
+    addSource(info.firstFrame);
+    addSource(info.preload);
+    addSource(info.preloads);
+    addSource(info.resources);
+    addFromDescriptor(info.assetManifest);
+    addSource(info.assetManifestUrl);
+    addSource(info.assetList);
+    addFromDescriptor(info.assetBundle);
+    if (info.media && typeof info.media === 'object') {
+      addSource(info.media.assets);
+      addSource(info.media.preload);
+      addFromDescriptor(info.media);
+    }
+    if (info.manifest && typeof info.manifest === 'object') {
+      addSource(info.manifest.assets);
+      addSource(info.manifest.preload);
+      addFromDescriptor(info.manifest);
+    }
+    if (info.bundle && typeof info.bundle === 'object') {
+      addSource(info.bundle.assets);
+      addSource(info.bundle.preload);
+      addFromDescriptor(info.bundle);
+    }
+    if (info.diagnostics && typeof info.diagnostics === 'object') {
+      addSource(info.diagnostics.assets);
+      addSource(info.diagnostics.preload);
+      addFromDescriptor(info.diagnostics);
+    }
     if (info.launch && typeof info.launch === 'object') {
-      baseSources.push(info.launch.assets);
-      baseSources.push(info.launch.preload);
-      baseSources.push(info.launch.resources);
+      addSource(info.launch.assets);
+      addSource(info.launch.preload);
+      addSource(info.launch.resources);
+      addFromDescriptor(info.launch);
     }
     if (info.data && typeof info.data === 'object') {
-      baseSources.push(info.data.assets);
-      baseSources.push(info.data.preload);
+      addSource(info.data.assets);
+      addSource(info.data.preload);
+      addFromDescriptor(info.data);
     }
-  }
-  for (var idx = 0; idx < baseSources.length; idx++) {
-    collectDeclaredAssets(baseSources[idx], collected);
   }
   try {
     if (typeof window !== 'undefined' && window.game && typeof window.game.getMeta === 'function') {
       var meta = window.game.getMeta();
       if (meta && meta.assets) {
-        collectDeclaredAssets(meta.assets, collected);
+        addSource(meta.assets);
       }
       if (meta && meta.preload) {
-        collectDeclaredAssets(meta.preload, collected);
+        addSource(meta.preload);
       }
     }
   } catch(_){ }
