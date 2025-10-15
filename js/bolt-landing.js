@@ -11,8 +11,7 @@ const FILTERS = document.getElementById('bolt-filters');
 const GAME_COUNT = document.getElementById('bolt-game-count');
 
 let allGames = [];
-let activeTag = 'All';
-const PRIMARY_QUERY_KEY = 'slug'; // shell reads slug; we also include id for legacy fallbacks
+const PRIMARY_QUERY_KEY = 'slug';
 const GAME_LOOKUP = new Map();
 const PREFETCHED = new Set();
 let CARD_OBSERVER = undefined;
@@ -20,6 +19,14 @@ let CARD_OBSERVER = undefined;
 const toSlug = s => (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
 const prettyTag = t => t?.charAt(0).toUpperCase() + t?.slice(1);
 const toQuery = s => (s||'').trim().toLowerCase();
+function esc(value){
+  return String(value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/\"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
 
 const HISTORY_SECTION = document.createElement('section');
 HISTORY_SECTION.className = 'bolt-history';
@@ -39,7 +46,7 @@ registerSW();
 
 function placeholderSVG(label='GG'){
   return `
-  <svg viewBox="0 0 512 288" role="img" aria-label="${label}">
+  <svg viewBox="0 0 512 288" role="img" aria-label="${esc(label)}">
     <defs>
       <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0" stop-color="#7dd3fc"/>
@@ -62,7 +69,7 @@ function placeholderSVG(label='GG'){
         <rect x="-10" y="24" rx="6" width="56" height="14"/>
         <rect x="-10" y="48" rx="6" width="56" height="14"/>
       </g>
-      <text x="220" y="160" fill="#cbd5e1" font-family="Poppins, Arial" font-size="28" font-weight="800">${label}</text>
+      <text x="220" y="160" fill="#cbd5e1" font-family="Poppins, Arial" font-size="28" font-weight="800">${esc(label)}</text>
     </g>
   </svg>`;
 }
@@ -81,20 +88,20 @@ function card(game){
   const href = `game.html?${params.toString()}`;
 
   return `
-  <article class="bolt-card" tabindex="0" role="article" aria-label="${title} card" data-slug="${slug}">
+  <article class="bolt-card" tabindex="0" role="article" aria-label="${esc(title)} card" data-slug="${esc(slug)}">
     <div class="bolt-shot">
-      <div class="bolt-badge">${badge}</div>
-      ${thumb ? `<img loading="lazy" decoding="async" alt="${title} thumbnail" src="${thumb}">` : placeholderSVG(title.slice(0, 14))}
+      <div class="bolt-badge">${esc(badge)}</div>
+      ${thumb ? `<img loading="lazy" decoding="async" alt="${esc(title)} thumbnail" src="${thumb}">` : placeholderSVG(String(title).slice(0, 14))}
     </div>
     <div class="bolt-card-body">
-      <div class="bolt-card-title">${title}</div>
+      <div class="bolt-card-title">${esc(title)}</div>
       <div class="bolt-card-meta">
-        ${Array.isArray(tags) ? tags.slice(0,3).map(t=>`<span>${prettyTag(t)}</span>`).join('') : ''}
+        ${Array.isArray(tags) ? tags.slice(0,3).map(t=>`<span>${esc(prettyTag(t))}</span>`).join('') : ''}
       </div>
-      ${short ? `<div class="bolt-card-desc">${short}</div>` : ''}
+      ${short ? `<div class="bolt-card-desc">${esc(short)}</div>` : ''}
       <div class="bolt-card-actions">
-        <a class="bolt-btn bolt-primary" href="${href}" aria-label="Play ${title} now">▶ Play</a>
-        <a class="bolt-btn" href="${href}#about" aria-label="Open ${title} details">ℹ Details</a>
+        <a class="bolt-btn bolt-primary" href="${href}" aria-label="Play ${esc(title)} now">▶ Play</a>
+        <a class="bolt-btn" href="${href}#about" aria-label="Open ${esc(title)} details">ℹ Details</a>
       </div>
     </div>
   </article>`;
@@ -140,7 +147,10 @@ function filterAndSearch(){
 
 function buildFilterChips(tags){
   const unique = Array.from(new Set(['All', ...tags.filter(Boolean)]));
-  FILTERS.innerHTML = unique.map(t => `<button class="bolt-chip" role="tab" aria-selected="${t==='All'}" data-tag="${t}">${prettyTag(t)}</button>`).join('');
+  FILTERS.innerHTML = unique.map(t => {
+    const label = prettyTag(t);
+    return `<button class="bolt-chip" role="tab" aria-selected="${t==='All'}" data-tag="${esc(t)}">${esc(label)}</button>`;
+  }).join('');
   FILTERS.addEventListener('click', (e)=>{
     const btn = e.target.closest('.bolt-chip'); if (!btn) return;
     activeTag = btn.dataset.tag;

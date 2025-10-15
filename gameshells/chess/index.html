@@ -9,7 +9,7 @@
     {
       "imports": {
         "console-signature": "../../js/vendor/console-signature.js",
-        "three": "https://unpkg.com/three@0.161.0/build/three.module.js"
+        "three": "../../vendor/three/0.161.0/build/three.module.js"
       }
     }
     </script>
@@ -185,7 +185,7 @@
 <script>
 (function(){
   if (window.__gg_autoSignalInstalled) return; window.__gg_autoSignalInstalled = true;
-  function post(type, payload){ try { parent && parent.postMessage(Object.assign({type}, payload||{}), "*"); } catch(e){} }
+  function post(type, payload){ try { parent && parent.postMessage(Object.assign({type}, payload||{}), location.origin); } catch(e){} }
   window.addEventListener("error", e => post("GAME_ERROR", { error: (e.message || String(e.error || e)).slice(0,500) }));
   window.addEventListener("unhandledrejection", e => {
     const r = e && e.reason ? (e.reason.message || String(e.reason)) : "unhandled rejection";

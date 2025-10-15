@@ -1,5 +1,13 @@
 // Shared UI helpers — fresh build
 import { t } from './i18n.js';
+function esc(value){
+  return String(value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/\"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
 
 export function applyTheme(theme) {
   let t = theme;
@@ -365,10 +373,10 @@ export function attachHelpOverlay({ gameId, steps = [], objective = '', controls
   const render = () => {
     const step = normalizedSteps[index]?.text || '';
     overlay.querySelector('.step-content').innerHTML = `
-      ${objective ? `<section><h4>${t('objective')}</h4><p>${objective}</p></section>` : ''}
-      ${controls ? `<section><h4>${t('controls')}</h4><p>${controls}</p></section>` : ''}
-      ${tips && tips.length ? `<section><h4>${t('tips')}</h4><ul>${tips.map(tip => `<li>${tip}</li>`).join('')}</ul></section>` : ''}
-      ${step ? `<section><p>${step}</p></section>` : ''}`;
+      ${objective ? `<section><h4>${t('objective')}</h4><p>${esc(objective)}</p></section>` : ''}
+      ${controls ? `<section><h4>${t('controls')}</h4><p>${esc(controls)}</p></section>` : ''}
+      ${tips && tips.length ? `<section><h4>${t('tips')}</h4><ul>${tips.map(tip => `<li>${esc(tip)}</li>`).join('')}</ul></section>` : ''}
+      ${step ? `<section><p>${esc(step)}</p></section>` : ''}`;
     overlay.querySelector('.step-indicator').textContent = normalizedSteps.length ? `${index + 1}/${normalizedSteps.length}` : '';
     if (progressEl) {
       if (normalizedSteps.length) {
