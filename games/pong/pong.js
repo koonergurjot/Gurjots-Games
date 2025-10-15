@@ -1,5 +1,5 @@
 
-import { pushEvent } from "/games/common/diag-adapter.js";
+import { pushEvent } from "../common/diag-adapter.js";
 import { preloadFirstFrameAssets } from "../../shared/game-asset-preloader.js";
 import { play as playSfx } from "../../shared/juice/audio.js";
 import "./pauseOverlay.js";
@@ -12,6 +12,17 @@ import "./pauseOverlay.js";
   const W = 1280, H = 720;
   const STEP = 1/60;
   const MAX_FRAME_DELTA = 0.1;
+  const ASSET_BASE_URL = new URL("../../", import.meta.url);
+
+  function resolveAsset(path){
+    if(!path) return path;
+    try {
+      const normalized = path.startsWith("/") ? path.slice(1) : path;
+      return new URL(normalized, ASSET_BASE_URL).href;
+    } catch {
+      return path;
+    }
+  }
 
   const DEFAULT_AI_TABLE = {
     Easy:   { speed: 460, reaction: 0.26, offset: 90, noise: 18 },
@@ -27,20 +38,20 @@ import "./pauseOverlay.js";
   };
   const PARALLAX_PRESETS = {
     arcade: [
-      { src: "/assets/backgrounds/parallax/arcade_layer1.png", speed: 18, alpha: 0.85 },
-      { src: "/assets/backgrounds/parallax/arcade_layer2.png", speed: 36, alpha: 1 },
+      { src: resolveAsset("/assets/backgrounds/parallax/arcade_layer1.png"), speed: 18, alpha: 0.85 },
+      { src: resolveAsset("/assets/backgrounds/parallax/arcade_layer2.png"), speed: 36, alpha: 1 },
     ],
     city: [
-      { src: "/assets/backgrounds/parallax/city_layer1.png", speed: 20, alpha: 0.8 },
-      { src: "/assets/backgrounds/parallax/city_layer2.png", speed: 42, alpha: 1 },
+      { src: resolveAsset("/assets/backgrounds/parallax/city_layer1.png"), speed: 20, alpha: 0.8 },
+      { src: resolveAsset("/assets/backgrounds/parallax/city_layer2.png"), speed: 42, alpha: 1 },
     ],
     forest: [
-      { src: "/assets/backgrounds/parallax/forest_layer1.png", speed: 14, alpha: 0.82 },
-      { src: "/assets/backgrounds/parallax/forest_layer2.png", speed: 28, alpha: 0.95 },
+      { src: resolveAsset("/assets/backgrounds/parallax/forest_layer1.png"), speed: 14, alpha: 0.82 },
+      { src: resolveAsset("/assets/backgrounds/parallax/forest_layer2.png"), speed: 28, alpha: 0.95 },
     ],
     vapor: [
-      { src: "/assets/backgrounds/parallax/space_layer1.png", speed: 26, alpha: 0.9 },
-      { src: "/assets/backgrounds/parallax/space_layer2.png", speed: 52, alpha: 1 },
+      { src: resolveAsset("/assets/backgrounds/parallax/space_layer1.png"), speed: 26, alpha: 0.9 },
+      { src: resolveAsset("/assets/backgrounds/parallax/space_layer2.png"), speed: 52, alpha: 1 },
     ],
   };
   const BACKGROUND_THEMES = {
@@ -311,13 +322,13 @@ import "./pauseOverlay.js";
   })();
 
   const SPRITE_SOURCES = {
-    paddle: "/assets/sprites/paddle.png",
-    ball: "/assets/sprites/ball.png",
-    particle: "/assets/effects/particle.png",
-    net: "/assets/effects/particle.png",
-    spark: "/assets/effects/spark.png",
-    explosion: "/assets/effects/explosion.png",
-    shield: "/assets/effects/shield.png",
+    paddle: resolveAsset("/assets/sprites/paddle.png"),
+    ball: resolveAsset("/assets/sprites/ball.png"),
+    particle: resolveAsset("/assets/effects/particle.png"),
+    net: resolveAsset("/assets/effects/particle.png"),
+    spark: resolveAsset("/assets/effects/spark.png"),
+    explosion: resolveAsset("/assets/effects/explosion.png"),
+    shield: resolveAsset("/assets/effects/shield.png"),
   };
 
   function getBackgroundPresetForMode(mode){
