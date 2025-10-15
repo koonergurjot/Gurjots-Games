@@ -775,6 +775,7 @@
       let signalled = false;
       window.addEventListener("message", (ev) => {
         if (ev.source !== frame.contentWindow) return;
+        if (ev.origin && ev.origin !== location.origin) return;
         const data = ev.data;
         if (!data || typeof data !== "object") return;
         if (data.type === "GAME_READY") {
