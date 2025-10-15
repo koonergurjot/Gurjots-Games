@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Achievement Tracker — Gurjot's Games</title>
+  <meta name="description" content="See how achievements sync across Gurjot's Games and learn how to track your progress.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../docs.css">
+  <link rel="icon" type="image/png" href="../../assets/favicon.png">
+</head>
+<body>
+  <div class="doc-container">
+    <article class="doc-card">
+      <header class="doc-header">
+        <div>
+          <a class="doc-breadcrumb" href="/">← Back to home</a>
+          <h1 class="doc-title">Achievement tracker</h1>
+          <p class="doc-tagline">Understand how achievements unlock, sync, and display across web, launcher, and mobile surfaces.</p>
+        </div>
+      </header>
+
+      <section class="doc-section">
+        <h2>How it works</h2>
+        <p>Every catalog game integrates with the Gurjot Achievement Service (GAS). When you fulfill the conditions for an achievement, the game posts a signed payload to GAS which syncs across devices within seconds.</p>
+        <p>Offline sessions queue unlocks locally and sync once you reconnect.</p>
+      </section>
+
+      <section class="doc-section">
+        <h2>Tracking progress</h2>
+        <ul class="doc-grid">
+          <li>
+            <h3>On the web</h3>
+            <p>Open the profile overlay (top right) and switch to the Achievements tab for per-game breakdowns.</p>
+          </li>
+          <li>
+            <h3>In the launcher</h3>
+            <p>Use the Achievements widget to filter by rarity, completion percentage, and friends who have unlocked it.</p>
+          </li>
+          <li>
+            <h3>Mobile companion</h3>
+            <p>Coming soon! Roadmap item slated for Q4 along with push notifications.</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="doc-section">
+        <h2>Developer integration tips</h2>
+        <ol class="doc-steps">
+          <li class="doc-step">
+            <h3>1. Define achievements</h3>
+            <p>Create a <code>achievements.json</code> file in your game directory with ID, name, description, and point values.</p>
+          </li>
+          <li class="doc-step">
+            <h3>2. Post unlocks</h3>
+            <p>Use <code>window.GG.achievements.unlock(id)</code> in your game code. The helper handles retries and offline queues.</p>
+          </li>
+          <li class="doc-step">
+            <h3>3. Test locally</h3>
+            <p>Enable the <em>Achievements</em> toggle in the dev overlay (Ctrl+Shift+A) to inspect unlock logs while you play.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="doc-section">
+        <h2>FAQ</h2>
+        <p><strong>Do achievements reset?</strong> Never. Seasonal events add limited-time goals, but core achievements remain.</p>
+        <p><strong>Can I delete progress?</strong> Yes—visit the privacy page in the launcher to wipe stored data per game.</p>
+      </section>
+    </article>
+
+    <p class="doc-footer">Need to report a bug? Email <a href="mailto:achievements@gurjotsgames.com">achievements@gurjotsgames.com</a>.</p>
+  </div>
+</body>
+</html>

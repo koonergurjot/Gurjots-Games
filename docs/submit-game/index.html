@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Submit a Game — Gurjot's Games</title>
+  <meta name="description" content="Guidelines for shipping your game to Gurjot's Games, including project checklist and review process.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../docs.css">
+  <link rel="icon" type="image/png" href="../../assets/favicon.png">
+</head>
+<body>
+  <div class="doc-container">
+    <article class="doc-card">
+      <header class="doc-header">
+        <div>
+          <a class="doc-breadcrumb" href="/">← Back to home</a>
+          <h1 class="doc-title">Submit a Game</h1>
+          <p class="doc-tagline">Share your best build with the Gurjot community. Follow the steps below to make sure the review goes smoothly.</p>
+        </div>
+      </header>
+
+      <section class="doc-section">
+        <h2>Launch checklist</h2>
+        <ul class="doc-grid">
+          <li>
+            <h3>Playable build</h3>
+            <p>Provide a WebGL or canvas build that runs in Chromium-based browsers without additional plugins.</p>
+          </li>
+          <li>
+            <h3>Clear controls</h3>
+            <p>Document keyboard, mouse, touch, or controller mappings inside the game or README.</p>
+          </li>
+          <li>
+            <h3>Optimized assets</h3>
+            <p>Keep the initial download under 30&nbsp;MB. Compress textures, sprites, and audio where possible.</p>
+          </li>
+          <li>
+            <h3>Branding</h3>
+            <p>Include a 640×360 thumbnail (<code>thumb.svg</code> or <code>.png</code>) and optional animated teaser for the catalog.</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="doc-section">
+        <h2>Submission flow</h2>
+        <ol class="doc-steps">
+          <li class="doc-step">
+            <h3>1. Fork &amp; set up</h3>
+            <p>Fork <a href="https://github.com/koonergurjot/Gurjots-Games" target="_blank" rel="noopener">the repository</a>, clone it locally, and run the game loader with <code>npm install</code> followed by <code>npm run dev</code>.</p>
+          </li>
+          <li class="doc-step">
+            <h3>2. Add your game</h3>
+            <p>Create a folder inside <code>/games/&lt;your-slug&gt;</code> with an <code>index.html</code> entry point. Update <code>games.json</code> with title, description, and tags.</p>
+          </li>
+          <li class="doc-step">
+            <h3>3. Document it</h3>
+            <p>Add controls and credits to <code>README.md</code> inside your game folder. Optional but encouraged: add screenshots to <code>docs/assets</code>.</p>
+          </li>
+          <li class="doc-step">
+            <h3>4. Open a pull request</h3>
+            <p>Follow the <a href="../../CONTRIBUTING.md">contributing guide</a>, run linting/tests, then open a PR titled <em>Add &lt;Game Name&gt;</em>. Include gameplay notes and any analytics hooks.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="doc-section">
+        <h2>Review timeline</h2>
+        <p>Most submissions are reviewed within 3–5 business days. We check for performance regressions, accessibility issues, and content compliance.</p>
+        <p>If your build requires extra capabilities (for example, same-origin sandboxing or additional storage), mention it in the PR body so we can verify security settings.</p>
+      </section>
+
+      <section class="doc-section">
+        <h2>Need a hand?</h2>
+        <p>Reach out in the <a href="https://discord.gg" target="_blank" rel="noopener">Discord dev channel</a> or open a draft pull request for early feedback. We keep an eye on #dev-support throughout the week.</p>
+      </section>
+    </article>
+
+    <p class="doc-footer">Questions? Email <a href="mailto:support@gurjotsgames.com">support@gurjotsgames.com</a> and include your game slug.</p>
+  </div>
+</body>
+</html>

@@ -7,6 +7,17 @@
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <link rel="stylesheet" href="styles/profile-overlay.css">
   <style>
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+      white-space: nowrap;
+    }
     :root {
       color-scheme: dark;
       --shell-bg: var(--shell-gradient, linear-gradient(180deg, #050b1f 0%, #111827 35%, #050b1f 100%));
@@ -199,6 +210,102 @@
       display: grid;
       gap: 8px;
     }
+    .nav-targets {
+      margin: 0 0 16px;
+      display: block;
+    }
+    .nav-target {
+      display: none;
+      padding: 18px;
+      border-radius: 14px;
+      border: 1px solid var(--border-strong);
+      background: color-mix(in srgb, rgba(12,18,28,0.92) 60%, var(--card-solid) 40%);
+      box-shadow: 0 12px 40px rgba(5,11,31,0.45);
+      scroll-margin-top: 120px;
+      outline: none;
+    }
+    .nav-target:target {
+      display: block;
+    }
+    .nav-target h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #f3f7ff;
+    }
+    .nav-target p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .nav-target ul {
+      margin: 0 0 14px;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .nav-target ul li {
+      margin: 0;
+    }
+    .nav-target a.nav-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--border-strong) 70%, rgba(76,201,240,0.55) 30%);
+      background: rgba(9, 16, 30, 0.55);
+      color: #d0e8ff;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+    .nav-target a.nav-chip:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, rgba(76,201,240,0.8) 60%, rgba(67,97,238,0.65) 40%);
+      background: rgba(35, 49, 74, 0.75);
+    }
+    .nav-target a.nav-chip:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .nav-target .nav-target-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .nav-target .nav-target-actions .btn {
+      min-width: 0;
+    }
+    .nav-target .nav-target-actions a.btn-secondary {
+      --button-bg: rgba(35, 45, 65, 0.65);
+      --button-border: rgba(76, 93, 128, 0.7);
+      --button-fg: #d6e7ff;
+      --button-weight: 500;
+    }
+    .nav-target .nav-target-actions a.btn-secondary:hover {
+      background: rgba(67, 97, 238, 0.15);
+    }
+    @media (max-width: 640px) {
+      .nav-target {
+        padding: 16px;
+      }
+      .nav-target ul {
+        flex-direction: column;
+      }
+      .nav-target a.nav-chip {
+        width: 100%;
+        justify-content: center;
+      }
+      .nav-target .nav-target-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
     .quest-widget-item {
       border: 1px solid rgba(76,201,240,0.25);
       border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent 60%);
@@ -318,9 +425,233 @@
       </div>
     </header>
 
-    <section id="questWidgetRoot" class="quest-widget" aria-live="polite"></section>
+  <section id="questWidgetRoot" class="quest-widget" aria-live="polite"></section>
 
-    <main>
+  <section class="nav-targets" aria-label="Featured navigation destinations">
+    <p class="sr-only" id="nav-targets-desc">Curated category summaries for the main navigation.</p>
+
+    <article id="trending" class="nav-target" tabindex="-1" aria-labelledby="trending-title" aria-describedby="nav-targets-desc">
+      <h2 id="trending-title">Trending challenges</h2>
+      <p>These games are spiking in concurrent players this week. Launch one instantly or browse all featured hits.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=runner&title=Neon%20Runner#play-shell">Neon Runner</a></li>
+        <li><a class="nav-chip" href="?slug=asteroids&title=Asteroids%20Redux#play-shell">Asteroids Redux</a></li>
+        <li><a class="nav-chip" href="?slug=breakout&title=Breakout%20Recharged#play-shell">Breakout Recharged</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-primary" href="index.html#games">Browse the library</a>
+        <a class="btn btn-secondary" href="stats.html">View live stats</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="new" class="nav-target" tabindex="-1" aria-labelledby="new-title" aria-describedby="nav-targets-desc">
+      <h2 id="new-title">New this week</h2>
+      <p>Fresh drops and major updates from the last sprint. Perfect for players hunting something new.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=platformer&title=Skybound%20Platformer#play-shell">Skybound Platformer</a></li>
+        <li><a class="nav-chip" href="?slug=shooter&title=Synthwave%20Shooter#play-shell">Synthwave Shooter</a></li>
+        <li><a class="nav-chip" href="?slug=box-core&title=Quantum%20Boxes#play-shell">Quantum Boxes</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-primary" href="CHANGELOG.md">Read release notes</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="retro" class="nav-target" tabindex="-1" aria-labelledby="retro-title" aria-describedby="nav-targets-desc">
+      <h2 id="retro-title">Retro throwbacks</h2>
+      <p>Arcade classics, lovingly rebuilt with modern controls and shaders.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=pong&title=Pong%20Classic#play-shell">Pong Classic</a></li>
+        <li><a class="nav-chip" href="?slug=tetris&title=Quantum%20Tetris#play-shell">Quantum Tetris</a></li>
+        <li><a class="nav-chip" href="?slug=asteroids&title=Asteroids%20Redux#play-shell">Asteroids Redux</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-primary" href="index.html#games">Browse the library</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="family" class="nav-target" tabindex="-1" aria-labelledby="family-title" aria-describedby="nav-targets-desc">
+      <h2 id="family-title">Family friendly</h2>
+      <p>No jump scares, no timers—just cozy arcade loops that are safe for all ages.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=2048&title=Fusion%202048#play-shell">Fusion 2048</a></li>
+        <li><a class="nav-chip" href="?slug=maze3d&title=Crystal%20Maze#play-shell">Crystal Maze</a></li>
+        <li><a class="nav-chip" href="?slug=snake&title=Neon%20Snake#play-shell">Neon Snake</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-secondary" href="https://github.com/koonergurjot/Gurjots-Games#readme" target="_blank" rel="noopener">View getting started guide</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="editor" class="nav-target" tabindex="-1" aria-labelledby="editor-title" aria-describedby="nav-targets-desc">
+      <h2 id="editor-title">Editor’s spotlight</h2>
+      <p>Handpicked experiences that show off polish, narrative, or clever mechanics.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=platformer&title=Skybound%20Platformer#play-shell">Skybound Platformer</a></li>
+        <li><a class="nav-chip" href="?slug=maze3d&title=Crystal%20Maze#play-shell">Crystal Maze</a></li>
+        <li><a class="nav-chip" href="?slug=runner&title=Neon%20Runner#play-shell">Neon Runner</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-secondary" href="docs/creator-program/">Pitch your game</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="speedrun" class="nav-target" tabindex="-1" aria-labelledby="speedrun-title" aria-describedby="nav-targets-desc">
+      <h2 id="speedrun-title">Speedrun gauntlet</h2>
+      <p>Short, repeatable loops with deterministic patterns—perfect for chasing PBs.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=runner&title=Neon%20Runner#play-shell">Neon Runner</a></li>
+        <li><a class="nav-chip" href="?slug=tetris&title=Quantum%20Tetris#play-shell">Quantum Tetris</a></li>
+        <li><a class="nav-chip" href="?slug=platformer&title=Skybound%20Platformer#play-shell">Skybound Platformer</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-secondary" href="stats.html">Track leaderboards</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="coop" class="nav-target" tabindex="-1" aria-labelledby="coop-title" aria-describedby="nav-targets-desc">
+      <h2 id="coop-title">Co-op quests</h2>
+      <p>Grab a friend for local multiplayer or shared-score runs.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=pong&title=Pong%20Classic#play-shell">Pong Classic</a></li>
+        <li><a class="nav-chip" href="?slug=breakout&title=Breakout%20Recharged#play-shell">Breakout Recharged</a></li>
+        <li><a class="nav-chip" href="?slug=runner&title=Neon%20Runner#play-shell">Neon Runner Relay</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-secondary" href="https://discord.gg" target="_blank" rel="noopener">Join community events</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="esports" class="nav-target" tabindex="-1" aria-labelledby="esports-title" aria-describedby="nav-targets-desc">
+      <h2 id="esports-title">Esports ready</h2>
+      <p>Competitive staples with built-in spectator overlays and tournament presets.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=shooter&title=Synthwave%20Shooter#play-shell">Synthwave Shooter</a></li>
+        <li><a class="nav-chip" href="?slug=pong&title=Pong%20Classic#play-shell">Pong Classic</a></li>
+        <li><a class="nav-chip" href="?slug=tetris&title=Quantum%20Tetris#play-shell">Quantum Tetris</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-secondary" href="stats.html">Open tournament dashboard</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="frostfall" class="nav-target" tabindex="-1" aria-labelledby="frostfall-title" aria-describedby="nav-targets-desc">
+      <h2 id="frostfall-title">Frostfall festival</h2>
+      <p>Limited-time winter cosmetics and quests. Runs through the end of the month.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=runner&title=Frostfall%20Runner#play-shell">Frostfall Runner</a></li>
+        <li><a class="nav-chip" href="?slug=maze3d&title=Glacier%20Maze#play-shell">Glacier Maze</a></li>
+        <li><a class="nav-chip" href="?slug=shooter&title=Blizzard%20Blitz#play-shell">Blizzard Blitz</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-primary" href="docs/roadmap/">Season update notes</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="desktop" class="nav-target" tabindex="-1" aria-labelledby="desktop-title" aria-describedby="nav-targets-desc">
+      <h2 id="desktop-title">Desktop &amp; web</h2>
+      <p>Optimized for keyboard, mouse, and large monitors with uncapped frame rates.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=shooter&title=Synthwave%20Shooter#play-shell">Synthwave Shooter</a></li>
+        <li><a class="nav-chip" href="?slug=platformer&title=Skybound%20Platformer#play-shell">Skybound Platformer</a></li>
+        <li><a class="nav-chip" href="?slug=tetris&title=Quantum%20Tetris#play-shell">Quantum Tetris</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-secondary" href="docs/launcher/">Install the launcher</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="mobile" class="nav-target" tabindex="-1" aria-labelledby="mobile-title" aria-describedby="nav-targets-desc">
+      <h2 id="mobile-title">Mobile touch</h2>
+      <p>Tap-friendly interfaces and generous touch targets that play great on phones.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=2048&title=Fusion%202048#play-shell">Fusion 2048</a></li>
+        <li><a class="nav-chip" href="?slug=snake&title=Neon%20Snake#play-shell">Neon Snake</a></li>
+        <li><a class="nav-chip" href="?slug=maze3d&title=Crystal%20Maze#play-shell">Crystal Maze</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-secondary" href="docs/launcher/">Enable touch overlay</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="controller" class="nav-target" tabindex="-1" aria-labelledby="controller-title" aria-describedby="nav-targets-desc">
+      <h2 id="controller-title">Controller ready</h2>
+      <p>DualSense, Xbox, and Switch Pro mappings have been tuned and tested.</p>
+      <ul>
+        <li><a class="nav-chip" href="?slug=runner&title=Neon%20Runner#play-shell">Neon Runner</a></li>
+        <li><a class="nav-chip" href="?slug=platformer&title=Skybound%20Platformer#play-shell">Skybound Platformer</a></li>
+        <li><a class="nav-chip" href="?slug=shooter&title=Synthwave%20Shooter#play-shell">Synthwave Shooter</a></li>
+      </ul>
+      <div class="nav-target-actions">
+        <a class="btn btn-secondary" href="docs/launcher/">Map a controller</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="vr" class="nav-target" tabindex="-1" aria-labelledby="vr-title" aria-describedby="nav-targets-desc">
+      <h2 id="vr-title">VR experiments</h2>
+      <p>Prototype builds that stream experimental VR gameplay to your headset browser.</p>
+      <p>Grab the launcher beta below for native OpenXR support.</p>
+      <div class="nav-target-actions">
+        <a class="btn btn-primary" href="docs/launcher/">Download VR beta</a>
+        <a class="btn btn-secondary" href="docs/roadmap/">Follow VR roadmap</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="cloud" class="nav-target" tabindex="-1" aria-labelledby="cloud-title" aria-describedby="nav-targets-desc">
+      <h2 id="cloud-title">Cloud saves</h2>
+      <p>Automatic backups for scores and progress through your Gurjot ID. Enable sync from the profile overlay.</p>
+      <div class="nav-target-actions">
+        <a class="btn btn-primary" href="js/profile-overlay.js">Review sync client</a>
+        <a class="btn btn-secondary" href="docs/roadmap/">Storage roadmap</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="sync" class="nav-target" tabindex="-1" aria-labelledby="sync-title" aria-describedby="nav-targets-desc">
+      <h2 id="sync-title">Cross-device sync</h2>
+      <p>Continue on desktop, mobile, or the launcher. The same Gurjot ID keeps your unlocks intact.</p>
+      <div class="nav-target-actions">
+        <a class="btn btn-secondary" href="docs/launcher/">Download the launcher</a>
+        <a class="btn btn-secondary" href="docs/roadmap/">See planned devices</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="offline" class="nav-target" tabindex="-1" aria-labelledby="offline-title" aria-describedby="nav-targets-desc">
+      <h2 id="offline-title">Offline mode</h2>
+      <p>Install Gurjot's Games as a PWA to keep your favorites cached for travel or spotty Wi-Fi.</p>
+      <div class="nav-target-actions">
+        <a class="btn btn-primary" href="sw.js">View service worker</a>
+        <a class="btn btn-secondary" href="docs/launcher/">Offline launcher tips</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+
+    <article id="performance" class="nav-target" tabindex="-1" aria-labelledby="performance-title" aria-describedby="nav-targets-desc">
+      <h2 id="performance-title">Performance mode</h2>
+      <p>Unlock high-refresh rendering, frame pacing tools, and GPU diagnostics.</p>
+      <div class="nav-target-actions">
+        <a class="btn btn-primary" href="stats.html">Open performance dashboard</a>
+        <a class="btn btn-secondary" href="docs/diagnostics-migration.md">Diagnostics migration guide</a>
+        <a class="btn btn-ghost" href="#play-shell">Skip to game</a>
+      </div>
+    </article>
+  </section>
+
+    <main id="play-shell">
       <section class="game-card" aria-live="polite">
         <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-pointer-lock"></iframe>
         <div class="overlay" id="overlay" aria-hidden="false">
