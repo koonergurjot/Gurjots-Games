@@ -11,6 +11,7 @@ const FILTERS = document.getElementById('bolt-filters');
 const GAME_COUNT = document.getElementById('bolt-game-count');
 
 let allGames = [];
+let activeTag = 'All';
 const PRIMARY_QUERY_KEY = 'slug';
 const GAME_LOOKUP = new Map();
 const PREFETCHED = new Set();
@@ -24,7 +25,7 @@ function esc(value){
     .replace(/&/g,'&amp;')
     .replace(/</g,'&lt;')
     .replace(/>/g,'&gt;')
-    .replace(/\"/g,'&quot;')
+    .replace(/"/g,'&quot;')
     .replace(/'/g,'&#39;');
 }
 
