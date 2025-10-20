@@ -1,7 +1,7 @@
 import { PointerLockControls } from "./PointerLockControls.js";
 import '/js/three-global-shim.js';
 import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.js';
-import { emitEvent } from '../../shared/achievements.js';
+import { gameEvent } from '../../shared/telemetry.js';
 import { connect } from './net.js';
 import { generateMaze, seedRandom } from './generator.js';
 
@@ -1882,7 +1882,7 @@ function start(syncTime) {
   if (!running) {
     running = true;
     startTime = syncTime !== undefined ? syncTime : performance.now();
-    emitEvent({ type: 'play', slug: 'maze3d' });
+    gameEvent('play', { slug: 'maze3d' });
     if (net && syncTime === undefined) {
       const startAt = Date.now();
       net.send('start', { seed: currentSeed, startAt });
@@ -2008,7 +2008,24 @@ function finish(time) {
   }
   showOverlay();
   startTime = 0;
-  emitEvent({ type: 'game_over', slug: 'maze3d', value: time });
+  const durationMs = Math.max(0, Math.round(Number(time) * 1000));
+  gameEvent('game_over', {
+    slug: 'maze3d',
+    value: time,
+    durationMs,
+  });
+  const outcome = opponentFinish != null
+    ? (myFinish < opponentFinish ? 'win' : (myFinish > opponentFinish ? 'lose' : null))
+    : 'win';
+  if (outcome) {
+    gameEvent(outcome, {
+      slug: 'maze3d',
+      meta: {
+        myTime: time,
+        opponentTime: opponentFinish,
+      },
+    });
+  }
   notifyDiagnosticsState('finished', { reason: 'finish', time });
   if (opponentFinish != null) {
     message.textContent += myFinish < opponentFinish ? ' You win!' : ' Opponent wins!';

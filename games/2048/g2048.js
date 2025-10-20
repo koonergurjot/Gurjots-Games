@@ -2,6 +2,9 @@
 import { GameEngine } from '../../shared/gameEngine.js';
 import { copyGrid, computeMove, getHint as engineHint, canMove, createHistoryManager, confirmNoMoves } from './engine.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
+import { gameEvent } from '../../shared/telemetry.js';
+
+const GAME_SLUG = '2048';
 
 // Feature Configuration (all feature-flagged)
 const FEATURES = {
@@ -247,6 +250,7 @@ const themes={
 let currentTheme=localStorage.getItem(LS_THEME) || 'dark';
 
 let grid, score=0, over=false, won=false, hintDir=null;
+let runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
 let undoLeft=parseInt(localStorage.getItem(LS_UNDO) ?? MAX_UNDO);
 let best=parseInt(localStorage.getItem(LS_BEST) ?? 0);
 if(isNaN(undoLeft)) undoLeft=MAX_UNDO;
@@ -321,6 +325,17 @@ function recordScoreEvent(reason, extra = {}) {
     diagScoreEvents.splice(0, diagScoreEvents.length - DIAG_MAX_SCORE_EVENTS);
   }
   notifyDiagListeners(diagScoreListeners, event);
+  if (Number(extra.delta || extra.gained || 0) > 0) {
+    gameEvent('score', {
+      slug: GAME_SLUG,
+      value: score,
+      meta: {
+        reason,
+        delta: extra.delta,
+        streak: extra.streak,
+      },
+    });
+  }
   return event;
 }
 
@@ -503,6 +518,16 @@ function reset(keepUndo=false, reasonOverride){
   const reason = (typeof reasonOverride === 'string' && reasonOverride)
     ? reasonOverride
     : (keepUndo ? 'init' : 'reset');
+  if (!keepUndo) {
+    runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    gameEvent('play', {
+      slug: GAME_SLUG,
+      meta: {
+        reason,
+        size: N,
+      },
+    });
+  }
   recordScoreEvent(reason, { delta: score - previousScore });
   recordReadyEvent(reason);
 
@@ -641,7 +666,17 @@ function move(dir){
       mergeStreak = 1; // Reset streak
     }
     lastMoveHadMerge = hadMerge;
-    
+
+    if (hadMerge && mergeStreak > 1) {
+      gameEvent('combo', {
+        slug: GAME_SLUG,
+        count: mergeStreak,
+        meta: {
+          gained,
+        },
+      });
+    }
+
     // Apply multiplier to gained score
     const multipliedGain = Math.floor(gained * mergeStreak);
     score += multipliedGain;
@@ -735,6 +770,34 @@ function check(){
   }
   if((won||over) && !gameOverShown){
     showGameOverModal(won?'2048!':'Game over', won?'You made 2048! Want to go again?':'No moves left. Try again?');
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const durationMs = Math.max(0, Math.round(now - (runStartTime || now)));
+    gameEvent('game_over', {
+      slug: GAME_SLUG,
+      value: score,
+      durationMs,
+      meta: {
+        won,
+        boardSize: N,
+      },
+    });
+    if (won) {
+      gameEvent('win', {
+        slug: GAME_SLUG,
+        meta: {
+          score,
+          boardSize: N,
+        },
+      });
+    } else {
+      gameEvent('lose', {
+        slug: GAME_SLUG,
+        meta: {
+          score,
+          boardSize: N,
+        },
+      });
+    }
   }
 }
 

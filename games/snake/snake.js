@@ -5,6 +5,7 @@ import getThemeTokens from '../../shared/skins/index.js';
 import '../../shared/ui/hud.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import '../common/diagnostics/adapter.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
@@ -507,6 +508,8 @@ const SPEEDUP_INTERVAL = 4;
 const SPEED_STEP_MS = 6;
 let speedMs = SPEED_BASE_MS;
 let score = 0;
+let runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+let gameOverReported = false;
 const storedBest = safeStorageGetItem('snake:best');
 let bestScore = storedBest != null ? Number(storedBest) : 0;
 if (!Number.isFinite(bestScore)) bestScore = 0;
@@ -1019,6 +1022,15 @@ function registerComboHit(now = performance.now()) {
   renderComboPanel(now);
   renderMissions();
   scheduleDiagnosticsRender();
+  if (comboCount > 1) {
+    gameEvent('combo', {
+      slug: SLUG,
+      count: comboCount,
+      meta: {
+        best: comboBest,
+      },
+    });
+  }
 }
 
 function decayCombo(now = performance.now()) {
@@ -1062,6 +1074,7 @@ function scheduleDiagnosticsRender() {
 }
 let paused = false;
 let level = 1;
+let lastLevelEmitted = 1;
 
 let engine = null;
 
@@ -1275,6 +1288,7 @@ function resetGame(reason = 'manual', options = {}) {
   paused = false;
   moveAcc = 0;
   level = 1;
+  lastLevelEmitted = 1;
   tickCounter = 0;
   foodsEaten = 0;
   spriteEffects.length = 0;
@@ -1307,8 +1321,43 @@ function resetGame(reason = 'manual', options = {}) {
   food = spawnFood();
   fruitSpawnTime = performance.now();
   bootLog('game:reset', { reason, seed });
+  runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  gameOverReported = false;
+  if (!skipProgress) {
+    gameEvent('play', {
+      slug: SLUG,
+      meta: {
+        reason,
+        daily: !!DAILY_MODE,
+      },
+    });
+  }
   if (engine && !engine.running) engine.start();
   updateDebugPanel();
+}
+
+function reportGameOutcome(result) {
+  if (gameOverReported) return;
+  gameOverReported = true;
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const durationMs = Math.max(0, Math.round(now - (runStartTime || now)));
+  const meta = {
+    result,
+    score,
+    length: snake.length,
+    level,
+    comboBest,
+  };
+  gameEvent('game_over', {
+    slug: SLUG,
+    value: score,
+    durationMs,
+    meta,
+  });
+  gameEvent(result === 'win' ? 'win' : 'lose', {
+    slug: SLUG,
+    meta,
+  });
 }
 
 resetGame('boot');
@@ -1362,6 +1411,7 @@ function spawnFood() {
       won = true;
       winHandled = false;
       bootLog('game:won', { score, length: snake.length, obstacles: obstacles.length });
+      reportGameOutcome('win');
       if (engine && typeof engine.stop === 'function') {
         try { engine.stop(); } catch (err) { bootLog('game:win-stop-error', { message: err?.message || String(err) }); }
       }
@@ -1395,7 +1445,18 @@ function addObstacleRow() {
 }
 
 function maybeLevelUp() {
+  const previousLevel = level;
   level = 1 + Math.floor(score / 5);
+  if (level > lastLevelEmitted) {
+    lastLevelEmitted = level;
+    gameEvent('level_up', {
+      slug: SLUG,
+      level,
+      meta: {
+        score,
+      },
+    });
+  }
   const bestList = parseJSONSafe(safeStorageGetItem('gg:lb:' + GAME_ID), []);
   const bestEntry = Array.isArray(bestList) ? bestList[0] : null;
   const best = Number(bestEntry?.score) || score;
@@ -1434,6 +1495,15 @@ function applyPickupEffect(pickup, head) {
   if (points > 0) {
     score += points;
     GG.addXP(points);
+    gameEvent('score', {
+      slug: SLUG,
+      value: score,
+      meta: {
+        points,
+        combo: comboCount,
+        level,
+      },
+    });
   }
   playSfx('power');
   spawnSpriteEffect('spark', head.x, head.y, { duration: 500, scale: pickup.effect === 'shrink' ? 1 : 1.25 });
@@ -1487,6 +1557,7 @@ function step() {
       dead = true;
       deadHandled = false;
       triggerDeathEffect(head);
+      reportGameOutcome('lose');
     }
   }
   if (!dead) {
@@ -1496,6 +1567,7 @@ function step() {
       dead = true;
       deadHandled = false;
       triggerDeathEffect(head);
+      reportGameOutcome('lose');
     }
   }
   if (dead || won) {

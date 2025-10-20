@@ -8,6 +8,7 @@ import { mountEvalMood } from "./ui/evalMood.js";
 import { log, warn } from '../../tools/reporters/console-signature.js';
 import { injectHelpButton } from '../../shared/ui.js';
 import { pushEvent } from "/games/common/diag-adapter.js";
+import { gameEvent } from '../../shared/telemetry.js';
 import * as logic from "./logic.js";
 
 async function loadCatalog() {
@@ -125,6 +126,8 @@ let gameState = null;
 let startRenderLoopImpl = () => {};
 let stopRenderLoopImpl = () => {};
 let currentState = 'menu';
+let runStartTime = now();
+let gameOverSent = false;
 const stateListeners = new Set();
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 let victoryPlayed = false;
@@ -140,6 +143,40 @@ function notifyStateChange(nextState, details = {}) {
   if (normalized === previous && !details?.force) return;
   currentState = normalized;
   const payload = Object.assign({ previous, state: normalized }, details || {});
+  if (normalized === 'play') {
+    runStartTime = now();
+    gameOverSent = false;
+    gameEvent('play', {
+      slug: 'chess3d',
+      meta: {
+        reason: payload.reason || '',
+      },
+    });
+  } else if (normalized === 'gameover' && !gameOverSent) {
+    gameOverSent = true;
+    const durationMs = Math.max(0, Math.round(now() - (runStartTime || now())));
+    const message = String(payload.message || '').toLowerCase();
+    let result = 'draw';
+    if (message.includes('white wins')) result = 'win';
+    else if (message.includes('black wins')) result = 'lose';
+    const value = result === 'win' ? 1 : result === 'lose' ? 0 : 0.5;
+    const meta = {
+      message: payload.message || '',
+      reason: payload.reason || '',
+    };
+    gameEvent('game_over', {
+      slug: 'chess3d',
+      value,
+      durationMs,
+      meta,
+    });
+    if (result === 'win' || result === 'lose') {
+      gameEvent(result, {
+        slug: 'chess3d',
+        meta,
+      });
+    }
+  }
   if (!stateListeners.size) return;
   stateListeners.forEach((listener) => {
     try {
@@ -148,6 +185,40 @@ function notifyStateChange(nextState, details = {}) {
       warn('chess3d', '[Chess3D] state listener failed', err);
     }
   });
+  if (normalized === 'play') {
+    runStartTime = now();
+    gameOverSent = false;
+    gameEvent('play', {
+      slug: 'chess3d',
+      meta: {
+        reason: payload.reason || '',
+      },
+    });
+  } else if (normalized === 'gameover' && !gameOverSent) {
+    gameOverSent = true;
+    const durationMs = Math.max(0, Math.round(now() - (runStartTime || now())));
+    const message = String(payload.message || '').toLowerCase();
+    let result = 'draw';
+    if (message.includes('white wins')) result = 'win';
+    else if (message.includes('black wins')) result = 'lose';
+    const value = result === 'win' ? 1 : result === 'lose' ? 0 : 0.5;
+    const meta = {
+      message: payload.message || '',
+      reason: payload.reason || '',
+    };
+    gameEvent('game_over', {
+      slug: 'chess3d',
+      value,
+      durationMs,
+      meta,
+    });
+    if (result === 'win' || result === 'lose') {
+      gameEvent(result, {
+        slug: 'chess3d',
+        meta,
+      });
+    }
+  }
 }
 
 const chess3dController = {

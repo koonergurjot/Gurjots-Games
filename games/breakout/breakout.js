@@ -6,6 +6,7 @@ import { showToast, showModal, clearHud } from '../../shared/ui/hud.js';
 import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
 import { loadImage, getCachedImage } from '../../shared/assets.js';
 import { play as playSfx } from '../../shared/juice/audio.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
 const globalScope = typeof window !== 'undefined'
   ? window
@@ -580,6 +581,7 @@ let paddlePrevX=paddle.x;
 let paddleVelocity=0;
 let ball={x:c.width/2,y:c.height-60,vx:240,vy:-360,r:8,stuck:true,speed:420};
 let bricks=[];let score=0,lives=3,level=1;let bestLevel=parseInt(localStorage.getItem('gg:bestlvl:breakout')||'1');
+let telemetryGameOverSent=false;
 let currentLevelData=null;let levelDropChance=0.2;let levelDropWeights=null;
 const scoreNode=document.getElementById('score');
 function syncScore(){
@@ -681,13 +683,20 @@ c.addEventListener('pointermove',e=>{
   if(ball.stuck){ball.x=center;}
 });
 c.addEventListener('pointerdown',()=>{if(ball.stuck)ball.stuck=false});
-function resetMatch(){
-  powerEngine.reset();
-  score=0;lives=3;level=1;
-  syncScore();
-  loadLevel();resetBall();
-  runStart=performance.now();endTime=null;submitted=false;
-  clearHud();gameOverShown=false;
+  function resetMatch(){
+    powerEngine.reset();
+    score=0;lives=3;level=1;
+    syncScore();
+    loadLevel();resetBall();
+    runStart=performance.now();endTime=null;submitted=false;
+    telemetryGameOverSent=false;
+    gameEvent('play', {
+      slug: GAME_ID,
+      meta: {
+        level,
+      },
+    });
+    clearHud();gameOverShown=false;
   activeEffects.length=0;effectPool.length=0;
   resetTrailBuffer();
   lasers.length=0;
@@ -858,6 +867,15 @@ function damageBrick(brick,impact){
     brick.alive=false;
     score+=brick.score||10;
     syncScore();
+    gameEvent('score', {
+      slug: GAME_ID,
+      value: score,
+      meta: {
+        level,
+        lives,
+        bricks: bricks.length,
+      },
+    });
     if(typeof GG?.addXP==='function')GG.addXP(1);
     spawnEffect('explosion',centerX,centerY,{scale:fxScale,duration:0.45});
     maybeSpawnPowerUp(brick);
@@ -1201,6 +1219,26 @@ function step(dt){
       if(typeof GG?.addAch==='function')GG.addAch(GAME_ID,'Game Over');
       if(!submitted&&window.LB){LB.submitScore(GAME_ID,score);submitted=true;}
       if(!endTime)endTime=performance.now();
+      if(!telemetryGameOverSent){
+        telemetryGameOverSent=true;
+        const durationMs=Math.max(0,Math.round((endTime-runStart)));
+        gameEvent('game_over', {
+          slug: GAME_ID,
+          value: score,
+          durationMs,
+          meta: {
+            level,
+            lives,
+          },
+        });
+        gameEvent('lose', {
+          slug: GAME_ID,
+          meta: {
+            level,
+            score,
+          },
+        });
+      }
     }
   }
 
@@ -1240,6 +1278,10 @@ function step(dt){
 
   if(bricks.length&&bricks.every(b=>b.hp<=0)){
     level++;
+    gameEvent('level_up', {
+      slug: GAME_ID,
+      level,
+    });
     if(level>bestLevel){bestLevel=level;localStorage.setItem('gg:bestlvl:breakout',bestLevel);}
     loadLevel();
     resetBall();
