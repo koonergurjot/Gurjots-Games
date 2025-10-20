@@ -250,7 +250,8 @@ if (!document.querySelector('.game-shell__back')) {
       });
       return pauseOverlay;
     };
-    const updateShellPauseState = (paused, detail) => {
+    const updateShellPauseState = (paused, detail, options = {}) => {
+      const { skipDispatch = false } = options;
       if (shellPaused === paused) return;
       shellPaused = paused;
       const overlayDetail = normalizeOverlayDetail(detail, 'shell');
@@ -259,11 +260,16 @@ if (!document.querySelector('.game-shell__back')) {
         if (paused) overlay.show(overlayDetail);
         else overlay.hide(overlayDetail);
       }
-      const eventName = paused ? 'ggshell:pause' : 'ggshell:resume';
-      try {
-        window.dispatchEvent(new CustomEvent(eventName, { detail }));
-      } catch (_) {
-        // Swallow errors dispatching custom events to avoid breaking games.
+      if (!skipDispatch) {
+        const eventName = paused ? 'ggshell:pause' : 'ggshell:resume';
+        const eventDetail = detail && typeof detail === 'object'
+          ? { ...detail, __shellDispatch: true }
+          : { __shellDispatch: true };
+        try {
+          window.dispatchEvent(new CustomEvent(eventName, { detail: eventDetail }));
+        } catch (_) {
+          // Swallow errors dispatching custom events to avoid breaking games.
+        }
       }
       sendToParent(paused ? 'GAME_PAUSE' : 'GAME_RESUME', { reason: detail?.source || 'unknown' });
     };
@@ -307,6 +313,19 @@ if (!document.querySelector('.game-shell__back')) {
     window.addEventListener('ggshell:score', (event) => {
       announceScore(event?.detail);
     });
+
+    const handleShellPauseEvent = (event) => {
+      if (event?.detail?.__shellDispatch) return;
+      updateShellPauseState(true, normalizeOverlayDetail(event?.detail, 'event'), { skipDispatch: true });
+    };
+
+    const handleShellResumeEvent = (event) => {
+      if (event?.detail?.__shellDispatch) return;
+      updateShellPauseState(false, normalizeOverlayDetail(event?.detail, 'event'), { skipDispatch: true });
+    };
+
+    window.addEventListener('ggshell:pause', handleShellPauseEvent);
+    window.addEventListener('ggshell:resume', handleShellResumeEvent);
 
     window.GGShellAnnounce = setAnnouncement;
     window.GGShellAnnounceScore = announceScore;

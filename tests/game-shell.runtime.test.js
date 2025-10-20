@@ -100,4 +100,23 @@ describe('game-shell runtime integration', () => {
     window.GGShellEmitScore(7);
     expect(postMessage).toHaveBeenLastCalledWith({ type: 'GAME_SCORE', slug: 'tetris', score: 7 }, '*');
   });
+
+  it('responds to global pause and resume events', async () => {
+    await importShell();
+    const overlay = await vi.waitFor(() => {
+      const node = document.querySelector('.game-shell__pause');
+      expect(node).toBeTruthy();
+      return node;
+    });
+
+    window.dispatchEvent(new CustomEvent('ggshell:pause', { detail: { source: 'test' } }));
+    await vi.waitFor(() => {
+      expect(overlay.classList.contains('is-active')).toBe(true);
+    });
+
+    window.dispatchEvent(new CustomEvent('ggshell:resume', { detail: { source: 'test' } }));
+    await vi.waitFor(() => {
+      expect(overlay.classList.contains('is-active')).toBe(false);
+    });
+  });
 });
