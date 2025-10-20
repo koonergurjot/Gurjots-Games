@@ -1,0 +1,17 @@
+{
+  "skyColor": "#060910",
+  "layers": [
+    {
+      "image": "/assets/backgrounds/parallax/forest_layer1.png",
+      "depth": 0.15,
+      "offsetY": -48,
+      "repeatX": true
+    },
+    {
+      "image": "/assets/backgrounds/parallax/forest_layer2.png",
+      "depth": 0.4,
+      "offsetY": -32,
+      "repeatX": true
+    }
+  ]
+}
