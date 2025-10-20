@@ -79,6 +79,19 @@ const BRICK_SPACING=8;
 const BRICK_ROW_HEIGHT=26;
 const BRICK_HEIGHT=20;
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 function createBrickSurfaceStyle(){
   const highlightRatio=clamp01(0.16+Math.random()*0.18);
   const highlightAlpha=0.18+Math.random()*0.16;
@@ -1729,6 +1742,7 @@ function draw(){
     showModal(`<p>Game Over — ${rt2.toFixed(1)}s — Press R</p>`,{closeButton:false});
     gameOverShown=true;
   }
+  markFirstFrame();
 }
 
 const engine=new GameEngine();

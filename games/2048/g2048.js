@@ -5,6 +5,18 @@ import { pushEvent } from '/games/common/diag-adapter.js';
 import { gameEvent } from '../../shared/telemetry.js';
 
 const GAME_SLUG = '2048';
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
 
 // Feature Configuration (all feature-flagged)
 const FEATURES = {
@@ -1545,6 +1557,7 @@ function draw(anim){
   if(hintDir!=null){ ctx.fillText('Hint: '+['Left','Up','Right','Down'][hintDir],12,canvasCssHeight-12); }
   updateStatus();
   drawOpponent();
+  markFirstFrame();
 }
 
 function tileColor(v){

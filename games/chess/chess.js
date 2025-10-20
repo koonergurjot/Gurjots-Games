@@ -28,6 +28,19 @@ if(victoryAudio){
   victoryAudio.volume=0.85;
 }
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 function requireElementById(id){
   const el=document.getElementById(id);
   if(!el) throw new Error(`Chess: required element #${id} was not found.`);
@@ -1686,6 +1699,7 @@ function draw(){
     if(img.complete) ctx.drawImage(img,x,y,S,S);
   }
   if(overMsg){ overlay(overMsg); }
+  markFirstFrame();
 }
 
 function overlay(msg){

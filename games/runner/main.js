@@ -13,6 +13,19 @@ const VIRTUAL_HEIGHT = 320;
 const GROUND_HEIGHT = 60;
 const PLAYER_X = 160;
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 const DIFFICULTY_SETTINGS = {
   relax: {
     label: 'Relaxed',
@@ -2835,6 +2848,7 @@ class RunnerGame {
       this.drawGameOver(ctx);
     }
     if (canSave && typeof ctx.restore === 'function') ctx.restore();
+    markFirstFrame();
   }
 
   drawParallax(ctx) {
