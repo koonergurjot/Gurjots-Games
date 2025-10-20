@@ -37,6 +37,28 @@ function createSeed(randomSource=(typeof crypto!=='undefined'?crypto:null)){
   return Math.floor(Math.random()*0xffffffff)>>>0;
 }
 
+function seedFromDate(input=new Date()){
+  let date;
+  if(input instanceof Date){
+    date=new Date(input.getTime());
+  }else{
+    date=new Date(input);
+  }
+  if(Number.isNaN(date.getTime())){
+    date=new Date();
+  }
+  const year=date.getFullYear();
+  const month=String(date.getMonth()+1).padStart(2,'0');
+  const day=String(date.getDate()).padStart(2,'0');
+  const label=`${year}-${month}-${day}`;
+  let hash=2166136261;
+  for(let i=0;i<label.length;i++){
+    hash^=label.charCodeAt(i);
+    hash=Math.imul(hash,16777619);
+  }
+  return { seed: hash>>>0, label };
+}
+
 function createBag(seed=createSeed()){
   let currentSeed=(normalizeSeed(seed)??createSeed())>>>0;
   let rng=mulberry32(currentSeed);
@@ -262,4 +284,5 @@ export {
   generateSequence,
   mulberry32,
   DEFAULT_RANDOMIZER_MODES,
+  seedFromDate,
 };
