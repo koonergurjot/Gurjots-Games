@@ -163,31 +163,42 @@ function moveHorizontally(amount) {
 }
 
 function moveVertically(amount) {
-  player.y += amount;
-  const bounds = getPlayerBounds();
-  player.onGround = false;
+  if (amount === 0) {
+    return;
+  }
 
-  if (amount > 0) {
-    const bottomTile = Math.floor((bounds.bottom) / TILE_SIZE);
-    const leftTile = Math.floor(bounds.left / TILE_SIZE);
-    const rightTile = Math.floor((bounds.right - 1) / TILE_SIZE);
-    for (let tx = leftTile; tx <= rightTile; tx += 1) {
-      if (isSolid(tx, bottomTile)) {
-        player.y = bottomTile * TILE_SIZE - player.height;
-        player.vy = 0;
-        player.onGround = true;
-        return;
+  player.onGround = false;
+  let remaining = amount;
+
+  while (remaining !== 0) {
+    const step = Math.sign(remaining) * Math.min(Math.abs(remaining), TILE_SIZE);
+    player.y += step;
+    remaining -= step;
+
+    const bounds = getPlayerBounds();
+
+    if (step > 0) {
+      const bottomTile = Math.floor(bounds.bottom / TILE_SIZE);
+      const leftTile = Math.floor(bounds.left / TILE_SIZE);
+      const rightTile = Math.floor((bounds.right - 1) / TILE_SIZE);
+      for (let tx = leftTile; tx <= rightTile; tx += 1) {
+        if (isSolid(tx, bottomTile)) {
+          player.y = bottomTile * TILE_SIZE - player.height;
+          player.vy = 0;
+          player.onGround = true;
+          return;
+        }
       }
-    }
-  } else if (amount < 0) {
-    const topTile = Math.floor(bounds.top / TILE_SIZE);
-    const leftTile = Math.floor(bounds.left / TILE_SIZE);
-    const rightTile = Math.floor((bounds.right - 1) / TILE_SIZE);
-    for (let tx = leftTile; tx <= rightTile; tx += 1) {
-      if (isSolid(tx, topTile)) {
-        player.y = (topTile + 1) * TILE_SIZE;
-        player.vy = 0;
-        return;
+    } else {
+      const topTile = Math.floor(bounds.top / TILE_SIZE);
+      const leftTile = Math.floor(bounds.left / TILE_SIZE);
+      const rightTile = Math.floor((bounds.right - 1) / TILE_SIZE);
+      for (let tx = leftTile; tx <= rightTile; tx += 1) {
+        if (isSolid(tx, topTile)) {
+          player.y = (topTile + 1) * TILE_SIZE;
+          player.vy = 0;
+          return;
+        }
       }
     }
   }
