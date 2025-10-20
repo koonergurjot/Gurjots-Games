@@ -4,6 +4,19 @@ const DEFAULT_CONFIG = {
   winByTwo: false,
 };
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 const isTestEnv = Boolean(
   (typeof globalThis !== 'undefined' &&
     (globalThis.__vitest_worker__ || globalThis.__VITEST__ || globalThis.__vitest_browser__)) ||
@@ -136,6 +149,26 @@ function signalReady() {
 
 function bootRealGame() {
   ensureRealGameShell();
+  requestAnimationFrame(() => {
+    try {
+      const canvas =
+        document.querySelector('#game-root canvas') ||
+        document.querySelector('#stage canvas') ||
+        document.querySelector('canvas');
+      if (canvas && typeof canvas.getContext === 'function') {
+        syncCanvasSize(canvas);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = 'black';
+          ctx.fillRect(0, 0, canvas.width || 0, canvas.height || 0);
+        }
+      }
+    } catch (err) {
+      console.warn('[pong] first frame prep failed', err);
+    } finally {
+      markFirstFrame();
+    }
+  });
   loadRealGameScript().catch((err) => {
     console.error('[pong] failed to load game script', err);
   });
