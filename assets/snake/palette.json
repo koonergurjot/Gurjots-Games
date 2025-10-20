@@ -1,0 +1,19 @@
+{
+  "board": {
+    "base": "#071426",
+    "accent": "#13264a"
+  },
+  "snake": {
+    "head": "#38bdf8",
+    "body": "#22d3ee"
+  },
+  "fruit": {
+    "skin": "#ff6b6b",
+    "leaf": "#5dd067"
+  },
+  "ui": {
+    "foreground": "#f8fbff",
+    "muted": "#9fb4e4",
+    "accent": "#7c5dfa"
+  }
+}
