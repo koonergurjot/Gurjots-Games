@@ -6,6 +6,19 @@ import './diagnostics-adapter.js';
 import { BossRushMode, DEFAULT_BOSS_RUSH_STAGES } from './shooter.js';
 import { ShooterUI } from './ui.js';
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 export function boot() {
   const canvas = document.getElementById('game');
   if (!canvas) return console.error('[shooter] missing #game canvas');
@@ -1495,6 +1508,7 @@ export function boot() {
     if (scoreDisplay) {
       scoreDisplay.textContent = String(Math.round(score));
     }
+    markFirstFrame();
   }
 
   function drawExplosions() {

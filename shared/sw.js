@@ -3,9 +3,32 @@ import { warn } from '../tools/reporters/console-signature.js';
 const PRECACHE_QUEUE = new Set();
 let flushTimer = null;
 let controllerListenerAttached = false;
+const SW_BLOCKED_HOST_PATTERNS = [/\.workers\.dev$/i, /\.cloudflareworkers\.com$/i];
+let swBlockedReasonLogged = false;
+
+function isServiceWorkerUsable() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
+  if (!('serviceWorker' in navigator)) {
+    return false;
+  }
+  const { protocol, hostname } = window.location || {};
+  if (protocol && protocol !== 'https:' && protocol !== 'http:') {
+    return false;
+  }
+  if (hostname && SW_BLOCKED_HOST_PATTERNS.some(pattern => pattern.test(hostname))) {
+    if (!swBlockedReasonLogged) {
+      swBlockedReasonLogged = true;
+      warn('shared', 'Skipping service worker registration on restricted host', hostname);
+    }
+    return false;
+  }
+  return true;
+}
 
 function attachControllerListener() {
-  if (controllerListenerAttached || !('serviceWorker' in navigator)) return;
+  if (controllerListenerAttached || !isServiceWorkerUsable()) return;
   controllerListenerAttached = true;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     scheduleFlush(0);
@@ -40,7 +63,7 @@ function scheduleFlush(delay = 0) {
 
 async function flushQueue() {
   if (!PRECACHE_QUEUE.size) return;
-  if (!('serviceWorker' in navigator)) {
+  if (!isServiceWorkerUsable()) {
     PRECACHE_QUEUE.clear();
     return;
   }
@@ -61,8 +84,14 @@ async function flushQueue() {
 }
 
 export function registerSW() {
-  if (!('serviceWorker' in navigator)) return;
-  const swUrl = new URL('../sw.js', import.meta.url);
+  if (!isServiceWorkerUsable()) return;
+  let swUrl;
+  try {
+    swUrl = new URL('../sw.js', import.meta.url);
+  } catch (error) {
+    warn('shared', 'Unable to resolve service worker URL', error);
+    return;
+  }
   attachControllerListener();
   navigator.serviceWorker.register(swUrl.href).then(() => {
     scheduleFlush(0);
@@ -72,7 +101,7 @@ export function registerSW() {
 }
 
 export function precacheAssets(assets) {
-  if (!('serviceWorker' in navigator)) return;
+  if (!isServiceWorkerUsable()) return;
   const list = Array.isArray(assets) ? assets : [assets];
   let added = false;
   for (const asset of list) {
