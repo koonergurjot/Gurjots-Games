@@ -287,7 +287,7 @@ ensureSprites();
 let postedReady=false;
 const COLS=10, ROWS=20;
 const GRID_SIZE=COLS*ROWS;
-const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L[[0,0,7],[7,7,7]]};
+const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L:[[0,0,7],[7,7,7]]};
 const PIECE_VALUE_TO_KEY=[null,'I','O','T','S','Z','J','L'];
 const PIECE_KEYS=['I','O','T','S','Z','J','L'];
 const DEFAULT_TILE_CONFIG={
