@@ -182,7 +182,13 @@ async function loadAtlas(config) {
         });
         loadPromises.push(promise);
       } else {
-        sprites[name][lod] = { ...definition };
+        const width = definition.width ?? definition.size?.[0];
+        const height = definition.height ?? definition.size?.[1];
+        sprites[name][lod] = {
+          ...definition,
+          ...(width !== undefined ? { width } : {}),
+          ...(height !== undefined ? { height } : {}),
+        };
       }
     }
   }
