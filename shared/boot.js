@@ -20,6 +20,7 @@
   let overlayDetailEl = null;
   let overlayActionBtn = null;
   let lastShownReason = '';
+  let overlayMountRetry = null;
 
   function ensureStyles(){
     if (document.getElementById('gg-boot-style')) {
@@ -143,10 +144,27 @@
       return;
     }
     const host = document.body || document.documentElement;
-    if (!host) {
+    if (host) {
+      host.appendChild(overlayRoot);
+      if (overlayMountRetry) {
+        window.clearTimeout(overlayMountRetry);
+        overlayMountRetry = null;
+      }
       return;
     }
-    host.appendChild(overlayRoot);
+    if (overlayMountRetry !== null) {
+      return;
+    }
+    const attemptMount = () => {
+      const nextHost = document.body || document.documentElement;
+      if (!nextHost) {
+        overlayMountRetry = window.setTimeout(attemptMount, 16);
+        return;
+      }
+      overlayMountRetry = null;
+      nextHost.appendChild(overlayRoot);
+    };
+    overlayMountRetry = window.setTimeout(attemptMount, 0);
   }
 
   function showOverlay(reason = 'loading', detail){
