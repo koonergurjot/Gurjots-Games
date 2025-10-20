@@ -4,6 +4,14 @@ import { injectHelpButton, recordLastPlayed, shareScore } from '../../shared/ui.
 import { gameEvent } from '../../shared/telemetry.js';
 import { connect } from './net.js';
 import { generateMaze, seedRandom } from './generator.js';
+import {
+  createCompassUi,
+  formatTime,
+  getBestTimeForSeed,
+  setBestTimeForSeed,
+  setCompassVisible,
+  updateCompassHeading,
+} from './ui.js';
 
 function loadPreference(key, fallback) {
   try {
@@ -75,6 +83,81 @@ function sanitizeHelp(source) {
   return help;
 }
 
+function hashSeedFromString(value) {
+  const text = typeof value === 'string' ? value : String(value ?? '');
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (hash * 31 + text.charCodeAt(i)) % 2147483647;
+  }
+  hash = (hash + 2147483647) % 2147483647;
+  if (hash === 0) hash = 2147483646;
+  return hash;
+}
+
+function getTodaySeedLabel(date = new Date()) {
+  try {
+    const iso = new Date(date).toISOString();
+    return iso.slice(0, 10);
+  } catch (err) {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function createSeedInfo(mode, overrideSeed) {
+  if (overrideSeed !== undefined && overrideSeed !== null) {
+    if (Number.isFinite(overrideSeed)) {
+      const numeric = Math.max(1, Math.floor(Number(overrideSeed)));
+      return {
+        value: numeric,
+        label: String(numeric),
+        display: `#${numeric}`,
+        key: `seed:${numeric}`,
+        daily: false,
+      };
+    }
+    const normalized = String(overrideSeed).trim();
+    if (normalized) {
+      const hashed = hashSeedFromString(normalized);
+      return {
+        value: hashed,
+        label: normalized,
+        display: normalized,
+        key: `seed:${normalized}`,
+        daily: false,
+      };
+    }
+  }
+
+  if (mode === 'daily') {
+    const label = getTodaySeedLabel();
+    const hashed = hashSeedFromString(label);
+    return {
+      value: hashed,
+      label,
+      display: `Daily ${label}`,
+      key: `daily:${label}`,
+      daily: true,
+    };
+  }
+
+  const randomSeed = Math.max(1, Math.floor(Math.random() * 1e9));
+  return {
+    value: randomSeed,
+    label: `#${randomSeed}`,
+    display: `#${randomSeed}`,
+    key: `seed:${randomSeed}`,
+    daily: false,
+  };
+}
+
+const SEED_MODES = new Set(['random', 'daily']);
+let seedMode = loadPreference('maze3d:seedMode', 'random');
+if (!SEED_MODES.has(seedMode)) seedMode = 'random';
+
+const storedNoMapPref = loadPreference('maze3d:noMap', '0');
+const noMapPrefString = typeof storedNoMapPref === 'string' ? storedNoMapPref.toLowerCase() : storedNoMapPref;
+let noMapActive = noMapPrefString === '1' || noMapPrefString === 'true' || noMapPrefString === true;
+
 const helpEntry = games.find(g => g?.id === 'maze3d' || g?.slug === 'maze3d');
 const help = sanitizeHelp(helpEntry?.help || window.helpData || {});
 window.helpData = help;
@@ -103,8 +186,10 @@ const mapRenderer = new THREE.WebGLRenderer({ antialias: false });
 mapRenderer.setSize(200, 200);
 mapRenderer.domElement.style.position='fixed'; mapRenderer.domElement.style.right='12px'; mapRenderer.domElement.style.bottom='12px'; mapRenderer.domElement.style.border='1px solid rgba(255,255,255,0.2)'; mapRenderer.domElement.style.borderRadius='6px';
 document.body.appendChild(mapRenderer.domElement);
+const compassUi = createCompassUi();
+let mapVisibilityRequested = true;
 let mapVisible = true;
-mapRenderer.domElement.style.display = 'block';
+mapRenderer.domElement.style.display = 'none';
 const minimapOverlay = document.createElement('canvas');
 minimapOverlay.width = mapRenderer.domElement.width;
 minimapOverlay.height = mapRenderer.domElement.height;
@@ -119,7 +204,8 @@ minimapOverlay.style.borderRadius = mapRenderer.domElement.style.borderRadius;
 minimapOverlay.style.zIndex = '10';
 document.body.appendChild(minimapOverlay);
 const minimapCtx = minimapOverlay.getContext('2d');
-minimapOverlay.style.display = 'block';
+minimapOverlay.style.display = 'none';
+const compassDirection = new THREE.Vector3();
 
 const MINIMAP_SIZE = mapRenderer.domElement.width;
 const MARKER_COLORS = ['#f97316', '#a855f7', '#22d3ee', '#facc15', '#34d399'];
@@ -186,6 +272,19 @@ function removeNearestMarker(worldX, worldZ) {
 function clearMinimapMarkers() {
   minimapMarkers = [];
   markerSequence = 1;
+}
+
+function updateMapVisibility() {
+  mapVisible = !noMapActive && mapVisibilityRequested;
+  if (mapRenderer?.domElement) {
+    mapRenderer.domElement.style.display = mapVisible ? 'block' : 'none';
+  }
+  if (minimapOverlay) {
+    minimapOverlay.style.display = mapVisible ? 'block' : 'none';
+  }
+  if (compassUi) {
+    setCompassVisible(compassUi, mapVisible);
+  }
 }
 
 function handleMinimapPointerEvent(event) {
@@ -446,9 +545,10 @@ function getDiagnosticsSnapshot() {
   const hudTime = parseHudTime(timeEl?.textContent ?? '');
   const hudOpponentTime = parseHudTime(oppTimeEl?.textContent ?? '');
   const perf = typeof performance !== 'undefined' ? performance : null;
+  const perfNow = perf?.now ? perf.now() : null;
   let elapsedSeconds = null;
-  if (running && !paused && perf && typeof startTime === 'number' && startTime > 0) {
-    elapsedSeconds = (perf.now() - startTime) / 1000;
+  if (timerStarted) {
+    elapsedSeconds = getTimerSeconds(perfNow);
   } else if (typeof myFinish === 'number') {
     elapsedSeconds = myFinish;
   } else if (hudTime != null) {
@@ -470,7 +570,7 @@ function getDiagnosticsSnapshot() {
   } else {
     opponentSeconds = null;
   }
-  const bestSeconds = Number.isFinite(best) && best > 0 ? Number(best) : null;
+  const bestSeconds = Number.isFinite(bestForSeed) && bestForSeed > 0 ? Number(bestForSeed) : null;
   const finishSeconds = typeof myFinish === 'number' ? Number(myFinish.toFixed(3)) : null;
   return {
     timestamp: Date.now(),
@@ -496,7 +596,8 @@ function getDiagnosticsSnapshot() {
       bestSeconds,
       hudTimeSeconds: hudTime,
       hudOpponentSeconds: hudOpponentTime,
-      startTimestamp: typeof startTime === 'number' ? startTime : null,
+      startTimestamp: timerStarted && startTime ? startTime : null,
+      mapUsedDuringRun,
     },
     player: vectorToSnapshot(player?.position ?? null),
     opponent: vectorToSnapshot(opponent.mesh?.position ?? null),
@@ -593,6 +694,7 @@ let shareBtn = document.getElementById('shareBtn');
 timeEl = document.getElementById('time');
 oppTimeEl = document.getElementById('oppTime');
 bestEl = document.getElementById('best');
+let seedLabelEl = document.getElementById('seedLabel');
 let sizeSelect = document.getElementById('mazeSize');
 let enemySelect = document.getElementById('enemyCount');
 let roomInput = document.getElementById('roomInput');
@@ -607,6 +709,8 @@ let deadZoneContainer = deadZoneSlider?.parentElement || null;
 let sensitivitySlider = document.getElementById('mobileSensitivity');
 let sensitivityValueLabel = document.querySelector('[data-slider-value="mobileSensitivity"]');
 let sensitivityContainer = sensitivitySlider?.parentElement || null;
+let seedModeSelect = document.getElementById('seedMode');
+let noMapToggle = document.getElementById('noMapToggle');
 
 ({
   overlay,
@@ -627,7 +731,9 @@ let sensitivityContainer = sensitivitySlider?.parentElement || null;
   deadZoneContainer,
   sensitivitySlider,
   sensitivityValueLabel,
-  sensitivityContainer
+  sensitivityContainer,
+  seedModeSelect,
+  noMapToggle
 } = ensureOverlayElements({
   overlay,
   message,
@@ -647,10 +753,12 @@ let sensitivityContainer = sensitivitySlider?.parentElement || null;
   deadZoneContainer,
   sensitivitySlider,
   sensitivityValueLabel,
-  sensitivityContainer
+  sensitivityContainer,
+  seedModeSelect,
+  noMapToggle
 }));
 
-({ timeEl, oppTimeEl, bestEl } = ensureHudElements({ timeEl, oppTimeEl, bestEl }));
+({ timeEl, oppTimeEl, bestEl, seedLabelEl } = ensureHudElements({ timeEl, oppTimeEl, bestEl, seedLabelEl }));
 
 let running = false;
 let paused = true;
@@ -658,16 +766,23 @@ let pausedByShell = false;
 let shellRenderPaused = false;
 let loopRaf = 0;
 let startTime = 0;
-let best = Number(localStorage.getItem('besttime:maze3d') || 0);
+let timerOffsetMs = 0;
+let timerStarted = false;
+let timerRunning = false;
+let telemetryRunStarted = false;
+let bestForSeed = null;
 let net = null;
-let currentSeed = Math.floor(Math.random()*1e9);
+let currentSeed = 0;
+let currentSeedLabel = '';
+let currentSeedDisplay = '';
+let currentSeedKey = '';
+let currentSeedIsDaily = seedMode === 'daily';
 const myId = Math.random().toString(36).slice(2,8);
 let opponentFinish = null;
 let myFinish = null;
 let lastPosSent = 0;
 let postedReady=false;
 if (roomInput) roomInput.value = Math.random().toString(36).slice(2,7);
-if (best) bestEl.textContent = best.toFixed(2);
 
 let trail = []; let lastTrailPos = null;
 let mazeSolutionCells = [];
@@ -675,6 +790,7 @@ let mazeSolutionWorld = [];
 let assistHeatSamples = [];
 let wallMesh = null;
 const stickState = { active: false, pointerId: null, radius: 60, centerX: 0, centerY: 0 };
+let mapUsedDuringRun = false;
 
 const ASSIST_MODES = new Set(['off', 'heatmap']);
 let assistMode = ASSIST_MODES.has(loadPreference('maze3d:assistMode', 'off'))
@@ -735,6 +851,17 @@ assistSelect?.addEventListener('change', () => {
 controlSelect?.addEventListener('change', () => {
   setInputProfile(controlSelect.value);
 });
+seedModeSelect?.addEventListener('change', () => {
+  setSeedMode(seedModeSelect.value);
+  restart();
+});
+noMapToggle?.addEventListener('change', (event) => {
+  const checked = !!event.target?.checked;
+  setNoMapActive(checked);
+  if (!running || paused) {
+    mapUsedDuringRun = !checked;
+  }
+});
 deadZoneSlider?.addEventListener('input', (event) => {
   mobileDeadZone = clampNumber(event.target?.value, MIN_DEAD_ZONE, MAX_DEAD_ZONE, mobileDeadZone);
   savePreference('maze3d:mobileDeadZone', mobileDeadZone);
@@ -752,6 +879,10 @@ rematchBtn?.addEventListener('click', () => { opponentFinish = myFinish = null; 
 applyInputProfile();
 setAssistMode(assistMode);
 updateMobileCalibrationUi();
+refreshSeedModeControl();
+setNoMapActive(noMapActive, { persist: false });
+mapUsedDuringRun = !noMapActive;
+updateTimerDisplay(0);
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -761,7 +892,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function ensureOverlayElements(elements) {
-  let { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect, deadZoneSlider, deadZoneValueLabel, deadZoneContainer, sensitivitySlider, sensitivityValueLabel, sensitivityContainer } = elements;
+  let { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect, deadZoneSlider, deadZoneValueLabel, deadZoneContainer, sensitivitySlider, sensitivityValueLabel, sensitivityContainer, seedModeSelect, noMapToggle } = elements;
   const doc = document;
   const body = doc.body || doc.documentElement;
 
@@ -843,6 +974,34 @@ function ensureOverlayElements(elements) {
       container.appendChild(select);
     }
     return select;
+  }
+
+  function ensureToggle(id, labelText) {
+    let container = panel.querySelector(`[data-toggle-for="${id}"]`);
+    if (!container) {
+      container = doc.createElement('div');
+      container.dataset.toggleFor = id;
+      container.style.marginTop = '10px';
+      container.style.display = 'flex';
+      container.style.justifyContent = 'center';
+      const label = doc.createElement('label');
+      label.setAttribute('for', id);
+      label.style.display = 'inline-flex';
+      label.style.alignItems = 'center';
+      label.style.gap = '8px';
+      label.style.cursor = 'pointer';
+      const input = doc.createElement('input');
+      input.type = 'checkbox';
+      input.id = id;
+      input.style.transform = 'scale(1.05)';
+      label.appendChild(input);
+      const span = doc.createElement('span');
+      span.textContent = labelText;
+      label.appendChild(span);
+      container.appendChild(label);
+      panel.appendChild(container);
+    }
+    return panel.querySelector(`#${id}`);
   }
 
   function ensureSlider(id, labelText, { min, max, step, format }) {
@@ -930,6 +1089,17 @@ function ensureOverlayElements(elements) {
     ]);
   }
   assistSelect.value = assistMode;
+
+  if (!seedModeSelect) {
+    seedModeSelect = ensureSelect('seedMode', 'Seed:', [
+      ['random', 'Random'],
+      ['daily', 'Daily'],
+    ]);
+  }
+
+  if (!noMapToggle) {
+    noMapToggle = ensureToggle('noMapToggle', 'No-map mode');
+  }
 
   if (!controlSelect) {
     controlSelect = ensureSelect('controlProfile', 'Controls:', [
@@ -1024,7 +1194,7 @@ function ensureOverlayElements(elements) {
     buttonTarget.appendChild(shareBtn);
   }
 
-  return { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect, deadZoneSlider, deadZoneValueLabel, deadZoneContainer, sensitivitySlider, sensitivityValueLabel, sensitivityContainer };
+  return { overlay, message, startBtn, restartBtn, shareBtn, sizeSelect, enemySelect, roomInput, connectBtn, rematchBtn, algorithmSelect, assistSelect, controlSelect, deadZoneSlider, deadZoneValueLabel, deadZoneContainer, sensitivitySlider, sensitivityValueLabel, sensitivityContainer, seedModeSelect, noMapToggle };
 }
 
 function applyMobileCalibration(target) {
@@ -1290,6 +1460,164 @@ function setAssistMode(mode) {
   }
 }
 
+function updateTimerDisplay(seconds) {
+  if (!timeEl) return;
+  const clamped = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  timeEl.textContent = formatTime(clamped);
+}
+
+function getTimerSeconds(now) {
+  if (!timerStarted) return 0;
+  const refNow = Number.isFinite(now) ? now : (typeof performance !== 'undefined' ? performance.now() : 0);
+  const total = timerRunning && startTime ? (timerOffsetMs + (refNow - startTime)) : timerOffsetMs;
+  return Math.max(0, total / 1000);
+}
+
+function resetTimerState() {
+  timerOffsetMs = 0;
+  timerStarted = false;
+  timerRunning = false;
+  startTime = 0;
+  telemetryRunStarted = false;
+}
+
+function emitRunStart() {
+  if (telemetryRunStarted) return;
+  telemetryRunStarted = true;
+  gameEvent('start', {
+    slug: 'maze3d',
+    meta: buildRunMeta({ event: 'start', startedAt: Date.now() }),
+  });
+}
+
+function startRunTimer(now, { emitTelemetry = true } = {}) {
+  const reference = Number.isFinite(now) ? now : (typeof performance !== 'undefined' ? performance.now() : 0);
+  timerOffsetMs = 0;
+  timerStarted = true;
+  timerRunning = true;
+  startTime = reference;
+  if (emitTelemetry) emitRunStart();
+}
+
+function pauseRunTimer(now) {
+  if (!timerStarted || !timerRunning) return;
+  const reference = Number.isFinite(now) ? now : (typeof performance !== 'undefined' ? performance.now() : 0);
+  timerOffsetMs += reference - startTime;
+  timerRunning = false;
+  startTime = 0;
+}
+
+function resumeRunTimer(now) {
+  if (!timerStarted || timerRunning) return;
+  const reference = Number.isFinite(now) ? now : (typeof performance !== 'undefined' ? performance.now() : 0);
+  timerRunning = true;
+  startTime = reference;
+}
+
+function stopRunTimer(now) {
+  if (!timerStarted) return 0;
+  if (timerRunning) {
+    const reference = Number.isFinite(now) ? now : (typeof performance !== 'undefined' ? performance.now() : 0);
+    timerOffsetMs += reference - startTime;
+    timerRunning = false;
+    startTime = 0;
+  }
+  return Math.max(0, timerOffsetMs / 1000);
+}
+
+function emitRunEnd(durationMs) {
+  if (!telemetryRunStarted) return;
+  gameEvent('end', {
+    slug: 'maze3d',
+    durationMs,
+    meta: buildRunMeta({ event: 'end' }),
+  });
+  telemetryRunStarted = false;
+}
+
+function updateBestDisplay() {
+  if (!bestEl) return;
+  if (Number.isFinite(bestForSeed) && bestForSeed > 0) {
+    bestEl.textContent = formatTime(bestForSeed);
+  } else {
+    bestEl.textContent = '--';
+  }
+}
+
+function updateSeedLabel() {
+  if (!seedLabelEl) return;
+  seedLabelEl.textContent = currentSeedDisplay || '--';
+}
+
+function buildRunMeta(extra = {}) {
+  return {
+    ...extra,
+    seed: currentSeedLabel,
+    seedDisplay: currentSeedDisplay,
+    seedKey: currentSeedKey,
+    seedNumeric: currentSeed,
+    seedMode,
+    daily: currentSeedIsDaily,
+    mapDisabled: noMapActive,
+    mapUsed: mapUsedDuringRun,
+    algorithm: algorithmPreference,
+    mazeSize: MAZE_CELLS,
+    enemies: ENEMY_COUNT,
+    assist: assistMode,
+  };
+}
+
+function applySeedInfo(info) {
+  currentSeed = info.value;
+  currentSeedLabel = info.label;
+  currentSeedDisplay = info.display;
+  currentSeedKey = info.key;
+  currentSeedIsDaily = !!info.daily;
+  bestForSeed = getBestTimeForSeed(currentSeedKey);
+  updateBestDisplay();
+  updateSeedLabel();
+}
+
+function refreshSeedModeControl() {
+  if (seedModeSelect && seedModeSelect.value !== seedMode) {
+    seedModeSelect.value = seedMode;
+  }
+}
+
+function setSeedMode(mode) {
+  const normalized = SEED_MODES.has(mode) ? mode : 'random';
+  if (seedMode === normalized) {
+    refreshSeedModeControl();
+    return;
+  }
+  seedMode = normalized;
+  savePreference('maze3d:seedMode', normalized);
+  refreshSeedModeControl();
+}
+
+function setNoMapActive(active, { persist = true } = {}) {
+  const normalized = !!active;
+  const wasVisible = mapVisible;
+  if (noMapActive === normalized) {
+    if (persist && noMapToggle && noMapToggle.checked !== normalized) {
+      noMapToggle.checked = normalized;
+    }
+    updateMapVisibility();
+    return;
+  }
+  noMapActive = normalized;
+  if (persist) {
+    savePreference('maze3d:noMap', normalized ? '1' : '0');
+  }
+  if (noMapToggle && noMapToggle.checked !== normalized) {
+    noMapToggle.checked = normalized;
+  }
+  updateMapVisibility();
+  if (wasVisible && running && !paused) {
+    mapUsedDuringRun = true;
+  }
+}
+
 function shouldUsePointerLock() {
   return !isTouchDevice || inputProfile === 'keyboard';
 }
@@ -1301,7 +1629,7 @@ function updatePointerLockPreference() {
 }
 
 function ensureHudElements(elements) {
-  let { timeEl, oppTimeEl, bestEl } = elements;
+  let { timeEl, oppTimeEl, bestEl, seedLabelEl } = elements;
   const doc = document;
   let hud = doc.getElementById('hud');
   if (!hud) {
@@ -1342,7 +1670,12 @@ function ensureHudElements(elements) {
     bestEl = ensureSpan('best', '', bestEl, '--');
   }
 
-  return { timeEl, oppTimeEl, bestEl };
+  if (!seedLabelEl) {
+    if (!hud.textContent.includes('Seed:')) hud.appendChild(document.createTextNode(' • Seed: '));
+    seedLabelEl = ensureSpan('seedLabel', '', seedLabelEl, '--');
+  }
+
+  return { timeEl, oppTimeEl, bestEl, seedLabelEl };
 }
 
 function disposeMesh(mesh) {
@@ -1879,13 +2212,30 @@ function buildMaze(seed) {
 }
 
 function start(syncTime) {
+  const now = typeof performance !== 'undefined' ? performance.now() : 0;
+  const isSyncStart = syncTime !== undefined;
   if (!running) {
     running = true;
-    startTime = syncTime !== undefined ? syncTime : performance.now();
-    gameEvent('play', { slug: 'maze3d' });
-    if (net && syncTime === undefined) {
+    if (isSyncStart) {
+      startRunTimer(syncTime, { emitTelemetry: true });
+      updateTimerDisplay(getTimerSeconds(syncTime));
+    } else {
+      updateTimerDisplay(0);
+    }
+    gameEvent('play', { slug: 'maze3d', meta: buildRunMeta({ event: 'play' }) });
+    if (net && !isSyncStart) {
       const startAt = Date.now();
       net.send('start', { seed: currentSeed, startAt });
+    }
+  } else if (paused) {
+    if (isSyncStart) {
+      if (!timerStarted) {
+        startRunTimer(syncTime, { emitTelemetry: true });
+      } else {
+        resumeRunTimer(syncTime);
+      }
+    } else if (timerStarted && !timerRunning) {
+      resumeRunTimer(now);
     }
   }
   paused = false;
@@ -1896,35 +2246,45 @@ function start(syncTime) {
     controls.unlock();
   }
   notifyDiagnosticsState('running', {
-    reason: syncTime !== undefined ? 'sync-start' : 'local-start',
-    sync: syncTime !== undefined,
+    reason: isSyncStart ? 'sync-start' : 'local-start',
+    sync: isSyncStart,
+    seed: currentSeed,
+    seedKey: currentSeedKey,
+    daily: currentSeedIsDaily,
   });
 }
 
 function resume(syncTime) {
-  if (!running || paused) {
+  if (!running) {
     start(syncTime);
+    return;
   }
+  if (!paused) return;
+  start(syncTime);
 }
 
-function restart(seed = Math.floor(Math.random()*1e9)) {
+function restart(seedOverride) {
   running = false;
   paused = true;
-  startTime = 0;
-  currentSeed = seed;
+  pauseRunTimer(typeof performance !== 'undefined' ? performance.now() : 0);
+  resetTimerState();
+  const seedInfo = createSeedInfo(seedMode, seedOverride);
+  applySeedInfo(seedInfo);
   opponentFinish = null;
   myFinish = null;
   updateMazeParams();
-  buildMaze(seed);
-  timeEl.textContent = '0.00';
-  oppTimeEl.textContent = '--';
+  buildMaze(currentSeed);
+  updateMapVisibility();
+  updateTimerDisplay(0);
+  if (oppTimeEl) oppTimeEl.textContent = '--';
   message.textContent = 'Click Start to play.';
   startBtn.textContent = 'Start';
   if (restartBtn) restartBtn.style.display = 'none';
   if (shareBtn) shareBtn.style.display = 'none';
   rematchBtn && (rematchBtn.style.display = 'none');
+  mapUsedDuringRun = !noMapActive;
   notifyNetworkLatency(null, { source: 'restart' });
-  notifyDiagnosticsState('ready', { reason: 'restart', seed });
+  notifyDiagnosticsState('ready', { reason: 'restart', seed: currentSeed, seedKey: currentSeedKey, daily: currentSeedIsDaily });
   showOverlay();
 }
 
@@ -1940,7 +2300,7 @@ function connectMatch() {
     },
     pos: ({ id, x, z, time }) => {
       if (id === myId) return;
-      oppTimeEl.textContent = time.toFixed(2);
+      if (oppTimeEl) oppTimeEl.textContent = formatTime(time);
       if (!opponent.mesh) {
         const geo = new THREE.SphereGeometry(0.4, 16, 16);
         const mat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
@@ -1953,12 +2313,12 @@ function connectMatch() {
     finish: ({ id, time }) => {
       if (id === myId) return;
       opponentFinish = time;
-      oppTimeEl.textContent = time.toFixed(2);
+      if (oppTimeEl) oppTimeEl.textContent = formatTime(time);
       if (myFinish != null) {
         message.textContent += myFinish < opponentFinish ? ' You win!' : ' Opponent wins!';
         rematchBtn && (rematchBtn.style.display = 'inline-block');
       } else {
-        message.textContent = `Opponent finished in ${time.toFixed(2)}s`;
+        message.textContent = `Opponent finished in ${formatTime(time)}s`;
         rematchBtn && (rematchBtn.style.display = 'inline-block');
       }
     }
@@ -1969,12 +2329,15 @@ function connectMatch() {
 function pause() {
   if (!running || paused) return;
   paused = true;
+  const now = typeof performance !== 'undefined' ? performance.now() : 0;
+  pauseRunTimer(now);
+  updateTimerDisplay(getTimerSeconds(now));
   controls.unlock();
   message.textContent = 'Paused';
   startBtn.textContent = 'Resume';
   if (restartBtn) restartBtn.style.display = 'inline-block';
   showOverlay();
-  notifyDiagnosticsState('paused', { reason: 'pause' });
+  notifyDiagnosticsState('paused', { reason: 'pause', seed: currentSeed, seedKey: currentSeedKey, daily: currentSeedIsDaily });
 }
 
 function togglePause() {
@@ -1983,36 +2346,52 @@ function togglePause() {
 }
 
 function toggleMap() {
-  mapVisible = !mapVisible;
-  mapRenderer.domElement.style.display = mapVisible ? 'block' : 'none';
-  minimapOverlay.style.display = mapVisible ? 'block' : 'none';
+  if (noMapActive) return;
+  const wasVisible = mapVisible;
+  mapVisibilityRequested = !mapVisibilityRequested;
+  updateMapVisibility();
+  if (wasVisible && running && !paused) {
+    mapUsedDuringRun = true;
+  }
 }
 
 function finish(time) {
   running = false;
   paused = true;
   controls.unlock();
-  myFinish = time;
-  if (net) net.send('finish', { id: myId, time });
-  if (!best || time < best) {
-    best = time;
-    localStorage.setItem('besttime:maze3d', best.toFixed(2));
-    bestEl.textContent = best.toFixed(2);
+  const now = typeof performance !== 'undefined' ? performance.now() : 0;
+  const stopSeconds = stopRunTimer(now);
+  const finalTime = Number.isFinite(time) ? time : stopSeconds;
+  timerOffsetMs = Math.max(0, finalTime * 1000);
+  const durationMs = Math.max(0, Math.round(Math.max(0, finalTime) * 1000));
+  myFinish = finalTime;
+  updateTimerDisplay(finalTime);
+  if (net) net.send('finish', { id: myId, time: finalTime });
+  const previousBest = Number.isFinite(bestForSeed) ? bestForSeed : null;
+  if (previousBest == null || finalTime < previousBest) {
+    const stored = setBestTimeForSeed(currentSeedKey, finalTime);
+    bestForSeed = Number.isFinite(stored) ? stored : finalTime;
   }
-  message.textContent = `Finished in ${time.toFixed(2)}s`;
+  updateBestDisplay();
+  const meta = buildRunMeta({
+    durationSeconds: finalTime,
+    finishedAt: Date.now(),
+  });
+  message.textContent = `Finished in ${formatTime(finalTime)}s`;
   startBtn.textContent = 'Start';
   if (restartBtn) restartBtn.style.display = 'inline-block';
   if (shareBtn) {
     shareBtn.style.display = 'inline-block';
-    shareBtn.onclick = () => shareScore('maze3d', time.toFixed(2));
+    shareBtn.onclick = () => shareScore('maze3d', formatTime(finalTime));
   }
   showOverlay();
   startTime = 0;
-  const durationMs = Math.max(0, Math.round(Number(time) * 1000));
+  timerRunning = false;
   gameEvent('game_over', {
     slug: 'maze3d',
-    value: time,
+    value: finalTime,
     durationMs,
+    meta,
   });
   const outcome = opponentFinish != null
     ? (myFinish < opponentFinish ? 'win' : (myFinish > opponentFinish ? 'lose' : null))
@@ -2021,12 +2400,32 @@ function finish(time) {
     gameEvent(outcome, {
       slug: 'maze3d',
       meta: {
-        myTime: time,
+        myTime: finalTime,
         opponentTime: opponentFinish,
+        ...meta,
       },
     });
   }
-  notifyDiagnosticsState('finished', { reason: 'finish', time });
+  if (currentSeedIsDaily && finalTime <= 150) {
+    gameEvent('score_event', {
+      slug: 'maze3d',
+      name: 'daily_sub_150s',
+      value: finalTime,
+      durationMs,
+      meta,
+    });
+  }
+  if (!mapUsedDuringRun) {
+    gameEvent('score_event', {
+      slug: 'maze3d',
+      name: 'maze_no_map_clear',
+      value: finalTime,
+      durationMs,
+      meta,
+    });
+  }
+  emitRunEnd(durationMs);
+  notifyDiagnosticsState('finished', { reason: 'finish', time: finalTime, seed: currentSeed, seedKey: currentSeedKey, daily: currentSeedIsDaily });
   if (opponentFinish != null) {
     message.textContent += myFinish < opponentFinish ? ' You win!' : ' Opponent wins!';
     rematchBtn && (rematchBtn.style.display = 'inline-block');
@@ -2103,10 +2502,14 @@ function updateLighting(now) {
   }
 }
 
-function update(dt) {
+function update(dt, frameNow) {
   const prev = controls.getObject().position.clone();
   const input = computeMovementInput();
   const hasInput = input.lengthSq() > 0;
+  const referenceNow = Number.isFinite(frameNow) ? frameNow : (typeof performance !== 'undefined' ? performance.now() : 0);
+  if (!timerStarted && hasInput) {
+    startRunTimer(referenceNow, { emitTelemetry: true });
+  }
   targetVelocity.copy(input).multiplyScalar(MOVE_SETTINGS.maxSpeed);
   const damping = hasInput ? MOVE_SETTINGS.accel : MOVE_SETTINGS.decel;
   const lerpFactor = THREE.MathUtils.clamp(1 - Math.exp(-damping * dt), 0, 1);
@@ -2139,11 +2542,13 @@ function update(dt) {
   }
 
   if (exitBox && exitBox.containsPoint(pos)) {
-    const time = (performance.now() - startTime) / 1000;
-    timeEl.textContent = time.toFixed(2);
-    finish(time);
+    const finishSeconds = getTimerSeconds(referenceNow);
+    finish(finishSeconds);
   }
   updateEnemies(dt);
+  if (running && !paused && mapVisible) {
+    mapUsedDuringRun = true;
+  }
 }
 
 function loop() {
@@ -2153,10 +2558,12 @@ function loop() {
   }
   const dt = 0.016; // fixed timestep
   const frameNow = performance.now();
+  if (timerStarted) {
+    updateTimerDisplay(getTimerSeconds(frameNow));
+  }
   if (running && !paused) {
-    const t = (frameNow - startTime) / 1000;
-    timeEl.textContent = t.toFixed(2);
-    update(dt);
+    update(dt, frameNow);
+    const t = getTimerSeconds(frameNow);
     if (net && frameNow - lastPosSent > 100) {
       const p = controls.getObject().position;
       const latency = lastPosSent ? frameNow - lastPosSent : 0;
@@ -2173,6 +2580,11 @@ function loop() {
   playerLight.position.copy(controls.getObject().position);
   playerLight.position.y += 1.5;
   renderer.render(scene, camera);
+  if (compassUi && mapVisible) {
+    camera.getWorldDirection(compassDirection);
+    const headingRad = Math.atan2(compassDirection.x, compassDirection.z);
+    updateCompassHeading(compassUi, THREE.MathUtils.radToDeg(headingRad));
+  }
   if(!postedReady){
     notifyReadyListeners();
     postedReady=true;
@@ -2248,5 +2660,5 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-restart(currentSeed);
+restart();
 startRenderLoop();
