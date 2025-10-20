@@ -92,8 +92,18 @@ export function registerSW() {
     warn('shared', 'Unable to resolve service worker URL', error);
     return;
   }
+  let scope = null;
+  try {
+    scope = new URL('./', swUrl).pathname || null;
+  } catch (error) {
+    warn('shared', 'Unable to compute service worker scope', error);
+  }
+  const options = scope ? { scope } : undefined;
   attachControllerListener();
-  navigator.serviceWorker.register(swUrl.href).then(() => {
+  const registrationPromise = options
+    ? navigator.serviceWorker.register(swUrl.href, options)
+    : navigator.serviceWorker.register(swUrl.href);
+  registrationPromise.then(() => {
     scheduleFlush(0);
   }).catch(err => {
     warn('shared', 'Service worker registration failed', err);
