@@ -1,0 +1,9 @@
+{
+  "I": { "fill": "--tetris-piece-i-fill", "stroke": "--tetris-piece-i-stroke", "cornerRadius": 6 },
+  "O": { "fill": "--tetris-piece-o-fill", "stroke": "--tetris-piece-o-stroke", "cornerRadius": 7 },
+  "T": { "fill": "--tetris-piece-t-fill", "stroke": "--tetris-piece-t-stroke", "cornerRadius": 6 },
+  "S": { "fill": "--tetris-piece-s-fill", "stroke": "--tetris-piece-s-stroke", "cornerRadius": 6 },
+  "Z": { "fill": "--tetris-piece-z-fill", "stroke": "--tetris-piece-z-stroke", "cornerRadius": 6 },
+  "J": { "fill": "--tetris-piece-j-fill", "stroke": "--tetris-piece-j-stroke", "cornerRadius": 5 },
+  "L": { "fill": "--tetris-piece-l-fill", "stroke": "--tetris-piece-l-stroke", "cornerRadius": 5 }
+}
