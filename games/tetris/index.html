@@ -60,7 +60,9 @@
     </div>
   </main>
 
+  <script src="../../shared/boot.js"></script>
   <script>
+  window.requestAnimationFrame(() => { try { window.ggFirstFrame?.(); } catch (_) {} });
   fetch('./replays/list.json')
     .then(r => r.json())
     .then(list => {

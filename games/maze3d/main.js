@@ -13,6 +13,19 @@ import {
   updateCompassHeading,
 } from './ui.js';
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 function loadPreference(key, fallback) {
   try {
     const value = localStorage.getItem(key);
@@ -2580,6 +2593,7 @@ function loop() {
   playerLight.position.copy(controls.getObject().position);
   playerLight.position.y += 1.5;
   renderer.render(scene, camera);
+  markFirstFrame();
   if (compassUi && mapVisible) {
     camera.getWorldDirection(compassDirection);
     const headingRad = Math.atan2(compassDirection.x, compassDirection.z);

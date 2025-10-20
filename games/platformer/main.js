@@ -16,6 +16,19 @@ const globalScope = typeof window !== 'undefined' ? window : undefined;
 const GAME_ID = 'platformer';
 const BOOT_SNAPSHOT_INTERVAL = 5000;
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 const platformerApi = (() => {
   if (!globalScope) return null;
   const existing = globalScope.Platformer;
@@ -2720,10 +2733,11 @@ export async function boot() {
     } else {
       ctx.fillStyle = '#7a8dad';
       ctx.font = '12px system-ui';
-      ctx.fillText('Click "Start Co-op" in the HUD to link another tab.', 16, 64);
+    ctx.fillText('Click "Start Co-op" in the HUD to link another tab.', 16, 64);
     }
 
     ctx.restore();
+    markFirstFrame();
   }
 
   function frame(now) {
