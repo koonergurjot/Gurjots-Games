@@ -1,6 +1,7 @@
 import { Controls } from '../../src/runtime/controls.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerRunnerAdapter } from './adapter.js';
+import { chunkLibrary, selectChunk } from './chunks.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
 import { createSceneManager } from '../../src/engine/scenes.js';
 import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
@@ -650,6 +651,8 @@ class RunnerGame {
     this.particlePool = [];
     this.manualObstacles = [];
     this.manualIndex = 0;
+    this.chunkLibrary = Array.isArray(chunkLibrary) ? chunkLibrary : [];
+    this.lastChunkTier = 'easy';
 
     const seedInfo = this.resolveSeedInfo(context);
     const metaAutoStart = context?.meta?.autoStart;
@@ -672,8 +675,17 @@ class RunnerGame {
     this.spawnTimer = 160;
     this.coinTimer = 280;
     this.score = 0;
+    this.distanceScore = 0;
+    this.coinScore = 0;
     this.lastDrawnScore = -1;
     this.bestScore = 0;
+    this.coinMultiplier = 1;
+    this.lastMultiplierValue = 0;
+    this.timeSinceLastHit = 0;
+    this.multiplierRampInterval = 30;
+    this.nextMultiplierTime = this.multiplierRampInterval;
+    this.triggeredMilestones = new Set();
+    this.milestoneGoals = [500, 1000];
     this.difficulty = 'med';
     const defaultDifficulty = getDifficultyEntry(this.difficulty);
     this.baseSpeed = defaultDifficulty.speed;
@@ -698,9 +710,14 @@ class RunnerGame {
       lastDistance: -1,
     };
 
+    this.lastMissionText = '';
+    this.resetMissions();
+    this.updateMultiplierDisplay(true);
+
     this.hud = {
       score: document.getElementById('score'),
       mission: document.getElementById('mission'),
+      multiplier: document.getElementById('multiplier'),
       pauseBtn: document.getElementById('pauseBtn'),
       restartBtn: document.getElementById('restartBtn'),
       shareBtn: document.getElementById('shareBtn'),
@@ -893,7 +910,7 @@ class RunnerGame {
     const best = Math.max(0, Math.floor(this.bestScore || 0));
     const diffLabel = getDifficultyLabel(this.difficulty);
     if (this.levelName) parts.push(this.levelName);
-    parts.push(`Best ${best} m`);
+    parts.push(`Best ${best} pts`);
     parts.push(`Difficulty ${diffLabel}`);
     if (this.isDailyRunActive()) {
       const label = this.dailySeedLabel || `#${(this.seedBase >>> 0).toString(16)}`;
@@ -932,7 +949,7 @@ class RunnerGame {
     if (overlay.gameover.score) {
       const distanceLabel = Number.isFinite(distance) ? `${distance} m travelled` : '';
       const summary = distanceLabel ? ` • ${distanceLabel}` : '';
-      overlay.gameover.score.textContent = `Distance ${score} m • Best ${best} m${summary}`;
+      overlay.gameover.score.textContent = `Score ${score} pts • Best ${best} pts${summary}`;
     }
   }
 
@@ -1510,6 +1527,19 @@ class RunnerGame {
     this.clearActiveEntities();
     if (resetScore) {
       this.runStartTime = performance.now();
+      this.resetCoinMultiplier();
+      if (this.triggeredMilestones && typeof this.triggeredMilestones.clear === 'function') {
+        this.triggeredMilestones.clear();
+      }
+      this.lastMissionText = '';
+      this.resetMissions();
+      gameEvent('start', {
+        slug: GAME_SLUG,
+        meta: {
+          difficulty: this.difficulty,
+          level: name || this.levelName || '',
+        },
+      });
       gameEvent('play', { slug: GAME_SLUG });
       this.prepareRunSeeds({ initial: this.runCounter === 0 });
     }
@@ -1524,6 +1554,8 @@ class RunnerGame {
     if (resetScore) {
       this.distance = 0;
       this.score = 0;
+      this.distanceScore = 0;
+      this.coinScore = 0;
       this.lastDrawnScore = -1;
       this.player = this.createPlayer();
       this.input.jumpQueued = false;
@@ -1541,6 +1573,7 @@ class RunnerGame {
       this.analytics.lastPerfects = -1;
       this.analytics.lastDistance = -1;
       this.updateAnalyticsDisplay(true);
+      this.updateMission();
     }
     if (!silent) {
       this.updateMission();
@@ -1615,24 +1648,182 @@ class RunnerGame {
   updateMission(customText) {
     if (!this.hud.mission) return;
     if (customText) {
-      this.hud.mission.textContent = customText;
+      this.setMissionText(customText);
       return;
     }
-    const difficultyLabel = getDifficultyLabel(this.difficulty);
-    const levelLabel = this.levelName ? `${this.levelName} • ` : '';
-    const dailySuffix = this.isDailyRunActive() ? ' • Daily Run' : '';
+    const parts = [];
+    if (this.levelName && !this.gameOver) parts.push(this.levelName);
     if (this.gameOver) {
-      this.hud.mission.textContent = `${levelLabel}Game Over • Best ${this.bestScore} m${dailySuffix}`;
-    } else if (this.paused) {
-      const reason = this.pauseReason;
-      const label = reason === 'shell'
-        ? 'Paused by system overlay'
-        : reason === 'menu'
-          ? 'Paused'
-          : 'Paused';
-      this.hud.mission.textContent = `${levelLabel}${label}${dailySuffix}`;
+      parts.push('Game Over');
+      parts.push(`Score ${this.score} pts`);
+      parts.push(`${Math.floor(this.distance)} m travelled`);
+      if (this.levelName) parts.unshift(this.levelName);
+      parts.push(`${getDifficultyLabel(this.difficulty)} difficulty`);
+      if (this.isDailyRunActive()) parts.push('Daily Run');
     } else {
-      this.hud.mission.textContent = `${levelLabel}Difficulty: ${difficultyLabel} • Best ${this.bestScore} m${dailySuffix}`;
+      if (this.paused) {
+        const reason = this.pauseReason === 'shell'
+          ? 'Paused by system overlay'
+          : 'Paused';
+        parts.push(reason);
+      }
+      const distanceMission = this.describeDistanceMission();
+      const coinMission = this.describeCoinMission();
+      if (distanceMission) parts.push(distanceMission);
+      if (coinMission) parts.push(coinMission);
+      const difficultyLabel = getDifficultyLabel(this.difficulty);
+      parts.push(`${difficultyLabel} difficulty`);
+      if (this.isDailyRunActive()) parts.push('Daily Run');
+    }
+    this.setMissionText(parts.filter(Boolean).join(' • '));
+  }
+
+  setMissionText(text) {
+    if (!this.hud.mission) return;
+    if (this.lastMissionText === text) return;
+    this.hud.mission.textContent = text;
+    this.lastMissionText = text;
+  }
+
+  describeDistanceMission() {
+    const mission = this.missions?.distance;
+    if (!mission) return '';
+    if (mission.complete) return 'No-hit 2 km: Complete!';
+    const progress = Math.min(mission.progress, mission.target) / 1000;
+    const target = mission.target / 1000;
+    return `No-hit 2 km: ${progress.toFixed(2)} / ${target.toFixed(2)} km`;
+  }
+
+  describeCoinMission() {
+    const mission = this.missions?.coins;
+    if (!mission) return '';
+    const progress = Math.min(mission.progress, mission.target);
+    if (mission.complete) return 'Collect 200 coins: Complete!';
+    return `Collect 200 coins: ${progress}/${mission.target}`;
+  }
+
+  resetMissions() {
+    this.missions = {
+      distance: {
+        id: 'distance_no_hit',
+        target: 2000,
+        progress: 0,
+        complete: false,
+        notified: false,
+      },
+      coins: {
+        id: 'collect_200_coins',
+        target: 200,
+        progress: 0,
+        complete: false,
+        notified: false,
+      },
+    };
+  }
+
+  updateDistanceMission() {
+    const mission = this.missions?.distance;
+    if (!mission || mission.complete) return;
+    const progress = Math.max(mission.progress, Math.floor(this.distance));
+    if (progress === mission.progress) return;
+    mission.progress = progress;
+    if (!mission.complete && mission.progress >= mission.target) {
+      this.onMissionComplete(mission);
+    }
+    this.updateMission();
+  }
+
+  advanceCoinMission(amount = 1) {
+    const mission = this.missions?.coins;
+    if (!mission || mission.complete || amount <= 0) return;
+    mission.progress += amount;
+    if (!mission.complete && mission.progress >= mission.target) {
+      this.onMissionComplete(mission);
+    }
+    this.updateMission();
+  }
+
+  onMissionComplete(mission) {
+    if (!mission) return;
+    if (!mission.complete) mission.complete = true;
+    if (!mission.notified) {
+      mission.notified = true;
+      gameEvent('mission_complete', {
+        slug: GAME_SLUG,
+        meta: { mission: mission.id },
+      });
+    }
+  }
+
+  resetCoinMultiplier() {
+    const interval = Math.max(1, this.multiplierRampInterval || 30);
+    this.multiplierRampInterval = interval;
+    this.coinMultiplier = 1;
+    this.timeSinceLastHit = 0;
+    this.nextMultiplierTime = interval;
+    this.lastMultiplierValue = 0;
+    this.updateMultiplierDisplay(true);
+  }
+
+  updateCoinMultiplier(step) {
+    if (this.gameOver) return;
+    const interval = Math.max(1, this.multiplierRampInterval || 30);
+    this.timeSinceLastHit += step / 60;
+    let threshold = this.nextMultiplierTime || interval;
+    if (threshold <= 0) {
+      threshold = interval;
+      this.nextMultiplierTime = threshold;
+    }
+    let upgraded = false;
+    while (this.timeSinceLastHit >= threshold) {
+      this.coinMultiplier += 1;
+      threshold += interval;
+      upgraded = true;
+    }
+    if (upgraded) {
+      this.nextMultiplierTime = threshold;
+      this.updateMultiplierDisplay();
+    }
+  }
+
+  updateMultiplierDisplay(force = false) {
+    const element = this.hud?.multiplier;
+    if (!element) return;
+    const text = `×${this.coinMultiplier}`;
+    if (!force && this.lastMultiplierValue === this.coinMultiplier && element.textContent === text) {
+      return;
+    }
+    element.textContent = text;
+    element.dataset.multiplier = String(this.coinMultiplier);
+    this.lastMultiplierValue = this.coinMultiplier;
+  }
+
+  addCoinScore(amount = 0) {
+    const value = Number.isFinite(amount) ? Math.floor(amount) : 0;
+    if (value <= 0) return;
+    this.coinScore += value;
+    this.updateScoreDisplay(true);
+  }
+
+  checkLevelMilestones() {
+    if (!Array.isArray(this.milestoneGoals) || !this.milestoneGoals.length) return;
+    if (!(this.triggeredMilestones instanceof Set)) {
+      this.triggeredMilestones = new Set();
+    }
+    for (const milestone of this.milestoneGoals) {
+      if (!Number.isFinite(milestone)) continue;
+      if (this.triggeredMilestones.has(milestone)) continue;
+      if (this.distance >= milestone) {
+        this.triggeredMilestones.add(milestone);
+        gameEvent('level_up', {
+          slug: GAME_SLUG,
+          level: Number((milestone / 1000).toFixed(2)),
+          meta: {
+            distance: Math.floor(this.distance),
+            milestone,
+          },
+        });
+      }
     }
   }
 
@@ -1667,9 +1858,10 @@ class RunnerGame {
 
   share() {
     const score = this.score;
+    const distance = Math.floor(this.distance);
     const shareData = {
       title: 'City Runner',
-      text: `I ran ${score}m in City Runner!`,
+      text: `I ran ${distance}m and scored ${score} pts in City Runner!`,
       url: typeof location !== 'undefined' ? location.href : '',
     };
     if (navigator?.share) {
@@ -1731,9 +1923,12 @@ class RunnerGame {
 
   advanceStep(step) {
     this.elapsedSeconds += step / 60;
+    this.updateCoinMultiplier(step);
     this.updateDifficultyCurve();
     const travel = this.speed * step;
     this.distance += travel;
+    this.updateDistanceMission();
+    this.checkLevelMilestones();
     this.updateParallax(travel);
     this.spawnTimer -= travel;
     this.coinTimer -= travel;
@@ -1810,16 +2005,27 @@ class RunnerGame {
 
   spawnRandomObstacle() {
     const [minGap, maxGap] = this.spawnRange;
-    this.spawnTimer = this.randRange(minGap, maxGap);
-    const difficulty = clamp(this.difficultyProgress, 0, 1.25);
+    const progress = clamp(this.difficultyProgress, 0, 1.35);
+    const fallbackDifficulty = clamp(this.difficultyProgress, 0, 1.25);
     const baseX = VIRTUAL_WIDTH + this.randRange(80, 140);
-    const roll = this.rand();
-    if (roll < 0.25 + difficulty * 0.35) {
-      this.spawnBarPattern(baseX, difficulty);
-    } else if (roll > 0.72 && difficulty > 0.4) {
-      this.spawnBlockCombo(baseX, difficulty);
+    const rng = () => this.rand();
+    const chunk = selectChunk(progress, rng);
+    if (chunk && typeof chunk.build === 'function') {
+      try {
+        chunk.build(this, baseX, progress);
+        this.lastChunkTier = chunk.tier || this.lastChunkTier;
+      } catch (err) {
+        console.warn('[runner] failed to build chunk', chunk?.id, err);
+        this.spawnGroundBlock(baseX, fallbackDifficulty);
+      }
+      const chunkLength = Number.isFinite(chunk?.length)
+        ? chunk.length
+        : this.randRange(minGap, maxGap);
+      const padding = this.randRange(minGap * 0.35, maxGap * 0.55);
+      this.spawnTimer = clamp(chunkLength + padding, minGap * 0.6, maxGap * 1.6);
     } else {
-      this.spawnGroundBlock(baseX, difficulty);
+      this.spawnTimer = this.randRange(minGap, maxGap);
+      this.spawnGroundBlock(baseX, fallbackDifficulty);
     }
   }
 
@@ -2070,6 +2276,8 @@ class RunnerGame {
     coin.collected = true;
     playSfx('powerup');
     this.analytics.coins += 1;
+    this.addCoinScore(this.coinMultiplier);
+    this.advanceCoinMission(1);
     this.triggerHaptic();
     this.spawnCoinBurst(coin.x, coin.y);
   }
@@ -2286,8 +2494,11 @@ class RunnerGame {
   }
 
   updateScoreDisplay(force = false) {
-    const newScore = Math.max(0, Math.floor(this.distance / 10));
-    if (force || newScore !== this.lastDrawnScore) {
+    const distanceScore = Math.max(0, Math.floor(this.distance / 10));
+    const newScore = distanceScore + Math.max(0, this.coinScore);
+    const changed = newScore !== this.lastDrawnScore || distanceScore !== this.distanceScore;
+    if (force || changed) {
+      this.distanceScore = distanceScore;
       this.score = newScore;
       this.lastDrawnScore = newScore;
       if (this.hud.score) {
@@ -2300,6 +2511,9 @@ class RunnerGame {
         value: newScore,
         meta: {
           distance: Math.floor(this.distance),
+          distanceScore: this.distanceScore,
+          coinScore: this.coinScore,
+          multiplier: this.coinMultiplier,
           nearMisses: this.analytics.nearMisses,
           perfects: this.analytics.perfects,
           coins: this.analytics.coins,
@@ -2310,6 +2524,8 @@ class RunnerGame {
         nearMisses: this.analytics.nearMisses,
         perfects: this.analytics.perfects,
         coins: this.analytics.coins,
+        coinScore: this.coinScore,
+        distanceScore: this.distanceScore,
       });
     }
   }
@@ -2328,6 +2544,7 @@ class RunnerGame {
   triggerGameOver() {
     if (this.gameOver) return;
     playSfx('powerdown', { allowWhilePaused: true });
+    this.resetCoinMultiplier();
     this.gameOver = true;
     this.paused = true;
     this.pauseReason = 'gameover';
@@ -2355,6 +2572,15 @@ class RunnerGame {
       slug: GAME_SLUG,
       meta: {
         distance: Math.floor(this.distance),
+        difficulty: this.difficulty,
+      },
+    });
+    gameEvent('end', {
+      slug: GAME_SLUG,
+      value: this.score,
+      meta: {
+        distance: Math.floor(this.distance),
+        coins: this.analytics.coins,
         difficulty: this.difficulty,
       },
     });
@@ -2929,8 +3155,9 @@ class RunnerGame {
       ctx.textAlign = 'center';
       ctx.fillText('Game Over', VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2 - 18);
       ctx.font = '20px system-ui, sans-serif';
-      ctx.fillText(`Distance: ${this.score} m`, VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2 + 12);
-      ctx.fillText('Press Restart to try again', VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2 + 40);
+      ctx.fillText(`Score: ${this.score} pts`, VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2 + 8);
+      ctx.fillText(`Distance: ${Math.floor(this.distance)} m`, VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2 + 36);
+      ctx.fillText('Press Restart to try again', VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2 + 64);
     }
   }
 }
