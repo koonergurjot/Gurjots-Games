@@ -1,0 +1,32 @@
+{
+  "lodLevels": ["high", "low"],
+  "sprites": {
+    "runner": {
+      "high": {
+        "src": "/assets/sprites/player/platformer_run.png",
+        "anchor": [0.5, 1],
+        "scale": 0.85
+      },
+      "low": {
+        "shape": "rect",
+        "size": [42, 54],
+        "anchor": [0.5, 1],
+        "color": "#f97316",
+        "radius": 12
+      }
+    },
+    "obstacle": {
+      "high": {
+        "src": "/assets/sprites/obstacles/spikes.png",
+        "anchor": [0.5, 1],
+        "scale": 0.9
+      },
+      "low": {
+        "shape": "triangle",
+        "size": [48, 36],
+        "anchor": [0.5, 1],
+        "color": "#cbd5f5"
+      }
+    }
+  }
+}
