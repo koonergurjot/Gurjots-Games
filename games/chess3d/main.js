@@ -5,6 +5,7 @@ import { mountHUD } from "./ui/hud.js";
 import { mountThemePicker } from "./ui/themePicker.js";
 import { mountCameraPresets } from "./ui/cameraPresets.js";
 import { mountEvalMood } from "./ui/evalMood.js";
+import { mountFallbackBoard } from "./ui/fallbackBoard.js";
 import { log, warn } from '../../tools/reporters/console-signature.js';
 import { injectHelpButton } from '../../shared/ui.js';
 import { pushEvent } from "/games/common/diag-adapter.js";
@@ -77,12 +78,125 @@ function sanitizeHelp(source) {
   return help;
 }
 
+const rulesBridge = {
+  getLegalMoves: (square) => logic.getLegalMoves(square),
+  move: ({ from, to, promotion }) => logic.applyMove({ from, to, promotion }),
+  turn: () => logic.turn(),
+};
+
 let renderLoopId = 0;
 let renderLoopPaused = false;
 let shellLoopAutoPaused = false;
 let shellClockAutoPaused = false;
 let handleShellPause = () => {};
 let handleShellResume = () => {};
+let fallbackController = null;
+let fallbackActive = false;
+let rendererMaxAnisotropy = 0;
+let stageRef = null;
+let statusRef = null;
+let coordsRef = null;
+
+function getMaxAnisotropy(renderer) {
+  if (!renderer || !renderer.capabilities) return 0;
+  const { capabilities } = renderer;
+  if (typeof capabilities.getMaxAnisotropy === 'function') {
+    try {
+      return capabilities.getMaxAnisotropy();
+    } catch (_) {
+      return capabilities.maxAnisotropy || 0;
+    }
+  }
+  return capabilities.maxAnisotropy || 0;
+}
+
+function clampTextureAnisotropy(texture) {
+  if (!texture || typeof texture !== 'object') return;
+  if (!rendererMaxAnisotropy) return;
+  if (typeof texture.anisotropy === 'number') {
+    const clamped = Math.min(Math.max(texture.anisotropy, 0), rendererMaxAnisotropy);
+    if (texture.anisotropy !== clamped) {
+      texture.anisotropy = clamped;
+      texture.needsUpdate = true;
+    }
+  }
+}
+
+function configureRenderer(renderer, THREE) {
+  if (!renderer || !THREE) return;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  if (renderer.shadowMap) {
+    renderer.shadowMap.enabled = true;
+    if (THREE.PCFSoftShadowMap !== undefined) {
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    }
+  }
+  if ('physicallyCorrectLights' in renderer) {
+    renderer.physicallyCorrectLights = true;
+  } else if ('useLegacyLights' in renderer) {
+    renderer.useLegacyLights = false;
+  }
+  if ('toneMapping' in renderer && THREE.ACESFilmicToneMapping !== undefined) {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  }
+  if ('toneMappingExposure' in renderer) {
+    renderer.toneMappingExposure = 1.15;
+  }
+  if ('outputColorSpace' in renderer && THREE.SRGBColorSpace !== undefined) {
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+  }
+  rendererMaxAnisotropy = getMaxAnisotropy(renderer);
+}
+
+function activateFallback(options = {}) {
+  if (fallbackActive) {
+    if (options.rulesBridge && fallbackController?.setRulesApi) {
+      fallbackController.setRulesApi(options.rulesBridge);
+    }
+    if (options.snapshot && fallbackController?.updateSnapshot) {
+      fallbackController.updateSnapshot(options.snapshot);
+    }
+    return;
+  }
+  fallbackActive = true;
+  const { reason = 'unknown', renderer, controls, message, snapshot } = options;
+  try { stopRenderLoopImpl?.(); } catch (_) {}
+  try { controls?.dispose?.(); } catch (_) {}
+  try { renderer?.dispose?.(); } catch (_) {}
+  const fallbackMessage = message || 'WebGL renderer unavailable. Showing 2D board.';
+  if (renderer?.domElement?.parentNode) {
+    try { renderer.domElement.parentNode.removeChild(renderer.domElement); } catch (_) {}
+  }
+  if (stageRef) {
+    Array.from(stageRef.children).forEach((child) => {
+      if (child !== coordsRef) {
+        stageRef.removeChild(child);
+      }
+    });
+    stageRef.style.pointerEvents = 'auto';
+  }
+  if (coordsRef) {
+    coordsRef.style.display = 'none';
+  }
+  if (statusRef) {
+    statusRef.textContent = fallbackMessage;
+  }
+  try {
+    warn('chess3d', `[Chess3D] activating fallback mode (${reason})`);
+  } catch (_) {}
+  if (stageRef) {
+    fallbackController = mountFallbackBoard({
+      container: stageRef,
+      message: fallbackMessage,
+    });
+    if (fallbackController?.setRulesApi) {
+      fallbackController.setRulesApi(options.rulesBridge || rulesBridge);
+    }
+    if (snapshot && fallbackController?.updateSnapshot) {
+      fallbackController.updateSnapshot(snapshot);
+    }
+  }
+}
 
 (function installShellAutoPause(){
   const onPause = () => handleShellPause();
@@ -125,6 +239,9 @@ coordsEl.style.top = '0';
 coordsEl.style.width = '100%';
 coordsEl.style.height = '100%';
 coordsEl.style.pointerEvents = 'none';
+stageRef = stage;
+statusRef = statusEl;
+coordsRef = coordsEl;
 
 let currentCamera;
 let searchToken = 0;
@@ -564,6 +681,11 @@ function handlePostMove(){
 
 function toggleCoords(show) {
   localStorage.setItem('chess3d.coords', show ? '1' : '0');
+  if (fallbackActive) {
+    coordsEl.hidden = true;
+    coordsEl.innerHTML = '';
+    return;
+  }
   if (show) {
     coordsEl.hidden = false;
     coordsEl.innerHTML = '';
@@ -745,6 +867,11 @@ async function boot(){
   } catch (e) {
     statusEl.textContent = 'Three.js vendor files missing. Add them to games/chess3d/lib.';
     warn('chess3d', '[Chess3D] missing vendor libs', e);
+    activateFallback({
+      reason: 'missing-three',
+      message: '3D engine missing. Showing 2D fallback board.',
+      rulesBridge,
+    });
     return;
   }
 
@@ -763,109 +890,161 @@ async function boot(){
   camera.position.set(6, 10, 6);
   camera.lookAt(0, 0, 0);
   currentCamera = camera;
+  let renderer = null;
+  let controls = null;
+  let helpers = null;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+  } catch (error) {
+    warn('chess3d', '[Chess3D] WebGLRenderer init failed', error);
+    activateFallback({
+      reason: 'webgl-init',
+      message: 'WebGL unavailable. Showing 2D fallback board.',
+      rulesBridge,
+    });
+  }
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  const width = stage.clientWidth || window.innerWidth;
-  const height = stage.clientHeight || window.innerHeight;
-  renderer.setSize(width, height);
-  try { renderer.shadowMap.enabled = true; } catch(_) {}
-  try { renderer.shadowMap.type = THREE.PCFSoftShadowMap ?? THREE.BasicShadowMap; } catch(_) {}
-  try { renderer.toneMapping = THREE.ACESFilmicToneMapping ?? THREE.ReinhardToneMapping ?? 0; } catch(_) {}
-  try { renderer.toneMappingExposure = 1.15; } catch(_) {}
-  try { renderer.outputColorSpace = THREE.SRGBColorSpace; } catch(_) { try { renderer.outputEncoding = THREE.sRGBEncoding; } catch(_){} }
-  stage.appendChild(renderer.domElement);
+  if (!fallbackActive && renderer) {
+    configureRenderer(renderer, THREE);
+    const width = stage.clientWidth || window.innerWidth;
+    const height = stage.clientHeight || window.innerHeight;
+    renderer.setSize(width, height);
+    stage.appendChild(renderer.domElement);
 
-  window.addEventListener('resize', () => {
-    const w = stage.clientWidth || window.innerWidth;
-    const h = stage.clientHeight || window.innerHeight;
-    renderer.setSize(w, h);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-  });
+    const handleResize = () => {
+      const w = stage.clientWidth || window.innerWidth;
+      const h = stage.clientHeight || window.innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    };
+    window.addEventListener('resize', handleResize);
 
-  const controls = new Controls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.maxPolarAngle = Math.PI * 0.49;
-  controls.minPolarAngle = Math.PI * 0.18;
-  controls.minDistance = 6;
-  controls.maxDistance = 16;
-  controls.enablePan = false;
-  controls.target.set(0, 0, 0);
-  controls.update();
+    controls = new Controls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI * 0.49;
+    controls.minPolarAngle = Math.PI * 0.18;
+    controls.minDistance = 6;
+    controls.maxDistance = 16;
+    controls.enablePan = false;
+    controls.target.set(0, 0, 0);
+    controls.update();
 
-  mountCameraPresets(document.getElementById('hud'), camera, controls);
-  evalMoodEffect = mountEvalMood(stage, () => currentCamera);
-  evalMoodEffect?.update(null);
+    renderer.domElement.addEventListener(
+      'webglcontextlost',
+      (event) => {
+        event.preventDefault();
+        activateFallback({
+          reason: 'context-lost',
+          renderer,
+          controls,
+          message: 'Graphics context lost. Switching to 2D board.',
+          rulesBridge,
+        });
+        renderer = null;
+        controls = null;
+      },
+      { passive: false }
+    );
 
-  const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.8);
-  scene.add(amb);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-  dir.position.set(8, 12, 6);
-  dir.castShadow = true;
-  dir.shadow.mapSize.set(1024,1024);
-  dir.shadow.camera.near = 1;
-  dir.shadow.camera.far = 40;
-  dir.shadow.camera.left = -10;
-  dir.shadow.camera.right = 10;
-  dir.shadow.camera.top = 10;
-  dir.shadow.camera.bottom = -10;
-  dir.shadow.bias = -0.0005;
-  dir.shadow.normalBias = 0.02;
-  scene.add(dir);
+    mountCameraPresets(document.getElementById('hud'), camera, controls);
+    evalMoodEffect = mountEvalMood(stage, () => currentCamera);
+    evalMoodEffect?.update(null);
 
-  // Fill light for softer contrast
-  const fill = new THREE.DirectionalLight(0x8bb2ff, 0.25);
-  fill.position.set(-6, 6, -8);
-  scene.add(fill);
+    const amb = new THREE.HemisphereLight(0xbfd4ff, 0x1a1e29, 0.8);
+    scene.add(amb);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir.position.set(8, 12, 6);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(1024,1024);
+    dir.shadow.camera.near = 1;
+    dir.shadow.camera.far = 40;
+    dir.shadow.camera.left = -10;
+    dir.shadow.camera.right = 10;
+    dir.shadow.camera.top = 10;
+    dir.shadow.camera.bottom = -10;
+    dir.shadow.bias = -0.0005;
+    dir.shadow.normalBias = 0.02;
+    scene.add(dir);
 
-  // Soft ground shadow outside the board
-  const GroundMat = THREE.ShadowMaterial ? new THREE.ShadowMaterial({ opacity: 0.18 }) : new THREE.MeshPhongMaterial({ color: 0x000000, transparent: true, opacity: 0.15 });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), GroundMat);
-  ground.rotation.x = -Math.PI/2;
-  ground.position.y = -0.08;
-  ground.receiveShadow = true;
-  scene.add(ground);
+    // Fill light for softer contrast
+    const fill = new THREE.DirectionalLight(0x8bb2ff, 0.25);
+    fill.position.set(-6, 6, -8);
+    scene.add(fill);
 
-  statusEl.textContent = 'Scene ready';
+    // Soft ground shadow outside the board
+    const GroundMat = THREE.ShadowMaterial ? new THREE.ShadowMaterial({ opacity: 0.18 }) : new THREE.MeshPhongMaterial({ color: 0x000000, transparent: true, opacity: 0.15 });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(40,40), GroundMat);
+    ground.rotation.x = -Math.PI/2;
+    ground.position.y = -0.08;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
-  const helpers = await createBoard(scene, THREE);
-  toggleCoords(true);
-  const savedCoords = localStorage.getItem('chess3d.coords');
-  if (savedCoords !== null) toggleCoords(savedCoords === '1');
-  statusEl.textContent = 'Board ready';
+    statusEl.textContent = 'Scene ready';
 
-  await createPieces(scene, THREE, helpers);
-  mountThemePicker(document.getElementById('hud'));
-  // Eval bar
-  import('./ui/evalBar.js').then(({ mountEvalBar })=>{
-    evalBar = mountEvalBar(document.getElementById('hud'));
-  });
-  // Last move arrow
-  import('./ui/lastMove.js').then(({ initLastMove })=>{
-    lastMoveHelper = initLastMove(scene, helpers, THREE);
-  });
-  const rulesBridge = {
-    getLegalMoves: (square) => logic.getLegalMoves(square),
-    move: ({ from, to, promotion }) => logic.applyMove({ from, to, promotion }),
-    turn: () => logic.turn(),
-  };
-  mountInputWrapper({
-    THREE,
-    scene,
-    camera,
-    renderer,
-    controls,
-    boardHelpers: helpers,
-    rulesApi: rulesBridge,
-  });
+    helpers = await createBoard(scene, THREE);
+    toggleCoords(true);
+    const savedCoords = localStorage.getItem('chess3d.coords');
+    if (savedCoords !== null) toggleCoords(savedCoords === '1');
+    statusEl.textContent = 'Board ready';
+
+    await createPieces(scene, THREE, helpers);
+    mountThemePicker(document.getElementById('hud'));
+    // Eval bar
+    import('./ui/evalBar.js').then(({ mountEvalBar })=>{
+      evalBar = mountEvalBar(document.getElementById('hud'));
+    });
+    // Last move arrow
+    import('./ui/lastMove.js').then(({ initLastMove })=>{
+      lastMoveHelper = initLastMove(scene, helpers, THREE);
+    });
+    mountInputWrapper({
+      THREE,
+      scene,
+      camera,
+      renderer,
+      controls,
+      boardHelpers: helpers,
+      rulesApi: rulesBridge,
+    });
+  } else {
+    renderer = null;
+    mountThemePicker(document.getElementById('hud'));
+    activateFallback({ reason: 'webgl-init:fallback', rulesBridge });
+  }
 
   const handleLogicUpdate = (snapshot) => {
     const previous = gameState;
     gameState = snapshot;
     const reason = typeof snapshot.reason === 'string' ? snapshot.reason : '';
     const shouldReset = !previous || ['init', 'new-game', 'load-fen', 'undo'].includes(reason);
+    if (fallbackActive) {
+      fallbackController?.updateSnapshot?.(snapshot);
+      if (shouldReset) {
+        resetOpeningTracker();
+      }
+      updateStatus();
+      if (reason === 'move' && snapshot.lastMove) {
+        try {
+          if (snapshot.inCheck) {
+            window.SFX?.seq?.([[880,0.08,0.25],[440,0.10,0.25]]);
+          } else {
+            window.SFX?.beep?.({ freq: 660, dur: 0.06, vol: 0.2 });
+          }
+        } catch (_) {}
+        handlePostMove();
+        updateOpeningFromMoves(logic.historySAN());
+        maybeAIMove();
+      } else if (shouldReset) {
+        handlePostMove();
+        updateOpeningFromMoves(logic.historySAN());
+      } else {
+        updateOpeningFromMoves(logic.historySAN());
+      }
+      return;
+    }
+
     if (shouldReset) {
       applySnapshot(snapshot.pieces);
       try { lastMoveHelper?.clear?.(); } catch (_) {}
@@ -899,22 +1078,31 @@ async function boot(){
   notifyStateChange('play', { reason: 'boot:ready' });
 
   const renderFrame = () => {
-    if (renderLoopPaused) {
+    if (renderLoopPaused || fallbackActive || !renderer) {
       renderLoopId = 0;
       return;
     }
-    controls.update();
+    controls?.update?.();
     if(!postedReady){
       postedReady=true;
       try { window.parent?.postMessage({ type:'GAME_READY', slug:'chess3d' }, '*'); } catch {}
     }
     updatePieces(performance.now());
-    renderer.render(scene, camera);
+    try {
+      renderer.render(scene, camera);
+    } catch (err) {
+      warn('chess3d', '[Chess3D] render failed', err);
+      activateFallback({ reason: 'render-failed', renderer, controls, rulesBridge });
+      renderer = null;
+      controls = null;
+      return;
+    }
     markFirstFrame();
     renderLoopId = requestAnimationFrame(renderFrame);
   };
   startRenderLoopImpl = () => {
     if (renderLoopId) return;
+    if (fallbackActive || !renderer) return;
     renderLoopPaused = false;
     renderLoopId = requestAnimationFrame(renderFrame);
   };
