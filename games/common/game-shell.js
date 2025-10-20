@@ -52,6 +52,35 @@ const sendToParent = (type, detail) => {
   }
 };
 
+const emitGameEvent = (detail = {}) => {
+  if (!detail || typeof detail !== 'object') return;
+  const eventDetail = { ...detail };
+  eventDetail.slug = typeof eventDetail.slug === 'string' && eventDetail.slug ? eventDetail.slug : slug;
+  if (typeof eventDetail.eventType === 'string' && !eventDetail.type) {
+    eventDetail.type = eventDetail.eventType;
+  }
+  if (!eventDetail.type || !eventDetail.slug) return;
+  try {
+    sendToParent('GAME_EVENT', { slug: eventDetail.slug, event: eventDetail });
+  } catch (_) {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('ggshell:game-event', { detail: eventDetail }));
+  } catch (_) {
+    /* ignore */
+  }
+};
+
+if (typeof window !== 'undefined') {
+  window.GGShellEmitEvent = function (type, detail = {}) {
+    const payload = typeof detail === 'object' && detail ? { ...detail } : {};
+    if (type && !payload.type) payload.type = type;
+    emitGameEvent(payload);
+  };
+  window.GGShellEmitMissionEvent = window.GGShellEmitEvent;
+}
+
 const readyPromises = [];
 const whenDomReady = (fn) => {
   if (document.readyState === 'complete' || document.readyState === 'interactive') {

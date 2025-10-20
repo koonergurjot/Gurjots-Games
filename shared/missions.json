@@ -1,0 +1,62 @@
+[
+  {
+    "id": "daily_pong_20_hits",
+    "slug": "pong",
+    "kind": "daily",
+    "title": "Rally Master",
+    "desc": "Reach a 20-hit rally in a single match.",
+    "requires": [
+      { "type": "combo", "count": 20 }
+    ]
+  },
+  {
+    "id": "daily_runner_coin_dash",
+    "slug": "runner",
+    "kind": "daily",
+    "title": "Coin Dash",
+    "desc": "Collect 150 coins in one run.",
+    "requires": [
+      { "type": "score_event", "name": "coin_collected", "count": 150 }
+    ]
+  },
+  {
+    "id": "weekly_tetris_b2b",
+    "slug": "tetris",
+    "kind": "weekly",
+    "title": "Back-to-Backer",
+    "desc": "Clear 3 back-to-back Tetrises in one game.",
+    "requires": [
+      { "type": "score_event", "name": "b2b_tetris", "count": 3 }
+    ]
+  },
+  {
+    "id": "weekly_breakout_streak",
+    "slug": "breakout",
+    "kind": "weekly",
+    "title": "Brick Smasher",
+    "desc": "Break 400 bricks across the week.",
+    "requires": [
+      { "type": "score_event", "name": "brick_destroyed", "count": 400 }
+    ]
+  },
+  {
+    "id": "career_shooter_elite",
+    "slug": "shooter",
+    "kind": "career",
+    "title": "Arcade Elite",
+    "desc": "Accumulate 50,000 lifetime points in Arcade Shooter.",
+    "requires": [
+      { "type": "score_event", "name": "score", "count": 50000 }
+    ]
+  },
+  {
+    "id": "career_snake_giant",
+    "slug": "snake",
+    "kind": "career",
+    "title": "Serpent Giant",
+    "desc": "Reach a length of 40 or more.",
+    "requires": [
+      { "type": "score_event", "name": "length", "count": 40 }
+    ]
+  }
+]

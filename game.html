@@ -264,6 +264,76 @@
       font-size: 12px;
       color: var(--muted);
     }
+    .mission-banner {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 5;
+      max-width: min(280px, 85%);
+      background: var(--panel-bg, rgba(12,18,28,0.92));
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: grid;
+      gap: 6px;
+      color: var(--fg, #e5f0ff);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+    }
+    .mission-banner__kind {
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--muted) 70%, #ffffff 30%);
+    }
+    .mission-banner__title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .mission-banner__desc {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .mission-banner__progress {
+      height: 6px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.12);
+      position: relative;
+    }
+    .mission-banner__progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4cc9f0 0%, #4895ef 100%);
+      transition: width 0.25s ease;
+    }
+    .mission-banner__status {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mission-banner__status strong {
+      font-weight: 600;
+      color: #7ae0ff;
+    }
+    .mission-banner__requirements {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .mission-banner__loading {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .mission-banner.is-complete {
+      border-color: var(--accent);
+      box-shadow: 0 12px 32px rgba(72, 149, 239, 0.25);
+    }
+    body.legacy-shell .mission-banner {
+      display: none !important;
+    }
     body.legacy-shell .quest-widget {
       display: none;
     }
@@ -280,6 +350,19 @@
     }
     @media (max-width: 768px) {
       header .title h1 { font-size: 14px; }
+      .mission-banner {
+        position: fixed;
+        top: 14px;
+        left: 14px;
+        right: 14px;
+        max-width: none;
+        pointer-events: none;
+      }
+      .mission-banner__status,
+      .mission-banner__desc,
+      .mission-banner__requirements {
+        pointer-events: auto;
+      }
     }
     @media (min-width: 1024px) {
       .shell-frame {
@@ -322,6 +405,7 @@
 
     <main>
       <section class="game-card" aria-live="polite">
+        <div class="mission-banner" id="missionBanner" aria-live="polite"></div>
         <iframe id="game-frame" title="Game frame" sandbox="allow-scripts allow-pointer-lock"></iframe>
         <div class="overlay" id="overlay" aria-hidden="false">
           <div class="status" id="statusPanel" role="status" aria-live="polite" aria-atomic="true">
@@ -356,6 +440,91 @@
     const root = document.getElementById('questWidgetRoot');
     if (root) {
       mountQuestWidget(root, { headingLevel: 2, regionLabel: 'Quest progress tracker' });
+    }
+  </script>
+
+  <script type="module">
+    import { subscribe, whenReady } from './shared/missions.js';
+
+    const params = new URLSearchParams(location.search);
+    const slug = (params.get('slug') || '').trim();
+    const banner = document.getElementById('missionBanner');
+
+    const KIND_LABELS = {
+      daily: 'Daily mission',
+      weekly: 'Weekly mission',
+      career: 'Career mission'
+    };
+
+    function selectMission(snapshot) {
+      if (!snapshot?.missions) return null;
+      const matches = snapshot.missions.filter(mission => mission.slug === slug);
+      if (!matches.length) return null;
+      const kinds = ['daily', 'weekly', 'career'];
+      for (const kind of kinds) {
+        const candidate = matches.find(m => m.kind === kind && !m.completed);
+        if (candidate) return candidate;
+      }
+      for (const kind of kinds) {
+        const fallback = matches.find(m => m.kind === kind);
+        if (fallback) return fallback;
+      }
+      return matches[0];
+    }
+
+    function formatRequirements(mission) {
+      if (!mission?.requirements?.length) return '';
+      return mission.requirements
+        .map(req => {
+          if (req.target > 0) {
+            const current = Math.min(req.current ?? 0, req.target);
+            return `${current} / ${req.target}`;
+          }
+          if (req.completed) return 'Complete';
+          const value = Number(req.current ?? req.raw ?? 0);
+          return value > 0 ? String(value) : 'In progress';
+        })
+        .join(' • ');
+    }
+
+    function render(snapshot) {
+      if (!banner) return;
+      if (!slug) {
+        banner.style.display = 'none';
+        return;
+      }
+      banner.classList.remove('is-complete');
+      if (!snapshot || snapshot.loaded === false) {
+        banner.innerHTML = '<span class="mission-banner__loading">Loading missions…</span>';
+        return;
+      }
+      const mission = selectMission(snapshot);
+      if (!mission) {
+        banner.innerHTML = '<span class="mission-banner__loading">No active missions for this game.</span>';
+        return;
+      }
+
+      const requirementText = formatRequirements(mission);
+      const pct = mission?.progress?.percentage ?? 0;
+      const kindLabel = KIND_LABELS[mission.kind] || 'Mission';
+      const status = mission.completed ? '<strong>Completed</strong>' : (requirementText ? `Progress: ${requirementText}` : 'Keep playing!');
+
+      banner.classList.toggle('is-complete', !!mission.completed);
+      banner.innerHTML = `
+        <span class="mission-banner__kind">${kindLabel}</span>
+        <h3 class="mission-banner__title">${mission.title}</h3>
+        <p class="mission-banner__desc">${mission.desc}</p>
+        <div class="mission-banner__progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, Math.max(0, pct))}" aria-label="${mission.title} progress">
+          <div class="mission-banner__progress-fill" style="width:${Math.min(100, Math.max(0, pct))}%"></div>
+        </div>
+        <div class="mission-banner__status">${status}</div>
+      `;
+    }
+
+    if (banner) {
+      const handleUpdate = snapshot => render(snapshot);
+      subscribe(handleUpdate);
+      whenReady().then(handleUpdate);
     }
   </script>
 
