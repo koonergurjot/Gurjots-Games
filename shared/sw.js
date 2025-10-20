@@ -60,15 +60,20 @@ async function flushQueue() {
   }
 }
 
-export function registerSW() {
-  if (!('serviceWorker' in navigator)) return;
-  const swUrl = new URL('../sw.js', import.meta.url);
-  attachControllerListener();
-  navigator.serviceWorker.register(swUrl.href).then(() => {
-    scheduleFlush(0);
-  }).catch(err => {
-    warn('shared', 'Service worker registration failed', err);
-  });
+export async function registerSW() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return false;
+  const host = location.hostname || '';
+  if (/workers\.dev$/i.test(host)) {
+    console.info('[GG] SW disabled on workers.dev');
+    return false;
+  }
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    return !!reg;
+  } catch (e) {
+    console.warn('[GG] SW registration failed', e);
+    return false;
+  }
 }
 
 export function precacheAssets(assets) {
