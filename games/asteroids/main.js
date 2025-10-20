@@ -954,8 +954,10 @@ class AsteroidsGame {
     this.canvas.width = Math.round(this.width * dpr);
     this.canvas.height = Math.round(this.height * dpr);
     if (this.canvas.style) {
-      this.canvas.style.width = `${this.width}px`;
-      this.canvas.style.height = `${this.height}px`;
+      this.canvas.style.width = '';
+      this.canvas.style.height = '';
+      this.canvas.style.removeProperty?.('width');
+      this.canvas.style.removeProperty?.('height');
     }
     this.world.width = this.width;
     this.world.height = this.height;
