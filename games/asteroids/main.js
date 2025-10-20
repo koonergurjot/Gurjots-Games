@@ -45,23 +45,14 @@ const markFirstFrame = (() => {
 })();
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
-
-function resolveAsset(path) {
-  if (!path) return path;
-  try {
-    return new URL(path, import.meta.url).href;
-  } catch (_) {
-    return path;
-  }
-}
+const LASER_AUDIO_URL = new URL('../../assets/audio/laser.wav', import.meta.url).href;
+const EXPLOSION_AUDIO_URL = new URL('../../assets/audio/explode.wav', import.meta.url).href;
 
 let audioReady = typeof window === 'undefined';
 if (!audioReady && typeof window !== 'undefined') {
-  const unlock = () => {
-    audioReady = true;
-  };
-  window.addEventListener('pointerdown', unlock, { once: true, passive: true });
-  window.addEventListener('keydown', unlock, { once: true });
+  const unlockAudio = () => { audioReady = true; };
+  window.addEventListener('pointerdown', unlockAudio, { once: true, passive: true });
+  window.addEventListener('keydown', unlockAudio, { once: true });
 }
 
 let activeGame = null;
@@ -723,33 +714,37 @@ function makeAsteroidShape(radius) {
   return vertices;
 }
 
+function resolveAssetUrl(path) {
+  if (!path) return path;
+  try {
+    return new URL(path, import.meta.url).href;
+  } catch (_) {
+    return path;
+  }
+}
+
 function createAudio(src, volume = 0.6) {
-  const resolved = resolveAsset(src);
+  const resolved = resolveAssetUrl(src);
   let template = null;
 
-  function ensureTemplate() {
-    if (template || typeof Audio === 'undefined') return template;
-    try {
-      const audio = new Audio(resolved);
-      audio.preload = 'auto';
-      audio.volume = volume;
-      template = audio;
-    } catch (_) {
-      template = null;
-    }
-    return template;
-  }
-
   return () => {
-    if (!audioReady) return;
-    const base = ensureTemplate();
-    if (!base) return;
+    if (!audioReady || typeof Audio === 'undefined') return;
+    if (!template) {
+      try {
+        template = new Audio(resolved);
+        template.preload = 'auto';
+        template.volume = volume;
+      } catch (_) {
+        template = null;
+        return;
+      }
+    }
     try {
-      const instance = base.cloneNode(true);
+      const instance = template.cloneNode(true);
       instance.volume = volume;
-      const playPromise = instance.play();
-      if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(() => {});
+      const play = instance.play();
+      if (play && typeof play.catch === 'function') {
+        play.catch(() => {});
       }
     } catch (_) {
       // ignore playback failures (likely due to user gesture requirements)
@@ -848,8 +843,8 @@ class AsteroidsGame {
     this.enemyProjectiles = [];
 
     this.sounds = {
-      laser: createAudio('../../assets/audio/laser.wav', 0.45),
-      explode: createAudio('../../assets/audio/explode.wav', 0.6),
+      laser: createAudio(LASER_AUDIO_URL, 0.45),
+      explode: createAudio(EXPLOSION_AUDIO_URL, 0.6),
     };
 
     this.hud = this.createHud();

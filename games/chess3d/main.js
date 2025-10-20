@@ -122,7 +122,7 @@ function ensureVictorySound() {
     try {
       victorySound = new Audio(VICTORY_SOUND_URL);
       victorySound.preload = 'auto';
-    } catch (err) {
+    } catch (_) {
       victorySound = null;
       return null;
     }
@@ -130,10 +130,7 @@ function ensureVictorySound() {
   return victorySound;
 }
 if (!audioReady && typeof window !== 'undefined') {
-  const unlock = () => {
-    audioReady = true;
-    ensureVictorySound();
-  };
+  const unlock = () => { audioReady = true; ensureVictorySound(); };
   window.addEventListener('pointerdown', unlock, { once: true, passive: true });
   window.addEventListener('keydown', unlock, { once: true });
 } else {

@@ -20,25 +20,30 @@ const markFirstFrame = (() => {
 })();
 
 const DATA_URL = new URL('./data/game-data.json', import.meta.url).href;
-
-function resolveAsset(path) {
-  if (!path) return path;
-  try {
-    return new URL(path, import.meta.url).href;
-  } catch (_) {
-    return path;
-  }
-}
+const SHOOTER_ASSET_URLS = {
+  bullet: new URL('../../assets/sprites/bullet.png', import.meta.url).href,
+  enemies: [
+    new URL('../../assets/sprites/enemy1.png', import.meta.url).href,
+    new URL('../../assets/sprites/enemy2.png', import.meta.url).href,
+  ],
+  explosion: new URL('../../assets/effects/explosion.png', import.meta.url).href,
+  portal: new URL('../../assets/effects/portal.png', import.meta.url).href,
+  shoot: new URL('../../assets/audio/laser.wav', import.meta.url).href,
+  gameover: new URL('../../assets/audio/gameover.wav', import.meta.url).href,
+};
+const SHOOTER_PARALLAX_LAYERS = [
+  { key: 'layer1', src: new URL('../../assets/backgrounds/parallax/space_layer1.png', import.meta.url).href, speed: 40, alpha: 0.85 },
+  { key: 'layer2', src: new URL('../../assets/backgrounds/parallax/space_layer2.png', import.meta.url).href, speed: 80, alpha: 1 },
+];
 
 let audioReady = typeof window === 'undefined';
-const audioUnlockQueue = [];
+const audioReadyQueue = [];
 
 function flushAudioQueue() {
-  if (!audioUnlockQueue.length) return;
-  const tasks = audioUnlockQueue.splice(0, audioUnlockQueue.length);
-  for (const task of tasks) {
+  while (audioReadyQueue.length) {
+    const task = audioReadyQueue.shift();
     try {
-      task();
+      task?.();
     } catch (_) {}
   }
 }
@@ -59,7 +64,7 @@ function onAudioReady(callback) {
       callback();
     } catch (_) {}
   } else {
-    audioUnlockQueue.push(callback);
+    audioReadyQueue.push(callback);
   }
 }
 
@@ -309,15 +314,12 @@ export function boot() {
 
   const SLUG = 'shooter';
   const ASSET_PATHS = {
-    bullet: resolveAsset('../../assets/sprites/bullet.png'),
-    enemies: [
-      resolveAsset('../../assets/sprites/enemy1.png'),
-      resolveAsset('../../assets/sprites/enemy2.png'),
-    ],
-    explosion: resolveAsset('../../assets/effects/explosion.png'),
-    portal: resolveAsset('../../assets/effects/portal.png'),
-    shoot: resolveAsset('../../assets/audio/laser.wav'),
-    gameover: resolveAsset('../../assets/audio/gameover.wav'),
+    bullet: SHOOTER_ASSET_URLS.bullet,
+    enemies: SHOOTER_ASSET_URLS.enemies.slice(),
+    explosion: SHOOTER_ASSET_URLS.explosion,
+    portal: SHOOTER_ASSET_URLS.portal,
+    shoot: SHOOTER_ASSET_URLS.shoot,
+    gameover: SHOOTER_ASSET_URLS.gameover,
   };
 
   const sprites = {
@@ -327,10 +329,7 @@ export function boot() {
     portal: getCachedImage(ASSET_PATHS.portal),
   };
 
-  const PARALLAX_LAYERS = [
-    { key: 'layer1', src: resolveAsset('/assets/backgrounds/parallax/space_layer1.png'), speed: 40, alpha: 0.85 },
-    { key: 'layer2', src: resolveAsset('/assets/backgrounds/parallax/space_layer2.png'), speed: 80, alpha: 1 },
-  ];
+  const PARALLAX_LAYERS = SHOOTER_PARALLAX_LAYERS;
   const parallaxLayers = PARALLAX_LAYERS.map(config => ({
     key: config.key,
     src: config.src,
@@ -380,7 +379,6 @@ export function boot() {
   async function loadGameData() {
     if (typeof fetch !== 'function') {
       dataLoaded = true;
-      dataLoadError = null;
       return gameData;
     }
     dataLoaded = false;
@@ -573,12 +571,14 @@ export function boot() {
   }
 
   function createSoundPlayer(src, volume = 0.6) {
-    const resolved = resolveAsset(src);
-    let base = getCachedAudio(resolved);
+    const resolved = src;
+    let base = getCachedAudio(resolved) || null;
 
     onAudioReady(() => {
-      if (getCachedAudio(resolved)) {
-        base = getCachedAudio(resolved);
+      if (base) return;
+      const cached = getCachedAudio(resolved);
+      if (cached) {
+        base = cached;
         return;
       }
       loadAudio(resolved, { slug: SLUG }).then(audio => {
@@ -587,10 +587,9 @@ export function boot() {
     });
 
     return () => {
-      if (!audioReady) return;
+      if (!audioReady || typeof Audio === 'undefined') return;
       let audio = base || getCachedAudio(resolved);
       if (!audio) {
-        if (typeof Audio === 'undefined') return;
         try {
           audio = new Audio(resolved);
           audio.preload = 'auto';
@@ -602,10 +601,8 @@ export function boot() {
       try {
         const instance = audio.cloneNode(true);
         instance.volume = volume;
-        const playPromise = instance.play();
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch(() => {});
-        }
+        const playback = instance.play();
+        if (playback && typeof playback.catch === 'function') playback.catch(() => {});
       } catch (_) {}
     };
   }

@@ -474,7 +474,7 @@ async function boot(){
     const { games } = await loadGameCatalog();
     const list = Array.isArray(games) ? games : [];
     if (!list.length) {
-      GRID?.innerHTML = '<p>No games available.</p>';
+      GRID.innerHTML = '<p>No games available.</p>';
       gamesReady = true;
       return;
     }

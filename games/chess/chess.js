@@ -214,8 +214,11 @@ function playVictorySound(){
   const audio=ensureVictoryAudio();
   if(!audio) return;
   victorySoundPlayed=true;
-  try{ audio.currentTime=0; audio.play().catch(()=>{}); }
-  catch{}
+  try{
+    audio.currentTime=0;
+    const play=audio.play();
+    if(play&&typeof play.catch==='function') play.catch(()=>{});
+  }catch{}
 }
 
 const AI_UNAVAILABLE_MESSAGE='AI unavailable – switching to local play';
