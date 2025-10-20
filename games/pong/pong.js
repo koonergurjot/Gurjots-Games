@@ -1790,6 +1790,9 @@ import "./pauseOverlay.js";
     updatePaddle(state.p1, dt, 'p1');
     updatePaddle(state.p2, dt, 'p2');
 
+    // ensure HUD reflects continuous stamina drain/recovery instead of only on discrete events
+    updateHUD();
+
     maybeSpawnPowerup(dt);
     updatePowerups(dt);
 
