@@ -3,6 +3,8 @@ import { pushEvent } from '/games/common/diag-adapter.js';
 import { getCachedAudio, getCachedImage, loadAudio, loadImage, loadStrip } from '../../shared/assets.js';
 import { gameEvent } from '../../shared/telemetry.js';
 import './diagnostics-adapter.js';
+import { BossRushMode, DEFAULT_BOSS_RUSH_STAGES } from './shooter.js';
+import { ShooterUI } from './ui.js';
 
 export function boot() {
   const canvas = document.getElementById('game');
@@ -226,6 +228,10 @@ export function boot() {
   let dataLoaded = true;
   let dataLoadError = null;
   let bossActive = null;
+  const bossRush = new BossRushMode(DEFAULT_BOSS_RUSH_STAGES, { intermissionDuration: 3, initialDelay: 2 });
+  let bossRushUI = null;
+  let currentBossStage = null;
+  let runVictoryPosted = false;
 
   const screenShake = {
     intensity: 0,
@@ -242,6 +248,7 @@ export function boot() {
   let lastPostedState = null;
   const scoreElement = document.getElementById('score');
   const scoreDisplay = document.getElementById('scoreDisplay');
+  bossRushUI = new ShooterUI({ totalBosses: bossRush.getTotalStages() });
 
   const SLUG = 'shooter';
   const ASSET_PATHS = {
@@ -820,6 +827,46 @@ export function boot() {
     });
     if (type?.boss) {
       bossActive = null;
+      const completion = bossRush.completeStage();
+      if (!completion.completed) {
+        currentBossStage = null;
+        return;
+      }
+      const fallbackIndex = currentBossStage?.index ?? -1;
+      const stageIndex = completion.stageIndex ?? enemy.bossRushStageIndex ?? fallbackIndex;
+      const totalStages = completion.totalStages ?? bossRush.getTotalStages();
+      const waveNumber = stageIndex >= 0 ? stageIndex + 1 : Math.max(1, fallbackIndex + 1);
+      const stageName = enemy.bossRushStageName || completion.stage?.name || type?.name || enemy.typeId;
+      const meta = {
+        mode: 'boss_rush',
+        boss: stageName,
+        index: waveNumber,
+        total: totalStages,
+        durationMs: Math.round(bossRush.getTimer() * 1000),
+        perfectWaves: bossRush.getPerfectWaveCount(),
+      };
+      gameEvent('end', { slug: SLUG, level: waveNumber, meta });
+      if (completion.perfect) {
+        gameEvent('score_event', { slug: SLUG, name: 'perfect_wave', meta: { wave: waveNumber } });
+        bossRushUI?.flagPerfectWave();
+      }
+      if (completion.runComplete && !runVictoryPosted) {
+        gameEvent('score_event', { slug: SLUG, name: 'boss_rush_clear', meta });
+        if (bossRush.getPerfectWaveCount() >= 3) {
+          gameEvent('score_event', {
+            slug: SLUG,
+            name: 'perfect_wave_streak',
+            meta: { perfectWaves: bossRush.getPerfectWaveCount() },
+          });
+        }
+        gameEvent('win', { slug: SLUG, value: Math.round(score), meta });
+        bossRushUI?.showRunComplete(bossRush.getTimer(), bossRush.getPerfectWaveCount());
+        publishDiagnostics('victory', { forceScore: true, forceState: true });
+        runVictoryPosted = true;
+      } else if (!completion.runComplete) {
+        bossRushUI?.setStatus('Intermission');
+      }
+      currentBossStage = null;
     }
   }
 
@@ -837,6 +884,7 @@ export function boot() {
       player.invuln = Math.max(player.invuln, iFrames || 0.6);
       if (damage > 0) {
         spawnDamageNumber(hitX ?? player.x, hitY ?? player.y, damage, { crit, color: '#f87171' });
+        bossRush.recordPlayerDamage();
       }
     } else {
       target.hp -= damage;
@@ -1002,6 +1050,30 @@ export function boot() {
       sweepAngle: -0.2,
       sweepDirection: 1,
     };
+    if (Number.isFinite(overrides.hp)) {
+      enemy.hp = Number(overrides.hp);
+    }
+    enemy.maxHp = Number.isFinite(overrides.maxHp)
+      ? Number(overrides.maxHp)
+      : (Number.isFinite(enemy.hp) ? enemy.hp : (type?.hp || enemy.hp));
+    if (Number.isFinite(overrides.speed)) {
+      enemy.speed = Number(overrides.speed);
+      enemy.vx = overrides.vx ?? -(Math.abs(enemy.speed) || enemy.speed || 0);
+    }
+    if (Array.isArray(overrides.timeline)) {
+      enemy.timeline = deepClone(overrides.timeline);
+    }
+    if (Number.isFinite(overrides.weaponCooldownScale)) {
+      enemy.weaponCooldownScale = Number(overrides.weaponCooldownScale);
+    } else if (enemy.weaponCooldownScale == null) {
+      enemy.weaponCooldownScale = 1;
+    }
+    if (overrides.stageIndex != null) {
+      enemy.bossRushStageIndex = overrides.stageIndex;
+    }
+    if (overrides.stageName) {
+      enemy.bossRushStageName = overrides.stageName;
+    }
     enemy.y = Math.max(enemy.r, Math.min(H - enemy.r, enemy.y));
     enemies.push(enemy);
     portalEffects.push({ x: enemy.x, y: enemy.y, frameIndex: 0, frameDelay: 0, enemy });
@@ -1041,7 +1113,8 @@ export function boot() {
       if (phase?.pattern === 'portalVolley') angle += (Math.random() - 0.5) * 0.18;
       if (phase?.pattern === 'rage') angle += (Math.random() - 0.5) * 0.3;
       if (fireWeapon(enemy, weapon, 'enemy', { angle })) {
-        enemy.weaponTimer = weapon.fireCooldown || 1.2;
+        const cooldownScale = Number.isFinite(enemy.weaponCooldownScale) ? enemy.weaponCooldownScale : 1;
+        enemy.weaponTimer = (weapon.fireCooldown || 1.2) * cooldownScale;
       }
     }
   }
@@ -1169,57 +1242,60 @@ export function boot() {
   }
 
   function updateWaves(delta) {
-    const waves = gameData?.waves || [];
     elapsedTime += delta;
-    while (nextWaveIndex < waves.length && elapsedTime >= (waves[nextWaveIndex].time || 0)) {
-      const waveNumber = nextWaveIndex + 1;
-      activateWave(waves[nextWaveIndex]);
-      nextWaveIndex++;
-      gameEvent('level_up', {
-        slug: SLUG,
-        level: waveNumber,
-      });
+    bossRush.tick(delta);
+    if (bossRushUI) {
+      bossRushUI.setTimer(bossRush.getTimer());
+      bossRushUI.setIntermission(bossRush.getIntermissionRemaining());
     }
-    for (let i = activeWaves.length - 1; i >= 0; i--) {
-      const wave = activeWaves[i];
-      let finished = true;
-      for (const spawn of wave.spawns) {
-        const config = spawn.config;
-        const count = Math.max(1, Math.floor(config.count || 1));
-        if (spawn.spawned >= count) continue;
-        finished = false;
-        spawn.timer -= delta;
-        if (spawn.timer <= 0) {
-          const hasOffset = Number.isFinite(config.offsetY);
-          const yOffset = hasOffset ? config.offsetY * H : Math.random() * (H - 80) + 40;
-          const enemy = spawnEnemy(config.type || 'grunt', {
-            y: yOffset,
-            path: config.pattern,
-          });
-          spawn.spawned++;
-          spawn.timer = config.interval || 0.5;
+    if (!bossActive && bossRush.shouldSpawnBoss()) {
+      const stageInfo = bossRush.startNextStage();
+      if (stageInfo) {
+        const stage = stageInfo.stage || {};
+        const typeId = stage.type || 'overseer';
+        const type = getEnemyType(typeId);
+        const baseHp = Number.isFinite(stage.hp)
+          ? Number(stage.hp)
+          : (type?.hp || 120);
+        const hpMultiplier = Number.isFinite(stage.hpMultiplier) ? stage.hpMultiplier : 1;
+        const hpOverride = Math.max(1, Math.round(baseHp * hpMultiplier));
+        const baseSpeed = type?.speed || 60;
+        const speedMultiplier = Number.isFinite(stage.speedMultiplier) ? stage.speedMultiplier : 1;
+        const speedOverride = baseSpeed * speedMultiplier;
+        const overrides = {
+          x: W - 140,
+          y: H / 2,
+          hp: hpOverride,
+          maxHp: hpOverride,
+          speed: speedOverride,
+          timeline: Array.isArray(stage.timeline) ? stage.timeline : undefined,
+          weaponCooldownScale: Number.isFinite(stage.weaponCooldownScale) ? stage.weaponCooldownScale : undefined,
+          stageIndex: stageInfo.index,
+          stageName: stage.name,
+        };
+        currentBossStage = stageInfo;
+        const boss = spawnEnemy(typeId, overrides);
+        if (boss) {
+          boss.maxHp = overrides.maxHp ?? boss.maxHp ?? boss.hp;
+          if (overrides.weaponCooldownScale != null) {
+            boss.weaponCooldownScale = overrides.weaponCooldownScale;
+          }
+          boss.bossRushStageIndex = stageInfo.index;
+          boss.bossRushStageName = stage.name;
         }
-      }
-      if (wave.boss && !wave.boss.spawned && !bossActive) {
-        spawnEnemy(wave.boss.type || 'overseer', { x: W - 120, y: H / 2 });
-        wave.boss.spawned = true;
-      }
-      if (!wave.boss && wave.spawns.every(spawn => spawn.spawned >= Math.max(1, Math.floor(spawn.config.count || 1)))) {
-        if (!enemies.some(enemy => !enemy.dead)) {
-          finished = true;
-        } else {
-          finished = false;
+        if (bossRushUI) {
+          bossRushUI.setWave(stageInfo.index + 1, stageInfo.total, stage.name);
+          bossRushUI.setStatus(stage.name ? `Fighting ${stage.name}` : 'Boss engaged');
+          bossRushUI.setIntermission(0);
         }
-      }
-      if (wave.boss) {
-        if (wave.boss.spawned) {
-          finished = !bossActive;
-        } else {
-          finished = false;
-        }
-      }
-      if (finished) {
-        activeWaves.splice(i, 1);
+        const meta = {
+          mode: 'boss_rush',
+          boss: stage.name || typeId,
+          index: stageInfo.index + 1,
+          total: stageInfo.total,
+        };
+        gameEvent('start', { slug: SLUG, level: stageInfo.index + 1, meta });
+        gameEvent('level_up', { slug: SLUG, level: stageInfo.index + 1, meta });
       }
     }
   }
@@ -1393,7 +1469,10 @@ export function boot() {
     ctx.fillText(`HP: ${Math.max(0, Math.ceil(player.hp))}/${player.maxHp}`, 16, 48);
     ctx.fillText('Move: WASD/Arrows • Shoot: Space/Enter', 16, 70);
     if (bossActive && bossActive.typeDef) {
-      const hpRatio = Math.max(0, Math.min(1, bossActive.hp / (bossActive.typeDef.hp || 1)));
+      const maxHp = Number.isFinite(bossActive.maxHp)
+        ? bossActive.maxHp
+        : (bossActive.typeDef.hp || 1);
+      const hpRatio = Math.max(0, Math.min(1, bossActive.hp / maxHp));
       const barWidth = 320;
       const barX = (W - barWidth) / 2;
       const barY = 40;
@@ -1600,6 +1679,10 @@ export function boot() {
     elapsedTime = 0;
     nextWaveIndex = 0;
     bossActive = null;
+    bossRush.start();
+    runVictoryPosted = false;
+    bossRushUI?.reset(bossRush.getTotalStages());
+    currentBossStage = null;
     resetParallax();
     score = 0;
     gameOverSent = false;
@@ -1611,7 +1694,7 @@ export function boot() {
     publishDiagnostics('running', { forceScore: true, forceState: true });
     draw();
     startLoop();
-    gameEvent('play', { slug: SLUG });
+    gameEvent('play', { slug: SLUG, meta: { mode: 'boss_rush', bosses: bossRush.getTotalStages() } });
   }
 
   const onShellPause=()=>pauseForShell();
@@ -1635,6 +1718,7 @@ export function boot() {
     ctx.fillText('Game Over', W/2, H/2 - 10);
     ctx.font='24px system-ui';
     ctx.fillText(`Score: ${Math.round(score)}`, W/2, H/2 + 26);
+    bossRushUI?.setStatus('Defeated');
     playGameOverSound();
     publishDiagnostics('gameover', { forceScore: true, forceState: true });
     if (!gameOverSent) {
@@ -1665,6 +1749,19 @@ export function boot() {
     shooterAPI.score = score;
     shooterAPI.hp = player.hp;
     shooterAPI.state = currentState;
+    const bossInfo = bossRush.getCurrentStageInfo();
+    const totalStages = bossRush.getTotalStages();
+    const activeIndex = bossActive
+      ? (currentBossStage?.index ?? bossInfo.index)
+      : bossInfo.index;
+    shooterAPI.bossRush = {
+      timer: bossRush.getTimer(),
+      wave: Math.max(0, (Number.isFinite(activeIndex) ? activeIndex : -1) + 1),
+      total: totalStages,
+      intermission: bossRush.getIntermissionRemaining(),
+      perfectWaves: bossRush.getPerfectWaveCount(),
+      complete: bossRush.isComplete() || runVictoryPosted,
+    };
   }
 
   function publishDiagnostics(stateLabel, { forceScore = false, forceState = false } = {}){
@@ -1700,6 +1797,14 @@ export function boot() {
     score,
     hp: player.hp,
     state: currentState,
+    bossRush: {
+      timer: bossRush.getTimer(),
+      wave: 0,
+      total: bossRush.getTotalStages(),
+      intermission: bossRush.getIntermissionRemaining(),
+      perfectWaves: 0,
+      complete: false,
+    },
   });
   if (!Array.isArray(base.onReady)) {
     base.onReady = readyQueue;
@@ -1719,11 +1824,14 @@ export function boot() {
     }
   }
 
+  bossRush.start();
+  runVictoryPosted = false;
+  bossRushUI?.reset(bossRush.getTotalStages());
   resetParallax();
   loadGameData();
   startLoop();
   runStartTime = performance.now();
-  gameEvent('play', { slug: SLUG });
+  gameEvent('play', { slug: SLUG, meta: { mode: 'boss_rush', bosses: bossRush.getTotalStages() } });
   addEventListener('beforeunload', ()=>stopLoop());
 }
 
