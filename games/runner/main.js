@@ -4,7 +4,9 @@ import { registerRunnerAdapter } from './adapter.js';
 import { play as playSfx, setPaused as setAudioPaused } from '../../shared/juice/audio.js';
 import { createSceneManager } from '../../src/engine/scenes.js';
 import { drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
+const GAME_SLUG = 'runner';
 const VIRTUAL_WIDTH = 960;
 const VIRTUAL_HEIGHT = 320;
 const GROUND_HEIGHT = 60;
@@ -666,6 +668,7 @@ class RunnerGame {
     this.parallaxLayers = [];
     this.distance = 0;
     this.elapsedSeconds = 0;
+    this.runStartTime = performance.now();
     this.spawnTimer = 160;
     this.coinTimer = 280;
     this.score = 0;
@@ -1506,6 +1509,8 @@ class RunnerGame {
     this.manualIndex = 0;
     this.clearActiveEntities();
     if (resetScore) {
+      this.runStartTime = performance.now();
+      gameEvent('play', { slug: GAME_SLUG });
       this.prepareRunSeeds({ initial: this.runCounter === 0 });
     }
     this.background = this.buildBackground(prepared.background);
@@ -2290,6 +2295,16 @@ class RunnerGame {
         // Shell observer expects the score attribute to stay in sync.
         this.hud.score.dataset.gameScore = String(newScore);
       }
+      gameEvent('score', {
+        slug: GAME_SLUG,
+        value: newScore,
+        meta: {
+          distance: Math.floor(this.distance),
+          nearMisses: this.analytics.nearMisses,
+          perfects: this.analytics.perfects,
+          coins: this.analytics.coins,
+        },
+      });
       emitRunnerScore(this, newScore, {
         distance: Math.floor(this.distance),
         nearMisses: this.analytics.nearMisses,
@@ -2323,6 +2338,26 @@ class RunnerGame {
       this.persistBestScore();
     }
     this.updateMission();
+    const now = performance.now();
+    const durationMs = Math.max(0, Math.round(now - (this.runStartTime || now)));
+    gameEvent('game_over', {
+      slug: GAME_SLUG,
+      value: this.score,
+      durationMs,
+      meta: {
+        best: this.bestScore,
+        distance: Math.floor(this.distance),
+        difficulty: this.difficulty,
+        level: this.levelName,
+      },
+    });
+    gameEvent('lose', {
+      slug: GAME_SLUG,
+      meta: {
+        distance: Math.floor(this.distance),
+        difficulty: this.difficulty,
+      },
+    });
     emitStateEvent(this, 'game-over');
     this.updateAnalyticsDisplay(true);
     emitRunnerScore(this, this.score, {

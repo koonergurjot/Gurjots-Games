@@ -7,6 +7,7 @@ import { play as playSfx } from '../../shared/juice/audio.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 import { createSeed, generateSequence as generateRandomSequence, createRandomizerSelector } from './randomizer.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
@@ -801,6 +802,9 @@ let cur;
 let ghost;
 let showGhost=localStorage.getItem('tetris:ghost')!=='0';
 let score=0, level=1, lines=0, over=false, dropMs=700, paused=false;
+let runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+let gameOverSent = false;
+let lastComboEmitted = -1;
 let combo=-1;
 const scoreDisplay=document.getElementById('score');
 
@@ -1128,6 +1132,9 @@ const TetrisAPI={
       lastFrame=0;
       gravityTimer=0;
       softDropTimer=0;
+      runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      gameOverSent = false;
+      gameEvent('play', { slug: GAME_ID });
     }
     startGameLoop();
     return true;
@@ -1185,6 +1192,9 @@ const TetrisAPI={
     dropMs=700;
     syncScoreDisplay();
     updateGhost();
+    runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    gameOverSent = false;
+    lastComboEmitted = -1;
     return true;
   },
   onReady: registerReadyCallback,
@@ -1363,11 +1373,34 @@ function lockPiece(soft=0,hard=0){
   if(cleared>0){
     combo++;
     if(combo>0) pts+=combo*50;
+    const comboCount = combo + 1;
+    if(comboCount>1 && combo!==lastComboEmitted){
+      lastComboEmitted = combo;
+      gameEvent('combo', {
+        slug: GAME_ID,
+        count: comboCount,
+        meta: {
+          cleared,
+          level,
+        },
+      });
+    }
   }else{
     combo=-1;
+    lastComboEmitted = -1;
   }
   score+=pts;
   syncScoreDisplay();
+  gameEvent('score', {
+    slug: GAME_ID,
+    value: score,
+    meta: {
+      lines: lines + cleared,
+      combo: combo,
+      cleared,
+      level,
+    },
+  });
   lines+=cleared;
   GG.addXP(2*cleared);
   let leveledUp=false;
@@ -1385,6 +1418,15 @@ function lockPiece(soft=0,hard=0){
     playSound('explode');
   }
   if(leveledUp) playSound('power');
+  if(leveledUp){
+    gameEvent('level_up', {
+      slug: GAME_ID,
+      level,
+      meta: {
+        lines,
+      },
+    });
+  }
   rotated=false;
   lockResetCount=0;
 }
@@ -1394,6 +1436,22 @@ function triggerGameOver(){
   over=true;
   updateBest();
   GG.addAch(GAME_ID,'Stacked');
+  if(!gameOverSent){
+    gameOverSent=true;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const durationMs = Math.max(0, Math.round(now - (runStartTime || now)));
+    const meta = { lines, level };
+    gameEvent('game_over', {
+      slug: GAME_ID,
+      value: score,
+      durationMs,
+      meta,
+    });
+    gameEvent('lose', {
+      slug: GAME_ID,
+      meta,
+    });
+  }
   if(mode==='play'){
     Replay.stop();
     Replay.download('tetris-replay-'+Date.now()+'.json');

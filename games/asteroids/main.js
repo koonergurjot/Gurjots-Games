@@ -1,6 +1,7 @@
 import { Controls } from '../../src/runtime/controls.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
 const SLUG = 'asteroids';
 const TWO_PI = Math.PI * 2;
@@ -767,6 +768,7 @@ class AsteroidsGame {
     this.gameOver = false;
     this.started = false;
     this.sessionActive = false;
+    this.runStartTime = performance.now();
 
     this.waveSpawnDelay = 0;
 
@@ -1581,6 +1583,10 @@ class AsteroidsGame {
       this.hud.score.textContent = '0';
       this.hideOverlay();
       this.startSession();
+      this.runStartTime = performance.now();
+      gameEvent('play', {
+        slug: SLUG,
+      });
       if (!this.asteroidsRemaining()) {
         this.spawnWave();
       }
@@ -1806,6 +1812,10 @@ class AsteroidsGame {
     this.waveSpawnDelay += dt;
     if (this.waveSpawnDelay < 1.5) return;
     this.wave++;
+    gameEvent('level_up', {
+      slug: SLUG,
+      level: this.wave,
+    });
     this.spawnWave();
   }
 
@@ -1837,6 +1847,15 @@ class AsteroidsGame {
     }
     this.hud.score.textContent = String(this.score);
     this.hud.best.textContent = String(this.bestScore);
+    gameEvent('score', {
+      slug: SLUG,
+      value: this.score,
+      meta: {
+        best: this.bestScore,
+        lives: this.lives,
+        wave: this.wave,
+      },
+    });
   }
 
   spawnThrusterParticles(pos, angle, vel) {
@@ -1910,6 +1929,23 @@ class AsteroidsGame {
       this.gameOver = true;
       this.paused = true;
       this.endSession();
+      const now = performance.now();
+      const durationMs = Math.max(0, Math.round(now - (this.runStartTime || now)));
+      gameEvent('game_over', {
+        slug: SLUG,
+        value: this.score,
+        durationMs,
+        meta: {
+          wave: this.wave,
+        },
+      });
+      gameEvent('lose', {
+        slug: SLUG,
+        meta: {
+          wave: this.wave,
+          score: this.score,
+        },
+      });
       this.showOverlay('Game Over', 'Press Restart to try again.');
     }
   }

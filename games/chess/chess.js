@@ -4,6 +4,7 @@ import getThemeTokens from '../../shared/skins/index.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
 installErrorReporter();
 getThemeTokens();
@@ -91,6 +92,8 @@ const EMPTY = '.';
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
 const COLORS={w:1,b:-1};
 let board=[], turn='w', sel=null, moves=[], over=false;
+let runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+let gameOverSent = false;
 let lastMove=null; let lastMoveInfo=null; let premove=null;
 let puzzleIndex=-1, puzzleStep=0;
 let puzzleStreak=0;
@@ -681,6 +684,45 @@ function handleGameOverState(stateId, extra={}){
       playVictorySound();
     }
   }
+  if(!gameOverSent){
+    gameOverSent=true;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const durationMs = Math.max(0, Math.round(now - (runStartTime || now)));
+    let winnerColor = null;
+    if(extra && typeof extra.winner==='string'){
+      const lower = extra.winner.toLowerCase();
+      if(lower.startsWith('white')) winnerColor='w';
+      else if(lower.startsWith('black')) winnerColor='b';
+    }
+    let result = 'draw';
+    if(winnerColor){
+      result = winnerColor===localColor ? 'win' : 'lose';
+    }else if(stateId==='timeout' && extra && typeof extra.flagged==='string'){
+      const flagged = extra.flagged === 'w' ? 'w' : extra.flagged === 'b' ? 'b' : null;
+      if(flagged){
+        result = flagged===localColor ? 'lose' : 'win';
+      }
+    }
+    const value = result==='win' ? 1 : result==='lose' ? 0 : 0.5;
+    const meta = {
+      state: stateId,
+      winner: extra?.winner || null,
+      loser: extra?.loser || null,
+      reason: payload?.message || '',
+    };
+    gameEvent('game_over', {
+      slug: 'chess',
+      value,
+      durationMs,
+      meta,
+    });
+    if(result==='win' || result==='lose'){
+      gameEvent(result, {
+        slug: 'chess',
+        meta,
+      });
+    }
+  }
   return payload;
 }
 
@@ -921,6 +963,15 @@ function reset(options={}){
     details:payload,
     slug:'chess',
   });
+  runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  gameOverSent = false;
+  gameEvent('play', {
+    slug: 'chess',
+    meta: {
+      mode: payload.mode,
+      reason: payload.reason,
+    },
+  });
 }
 function loadPuzzle(i, options={}){
   resetVictorySound();
@@ -963,6 +1014,16 @@ function loadPuzzle(i, options={}){
     message:`[chess] puzzle ${i+1} loaded`,
     details:payload,
     slug:'chess',
+  });
+  runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  gameOverSent = false;
+  gameEvent('play', {
+    slug: 'chess',
+    meta: {
+      mode: payload.mode,
+      reason: payload.reason,
+      puzzle: i,
+    },
   });
 }
 function parseFEN(f){ const rows=f.split('/'); const b=[]; for(const r of rows){ const row=[]; for(const ch of r){ if(/[1-8]/.test(ch)){ for(let i=0;i<Number(ch);i++) row.push(EMPTY);} else row.push(ch);} b.push(row);} return b; }

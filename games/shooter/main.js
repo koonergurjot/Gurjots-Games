@@ -1,6 +1,7 @@
 // Minimal top-down shooter (canvas id='game')
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { getCachedAudio, getCachedImage, loadAudio, loadImage, loadStrip } from '../../shared/assets.js';
+import { gameEvent } from '../../shared/telemetry.js';
 import './diagnostics-adapter.js';
 
 export function boot() {
@@ -232,6 +233,8 @@ export function boot() {
     decay: 1.8,
   };
   let score = 0;
+  let runStartTime = performance.now();
+  let gameOverSent = false;
   let shooterAPI = null;
   let currentState = 'ready';
   let lastPostedScore = null;
@@ -806,6 +809,15 @@ export function boot() {
     const type = enemy.typeDef || getEnemyType(enemy.typeId);
     const value = type?.boss ? 150 : Math.max(10, Math.round((type?.hp || 5) * 2));
     score += value;
+    gameEvent('score', {
+      slug: SLUG,
+      value: Math.round(score),
+      meta: {
+        boss: !!type?.boss,
+        enemyType: enemy.typeId,
+        hp: player.hp,
+      },
+    });
     if (type?.boss) {
       bossActive = null;
     }
@@ -1160,8 +1172,13 @@ export function boot() {
     const waves = gameData?.waves || [];
     elapsedTime += delta;
     while (nextWaveIndex < waves.length && elapsedTime >= (waves[nextWaveIndex].time || 0)) {
+      const waveNumber = nextWaveIndex + 1;
       activateWave(waves[nextWaveIndex]);
       nextWaveIndex++;
+      gameEvent('level_up', {
+        slug: SLUG,
+        level: waveNumber,
+      });
     }
     for (let i = activeWaves.length - 1; i >= 0; i--) {
       const wave = activeWaves[i];
@@ -1585,6 +1602,8 @@ export function boot() {
     bossActive = null;
     resetParallax();
     score = 0;
+    gameOverSent = false;
+    runStartTime = performance.now();
     shellPaused = false;
     pausedByShell = false;
     currentState = 'ready';
@@ -1592,6 +1611,7 @@ export function boot() {
     publishDiagnostics('running', { forceScore: true, forceState: true });
     draw();
     startLoop();
+    gameEvent('play', { slug: SLUG });
   }
 
   const onShellPause=()=>pauseForShell();
@@ -1617,6 +1637,25 @@ export function boot() {
     ctx.fillText(`Score: ${Math.round(score)}`, W/2, H/2 + 26);
     playGameOverSound();
     publishDiagnostics('gameover', { forceScore: true, forceState: true });
+    if (!gameOverSent) {
+      gameOverSent = true;
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const durationMs = Math.max(0, Math.round(now - (runStartTime || now)));
+      gameEvent('game_over', {
+        slug: SLUG,
+        value: Math.round(score),
+        durationMs,
+        meta: {
+          hp: player.hp,
+        },
+      });
+      gameEvent('lose', {
+        slug: SLUG,
+        meta: {
+          score: Math.round(score),
+        },
+      });
+    }
   }
   function syncShooterState(){
     if(!shooterAPI) return;
@@ -1683,6 +1722,8 @@ export function boot() {
   resetParallax();
   loadGameData();
   startLoop();
+  runStartTime = performance.now();
+  gameEvent('play', { slug: SLUG });
   addEventListener('beforeunload', ()=>stopLoop());
 }
 

@@ -2,6 +2,7 @@
 import { pushEvent } from "../common/diag-adapter.js";
 import { preloadFirstFrameAssets } from "../../shared/game-asset-preloader.js";
 import { play as playSfx } from "../../shared/juice/audio.js";
+import { gameEvent } from "../../shared/telemetry.js";
 import "./pauseOverlay.js";
 
 (function(){
@@ -304,6 +305,7 @@ import "./pauseOverlay.js";
     lastRallyFrames:[],
     lastRallyMeta:null,
     currentRallyStart:0,
+    matchStartTime: typeof performance !== 'undefined' ? performance.now() : Date.now(),
   };
 
   state.backgroundPreset = getBackgroundPresetForMode(state.mode);
@@ -855,6 +857,15 @@ import "./pauseOverlay.js";
     ensureParallaxLayers(true);
     markRallyStart();
     updateTitleOverlay();
+    state.matchStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    gameEvent('play', {
+      slug: SLUG,
+      meta: {
+        mode: state.mode,
+        toScore: state.toScore,
+        winByTwo: state.winByTwo,
+      },
+    });
   }
 
   function spawnBall(dir=1, speed=360){
@@ -865,6 +876,15 @@ import "./pauseOverlay.js";
 
   function award(pointTo){
     state.score[pointTo]++; updateHUD();
+    gameEvent('score', {
+      slug: SLUG,
+      value: state.score.p1,
+      meta: {
+        opponent: state.score.p2,
+        scoredBy: pointTo,
+        mode: state.mode,
+      },
+    });
     triggerBackgroundPulse(pointTo);
     if(state.mode==="Endless") { // endless: don't end, just reset
       spawnBall(pointTo==="p1" ? 1 : -1);
@@ -888,6 +908,19 @@ import "./pauseOverlay.js";
     playSound("explode");
     const winner = state.score.p1 === state.score.p2 ? null : state.score.p1 > state.score.p2 ? 'p1' : 'p2';
     const details = { winner, left: state.score.p1, right: state.score.p2, mode: state.mode };
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const durationMs = Math.max(0, Math.round(now - (state.matchStartTime || now)));
+    gameEvent('game_over', {
+      slug: SLUG,
+      value: state.score.p1,
+      durationMs,
+      meta: details,
+    });
+    if (winner === 'p1') {
+      gameEvent('win', { slug: SLUG, meta: details });
+    } else if (winner === 'p2') {
+      gameEvent('lose', { slug: SLUG, meta: details });
+    }
     scenes.push(() => createGameOverScene(details)).catch(err => console.error('[pong] gameover scene failed', err));
   }
 

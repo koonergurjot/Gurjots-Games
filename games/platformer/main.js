@@ -2,6 +2,7 @@ import * as net from './net.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { drawTileOverlay, drawTileSprite, getTilePattern, preloadTileTextures } from '../../shared/render/tileTextures.js';
 import { loadStrip } from '../../shared/assets.js';
+import { gameEvent } from '../../shared/telemetry.js';
 import {
   play as playSfx,
   setPaused as setAudioPaused,
@@ -2145,11 +2146,69 @@ export async function boot() {
   }
 
   function emitState(type, extra = {}) {
-    notifyPlatformerCallbacks('onState', stateSnapshot(type, extra));
+    const snapshot = stateSnapshot(type, extra);
+    notifyPlatformerCallbacks('onState', snapshot);
+    if (type === 'start' || type === 'restart') {
+      gameEvent('play', {
+        slug: GAME_ID,
+        meta: {
+          reason: snapshot.reason || type,
+          coins: snapshot.collected,
+          totalCoins: snapshot.totalCoins,
+        },
+      });
+    } else if (type === 'gameover') {
+      const durationMs = Math.max(0, Math.round(secondsElapsed() * 1000));
+      gameEvent('game_over', {
+        slug: GAME_ID,
+        value: snapshot.collected,
+        durationMs,
+        meta: {
+          title: snapshot.title || extra.title || '',
+          info: snapshot.info || extra.info || '',
+          coins: snapshot.collected,
+          totalCoins: snapshot.totalCoins,
+        },
+      });
+      const title = String(snapshot.title || extra.title || '').toLowerCase();
+      if (title.includes('clear')) {
+        gameEvent('win', {
+          slug: GAME_ID,
+          meta: {
+            coins: snapshot.collected,
+            totalCoins: snapshot.totalCoins,
+            time: snapshot.time,
+          },
+        });
+      } else {
+        gameEvent('lose', {
+          slug: GAME_ID,
+          meta: {
+            coins: snapshot.collected,
+            totalCoins: snapshot.totalCoins,
+            time: snapshot.time,
+          },
+        });
+      }
+    }
+    return snapshot;
   }
 
   function emitScore(type, extra = {}) {
-    notifyPlatformerCallbacks('onScore', scoreSnapshot(type, extra));
+    const snapshot = scoreSnapshot(type, extra);
+    notifyPlatformerCallbacks('onScore', snapshot);
+    if (type === 'collect' || type === 'final') {
+      gameEvent('score', {
+        slug: GAME_ID,
+        value: snapshot.collected,
+        meta: {
+          totalCoins: snapshot.totalCoins,
+          coinId: extra.coinId,
+          time: snapshot.time,
+        },
+      });
+    }
+    return snapshot;
   }
 
   function triggerGameOver(title, info) {
