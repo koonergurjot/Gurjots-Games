@@ -1210,24 +1210,6 @@ function ensureDiagV2Overlay(){
   return loading;
 }
 
-function toggleDiagV2Overlay(forceShow){
-  ensureDiagV2Overlay().then(function(api){
-    if (!api || typeof api.open !== 'function' || typeof api.close !== 'function') return;
-    var shouldShow;
-    var currentlyOpen = false;
-    if (typeof api.isOpen === 'function') {
-      try { currentlyOpen = !!api.isOpen(); } catch(_){ currentlyOpen = false; }
-    }
-    if (typeof forceShow === 'boolean') {
-      shouldShow = forceShow;
-    } else {
-      shouldShow = !currentlyOpen;
-    }
-    if (shouldShow) api.open();
-    else api.close();
-  }).catch(function(){ });
-}
-
 function openDiagV2Overlay(){
   var diag = null;
   try {
