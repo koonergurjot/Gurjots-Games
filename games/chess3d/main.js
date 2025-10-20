@@ -185,40 +185,6 @@ function notifyStateChange(nextState, details = {}) {
       warn('chess3d', '[Chess3D] state listener failed', err);
     }
   });
-  if (normalized === 'play') {
-    runStartTime = now();
-    gameOverSent = false;
-    gameEvent('play', {
-      slug: 'chess3d',
-      meta: {
-        reason: payload.reason || '',
-      },
-    });
-  } else if (normalized === 'gameover' && !gameOverSent) {
-    gameOverSent = true;
-    const durationMs = Math.max(0, Math.round(now() - (runStartTime || now())));
-    const message = String(payload.message || '').toLowerCase();
-    let result = 'draw';
-    if (message.includes('white wins')) result = 'win';
-    else if (message.includes('black wins')) result = 'lose';
-    const value = result === 'win' ? 1 : result === 'lose' ? 0 : 0.5;
-    const meta = {
-      message: payload.message || '',
-      reason: payload.reason || '',
-    };
-    gameEvent('game_over', {
-      slug: 'chess3d',
-      value,
-      durationMs,
-      meta,
-    });
-    if (result === 'win' || result === 'lose') {
-      gameEvent(result, {
-        slug: 'chess3d',
-        meta,
-      });
-    }
-  }
 }
 
 const chess3dController = {
