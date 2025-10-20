@@ -22,10 +22,29 @@ import {
 installErrorReporter();
 getThemeTokens();
 
-const victoryAudio=(typeof Audio!=='undefined')?new Audio('/assets/audio/victory.wav'):null;
-if(victoryAudio){
-  victoryAudio.preload='auto';
-  victoryAudio.volume=0.85;
+const VICTORY_AUDIO_URL=new URL('../../assets/audio/victory.wav',import.meta.url).href;
+let victoryAudio=null;
+let audioReady=typeof window==='undefined';
+function ensureVictoryAudio(){
+  if(!audioReady||typeof Audio==='undefined') return null;
+  if(!victoryAudio){
+    try{
+      victoryAudio=new Audio(VICTORY_AUDIO_URL);
+      victoryAudio.preload='auto';
+      victoryAudio.volume=0.85;
+    }catch{
+      victoryAudio=null;
+      return null;
+    }
+  }
+  return victoryAudio;
+}
+if(!audioReady&&typeof window!=='undefined'){
+  const unlock=()=>{audioReady=true;ensureVictoryAudio();};
+  window.addEventListener('pointerdown',unlock,{once:true,passive:true});
+  window.addEventListener('keydown',unlock,{once:true});
+}else{
+  ensureVictoryAudio();
 }
 
 const markFirstFrame = (() => {
@@ -181,18 +200,21 @@ let mateInThreeAwarded=false;
 
 function resetVictorySound(){
   victorySoundPlayed=false;
-  if(victoryAudio){
+  const audio=ensureVictoryAudio();
+  if(audio){
     try{
-      victoryAudio.pause();
-      victoryAudio.currentTime=0;
+      audio.pause();
+      audio.currentTime=0;
     }catch{}
   }
 }
 
 function playVictorySound(){
-  if(victorySoundPlayed||!victoryAudio) return;
+  if(victorySoundPlayed) return;
+  const audio=ensureVictoryAudio();
+  if(!audio) return;
   victorySoundPlayed=true;
-  try{ victoryAudio.currentTime=0; victoryAudio.play().catch(()=>{}); }
+  try{ audio.currentTime=0; audio.play().catch(()=>{}); }
   catch{}
 }
 

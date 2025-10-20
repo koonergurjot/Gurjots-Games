@@ -19,6 +19,50 @@ const markFirstFrame = (() => {
   };
 })();
 
+const DATA_URL = new URL('./data/game-data.json', import.meta.url).href;
+
+function resolveAsset(path) {
+  if (!path) return path;
+  try {
+    return new URL(path, import.meta.url).href;
+  } catch (_) {
+    return path;
+  }
+}
+
+let audioReady = typeof window === 'undefined';
+const audioUnlockQueue = [];
+
+function flushAudioQueue() {
+  if (!audioUnlockQueue.length) return;
+  const tasks = audioUnlockQueue.splice(0, audioUnlockQueue.length);
+  for (const task of tasks) {
+    try {
+      task();
+    } catch (_) {}
+  }
+}
+
+if (!audioReady && typeof window !== 'undefined') {
+  const unlock = () => {
+    audioReady = true;
+    flushAudioQueue();
+  };
+  window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+  window.addEventListener('keydown', unlock, { once: true });
+}
+
+function onAudioReady(callback) {
+  if (typeof callback !== 'function') return;
+  if (audioReady) {
+    try {
+      callback();
+    } catch (_) {}
+  } else {
+    audioUnlockQueue.push(callback);
+  }
+}
+
 export function boot() {
   const canvas = document.getElementById('game');
   if (!canvas) return console.error('[shooter] missing #game canvas');
@@ -39,7 +83,7 @@ export function boot() {
     LOOT: 1 << 4,
   };
 
-  const DATA_PATH = './data/game-data.json';
+  const DATA_PATH = DATA_URL;
 
   const defaultGameData = {
     armorTypes: {
@@ -265,15 +309,15 @@ export function boot() {
 
   const SLUG = 'shooter';
   const ASSET_PATHS = {
-    bullet: '../../assets/sprites/bullet.png',
+    bullet: resolveAsset('../../assets/sprites/bullet.png'),
     enemies: [
-      '../../assets/sprites/enemy1.png',
-      '../../assets/sprites/enemy2.png',
+      resolveAsset('../../assets/sprites/enemy1.png'),
+      resolveAsset('../../assets/sprites/enemy2.png'),
     ],
-    explosion: '../../assets/effects/explosion.png',
-    portal: '../../assets/effects/portal.png',
-    shoot: '../../assets/audio/laser.wav',
-    gameover: '../../assets/audio/gameover.wav',
+    explosion: resolveAsset('../../assets/effects/explosion.png'),
+    portal: resolveAsset('../../assets/effects/portal.png'),
+    shoot: resolveAsset('../../assets/audio/laser.wav'),
+    gameover: resolveAsset('../../assets/audio/gameover.wav'),
   };
 
   const sprites = {
@@ -284,8 +328,8 @@ export function boot() {
   };
 
   const PARALLAX_LAYERS = [
-    { key: 'layer1', src: '/assets/backgrounds/parallax/space_layer1.png', speed: 40, alpha: 0.85 },
-    { key: 'layer2', src: '/assets/backgrounds/parallax/space_layer2.png', speed: 80, alpha: 1 },
+    { key: 'layer1', src: resolveAsset('/assets/backgrounds/parallax/space_layer1.png'), speed: 40, alpha: 0.85 },
+    { key: 'layer2', src: resolveAsset('/assets/backgrounds/parallax/space_layer2.png'), speed: 80, alpha: 1 },
   ];
   const parallaxLayers = PARALLAX_LAYERS.map(config => ({
     key: config.key,
@@ -333,29 +377,30 @@ export function boot() {
     return output;
   }
 
-  function loadGameData() {
+  async function loadGameData() {
     if (typeof fetch !== 'function') {
       dataLoaded = true;
-      return Promise.resolve(gameData);
+      dataLoadError = null;
+      return gameData;
     }
-    return fetch(DATA_PATH, { cache: 'no-store' })
-      .then(response => {
-        if (!response.ok) throw new Error(`Failed to load ${DATA_PATH}: ${response.status}`);
-        return response.json();
-      })
-      .then(json => {
-        if (json && typeof json === 'object') {
-          gameData = mergeGameData(defaultGameData, json);
-        }
-        dataLoaded = true;
-        return gameData;
-      })
-      .catch(error => {
-        console.warn('[shooter] failed to load game data', error);
-        dataLoaded = true;
-        dataLoadError = error;
-        return gameData;
-      });
+    dataLoaded = false;
+    dataLoadError = null;
+    try {
+      const response = await fetch(DATA_PATH, { cache: 'no-store' });
+      if (!response?.ok) {
+        throw new Error(`HTTP ${response?.status ?? 'error'}`);
+      }
+      const json = await response.json();
+      if (json && typeof json === 'object') {
+        gameData = mergeGameData(defaultGameData, json);
+      }
+    } catch (error) {
+      console.error('[shooter] failed to load game data', error);
+      dataLoadError = error;
+    } finally {
+      dataLoaded = true;
+    }
+    return gameData;
   }
 
   function isImageReady(image) {
@@ -528,17 +573,39 @@ export function boot() {
   }
 
   function createSoundPlayer(src, volume = 0.6) {
-    let base = getCachedAudio(src);
-    if (!base) {
-      loadAudio(src, { slug: SLUG }).then(audio => { base = audio; }).catch(() => {});
-    }
+    const resolved = resolveAsset(src);
+    let base = getCachedAudio(resolved);
+
+    onAudioReady(() => {
+      if (getCachedAudio(resolved)) {
+        base = getCachedAudio(resolved);
+        return;
+      }
+      loadAudio(resolved, { slug: SLUG }).then(audio => {
+        base = audio;
+      }).catch(() => {});
+    });
+
     return () => {
-      const audio = base || getCachedAudio(src);
-      if (!audio) return;
+      if (!audioReady) return;
+      let audio = base || getCachedAudio(resolved);
+      if (!audio) {
+        if (typeof Audio === 'undefined') return;
+        try {
+          audio = new Audio(resolved);
+          audio.preload = 'auto';
+          base = audio;
+        } catch (_) {
+          return;
+        }
+      }
       try {
         const instance = audio.cloneNode(true);
         instance.volume = volume;
-        instance.play().catch(() => {});
+        const playPromise = instance.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {});
+        }
       } catch (_) {}
     };
   }

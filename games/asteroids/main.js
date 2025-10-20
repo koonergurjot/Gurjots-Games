@@ -46,6 +46,24 @@ const markFirstFrame = (() => {
 
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 
+function resolveAsset(path) {
+  if (!path) return path;
+  try {
+    return new URL(path, import.meta.url).href;
+  } catch (_) {
+    return path;
+  }
+}
+
+let audioReady = typeof window === 'undefined';
+if (!audioReady && typeof window !== 'undefined') {
+  const unlock = () => {
+    audioReady = true;
+  };
+  window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+  window.addEventListener('keydown', unlock, { once: true });
+}
+
 let activeGame = null;
 let bootInProgress = false;
 let bootErrorUi = null;
@@ -706,15 +724,34 @@ function makeAsteroidShape(radius) {
 }
 
 function createAudio(src, volume = 0.6) {
-  const audio = new Audio(src);
-  audio.volume = volume;
-  audio.preload = 'auto';
-  return () => {
+  const resolved = resolveAsset(src);
+  let template = null;
+
+  function ensureTemplate() {
+    if (template || typeof Audio === 'undefined') return template;
     try {
-      const instance = audio.cloneNode(true);
+      const audio = new Audio(resolved);
+      audio.preload = 'auto';
+      audio.volume = volume;
+      template = audio;
+    } catch (_) {
+      template = null;
+    }
+    return template;
+  }
+
+  return () => {
+    if (!audioReady) return;
+    const base = ensureTemplate();
+    if (!base) return;
+    try {
+      const instance = base.cloneNode(true);
       instance.volume = volume;
-      instance.play().catch(() => {});
-    } catch (err) {
+      const playPromise = instance.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {});
+      }
+    } catch (_) {
       // ignore playback failures (likely due to user gesture requirements)
     }
   };

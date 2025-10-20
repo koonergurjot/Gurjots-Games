@@ -113,10 +113,32 @@ const statusEl = document.getElementById('status');
 const coordsEl = document.getElementById('coords');
 const thinkingEl = document.getElementById('thinking');
 const difficultyEl = document.getElementById('difficulty');
-const victorySound = typeof Audio !== 'undefined'
-  ? new Audio('../../assets/audio/victory.wav')
-  : null;
-if (victorySound) victorySound.preload = 'auto';
+const VICTORY_SOUND_URL = new URL('../../assets/audio/victory.wav', import.meta.url).href;
+let victorySound = null;
+let audioReady = typeof window === 'undefined';
+function ensureVictorySound() {
+  if (!audioReady || typeof Audio === 'undefined') return null;
+  if (!victorySound) {
+    try {
+      victorySound = new Audio(VICTORY_SOUND_URL);
+      victorySound.preload = 'auto';
+    } catch (err) {
+      victorySound = null;
+      return null;
+    }
+  }
+  return victorySound;
+}
+if (!audioReady && typeof window !== 'undefined') {
+  const unlock = () => {
+    audioReady = true;
+    ensureVictorySound();
+  };
+  window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+  window.addEventListener('keydown', unlock, { once: true });
+} else {
+  ensureVictorySound();
+}
 stage.style.position = 'relative';
 stage.appendChild(coordsEl);
 coordsEl.style.position = 'absolute';
@@ -698,10 +720,11 @@ function flipCamera() {
 const hudControls = mountHUD({
   onNew: () => {
     victoryPlayed = false;
-    if (victorySound) {
+    const audio = ensureVictorySound();
+    if (audio) {
       try {
-        victorySound.pause();
-        victorySound.currentTime = 0;
+        audio.pause();
+        audio.currentTime = 0;
       } catch (_) {}
     }
     gameOver = false;
@@ -982,10 +1005,11 @@ function endGame(text){
     statusEl.textContent = text;
     if (!victoryPlayed && /white wins/i.test(text)) {
       victoryPlayed = true;
-      if (victorySound) {
+      const audio = ensureVictorySound();
+      if (audio) {
         try {
-          victorySound.currentTime = 0;
-          const playback = victorySound.play();
+          audio.currentTime = 0;
+          const playback = audio.play();
           if (playback?.catch) playback.catch(() => {});
         } catch (err) {
           warn('chess3d', '[Chess3D] failed to play victory sound', err);
@@ -1068,10 +1092,11 @@ import('./ui/hud.js').then(({ addGameButtons }) => {
       moveList?.refresh();
       moveList?.setIndex(logic.historySAN().length);
       victoryPlayed = false;
-      if (victorySound) {
+      const audio = ensureVictorySound();
+      if (audio) {
         try {
-          victorySound.pause();
-          victorySound.currentTime = 0;
+          audio.pause();
+          audio.currentTime = 0;
         } catch (_) {}
       }
     });

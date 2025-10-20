@@ -473,6 +473,11 @@ async function boot(){
   try {
     const { games } = await loadGameCatalog();
     const list = Array.isArray(games) ? games : [];
+    if (!list.length) {
+      GRID?.innerHTML = '<p>No games available.</p>';
+      gamesReady = true;
+      return;
+    }
     GAME_LOOKUP.clear();
     allGames = list.map(g => {
       const slug = g.slug || g.id || toSlug(g.name);

@@ -183,7 +183,7 @@ scene.fog = new THREE.Fog(0x0e0f12, 10, 60);
 
 const texLoader = new THREE.TextureLoader();
 
-const floorTexture = texLoader.load('../../assets/sprites/maze3d/floor.png');
+const floorTexture = texLoader.load(new URL('../../assets/sprites/maze3d/floor.png', import.meta.url).href);
 floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
 floorTexture.center.set(0.5, 0.5);
 floorTexture.rotation = Math.PI / 2;
