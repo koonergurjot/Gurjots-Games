@@ -144,8 +144,11 @@ export class Router {
   }
 
   commitHistory(path, mode) {
+    const current = this.buildFullPath(location.pathname + location.search + location.hash);
     if (mode === 'push') {
-      history.pushState({}, '', path);
+      if (path !== current) {
+        history.pushState({}, '', path);
+      }
     } else if (mode === 'replace') {
       history.replaceState({}, '', path);
     }
