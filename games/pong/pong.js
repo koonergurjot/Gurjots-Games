@@ -117,6 +117,19 @@ import "./pauseOverlay.js";
       pulse: { color: [255, 110, 220], alpha: 0.52 },
     },
   };
+
+  const markFirstFrame = (() => {
+    let done = false;
+    return () => {
+      if (done) return;
+      done = true;
+      try {
+        window.ggFirstFrame?.();
+      } catch (_) {
+        /* noop */
+      }
+    };
+  })();
   const SPIN_ACCEL = SPIN_CONFIG.curveAccel;
   const SPIN_DECAY = SPIN_CONFIG.decay;
   const TOUCH_DEBOUNCE_MS = 18;
@@ -1839,6 +1852,7 @@ import "./pauseOverlay.js";
     ctx.restore();
 
     updateDebugHud();
+    markFirstFrame();
   }
 
   function ensureDebugHud(){

@@ -11,6 +11,19 @@ import { pushEvent } from "/games/common/diag-adapter.js";
 import { gameEvent } from '../../shared/telemetry.js';
 import * as logic from "./logic.js";
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 async function loadCatalog() {
   const urls = ['/games.json', '/public/games.json'];
   let lastError = null;
@@ -897,6 +910,7 @@ async function boot(){
     }
     updatePieces(performance.now());
     renderer.render(scene, camera);
+    markFirstFrame();
     renderLoopId = requestAnimationFrame(renderFrame);
   };
   startRenderLoopImpl = () => {

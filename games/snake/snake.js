@@ -8,6 +8,19 @@ import '../common/diagnostics/adapter.js';
 import { gameEvent } from '../../shared/telemetry.js';
 import { initSnakeUI } from './ui.js';
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
 const bootStatus = (() => {
@@ -2061,6 +2074,7 @@ function draw() {
   }
 
   updateDebugPanel();
+  markFirstFrame();
 }
 
 function saveScore(s) {
