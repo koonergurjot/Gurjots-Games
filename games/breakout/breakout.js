@@ -1,5 +1,6 @@
 import { GameEngine } from '../../shared/gameEngine.js';
 import { getLevel } from './levels.js';
+import { initHud, updateHudStatus, updateHudPowerups, updateMissionHud } from './ui.js';
 import { PowerUpEngine, getPowerUpDefinition, selectPowerUp, POWERUP_DEFINITIONS } from './powerups.js';
 import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { showToast, showModal, clearHud } from '../../shared/ui/hud.js';
@@ -280,6 +281,14 @@ const PARALLAX_PALETTES={
     layer1:{color:'#38bdf8',alpha:0.5},
     layer2:{color:'#0ea5e9',alpha:0.6}
   },
+  sticky:{
+    layer1:{color:'#facc15',alpha:0.6},
+    layer2:{color:'#fb923c',alpha:0.65}
+  },
+  shrink:{
+    layer1:{color:'#0ea5e9',alpha:0.55},
+    layer2:{color:'#6366f1',alpha:0.65}
+  },
   combo:{
     layer1:{color:'#14f195',alpha:0.6},
     layer2:{color:'#facc15',alpha:0.7}
@@ -539,6 +548,158 @@ const MAX_BALL_SPEED=860;
 const BALL_PADDLE_MAX_ANGLE=Math.PI*0.35;
 const COLLISION_EPSILON=1e-4;
 
+const MIN_PADDLE_WIDTH=60;
+const MAX_PADDLE_WIDTH=260;
+const widthEffects=new Map();
+const timedPowerups=new Map();
+const POWERUP_LABELS={
+  EXPAND:'Widen Paddle',
+  LASER:'Paddle Laser',
+  LASER_MULTI:'Laser Barrage',
+  MULTI:'Multi-ball',
+  SLOW:'Time Dilation',
+  STICKY:'Sticky Paddle',
+  SHRINK:'Narrow Paddle',
+  NARROW:'Narrow Paddle'
+};
+const POWERUP_TYPE_LABELS={
+  enlarge:'Widen Paddle',
+  slow:'Time Dilation',
+  multi:'Multi-ball',
+  laser:'Paddle Laser',
+  combo:'Combo Surge',
+  sticky:'Sticky Paddle',
+  narrow:'Narrow Paddle',
+  shrink:'Narrow Paddle'
+};
+
+let stickyActive=0;
+let goldBricksTotal=0;
+let goldBricksRemaining=0;
+let tripleBallActive=false;
+
+const missionState={
+  goldWall:{
+    id:'gold-wall',
+    label:'Clear a gold wall',
+    complete:false,
+    target:0,
+    progress:0
+  },
+  tripleSurvivor:{
+    id:'triple-survivor',
+    label:'Survive 60s with triple ball',
+    complete:false,
+    target:60,
+    timer:0
+  }
+};
+
+function resetMissionState(){
+  missionState.goldWall.complete=false;
+  missionState.goldWall.target=0;
+  missionState.goldWall.progress=0;
+  missionState.tripleSurvivor.complete=false;
+  missionState.tripleSurvivor.timer=0;
+}
+
+function describePowerup(def){
+  if(!def)return 'Power-up';
+  const byId=def.id?POWERUP_LABELS[def.id]:null;
+  if(byId)return byId;
+  const typeKey=typeof def.type==='string'?def.type.toLowerCase():'';
+  const typeLabel=typeKey?POWERUP_TYPE_LABELS[typeKey]:null;
+  if(typeLabel)return typeLabel;
+  return def.name||def.id||'Power-up';
+}
+
+function beginTimedPower(def){
+  if(!def)return;
+  const duration=Number(def.duration||0);
+  if(!(duration>0)){timedPowerups.delete(def.id);return;}
+  const label=describePowerup(def);
+  const entry=timedPowerups.get(def.id)||{id:def.id,label,duration,remaining:duration};
+  entry.duration=duration;
+  entry.remaining=duration;
+  entry.label=label;
+  timedPowerups.set(def.id,entry);
+}
+
+function endTimedPower(id){
+  if(!id)return;
+  timedPowerups.delete(id);
+}
+
+function tickTimedPowerups(dt){
+  if(!timedPowerups.size||!(dt>0))return;
+  for(const entry of timedPowerups.values()){
+    entry.remaining=Math.max(0,entry.remaining-dt);
+  }
+}
+
+function getPowerupSnapshot(){
+  if(!timedPowerups.size)return [];
+  return Array.from(timedPowerups.values()).sort((a,b)=>a.remaining-b.remaining);
+}
+
+function getMissionSnapshot(){
+  const missions=[];
+  const goldTarget=missionState.goldWall.target||0;
+  const goldProgress=missionState.goldWall.complete
+    ? goldTarget
+    : Math.max(0,Math.min(goldTarget,missionState.goldWall.progress||0));
+  missions.push({
+    id:missionState.goldWall.id,
+    label:missionState.goldWall.label,
+    complete:missionState.goldWall.complete,
+    progress:goldProgress,
+    target:goldTarget,
+    unit:' bricks'
+  });
+  const tripleTarget=missionState.tripleSurvivor.target||60;
+  const tripleProgress=missionState.tripleSurvivor.complete
+    ? tripleTarget
+    : Math.max(0,Math.min(tripleTarget,missionState.tripleSurvivor.timer||0));
+  missions.push({
+    id:missionState.tripleSurvivor.id,
+    label:missionState.tripleSurvivor.label,
+    complete:missionState.tripleSurvivor.complete,
+    progress:tripleProgress,
+    target:tripleTarget,
+    unit:'s'
+  });
+  return missions;
+}
+
+function completeMission(key,message){
+  const mission=missionState[key];
+  if(!mission||mission.complete)return;
+  mission.complete=true;
+  if(typeof message==='string'&&message){
+    showToast(message);
+  }
+}
+
+function refreshGoldMissionTarget(){
+  missionState.goldWall.target=goldBricksTotal;
+  if(missionState.goldWall.complete){
+    missionState.goldWall.progress=goldBricksTotal;
+    return;
+  }
+  missionState.goldWall.progress=Math.max(0,goldBricksTotal-goldBricksRemaining);
+}
+
+function updateHudPanels(elapsedSeconds){
+  updateHudStatus({
+    score,
+    lives,
+    level,
+    time:Math.max(0,Number.isFinite(elapsedSeconds)?elapsedSeconds:0)
+  });
+  updateHudPowerups(getPowerupSnapshot());
+  updateMissionHud(getMissionSnapshot());
+}
+
 let c=document.getElementById('b');
 if(!c){
   const fallback=document.getElementById('gameCanvas');
@@ -584,12 +745,56 @@ let bricks=[];let score=0,lives=3,level=1;let bestLevel=parseInt(localStorage.ge
 let telemetryGameOverSent=false;
 let currentLevelData=null;let levelDropChance=0.2;let levelDropWeights=null;
 const scoreNode=document.getElementById('score');
+
+function recomputePaddleWidth(){
+  let multiplier=1;
+  let maxWidth=MAX_PADDLE_WIDTH;
+  let minWidth=MIN_PADDLE_WIDTH;
+  for(const effect of widthEffects.values()){
+    if(effect&&Number.isFinite(effect.multiplier)){
+      multiplier*=effect.multiplier;
+    }
+    if(effect&&Number.isFinite(effect.maxWidth)&&effect.maxWidth>0){
+      maxWidth=Math.min(maxWidth,effect.maxWidth);
+    }
+    if(effect&&Number.isFinite(effect.minWidth)&&effect.minWidth>0){
+      minWidth=Math.max(minWidth,effect.minWidth);
+    }
+  }
+  const desired=paddleBaseW*multiplier;
+  const width=Math.max(minWidth,Math.min(maxWidth,desired));
+  const center=paddle.x+paddle.w/2;
+  paddle.w=width;
+  paddle.x=Math.max(0,Math.min(c.width-width,center-width/2));
+}
+
+function releaseBall(entity){
+  if(!entity||!entity.stuck)return;
+  entity.stuck=false;
+  entity.stuckBySticky=false;
+  entity.stickyOffset=null;
+  if(!Number.isFinite(entity.vx))entity.vx=0;
+  if(!Number.isFinite(entity.vy))entity.vy=0;
+  if(Math.abs(entity.vx)<=1e-3&&Math.abs(entity.vy)<=1e-3){
+    const baseSpeed=Math.max(MIN_BALL_SPEED,entity.speed||MIN_BALL_SPEED);
+    entity.vx=0;
+    entity.vy=-baseSpeed;
+  }
+  normaliseBallVelocity(entity);
+}
+
+function getActiveBallCount(){
+  return 1+(Array.isArray(multiBalls)?multiBalls.length:0);
+}
 function syncScore(){
   if(!scoreNode)return;
   scoreNode.textContent=String(score); // Keep the shell score display in sync.
   scoreNode.dataset.gameScore=String(score);
 }
 syncScore();
+resetMissionState();
+initHud();
+updateHudPanels(0);
 let paused=false;let pauseToast=null;let gameOverShown=false;
 function togglePause(){
   paused=!paused;
@@ -609,6 +814,8 @@ function loadLevel(){
   parallaxLayers.forEach(layer=>{ if(layer) layer.offset=0; });
   triggerParallaxPalette('default',{duration:0.8,hold:0});
   bricks=[];
+  goldBricksTotal=0;
+  goldBricksRemaining=0;
   currentLevelData=getLevel(level-1);
   const lvl=currentLevelData;
   if(lvl){
@@ -644,6 +851,7 @@ function loadLevel(){
       if(!material)continue;
       const hp=Math.max(1,material.hp||1);
       const variantIndex=Number.isFinite(material.variant)?material.variant:(BRICK_TILESET.variants.length?((r+i)%BRICK_TILESET.variants.length):0);
+      const brickType=(material.type||'normal').toLowerCase();
       bricks.push({
         x:BRICK_PADDING_X+i*(bw+BRICK_SPACING),
         y:BRICK_TOP+r*BRICK_ROW_HEIGHT,
@@ -658,14 +866,30 @@ function loadLevel(){
         dropMultiplier:material.powerMultiplier||1,
         dropWeights:material.weights||null,
         alive:true,
+        type:brickType,
         surfaceStyle:createBrickSurfaceStyle()
       });
+      if(brickType==='gold'){
+        goldBricksTotal++;
+        goldBricksRemaining++;
+      }
     }
   }
+  refreshGoldMissionTarget();
 }
 
 function resetBall(){
-  ball={x:paddle.x+paddle.w/2,y:paddle.y-20,vx:240*(Math.random()<0.5?-1:1),vy:-360,r:8,stuck:true,speed:(7+(level-1)*.5)*60};
+  ball={
+    x:paddle.x+paddle.w/2,
+    y:paddle.y-20,
+    vx:240*(Math.random()<0.5?-1:1),
+    vy:-360,
+    r:8,
+    stuck:true,
+    speed:(7+(level-1)*.5)*60,
+    stickyOffset:null,
+    stuckBySticky:false
+  };
   paddlePrevX=paddle.x;
   paddleVelocity=0;
   resetTrailBuffer();
@@ -673,6 +897,9 @@ function resetBall(){
 
 loadLevel();
 resetBall();
+refreshGoldMissionTarget();
+updateHudPanels(0);
+gameEvent('play',{ slug: GAME_ID });
 
 c.addEventListener('pointermove',e=>{
   const r=c.getBoundingClientRect();
@@ -680,33 +907,66 @@ c.addEventListener('pointermove',e=>{
   const mx=(e.clientX-r.left)*scaleX;
   const center=Math.max(paddle.w/2,Math.min(c.width-paddle.w/2,mx));
   paddle.x=center-paddle.w/2;
-  if(ball.stuck){ball.x=center;}
+  if(ball.stuck){
+    const offset=typeof ball.stickyOffset==='number'
+      ? Math.max(ball.r,Math.min(paddle.w-ball.r,ball.stickyOffset))
+      : paddle.w/2;
+    ball.x=Math.max(ball.r,Math.min(c.width-ball.r,paddle.x+offset));
+  }
+  if(Array.isArray(multiBalls)){
+    for(const m of multiBalls){
+      if(!m||!m.stuck)continue;
+      const offset=typeof m.stickyOffset==='number'
+        ? Math.max(m.r,Math.min(paddle.w-m.r,m.stickyOffset))
+        : m.r;
+      m.x=Math.max(m.r,Math.min(c.width-m.r,paddle.x+offset));
+    }
+  }
 });
-c.addEventListener('pointerdown',()=>{if(ball.stuck)ball.stuck=false});
+c.addEventListener('pointerdown',()=>{
+  if(ball.stuck)releaseBall(ball);
+  if(Array.isArray(multiBalls)){
+    for(const m of multiBalls){
+      if(m.stuck)releaseBall(m);
+    }
+  }
+});
   function resetMatch(){
     powerEngine.reset();
+    timedPowerups.clear();
+    widthEffects.clear();
+    stickyActive=0;
+    laserActive=0;
+    laserPulseInterval=BASE_LASER_INTERVAL;
+    lasers.length=0;
+    multiBalls.length=0;
+    powerups.length=0;
+    paddle.w=paddleBaseW;
+    paddle.x=c.width/2-paddleBaseW/2;
+    recomputePaddleWidth();
+    resetMissionState();
     score=0;lives=3;level=1;
     syncScore();
     loadLevel();resetBall();
     runStart=performance.now();endTime=null;submitted=false;
     telemetryGameOverSent=false;
     gameEvent('play', {
-      slug: GAME_ID,
-      meta: {
-        level,
-      },
+      slug: GAME_ID
     });
     clearHud();gameOverShown=false;
-  activeEffects.length=0;effectPool.length=0;
-  resetTrailBuffer();
-  lasers.length=0;
-  multiBalls.length=0;
-  powerups.length=0;
-}
+    activeEffects.length=0;effectPool.length=0;
+    resetTrailBuffer();
+    refreshGoldMissionTarget();
+    updateHudPanels(0);
+  }
 
 addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft')paddle.x=Math.max(0,paddle.x-24);
   if(e.key==='ArrowRight')paddle.x=Math.min(c.width-paddle.w,paddle.x+24);
+  if(e.code==='Space'||e.key===' '){
+    releaseBall(ball);
+    if(Array.isArray(multiBalls))multiBalls.forEach(releaseBall);
+  }
   if(e.key.toLowerCase()==='r'&&lives<=0){
     resetMatch();
   }
@@ -762,6 +1022,8 @@ function spawnMultiBallSplit(source,count){
       vy:Math.sin(ang)*speed,
       r:source.r,
       stuck:false,
+      stickyOffset:null,
+      stuckBySticky:false,
       speed,
       born:performance.now()
     });
@@ -777,21 +1039,24 @@ function applySinglePower(def){
     const maxWidth=def.maxWidth&&def.maxWidth>0?def.maxWidth:240;
     powerEngine.activate(def.id,def.duration||8,
       ()=>{
-        paddle.w=Math.min(Math.max(paddle.w, paddleBaseW)*multiplier,maxWidth);
-        paddle.x=Math.min(Math.max(0,paddle.x),c.width-paddle.w);
+        widthEffects.set(def.id,{multiplier,maxWidth});
+        recomputePaddleWidth();
       },
       ()=>{
-        paddle.w=Math.max(paddleBaseW,Math.min(paddle.w/multiplier,maxWidth));
-        paddle.x=Math.min(Math.max(0,paddle.x),c.width-paddle.w);
+        widthEffects.delete(def.id);
+        recomputePaddleWidth();
+        endTimedPower(def.id);
       }
     );
+    beginTimedPower(def);
     triggerParallaxPalette('boost',{duration:0.45,hold:Math.max(2,def.duration||6)});
   }else if(type==='slow'){
     const scale=def.speedScale&&def.speedScale>0?def.speedScale:0.7;
     powerEngine.activate(def.id,def.duration||6,
       ()=>{ball.speed*=scale;multiBalls.forEach(m=>{m.speed*=scale;});},
-      ()=>{const inv=scale?1/scale:1;ball.speed*=inv;multiBalls.forEach(m=>{m.speed*=inv;});}
+      ()=>{const inv=scale?1/scale:1;ball.speed*=inv;multiBalls.forEach(m=>{m.speed*=inv;});endTimedPower(def.id);}
     );
+    beginTimedPower(def);
     triggerParallaxPalette('slow',{duration:0.45,hold:Math.max(2,def.duration||6)});
   }else if(type==='multi'){
     const count=Math.max(1,Math.round(def.count||2));
@@ -800,9 +1065,35 @@ function applySinglePower(def){
   }else if(type==='laser'){
     powerEngine.activate(def.id,def.duration||5,
       ()=>{laserActive++;laserPulseInterval=Math.max(0.12,def.pulseInterval||BASE_LASER_INTERVAL);laserTimer=0;},
-      ()=>{laserActive=Math.max(0,laserActive-1);if(laserActive===0){laserPulseInterval=BASE_LASER_INTERVAL;}}
+      ()=>{laserActive=Math.max(0,laserActive-1);if(laserActive===0){laserPulseInterval=BASE_LASER_INTERVAL;}endTimedPower(def.id);}
     );
+    beginTimedPower(def);
     triggerParallaxPalette('laser',{duration:0.4,hold:Math.max(2,def.duration||5)});
+  }else if(type==='sticky'){
+    const duration=Math.max(2,def.duration||6);
+    powerEngine.activate(def.id,duration,
+      ()=>{stickyActive++;},
+      ()=>{stickyActive=Math.max(0,stickyActive-1);endTimedPower(def.id);}
+    );
+    beginTimedPower({...def,duration});
+    triggerParallaxPalette('sticky',{duration:0.45,hold:Math.max(2,duration)});
+  }else if(type==='narrow'||type==='shrink'){
+    const multiplier=Math.max(0.35,def.widthMultiplier&&def.widthMultiplier>0?def.widthMultiplier:0.7);
+    const duration=Math.max(2,def.duration||7);
+    const minWidth=Math.max(MIN_PADDLE_WIDTH*multiplier,MIN_PADDLE_WIDTH*0.5);
+    powerEngine.activate(def.id,duration,
+      ()=>{
+        widthEffects.set(def.id,{multiplier,maxWidth:MAX_PADDLE_WIDTH,minWidth});
+        recomputePaddleWidth();
+      },
+      ()=>{
+        widthEffects.delete(def.id);
+        recomputePaddleWidth();
+        endTimedPower(def.id);
+      }
+    );
+    beginTimedPower({...def,duration});
+    triggerParallaxPalette('shrink',{duration:0.45,hold:Math.max(2,duration)});
   }else if(type==='combo'){
     triggerParallaxPalette('combo',{duration:0.6,hold:Math.max(2.5,def.duration||6)});
   }
@@ -855,8 +1146,20 @@ function spawnEffect(type,x,y,opts={}){
   activeEffects.push(fx);
 }
 
-function damageBrick(brick,impact){
+function damageBrick(brick,impact,options={}){
   if(!brick||brick.hp<=0)return false;
+  const brickType=(brick.type||brick.material?.type||'normal').toLowerCase();
+  if(brickType==='gold'){
+    const allowLaser=Boolean(options.allowLaser);
+    const ballCount=Number.isFinite(options.ballCount)?options.ballCount:getActiveBallCount();
+    if(!allowLaser && ballCount<3){
+      const hitX=impact?.x ?? (brick.x+brick.w/2);
+      const hitY=impact?.y ?? (brick.y+brick.h/2);
+      spawnEffect('spark',hitX,hitY,{scale:Math.max(0.4,Math.min(0.85,brick.w/90)),duration:0.3,alpha:0.9});
+      playSound('hit');
+      return false;
+    }
+  }
   brick.hp=Math.max(0,brick.hp-1);
   const destroyed=brick.hp<=0;
   const centerX=brick.x+brick.w/2;
@@ -879,6 +1182,16 @@ function damageBrick(brick,impact){
     if(typeof GG?.addXP==='function')GG.addXP(1);
     spawnEffect('explosion',centerX,centerY,{scale:fxScale,duration:0.45});
     maybeSpawnPowerUp(brick);
+    if(brickType==='gold'){
+      goldBricksRemaining=Math.max(0,goldBricksRemaining-1);
+      if(!missionState.goldWall.complete){
+        missionState.goldWall.progress=Math.max(0,goldBricksTotal-goldBricksRemaining);
+        if(goldBricksTotal>0&&goldBricksRemaining===0){
+          completeMission('goldWall','Mission complete: Clear a gold wall.');
+          missionState.goldWall.progress=goldBricksTotal;
+        }
+      }
+    }
     if(bossBrick){
       triggerParallaxPalette('boss',{duration:0.6,hold:2});
     }
@@ -1138,13 +1451,27 @@ function applyPaddleBounce(entity,collision){
   entity.y=paddle.y-(entity.r||0)-COLLISION_EPSILON;
   spawnEffect('spark',contactX,paddle.y,{scale:0.8,duration:0.3});
   playSound('hit');
+  if(stickyActive>0){
+    const offset=Math.max(entity.r||0,Math.min(paddle.w-(entity.r||0),contactX-paddle.x));
+    entity.stuck=true;
+    entity.stuckBySticky=true;
+    entity.stickyOffset=isFinite(offset)?offset:Math.max(entity.r||0,paddle.w/2);
+  }else{
+    entity.stuck=false;
+    entity.stuckBySticky=false;
+    entity.stickyOffset=null;
+  }
 }
 
 function handleCollision(entity,collision){
   if(!collision)return;
   if(collision.type==='brick'&&collision.target){
     reflectVelocity(entity,collision.normal||{x:0,y:-1});
-    damageBrick(collision.target,{x:collision.contactX,y:collision.contactY});
+    damageBrick(collision.target,{x:collision.contactX,y:collision.contactY},{
+      source:'ball',
+      ballCount:getActiveBallCount(),
+      allowLaser:laserActive>0
+    });
   }else if(collision.type==='paddle'){
     applyPaddleBounce(entity,collision);
   }else{
@@ -1188,9 +1515,19 @@ function step(dt){
   if(paused){
     paddleVelocity=0;
     paddlePrevX=paddle.x;
+    updateHudPanels(Math.max(0,((endTime||performance.now())-runStart)/1000));
     return;
   }
   powerEngine.update(dt);
+  tickTimedPowerups(dt);
+  if(stickyActive===0){
+    if(ball.stuck&&ball.stuckBySticky)releaseBall(ball);
+    if(Array.isArray(multiBalls)){
+      for(const m of multiBalls){
+        if(m&&m.stuck&&m.stuckBySticky)releaseBall(m);
+      }
+    }
+  }
 
   if(!Number.isFinite(dt)||dt<=0){
     paddleVelocity=0;
@@ -1200,10 +1537,12 @@ function step(dt){
   paddlePrevX=paddle.x;
 
   if(ball.stuck){
-    const center=clamp(paddle.x+paddle.w/2,ball.r,c.width-ball.r);
-    ball.x=center;
+    const offset=typeof ball.stickyOffset==='number'
+      ? Math.max(ball.r,Math.min(paddle.w-ball.r,ball.stickyOffset))
+      : paddle.w/2;
+    const destX=Math.max(ball.r,Math.min(c.width-ball.r,paddle.x+offset));
+    ball.x=destX;
     ball.y=paddle.y-ball.r-6;
-    normaliseBallVelocity(ball);
   }else{
     advanceBall(ball,dt);
   }
@@ -1244,11 +1583,45 @@ function step(dt){
 
   const survivors=[];
   for(const m of multiBalls){
+    if(m.stuck){
+      const offset=typeof m.stickyOffset==='number'
+        ? Math.max(m.r,Math.min(paddle.w-m.r,m.stickyOffset))
+        : m.r;
+      m.x=Math.max(m.r,Math.min(c.width-m.r,paddle.x+offset));
+      m.y=paddle.y-m.r-6;
+      survivors.push(m);
+      continue;
+    }
     advanceBall(m,dt);
     if(m.y>c.height+20)continue;
     survivors.push(m);
   }
   multiBalls=survivors;
+
+  const activeBallCount=getActiveBallCount();
+  if(activeBallCount>=3){
+    if(!tripleBallActive){
+      tripleBallActive=true;
+      gameEvent('score_event',{ slug: GAME_ID, name:'triple_ball' });
+    }
+    if(!missionState.tripleSurvivor.complete&&Number.isFinite(dt)&&dt>0){
+      missionState.tripleSurvivor.timer=Math.min(
+        missionState.tripleSurvivor.target,
+        missionState.tripleSurvivor.timer+dt
+      );
+      if(missionState.tripleSurvivor.timer>=missionState.tripleSurvivor.target){
+        completeMission('tripleSurvivor','Mission complete: Survive 60s with triple ball.');
+        missionState.tripleSurvivor.timer=missionState.tripleSurvivor.target;
+      }
+    }
+  }else{
+    if(tripleBallActive){
+      tripleBallActive=false;
+    }
+    if(!missionState.tripleSurvivor.complete){
+      missionState.tripleSurvivor.timer=0;
+    }
+  }
 
   if(laserActive>0){
     laserTimer-=dt;
@@ -1268,7 +1641,7 @@ function step(dt){
     for(const brick of bricks){
       if(brick.hp<=0)continue;
       if(beam.x>=brick.x&&beam.x<=brick.x+brick.w&&beam.y>=brick.y&&beam.y<=brick.y+brick.h){
-        damageBrick(brick,{x:beam.x,y:beam.y});
+        damageBrick(brick,{x:beam.x,y:beam.y},{source:'laser',allowLaser:true});
       }
     }
   }
@@ -1286,6 +1659,7 @@ function step(dt){
     loadLevel();
     resetBall();
   }
+  updateHudPanels(Math.max(0,((endTime||performance.now())-runStart)/1000));
 }
 
 function draw(){
