@@ -2,6 +2,7 @@ import { Controls } from '../../src/runtime/controls.js';
 import { startSessionTimer, endSessionTimer } from '../../shared/metrics.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { gameEvent } from '../../shared/telemetry.js';
+import { createShopUi } from './ui.js';
 
 const SLUG = 'asteroids';
 const TWO_PI = Math.PI * 2;
@@ -736,6 +737,8 @@ class AsteroidsGame {
     this.loop = this.loop.bind(this);
     this.handleVisibility = this.handleVisibility.bind(this);
     this.handleResize = this.handleResize.bind(this);
+    this.handleShopPurchase = this.handleShopPurchase.bind(this);
+    this.handleShopSkip = this.handleShopSkip.bind(this);
 
     this.width = BASE_WIDTH;
     this.height = BASE_HEIGHT;
@@ -751,6 +754,18 @@ class AsteroidsGame {
     this.bulletCooldown = 0;
     this.thrustTimer = 0;
     this.postedReady = false;
+    this.baseBulletCooldown = 0.18;
+    this.primaryFireCooldown = this.baseBulletCooldown;
+    this.shotsFired = 0;
+    this.shotsHit = 0;
+    this.lastAccuracy = 0;
+    this.tookDamage = false;
+    this.missionState = { wave10NoDamage: false, accuracy70: false };
+    this.speedBonus = 0;
+    this.accuracyBonus = 0;
+    this.shopActive = false;
+    this.pendingWave = null;
+    this.shop = null;
 
     this.wave = 1;
     this.waveConfig = DEFAULT_WAVE_CONFIG;
@@ -792,6 +807,14 @@ class AsteroidsGame {
     if (this.hud?.best) this.hud.best.textContent = String(this.bestScore);
     if (this.hud?.score) this.hud.score.textContent = '0';
     if (this.hud?.wave) this.hud.wave.textContent = String(this.wave);
+    if (this.hud?.accuracy) this.hud.accuracy.textContent = '--';
+
+    this.shop = createShopUi({
+      host: this.hud?.surface || (typeof document !== 'undefined' ? document.querySelector('.game-shell__surface') : null),
+      onPurchase: this.handleShopPurchase,
+      onSkip: this.handleShopSkip,
+    });
+    this.resetRunStats();
 
     this.resizeCanvas();
     this.starfield = this.createStarLayers();
@@ -801,8 +824,9 @@ class AsteroidsGame {
     }
 
     this.shipEntity = this.spawnShip();
+    this.applyPerkStats();
     this.updateLivesDisplay();
-    this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Press Start to play.');
+    this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Missions: Reach wave 10 without damage and keep accuracy at ≥70%. Press Start to play.');
 
     this.lastTime = performance.now();
     this.rafId = requestAnimationFrame(this.loop);
@@ -821,6 +845,7 @@ class AsteroidsGame {
     this.hud?.root?.remove?.();
     this.hud?.overlay?.remove?.();
     this.hud?.players?.remove?.();
+    this.shop?.root?.remove?.();
   }
 
   handleVisibility() {
@@ -859,12 +884,14 @@ class AsteroidsGame {
         best: { textContent: '0' },
         wave: { textContent: '1' },
         lives: { innerHTML: '' },
+        accuracy: { textContent: '--' },
         overlayTitle: { textContent: '' },
         overlayMessage: { textContent: '' },
         objectiveRow: { setAttribute() {}, removeAttribute() {} },
         objectiveValue: { textContent: '', style: {} },
         difficultySlider: { value: '0' },
         difficultyLabels: [],
+        surface: null,
       };
     }
 
@@ -889,6 +916,10 @@ class AsteroidsGame {
       <div class="asteroids-hud__row">
         <span class="asteroids-hud__label">Lives</span>
         <span class="asteroids-hud__lives" id="asteroids-lives"></span>
+      </div>
+      <div class="asteroids-hud__row">
+        <span class="asteroids-hud__label">Accuracy</span>
+        <span class="asteroids-hud__value" id="asteroids-accuracy">--</span>
       </div>
       <div class="asteroids-hud__row asteroids-hud__row--objective" data-objective-row hidden>
         <span class="asteroids-hud__label">Objective</span>
@@ -969,12 +1000,14 @@ class AsteroidsGame {
       best: hud.querySelector('#asteroids-best'),
       wave: hud.querySelector('#asteroids-wave'),
       lives: hud.querySelector('#asteroids-lives'),
+      accuracy: hud.querySelector('#asteroids-accuracy'),
       objectiveRow: hud.querySelector('[data-objective-row]'),
       objectiveValue: hud.querySelector('#asteroids-objective'),
       overlayTitle: overlay.querySelector('#asteroids-overlay-title'),
       overlayMessage: overlay.querySelector('#asteroids-overlay-message'),
       difficultySlider,
       difficultyLabels: difficultySpans,
+      surface,
     };
   }
 
@@ -995,6 +1028,202 @@ class AsteroidsGame {
         stars,
       };
     });
+  }
+
+  resetRunStats() {
+    this.shotsFired = 0;
+    this.shotsHit = 0;
+    this.lastAccuracy = 0;
+    this.tookDamage = false;
+    this.missionState = { wave10NoDamage: false, accuracy70: false };
+    if (this.hud?.accuracy) this.hud.accuracy.textContent = '--';
+  }
+
+  resetPerks() {
+    this.speedBonus = 0;
+    this.accuracyBonus = 0;
+    this.shopActive = false;
+    this.pendingWave = null;
+    if (this.shop?.hide) this.shop.hide();
+    this.applyPerkStats();
+  }
+
+  applyPerkStats() {
+    const baseMaxSpeed = this.tuning?.shipMaxSpeed ?? SHIP_BASE_MAX_SPEED;
+    const baseThrust = this.tuning?.shipThrust ?? SHIP_BASE_THRUST;
+    const baseTurn = this.tuning?.shipTurnSpeed ?? SHIP_BASE_TURN_SPEED;
+    this.shipMaxSpeed = baseMaxSpeed + this.speedBonus;
+    const ship = this.shipEntity != null ? getComponent(this.world, 'ship', this.shipEntity) : null;
+    if (ship) {
+      ship.thrust = baseThrust + this.speedBonus * 1.2;
+      ship.turnSpeed = baseTurn;
+    }
+    const reduction = this.accuracyBonus * 0.02;
+    const cooldown = Math.max(0.08, this.baseBulletCooldown - reduction);
+    this.primaryFireCooldown = cooldown;
+    this.bulletCooldown = Math.min(this.bulletCooldown, cooldown);
+  }
+
+  getAccuracyRatio() {
+    if (!this.shotsFired) return 0;
+    return clamp(this.shotsHit / this.shotsFired, 0, 1);
+  }
+
+  getAccuracyPercent() {
+    return this.getAccuracyRatio() * 100;
+  }
+
+  formatPercent(value) {
+    if (!Number.isFinite(value)) return '0%';
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? `${rounded.toFixed(0)}%` : `${rounded.toFixed(1)}%`;
+  }
+
+  getAccuracySummary(includeCounts = false) {
+    if (!this.shotsFired) {
+      return includeCounts ? 'No shots fired' : '--';
+    }
+    const percent = this.getAccuracyPercent();
+    const label = this.formatPercent(percent);
+    if (!includeCounts) return label;
+    return `${label} (${this.shotsHit}/${this.shotsFired})`;
+  }
+
+  updateAccuracyDisplay() {
+    const percent = this.getAccuracyPercent();
+    this.lastAccuracy = Number.isFinite(percent) ? Math.round(percent * 10) / 10 : 0;
+    if (this.hud?.accuracy) {
+      this.hud.accuracy.textContent = this.shotsFired ? this.formatPercent(percent) : '--';
+    }
+    this.checkAccuracyMission();
+  }
+
+  registerShotFired() {
+    this.shotsFired += 1;
+    gameEvent('score_event', {
+      slug: SLUG,
+      name: 'shot_fired',
+      value: this.shotsFired,
+    });
+    this.updateAccuracyDisplay();
+  }
+
+  registerShotHit() {
+    this.shotsHit += 1;
+    gameEvent('score_event', {
+      slug: SLUG,
+      name: 'shot_hit',
+      value: this.shotsHit,
+    });
+    this.updateAccuracyDisplay();
+  }
+
+  checkAccuracyMission() {
+    if (this.missionState?.accuracy70) return;
+    if (!this.shotsFired) return;
+    if (this.getAccuracyPercent() < 70) return;
+    this.missionState.accuracy70 = true;
+    gameEvent('score_event', {
+      slug: SLUG,
+      name: 'accuracy_70',
+      value: 1,
+    });
+  }
+
+  handleWaveCleared(clearedWave) {
+    if (clearedWave >= 10 && !this.tookDamage && !this.missionState.wave10NoDamage) {
+      this.missionState.wave10NoDamage = true;
+      gameEvent('score_event', {
+        slug: SLUG,
+        name: 'wave10_no_damage',
+        value: 1,
+      });
+    }
+
+    const nextWave = clearedWave + 1;
+    this.wave = nextWave;
+
+    if (clearedWave > 0 && clearedWave % 3 === 0) {
+      this.openShop(nextWave);
+      return;
+    }
+
+    this.spawnWave();
+  }
+
+  openShop(nextWave) {
+    if (!this.shop || typeof this.shop.show !== 'function') {
+      this.shopActive = false;
+      this.pendingWave = null;
+      this.spawnWave();
+      return;
+    }
+
+    this.shopActive = true;
+    this.pendingWave = nextWave;
+    this.specialWave = null;
+    this.refreshObjectiveHud();
+    if (this.hud?.wave) {
+      this.hud.wave.textContent = `${nextWave} • Shop`;
+    }
+    this.shop.show({
+      wave: nextWave,
+      accuracy: this.lastAccuracy,
+      shotsFired: this.shotsFired,
+      shotsHit: this.shotsHit,
+    });
+  }
+
+  closeShop() {
+    if (this.shop?.hide) {
+      this.shop.hide();
+    }
+    this.shopActive = false;
+    this.pendingWave = null;
+  }
+
+  beginNextWave() {
+    this.closeShop();
+    this.waveSpawnDelay = 0;
+    this.spawnWave();
+  }
+
+  handleShopPurchase(perkId) {
+    if (!this.shopActive) return;
+
+    switch (perkId) {
+      case 'shield':
+        this.lives = Math.min(this.lives + 1, 6);
+        this.updateLivesDisplay();
+        break;
+      case 'speed':
+        this.speedBonus = Math.min(this.speedBonus + 40, 200);
+        break;
+      case 'accuracy':
+        this.accuracyBonus = Math.min(this.accuracyBonus + 1, 5);
+        break;
+      default:
+        break;
+    }
+
+    this.applyPerkStats();
+    gameEvent('score_event', {
+      slug: SLUG,
+      name: 'shop_purchase',
+      value: 1,
+      meta: { item: perkId },
+    });
+    this.beginNextWave();
+  }
+
+  handleShopSkip() {
+    if (!this.shopActive) return;
+    gameEvent('score_event', {
+      slug: SLUG,
+      name: 'shop_skip',
+      value: 1,
+    });
+    this.beginNextWave();
   }
 
   createStar(width, height) {
@@ -1048,6 +1277,7 @@ class AsteroidsGame {
       ship.thrust = this.tuning.shipThrust;
       ship.turnSpeed = this.tuning.shipTurnSpeed;
     }
+    this.applyPerkStats();
     if (this.specialWave?.type === 'boss' && typeof this.specialWave.baseScore === 'number') {
       this.specialWave.score = Math.round(this.specialWave.baseScore * (this.tuning?.scoreScale ?? 1));
     } else if (this.specialWave?.type === 'objective') {
@@ -1579,6 +1809,7 @@ class AsteroidsGame {
     if (this.started && !this.paused) return;
     if (!this.started) {
       this.started = true;
+      this.resetRunStats();
       this.score = 0;
       this.hud.score.textContent = '0';
       this.hideOverlay();
@@ -1596,13 +1827,17 @@ class AsteroidsGame {
   }
 
   pause() {
-    if (this.paused || this.gameOver) return;
+    if (this.paused || this.gameOver || this.shopActive) return;
     this.paused = true;
-    this.showOverlay('Paused', 'Press Resume or Space to continue.');
+    const summary = this.getAccuracySummary(true);
+    const message = summary === 'No shots fired'
+      ? 'No shots fired yet. Press Resume or Space to continue.'
+      : `Accuracy ${summary}. Press Resume or Space to continue.`;
+    this.showOverlay('Paused', message);
   }
 
   resume() {
-    if (!this.paused || this.gameOver) return;
+    if (!this.paused || this.gameOver || this.shopActive) return;
     this.paused = false;
     this.hideOverlay();
   }
@@ -1610,6 +1845,8 @@ class AsteroidsGame {
   restart() {
     this.world = createWorld(this.width, this.height);
     this.shipEntity = this.spawnShip();
+    this.resetRunStats();
+    this.resetPerks();
     this.score = 0;
     this.hud.score.textContent = '0';
     this.wave = 1;
@@ -1629,7 +1866,7 @@ class AsteroidsGame {
     this.refreshObjectiveHud();
     this.updateDifficultyUi();
     this.hideOverlay();
-    this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Press Start to play.');
+    this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Missions: Reach wave 10 without damage and keep accuracy at ≥70%. Press Start to play.');
     this.endSession();
   }
 
@@ -1650,7 +1887,7 @@ class AsteroidsGame {
     const dt = clamp((now - this.lastTime) / 1000, 0, 0.12);
     this.lastTime = now;
 
-    if (!this.paused && !this.gameOver) {
+    if (!this.paused && !this.gameOver && !this.shopActive) {
       this.step(dt);
     }
 
@@ -1749,7 +1986,9 @@ class AsteroidsGame {
       if (!bulletPos || !bulletCol) continue;
       const radius = bulletCol.radius || 3;
       let hit = this.handleSpecialBulletHit(bulletPos, radius);
-      if (!hit) {
+      if (hit) {
+        this.registerShotHit();
+      } else {
         for (const rock of rocks) {
           if (!this.world.alive[rock]) continue;
           const rockPos = getComponent(this.world, 'position', rock);
@@ -1757,6 +1996,7 @@ class AsteroidsGame {
           if (distanceSquared(bulletPos.x, bulletPos.y, rockPos.x, rockPos.y) < (radius + rockCol.radius) ** 2) {
             hit = true;
             this.handleAsteroidHit(rock);
+            this.registerShotHit();
             break;
           }
         }
@@ -1808,15 +2048,17 @@ class AsteroidsGame {
   }
 
   advanceWave(dt) {
+    if (this.shopActive) return;
     if (!this.isWaveComplete()) return;
     this.waveSpawnDelay += dt;
     if (this.waveSpawnDelay < 1.5) return;
-    this.wave++;
+    this.waveSpawnDelay = 0;
+    const clearedWave = this.wave;
     gameEvent('level_up', {
       slug: SLUG,
-      level: this.wave,
+      level: clearedWave,
     });
-    this.spawnWave();
+    this.handleWaveCleared(clearedWave);
   }
 
   asteroidsRemaining() {
@@ -1895,7 +2137,7 @@ class AsteroidsGame {
   }
 
   firePrimary(pos, vel, angle) {
-    this.bulletCooldown = 0.18;
+    this.bulletCooldown = this.primaryFireCooldown;
     const entity = createEntity(this.world);
     const speed = 460;
     addComponent(this.world, 'position', entity, {
@@ -1914,6 +2156,7 @@ class AsteroidsGame {
     } catch (_) {
       /* ignore */
     }
+    this.registerShotFired();
   }
 
   shipDestroyed() {
@@ -1924,10 +2167,14 @@ class AsteroidsGame {
     const shipPos = getComponent(this.world, 'position', this.shipEntity);
     this.spawnExplosion(shipPos.x, shipPos.y, 2);
     this.lives = Math.max(0, this.lives - 1);
+    this.tookDamage = true;
     this.updateLivesDisplay();
     if (this.lives <= 0) {
       this.gameOver = true;
       this.paused = true;
+      if (this.shopActive) {
+        this.closeShop();
+      }
       this.endSession();
       const now = performance.now();
       const durationMs = Math.max(0, Math.round(now - (this.runStartTime || now)));
@@ -1937,6 +2184,7 @@ class AsteroidsGame {
         durationMs,
         meta: {
           wave: this.wave,
+          accuracy: this.lastAccuracy,
         },
       });
       gameEvent('lose', {
@@ -1946,7 +2194,11 @@ class AsteroidsGame {
           score: this.score,
         },
       });
-      this.showOverlay('Game Over', 'Press Restart to try again.');
+      const summary = this.getAccuracySummary(true);
+      const message = summary === 'No shots fired'
+        ? `Score ${this.score}. Press Restart to try again.`
+        : `Score ${this.score} • Accuracy ${summary}. Press Restart to try again.`;
+      this.showOverlay('Game Over', message);
     }
   }
 
