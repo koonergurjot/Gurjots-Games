@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alien Shooter FX Test</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: radial-gradient(circle at top, #121726 0%, #05060b 60%);
+        font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #dde6ff;
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        padding: 1.5rem;
+        gap: 1rem;
+      }
+      #game-wrapper {
+        width: min(960px, 100%);
+        aspect-ratio: 16 / 9;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(8, 13, 32, 0.45);
+        border: 1px solid rgba(80, 120, 220, 0.2);
+        overflow: hidden;
+        position: relative;
+        background: #05070f;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        cursor: crosshair;
+      }
+      .hint {
+        text-align: center;
+        font-size: 0.95rem;
+        color: rgba(220, 234, 255, 0.72);
+        max-width: 640px;
+        line-height: 1.4;
+      }
+      a {
+        color: #8fb9ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="game-wrapper">
+        <canvas id="game" width="960" height="540" aria-label="Alien shooter canvas"></canvas>
+      </div>
+      <p class="hint">
+        Move with WASD or arrow keys. Hold the mouse button to fire and watch the pooled
+        muzzle flashes. Tap <kbd>Space</kbd> or <kbd>E</kbd> for bigger explosions.
+      </p>
+    </main>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
