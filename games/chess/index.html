@@ -10,11 +10,63 @@
   <style>
     :root {
       color-scheme: dark;
+      --chess-bg: #050914;
+      --chess-text: #f4f7ff;
+      --chess-board-border: #243047;
+      --chess-board-backdrop: #0f172a;
+      --chess-board-shadow: rgba(7, 16, 33, 0.6);
+      --chess-panel-bg: rgba(12, 20, 40, 0.85);
+      --chess-panel-border: rgba(56, 72, 112, 0.8);
+      --chess-panel-shadow: rgba(7, 16, 33, 0.45);
+      --chess-panel-strong: #fefefe;
+      --chess-panel-muted: #a1accf;
+      --chess-panel-accent: #9bb3ff;
+      --chess-accent: #7dd3fc;
+      --chess-eval-positive: #ffe082;
+      --chess-eval-bg: rgba(9, 16, 32, 0.92);
+      --chess-eval-border: rgba(44, 60, 96, 0.8);
+      --chess-eval-fill: linear-gradient(180deg, rgba(148, 197, 255, 0.9) 0%, rgba(11, 29, 62, 0.95) 100%);
+      --chess-eval-track: linear-gradient(180deg, rgba(239, 246, 255, 0.9) 0%, rgba(9, 16, 32, 0.95) 100%);
+      --chess-eval-history-bg: rgba(6, 10, 22, 0.8);
+      --chess-eval-history-border: rgba(44, 60, 96, 0.6);
+      --chess-highlight-selection: rgba(80, 200, 255, 0.25);
+      --chess-highlight-target: rgba(80, 200, 255, 0.15);
+      --chess-highlight-last-move: rgba(255, 214, 0, 0.28);
+      --chess-highlight-hint-from: rgba(125, 211, 252, 0.35);
+      --chess-highlight-hint-to: rgba(56, 189, 248, 0.25);
+      --chess-highlight-check: rgba(248, 113, 113, 0.32);
+    }
+    [data-chess-theme="high-contrast"] {
+      --chess-bg: #000000;
+      --chess-text: #ffffff;
+      --chess-board-border: #f5f5f5;
+      --chess-board-backdrop: #050505;
+      --chess-board-shadow: rgba(255, 255, 255, 0.25);
+      --chess-panel-bg: #101010;
+      --chess-panel-border: #e5e5e5;
+      --chess-panel-shadow: rgba(255, 255, 255, 0.2);
+      --chess-panel-strong: #ffffff;
+      --chess-panel-muted: #d4d4d4;
+      --chess-panel-accent: #ffd166;
+      --chess-accent: #4ade80;
+      --chess-eval-positive: #ffd166;
+      --chess-eval-bg: #111111;
+      --chess-eval-border: #f5f5f5;
+      --chess-eval-fill: linear-gradient(180deg, rgba(74, 222, 128, 0.9) 0%, rgba(15, 118, 110, 0.95) 100%);
+      --chess-eval-track: linear-gradient(180deg, rgba(240, 240, 240, 0.9) 0%, rgba(20, 20, 20, 0.95) 100%);
+      --chess-eval-history-bg: rgba(20, 20, 20, 0.95);
+      --chess-eval-history-border: rgba(245, 245, 245, 0.65);
+      --chess-highlight-selection: rgba(102, 204, 255, 0.45);
+      --chess-highlight-target: rgba(102, 204, 255, 0.32);
+      --chess-highlight-last-move: rgba(255, 221, 89, 0.55);
+      --chess-highlight-hint-from: rgba(186, 230, 253, 0.6);
+      --chess-highlight-hint-to: rgba(125, 211, 252, 0.45);
+      --chess-highlight-check: rgba(255, 99, 132, 0.55);
     }
     body {
       margin: 0;
-      background: #050914;
-      color: #f4f7ff;
+      background: var(--chess-bg);
+      color: var(--chess-text);
       font-family: "Press Start 2P", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       letter-spacing: 0.01em;
     }
@@ -39,18 +91,49 @@
       align-items: center;
       gap: 16px;
     }
+    .chess-theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--chess-panel-border);
+      background: transparent;
+      color: var(--chess-text);
+      font-family: inherit;
+      font-size: 0.75rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    }
+    .chess-theme-toggle:hover {
+      transform: translateY(-1px);
+      border-color: var(--chess-accent);
+      color: var(--chess-accent);
+    }
+    .chess-theme-toggle[aria-pressed="true"] {
+      background: var(--chess-accent);
+      color: #041226;
+      border-color: var(--chess-accent);
+    }
+    .chess-theme-toggle:focus-visible {
+      outline: 2px solid var(--chess-accent);
+      outline-offset: 2px;
+    }
     .chess-board-stack {
       position: relative;
     }
     .chess-board-stack canvas {
-      border: 1px solid #243047;
+      border: 1px solid var(--chess-board-border);
       border-radius: 12px;
-      background: #0f172a;
+      background: var(--chess-board-backdrop);
       display: block;
       width: min(100%, 480px);
       height: auto;
-      image-rendering: pixelated;
-      box-shadow: 0 0 0 4px rgba(7, 16, 33, 0.6);
+      image-rendering: auto;
+      box-shadow: 0 0 0 4px var(--chess-board-shadow);
     }
     .chess-board-stack canvas + canvas {
       position: absolute;
@@ -70,26 +153,26 @@
       justify-content: space-between;
       padding: 10px 14px;
       border-radius: 10px;
-      background: rgba(12, 20, 40, 0.85);
-      border: 1px solid rgba(56, 72, 112, 0.8);
+      background: var(--chess-panel-bg);
+      border: 1px solid var(--chess-panel-border);
       font-size: 0.8rem;
       letter-spacing: 0.04em;
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     .chess-clock__player--active {
       transform: translateY(-2px);
-      box-shadow: 0 6px 12px rgba(7, 16, 33, 0.45);
+      box-shadow: 0 6px 12px var(--chess-panel-shadow);
     }
     .chess-clock__label {
       text-transform: uppercase;
-      color: #9bb3ff;
+      color: var(--chess-panel-accent);
       font-size: 0.72rem;
       letter-spacing: 0.18em;
     }
     .chess-clock__time {
       font-size: 1.2rem;
       font-variant-numeric: tabular-nums;
-      color: #fefefe;
+      color: var(--chess-panel-strong);
     }
     .chess-clock__display {
       display: flex;
@@ -98,7 +181,7 @@
     }
     .chess-clock__increment {
       font-size: 0.7rem;
-      color: #7dd3fc;
+      color: var(--chess-accent);
       opacity: 0;
       transition: opacity 0.2s ease;
       margin-left: 8px;
@@ -110,7 +193,7 @@
       font-size: 0.7rem;
       text-transform: uppercase;
       letter-spacing: 0.12em;
-      color: #9bb3ff;
+      color: var(--chess-panel-accent);
       text-align: center;
     }
     .evaluation-panel {
@@ -120,17 +203,17 @@
       gap: 14px;
       padding: 18px 20px;
       border-radius: 16px;
-      background: rgba(9, 16, 32, 0.92);
-      border: 1px solid rgba(44, 60, 96, 0.8);
-      box-shadow: 0 0 0 4px rgba(7, 16, 33, 0.4);
+      background: var(--chess-eval-bg);
+      border: 1px solid var(--chess-eval-border);
+      box-shadow: 0 0 0 4px var(--chess-board-shadow);
     }
     .evaluation-panel__bar {
       position: relative;
       height: 200px;
       border-radius: 12px;
       overflow: hidden;
-      border: 1px solid rgba(56, 72, 112, 0.8);
-      background: linear-gradient(180deg, rgba(239, 246, 255, 0.9) 0%, rgba(9, 16, 32, 0.95) 100%);
+      border: 1px solid var(--chess-panel-border);
+      background: var(--chess-eval-track);
     }
     .evaluation-panel__fill {
       position: absolute;
@@ -138,7 +221,7 @@
       bottom: 0;
       width: 100%;
       height: 50%;
-      background: linear-gradient(180deg, rgba(148, 197, 255, 0.9) 0%, rgba(11, 29, 62, 0.95) 100%);
+      background: var(--chess-eval-fill);
       transition: height 0.2s ease;
     }
     .evaluation-panel__markers {
@@ -150,7 +233,7 @@
       font-size: 0.65rem;
       text-transform: uppercase;
       letter-spacing: 0.18em;
-      color: rgba(12, 20, 40, 0.85);
+      color: var(--chess-panel-muted);
       pointer-events: none;
       font-weight: 600;
     }
@@ -158,20 +241,20 @@
       font-size: 1.1rem;
       text-align: center;
       font-variant-numeric: tabular-nums;
-      color: #ffe082;
+      color: var(--chess-eval-positive);
     }
     #evaluation-history {
       width: 100%;
       height: 140px;
       border-radius: 12px;
-      background: rgba(6, 10, 22, 0.8);
-      border: 1px solid rgba(44, 60, 96, 0.6);
+      background: var(--chess-eval-history-bg);
+      border: 1px solid var(--chess-eval-history-border);
     }
     .evaluation-panel__legend {
       font-size: 0.72rem;
       text-transform: uppercase;
       letter-spacing: 0.14em;
-      color: #9bb3ff;
+      color: var(--chess-panel-accent);
     }
     .evaluation-swings {
       list-style: none;
@@ -185,12 +268,12 @@
     .evaluation-swings li {
       padding: 8px 10px;
       border-radius: 10px;
-      background: rgba(11, 22, 45, 0.7);
-      border: 1px solid rgba(52, 70, 110, 0.6);
+      background: var(--chess-panel-bg);
+      border: 1px solid var(--chess-panel-border);
     }
     .evaluation-swings__empty {
       text-align: center;
-      color: #a1accf;
+      color: var(--chess-panel-muted);
       font-style: italic;
     }
     .chess-hud {
@@ -417,6 +500,9 @@
               <canvas id="board" aria-label="Chess board"></canvas>
               <canvas id="fx" aria-hidden="true"></canvas>
             </div>
+            <button type="button" id="chess-theme-toggle" class="chess-theme-toggle" aria-pressed="false">
+              Use high-contrast theme
+            </button>
           </div>
           <aside class="evaluation-panel" aria-label="Evaluation insights">
             <div class="evaluation-panel__bar">

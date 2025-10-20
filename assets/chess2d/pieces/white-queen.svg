@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' role='img' aria-labelledby='title desc'>
+  <title id='title'>White Queen</title>
+  <desc id='desc'>Stylized white queen chess piece</desc>
+  <g fill='#f7f9ff' stroke='#1f2937' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'>
+    <circle cx='36' cy='34' r='8'/>
+    <circle cx='60' cy='28' r='8'/>
+    <circle cx='84' cy='34' r='8'/>
+    <path d='M36 48h48l-10 36H46z'/>
+    <rect x='34' y='84' width='52' height='14' rx='6'/>
+    <rect x='30' y='96' width='60' height='14' rx='6'/>
+  </g>
+</svg>
