@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" role="img" aria-labelledby="pong-palette-title">
+  <title id="pong-palette-title">Pong Palette Reference</title>
+  <!-- [GFX-PONG] Swatch guide mirrored by CSS variables -->
+  <style>
+    :root {
+      --pong-color-bg:#0b0f14;
+      --pong-color-fg:#e8f1ff;
+      --pong-color-accent:#69e1ff;
+      --pong-color-muted:#7a8aa0;
+      --pong-color-good:#45e27b;
+      --pong-color-bad:#ff6b6b;
+      --pong-color-grid:#132033;
+      --pong-color-glow:rgba(105,225,255,0.28);
+    }
+    text { font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; fill: #f5f8ff; }
+    .label { font-size: 11px; opacity: 0.82; }
+    .swatch-title { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; fill: #ffffff; }
+    .outline { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 1; }
+  </style>
+  <rect width="640" height="220" fill="#05070c" rx="18"/>
+  <g transform="translate(24 28)">
+    <text class="swatch-title" x="0" y="-8">Core Palette</text>
+    <g transform="translate(0 12)">
+      <rect x="0" y="0" width="90" height="90" rx="12" fill="var(--pong-color-bg)"/>
+      <rect x="100" y="0" width="90" height="90" rx="12" fill="var(--pong-color-fg)"/>
+      <rect x="200" y="0" width="90" height="90" rx="12" fill="var(--pong-color-accent)"/>
+      <rect x="300" y="0" width="90" height="90" rx="12" fill="var(--pong-color-muted)"/>
+      <rect x="400" y="0" width="90" height="90" rx="12" fill="var(--pong-color-good)"/>
+      <rect x="500" y="0" width="90" height="90" rx="12" fill="var(--pong-color-bad)"/>
+      <rect x="0" y="0" width="590" height="90" rx="14" class="outline"/>
+      <text x="12" y="108">--pong-color-bg</text>
+      <text x="112" y="108">--pong-color-fg</text>
+      <text x="212" y="108">--pong-color-accent</text>
+      <text x="312" y="108">--pong-color-muted</text>
+      <text x="412" y="108">--pong-color-good</text>
+      <text x="512" y="108">--pong-color-bad</text>
+    </g>
+    <g transform="translate(0 140)">
+      <rect x="0" y="0" width="180" height="48" rx="12" fill="var(--pong-color-grid)"/>
+      <rect x="200" y="0" width="180" height="48" rx="12" fill="var(--pong-color-glow)"/>
+      <rect x="0" y="0" width="380" height="48" rx="14" class="outline"/>
+      <text x="12" y="66">--pong-color-grid</text>
+      <text x="212" y="66">--pong-color-glow</text>
+      <text class="label" x="0" y="-14">Grid / Glow accents</text>
+    </g>
+  </g>
+</svg>
