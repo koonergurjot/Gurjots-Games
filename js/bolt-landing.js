@@ -472,6 +472,11 @@ function wirePrefetch(root){
 async function boot(){
   try {
     const { games } = await loadGameCatalog();
+    if (!games?.length) {
+      const grid = document.getElementById('bolt-grid');
+      if (grid) grid.innerHTML = '<p>No games available.</p>';
+      return;
+    }
     const list = Array.isArray(games) ? games : [];
     GAME_LOOKUP.clear();
     allGames = list.map(g => {

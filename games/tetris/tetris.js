@@ -11,6 +11,9 @@ import { createScoringSystem, detectTSpin } from './scoring.js';
 import { createHud } from './ui.js';
 import { gameEvent } from '../../shared/telemetry.js';
 
+const ASSET_BASE_URL = new URL('../../', import.meta.url);
+const TILE_CONFIG_URL = new URL('assets/tetris/tiles.json', ASSET_BASE_URL);
+
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
 const globalScope = typeof window !== 'undefined' ? window : globalThis;
@@ -341,19 +344,24 @@ function getPieceStyle(key){
   tileStyleCache.set(key,style);
   return style;
 }
-if(typeof fetch==='function'){
-  fetch(new URL('../../assets/tetris/tiles.json', import.meta.url)).then(r=>{
-    if(!r.ok) return null;
-    return r.json();
-  }).then(data=>{
+async function loadTileConfigOverrides(){
+  if(typeof fetch!=='function') return;
+  try{
+    const response=await fetch(TILE_CONFIG_URL, { cache:'no-store' });
+    if(!response?.ok) throw new Error(`HTTP ${response?.status}`);
+    const data=await response.json();
     if(!data || typeof data!=='object') return;
     for(const key of PIECE_KEYS){
       if(!data[key] || typeof data[key]!=='object') continue;
       tileConfig[key]={ ...tileConfig[key], ...data[key] };
     }
     tileStyleCache.clear();
-  }).catch(()=>{});
+  }catch(error){
+    console.error('[tetris] failed to load tile config', error);
+  }
 }
+
+loadTileConfigOverrides();
 const PREVIEW_COUNT=3;
 const CLEAR_EFFECT_DURATION=0.6;
 const CLEAR_STAGE_SPLIT=[CLEAR_EFFECT_DURATION*0.5,CLEAR_EFFECT_DURATION*0.5];

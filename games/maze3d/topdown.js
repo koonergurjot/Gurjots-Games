@@ -3,6 +3,18 @@ import { gameEvent } from '../../shared/telemetry.js';
 import { generateMaze, seedRandom } from './generator.js';
 import { formatTime, getBestTimeForSeed, setBestTimeForSeed } from './ui.js';
 
+const ASSET_BASE_URL = new URL('../../', import.meta.url);
+
+function resolveAsset(path) {
+  if (!path) return path;
+  try {
+    const normalized = path.startsWith('/') ? path.slice(1) : path;
+    return new URL(normalized, ASSET_BASE_URL).href;
+  } catch (_) {
+    return path;
+  }
+}
+
 const MathUtils = (typeof window !== 'undefined' && window.THREE?.MathUtils) ? window.THREE.MathUtils : {
   clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
@@ -183,15 +195,18 @@ function mergeMaterialSettings(defaults, overrides = {}) {
 
 async function loadMaterialConfig() {
   try {
-    const res = await fetch('../../assets/maze3d/materials.json', { cache: 'no-store' });
-    if (!res?.ok) throw new Error(`bad status ${res?.status}`);
+    const res = await fetch(resolveAsset('/assets/maze3d/materials.json'), { cache: 'no-store' });
+    if (!res?.ok) throw new Error(`HTTP ${res?.status}`);
     const payload = await res.json();
     const floor = mergeMaterialSettings(MATERIAL_DEFAULTS.floor, payload?.floor || {});
     const wall = mergeMaterialSettings(MATERIAL_DEFAULTS.wall, payload?.wall || {});
     return { floor, wall };
   } catch (err) {
-    console.warn('maze3d: failed to load fallback material config, using defaults', err);
-    return { ...MATERIAL_DEFAULTS };
+    console.warn('[maze3d] failed to load fallback material config, using defaults', err);
+    return {
+      floor: { ...MATERIAL_DEFAULTS.floor },
+      wall: { ...MATERIAL_DEFAULTS.wall },
+    };
   }
 }
 
