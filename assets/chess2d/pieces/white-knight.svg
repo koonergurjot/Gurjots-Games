@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' role='img' aria-labelledby='title desc'>
+  <title id='title'>White Knight</title>
+  <desc id='desc'>Stylized white knight chess piece</desc>
+  <g fill='#f7f9ff' stroke='#1f2937' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'>
+    <path d='M76 24c-18 0-30 12-30 28 0 6 2 12 2 12l-14 12 8 6 6-4 4 12-12 8v12h48V74c0-10 8-16 8-26 0-14-8-24-20-24z'/>
+    <path d='M62 44l-14-10'/>
+  </g>
+</svg>
