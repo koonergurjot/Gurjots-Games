@@ -72,9 +72,23 @@
 .pong-overlay__btn{cursor:pointer; border:1px solid #243043; background:#111a28; color:var(--pong-fg); border-radius:.6rem; padding:.5rem .9rem; font:inherit; min-width:120px; transition:background .15s ease-in-out;}
 .pong-overlay__btn:hover{background:#172334;}
 
-.pong-hud{display:flex; align-items:center; justify-content:center; gap:2rem; padding:.4rem 0; font-weight:700}
-.pong-score{font-size:1.25rem}
+.pong-hud{display:flex; flex-direction:column; align-items:center; gap:.35rem; padding:.5rem 0; font-weight:700}
+.pong-status{display:flex; align-items:center; justify-content:space-between; gap:1rem; width:min(720px,100%); text-transform:none}
+.pong-status__left{display:flex; flex-direction:column; gap:.1rem; font-size:.85rem; color:var(--pong-muted); flex:1}
+.pong-status__mode{font-size:1rem; font-weight:700; color:var(--pong-fg)}
+.pong-status__tier{font-weight:600; color:var(--pong-muted)}
+.pong-status__score{display:flex; align-items:center; justify-content:center; gap:.65rem; font-size:1.45rem; font-weight:700; color:var(--pong-fg); flex:1}
+.pong-status__right{font-size:.85rem; color:var(--pong-muted); min-width:110px; text-align:right; flex:1; display:flex; justify-content:flex-end; align-items:center}
+.pong-status__combo{font-weight:600; transition:color .2s ease-in-out}
+.pong-status__combo.is-hot{color:var(--pong-accent)}
+.pong-score{font-size:inherit}
 .pong-mid{color:var(--pong-muted)}
+.pong-stamina{display:flex; gap:.75rem; width:min(720px,100%); opacity:.95; transition:opacity .2s ease-in-out}
+.pong-stamina:not(.is-active){opacity:.35}
+.pong-stamina__track{flex:1; position:relative; height:8px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden}
+.pong-stamina__track[data-side="p1"]{--bar-color:rgba(105,225,255,0.9)}
+.pong-stamina__track[data-side="p2"]{--bar-color:rgba(255,153,102,0.85)}
+.pong-stamina__fill{--fill:1; position:absolute; inset:0; width:calc(var(--fill,1) * 100%); background:var(--bar-color, var(--pong-accent)); border-radius:inherit; transition:width .18s ease-out}
 
 .pong-menu{padding:.75rem 1rem; border-top:1px solid #1b2533; display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-start}
 .pong-menu__section{flex:1 1 360px; display:flex; flex-direction:column; gap:.5rem; padding:.5rem 0; min-width:min(360px,100%)}
