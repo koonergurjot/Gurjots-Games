@@ -1,0 +1,16 @@
+{
+  "floor": {
+    "baseColor": "#3a4154",
+    "accentColor": "#252c3a",
+    "roughness": 0.78,
+    "metalness": 0.08,
+    "normalIntensity": 0.28
+  },
+  "wall": {
+    "baseColor": "#7d8794",
+    "accentColor": "#4f5664",
+    "roughness": 0.88,
+    "metalness": 0.06,
+    "normalIntensity": 0.32
+  }
+}

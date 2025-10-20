@@ -177,26 +177,159 @@ window.helpData = help;
 injectHelpButton({ gameId: 'maze3d', ...help });
 recordLastPlayed('maze3d');
 
+const MATERIAL_DEFAULTS = {
+  floor: {
+    baseColor: '#394055',
+    accentColor: '#2a3142',
+    roughness: 0.78,
+    metalness: 0.08,
+    normalIntensity: 0.22,
+  },
+  wall: {
+    baseColor: '#7e8894',
+    accentColor: '#555e6d',
+    roughness: 0.86,
+    metalness: 0.06,
+    normalIntensity: 0.3,
+  }
+};
+
+function mergeMaterialSettings(defaults, overrides = {}) {
+  const result = { ...defaults };
+  for (const key of Object.keys(defaults)) {
+    if (!(key in overrides)) continue;
+    const value = overrides[key];
+    if (typeof defaults[key] === 'number') {
+      const num = Number(value);
+      if (Number.isFinite(num)) {
+        result[key] = THREE.MathUtils.clamp(num, 0, 5);
+      }
+    } else if (typeof defaults[key] === 'string') {
+      if (typeof value === 'string' && value.trim()) {
+        result[key] = value.trim();
+      }
+    }
+  }
+  return result;
+}
+
+async function loadMaterialConfig() {
+  try {
+    const res = await fetch('../../assets/maze3d/materials.json', { cache: 'no-store' });
+    if (!res?.ok) throw new Error(`bad status ${res?.status}`);
+    const payload = await res.json();
+    const floor = mergeMaterialSettings(MATERIAL_DEFAULTS.floor, payload?.floor || {});
+    const wall = mergeMaterialSettings(MATERIAL_DEFAULTS.wall, payload?.wall || {});
+    return { floor, wall };
+  } catch (err) {
+    console.warn('maze3d: failed to load material config, using defaults', err);
+    return { ...MATERIAL_DEFAULTS };
+  }
+}
+
+function createCheckerTexture({ baseColor, accentColor, size = 128, squares = 8 } = {}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = accentColor || '#1d2330';
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = baseColor || '#2e3546';
+  const step = size / squares;
+  for (let y = 0; y < squares; y++) {
+    for (let x = 0; x < squares; x++) {
+      if ((x + y) % 2 === 0) {
+        ctx.fillRect(x * step, y * step, step, step);
+      }
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function createNoiseTexture(size = 128, contrast = 0.5) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(size, size);
+  const power = Math.max(contrast, 0.1);
+  for (let i = 0; i < imageData.data.length; i += 4) {
+    const v = Math.floor(Math.pow(Math.random(), power) * 255);
+    imageData.data[i] = imageData.data[i + 1] = imageData.data[i + 2] = v;
+    imageData.data[i + 3] = 255;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+const materialConfig = await loadMaterialConfig();
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0e0f12);
-scene.fog = new THREE.Fog(0x0e0f12, 10, 60);
+scene.background = new THREE.Color('#0d111a');
+scene.fog = new THREE.Fog(0x0d111a, 8, 55);
 
 const texLoader = new THREE.TextureLoader();
 
-const floorTexture = texLoader.load('../../assets/sprites/maze3d/floor.png');
-floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
-floorTexture.center.set(0.5, 0.5);
-floorTexture.rotation = Math.PI / 2;
+async function loadTextureWithFallback(url, fallbackOptions) {
+  return new Promise((resolve) => {
+    texLoader.load(
+      url,
+      (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        resolve(texture);
+      },
+      undefined,
+      () => {
+        console.warn('maze3d: missing texture, using procedural material', url);
+        resolve(createCheckerTexture(fallbackOptions));
+      }
+    );
+  });
+}
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.physicallyCorrectLights = true;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const toneMappingExposure = (() => {
+  const stored = Number(loadPreference('maze3d:exposure', 1.08));
+  return THREE.MathUtils.clamp(Number.isFinite(stored) ? stored : 1.08, 0.75, 1.35);
+})();
+renderer.toneMappingExposure = toneMappingExposure;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio ?? 1, 2));
 document.body.appendChild(renderer.domElement);
+
+const floorTexture = await loadTextureWithFallback('../../assets/sprites/maze3d/floor.png', {
+  baseColor: materialConfig.floor.baseColor,
+  accentColor: materialConfig.floor.accentColor,
+});
+floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+floorTexture.center.set(0.5, 0.5);
+floorTexture.rotation = Math.PI / 2;
+floorTexture.anisotropy = Math.min(renderer.capabilities.getMaxAnisotropy?.() ?? 1, 8);
+
+const floorDetailTexture = createNoiseTexture(256, Math.max(materialConfig.floor.normalIntensity * 2.2, 0.3));
+const wallDetailTexture = createNoiseTexture(256, Math.max(materialConfig.wall.normalIntensity * 2.2, 0.3));
+const maxAnisotropy = Math.min(renderer.capabilities.getMaxAnisotropy?.() ?? 1, 8);
+floorDetailTexture.anisotropy = maxAnisotropy;
+wallDetailTexture.anisotropy = maxAnisotropy;
+wallDetailTexture.repeat.set(2, 2);
+wallDetailTexture.needsUpdate = true;
+
 // minimap
 const mapRenderer = new THREE.WebGLRenderer({ antialias: false });
 mapRenderer.setSize(200, 200);
+mapRenderer.outputColorSpace = THREE.SRGBColorSpace;
+mapRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+mapRenderer.toneMappingExposure = 1.0;
 mapRenderer.domElement.style.position='fixed'; mapRenderer.domElement.style.right='12px'; mapRenderer.domElement.style.bottom='12px'; mapRenderer.domElement.style.border='1px solid rgba(255,255,255,0.2)'; mapRenderer.domElement.style.borderRadius='6px';
 document.body.appendChild(mapRenderer.domElement);
 const compassUi = createCompassUi();
@@ -384,14 +517,24 @@ function renderMinimapOverlay() {
   minimapCtx.fillRect(u - 2, v - 2, 4, 4);
 }
 
-const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+const ambient = new THREE.AmbientLight(0x1a2334, 0.32);
+scene.add(ambient);
+const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x1a212d, 0.55);
 scene.add(hemi);
-const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-dir.position.set(10, 20, 10);
+const dir = new THREE.DirectionalLight(0xfdf6e3, 1.08);
+dir.position.set(18, 26, 14);
 dir.castShadow = true;
+dir.shadow.bias = -0.00085;
+dir.shadow.mapSize.set(2048, 2048);
+dir.shadow.camera.near = 2;
+dir.shadow.camera.far = 90;
+dir.shadow.camera.left = -55;
+dir.shadow.camera.right = 55;
+dir.shadow.camera.top = 55;
+dir.shadow.camera.bottom = -55;
 scene.add(dir);
 
-const playerLight = new THREE.PointLight(0xffffff, 1, 20, 2);
+const playerLight = new THREE.PointLight(0xf9f5d7, 0.9, 22, 1.8);
 playerLight.castShadow = true;
 scene.add(playerLight);
 
@@ -399,8 +542,9 @@ function randomRange(min, max) {
   return min + Math.random() * (max - min);
 }
 
-const fogPulseColor = new THREE.Color(0x172033);
+const fogPulseColor = new THREE.Color(0x1a2438);
 const lightingState = {
+  baseAmbientIntensity: ambient.intensity,
   baseHemiIntensity: hemi.intensity,
   baseDirIntensity: dir.intensity,
   basePlayerIntensity: playerLight.intensity,
@@ -2109,9 +2253,11 @@ function buildMaze(seed) {
 
   const wallGeo = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
   const wallMat = new THREE.MeshStandardMaterial({
-    color: 0x7e8894,
-    roughness: 0.85,
-    metalness: 0.05,
+    color: new THREE.Color(materialConfig.wall.baseColor),
+    roughness: materialConfig.wall.roughness,
+    metalness: materialConfig.wall.metalness,
+    bumpMap: wallDetailTexture,
+    bumpScale: materialConfig.wall.normalIntensity,
     side: THREE.FrontSide
   });
   wallMat.onBeforeCompile = (shader) => {
@@ -2172,9 +2318,16 @@ function buildMaze(seed) {
 
   floorTexture.repeat.set(cols, rows);
   floorTexture.needsUpdate = true;
+  floorDetailTexture.repeat.set(cols * 2, rows * 2);
+  floorDetailTexture.needsUpdate = true;
   const floorGeo = new THREE.PlaneGeometry(cols * cellSize, rows * cellSize);
   const floorMat = new THREE.MeshStandardMaterial({
     map: floorTexture,
+    color: new THREE.Color(materialConfig.floor.baseColor),
+    roughness: materialConfig.floor.roughness,
+    metalness: materialConfig.floor.metalness,
+    bumpMap: floorDetailTexture,
+    bumpScale: materialConfig.floor.normalIntensity,
     side: THREE.FrontSide
   });
   floor = new THREE.Mesh(floorGeo, floorMat);
@@ -2468,13 +2621,15 @@ function updateLighting(now) {
       const envelope = 1 - Math.pow(t, 0.45);
       const waveA = Math.sin((now - start) * 0.045 + seed) * 0.35;
       const waveB = Math.sin((now - start) * 0.12 + seed * 2.2) * 0.2;
-      const flickerFactor = THREE.MathUtils.clamp(0.7 + envelope * 0.4 + (waveA + waveB) * 0.2, 0.4, 1.6);
-      playerLight.intensity = THREE.MathUtils.lerp(playerLight.intensity, lightingState.basePlayerIntensity * flickerFactor, 0.45);
-      dir.intensity = THREE.MathUtils.lerp(dir.intensity, lightingState.baseDirIntensity * (0.9 + envelope * 0.2), 0.3);
+      const flickerFactor = THREE.MathUtils.clamp(0.7 + envelope * 0.4 + (waveA + waveB) * 0.2, 0.45, 1.55);
+      playerLight.intensity = THREE.MathUtils.lerp(playerLight.intensity, lightingState.basePlayerIntensity * flickerFactor, 0.42);
+      dir.intensity = THREE.MathUtils.lerp(dir.intensity, lightingState.baseDirIntensity * (0.92 + envelope * 0.18), 0.28);
+      ambient.intensity = THREE.MathUtils.lerp(ambient.intensity, lightingState.baseAmbientIntensity * (0.95 + envelope * 0.12), 0.3);
     }
   } else {
     playerLight.intensity = THREE.MathUtils.lerp(playerLight.intensity, lightingState.basePlayerIntensity, 0.08);
     dir.intensity = THREE.MathUtils.lerp(dir.intensity, lightingState.baseDirIntensity, 0.08);
+    ambient.intensity = THREE.MathUtils.lerp(ambient.intensity, lightingState.baseAmbientIntensity, 0.08);
   }
 
   if (!lightingState.fogPulse && now >= lightingState.nextFogPulse) {
@@ -2503,7 +2658,8 @@ function updateLighting(now) {
         fogTargetColor.copy(lightingState.baseFogColor).lerp(fogPulseColor, strength * pulse);
         scene.fog.color.lerp(fogTargetColor, 0.2);
       }
-      hemi.intensity = THREE.MathUtils.lerp(hemi.intensity, lightingState.baseHemiIntensity * (1 - strength * 0.25 * pulse), 0.2);
+      hemi.intensity = THREE.MathUtils.lerp(hemi.intensity, lightingState.baseHemiIntensity * (1 - strength * 0.22 * pulse), 0.2);
+      ambient.intensity = THREE.MathUtils.lerp(ambient.intensity, lightingState.baseAmbientIntensity * (1 - strength * 0.18 * pulse), 0.18);
     }
   } else {
     if (scene.fog) {
@@ -2512,6 +2668,7 @@ function updateLighting(now) {
       scene.fog.color.lerp(lightingState.baseFogColor, 0.08);
     }
     hemi.intensity = THREE.MathUtils.lerp(hemi.intensity, lightingState.baseHemiIntensity, 0.08);
+    ambient.intensity = THREE.MathUtils.lerp(ambient.intensity, lightingState.baseAmbientIntensity, 0.08);
   }
 }
 
