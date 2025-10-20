@@ -59,17 +59,23 @@
       }
     return false;
   }
-  function rotate(piece,grid,dir=1){
+  function rotateDetailed(piece,grid,dir=1){
     const adapter=asAdapter(grid);
     const newO=(piece.o+dir+4)%4;
     const key=`${piece.o}->${newO}`;
     const kicks=(piece.t==='I'?I:JLSTZ)[key]||[[0,0]];
     const R=dir===1?rotateCW(piece.m):rotateCCW(piece.m);
-    for(const [kx,ky] of kicks){
+    for(let i=0;i<kicks.length;i++){
+      const [kx,ky]=kicks[i];
       const cand={m:R,x:piece.x+kx,y:piece.y+ky,o:newO,t:piece.t};
-      if(!collide(cand,adapter)) return cand;
+      if(!collide(cand,adapter)){
+        return { piece:cand, kickIndex:i, kick:{ x:kx, y:ky }, kicked:!!(kx||ky), success:true };
+      }
     }
-    return piece;
+    return { piece, kickIndex:-1, kick:{ x:0, y:0 }, kicked:false, success:false };
   }
-  window.TetrisEngine={rotate};
+  function rotate(piece,grid,dir=1){
+    return rotateDetailed(piece,grid,dir).piece;
+  }
+  window.TetrisEngine={rotate,rotateDetailed};
 })();

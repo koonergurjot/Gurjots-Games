@@ -30,6 +30,16 @@
     ]
   },
   {
+    "id": "weekly_tetris_tspin_double",
+    "slug": "tetris",
+    "kind": "weekly",
+    "title": "Spin Doctor",
+    "desc": "Land a T-Spin Double.",
+    "requires": [
+      { "type": "score_event", "name": "tspin_double", "count": 1 }
+    ]
+  },
+  {
     "id": "weekly_breakout_streak",
     "slug": "breakout",
     "kind": "weekly",
@@ -57,6 +67,16 @@
     "desc": "Reach a length of 40 or more.",
     "requires": [
       { "type": "score_event", "name": "length", "count": 40 }
+    ]
+  },
+  {
+    "id": "career_tetris_half_million",
+    "slug": "tetris",
+    "kind": "career",
+    "title": "Half-Million Stack",
+    "desc": "Score 500,000 total points.",
+    "requires": [
+      { "type": "score", "count": 500000 }
     ]
   }
 ]

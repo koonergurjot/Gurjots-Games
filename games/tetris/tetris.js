@@ -6,7 +6,9 @@ import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
 import { play as playSfx } from '../../shared/juice/audio.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
-import { createSeed, generateSequence as generateRandomSequence, createRandomizerSelector } from './randomizer.js';
+import { createSeed, seedFromDate, generateSequence as generateRandomSequence, createRandomizerSelector } from './randomizer.js';
+import { createScoringSystem, detectTSpin } from './scoring.js';
+import { createHud } from './ui.js';
 import { gameEvent } from '../../shared/telemetry.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
@@ -289,6 +291,7 @@ const COLS=10, ROWS=20;
 const GRID_SIZE=COLS*ROWS;
 const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
 const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L:[[0,0,7],[7,7,7]]};
+const PREVIEW_COUNT=3;
 const CLEAR_EFFECT_DURATION=0.6;
 const CLEAR_STAGE_SPLIT=[CLEAR_EFFECT_DURATION*0.5,CLEAR_EFFECT_DURATION*0.5];
 const LINES_PER_LEVEL=10;
@@ -383,14 +386,28 @@ function parseSeedParam(value){
   return (parsed>>>0);
 }
 const requestedRandomizerMode=params.get('randomizer')||params.get('rng')||'';
-const requestedSeed=parseSeedParam(params.get('seed'));
+const rawSeedParam=params.get('seed');
+const requestedDaily=params.get('daily');
+let dailySeedLabel=null;
+let dailySeedActive=requestedDaily==='1'||(typeof rawSeedParam==='string' && rawSeedParam.toLowerCase()==='daily');
+const requestedSeed=dailySeedActive?null:parseSeedParam(rawSeedParam);
 const mode=params.has('spectate')?'spectate':(params.get('replay')?'replay':'play');
 const replayFile=params.get('replay');
 
 const initialRandomizerMode=requestedRandomizerMode||'bag';
-const initialSeed=typeof requestedSeed==='number'?requestedSeed:createSeed();
+let initialSeed;
+if(dailySeedActive){
+  initialSeed=computeDailySeed();
+}else if(typeof requestedSeed==='number'){
+  initialSeed=requestedSeed;
+}else{
+  initialSeed=createSeed();
+}
 const pieceRandomizer=createRandomizerSelector({ mode: initialRandomizerMode, seed: initialSeed });
-let rngSeed=pieceRandomizer.seed;
+let rngSeed=dailySeedActive?initialSeed:pieceRandomizer.seed;
+if(dailySeedActive && !dailySeedLabel){
+  dailySeedLabel=seedFromDate().label;
+}
 
 const broadcastState={
   supported:false,
@@ -794,6 +811,7 @@ let bestScore=+(localStorage.getItem('tetris:bestScore')||0);
 let bestLines=+(localStorage.getItem('tetris:bestLines')||0);
 let started=false;
 let grid=createGrid();
+let pieceQueue=[];
 let nextM;
 let holdM=null;
 let canHold=true;
@@ -806,7 +824,11 @@ let runStartTime = typeof performance !== 'undefined' ? performance.now() : Date
 let gameOverSent = false;
 let lastComboEmitted = -1;
 let combo=-1;
+let backToBack=false;
+let lastRotationInfo=null;
 const scoreDisplay=document.getElementById('score');
+const scoringSystem=createScoringSystem();
+let hud=null;
 
 const moveState={
   left:{active:false,das:0,arr:0},
@@ -828,8 +850,14 @@ function syncRandomizerUrl(){
   if(mode!=='play') return;
   try{
     const current=new URL(location.href);
-    if(Number.isInteger(rngSeed)) current.searchParams.set('seed',String(rngSeed>>>0));
-    else current.searchParams.delete('seed');
+    if(dailySeedActive){
+      current.searchParams.set('daily','1');
+      current.searchParams.delete('seed');
+    }else{
+      current.searchParams.delete('daily');
+      if(Number.isInteger(rngSeed)) current.searchParams.set('seed',String(rngSeed>>>0));
+      else current.searchParams.delete('seed');
+    }
     const randomizerMode=pieceRandomizer.mode;
     if(randomizerMode && randomizerMode!=='bag') current.searchParams.set('randomizer',randomizerMode);
     else current.searchParams.delete('randomizer');
@@ -839,15 +867,60 @@ function syncRandomizerUrl(){
   }
 }
 
-function reseed(seed=createSeed()){
+function computeDailySeed(){
+  const info=seedFromDate();
+  dailySeedLabel=info.label;
+  return info.seed>>>0;
+}
+
+function reseed(seed){
+  let targetSeed;
+  const hasExplicitSeed=seed!==undefined;
   const parsedSeed=parseSeedParam(seed);
-  const nextSeed=typeof parsedSeed==='number'?parsedSeed:createSeed();
-  rngSeed=pieceRandomizer.reset(nextSeed);
+  if(typeof parsedSeed==='number'){
+    dailySeedActive=false;
+    dailySeedLabel=null;
+    targetSeed=parsedSeed;
+  }else if(dailySeedActive && !hasExplicitSeed){
+    targetSeed=computeDailySeed();
+  }else if(dailySeedActive){
+    targetSeed=computeDailySeed();
+  }else{
+    targetSeed=createSeed();
+  }
+  rngSeed=pieceRandomizer.reset(targetSeed);
   if(!Number.isInteger(rngSeed)) rngSeed=pieceRandomizer.seed;
+  pieceQueue.length=0;
+  nextM=null;
   syncRandomizerUrl();
   const replayApi=globalScope?.Replay;
   if(mode==='play' && replayApi && typeof replayApi.setSeed==='function'){
     replayApi.setSeed(rngSeed);
+  }
+  updateDailyHud();
+  return rngSeed;
+}
+
+function setDailySeedMode(enabled,{ restart=true }={}){
+  const next=!!enabled;
+  if(next===dailySeedActive){
+    if(next){
+      dailySeedLabel=seedFromDate().label;
+      updateDailyHud();
+    }
+    return rngSeed;
+  }
+  dailySeedActive=next;
+  if(next){
+    reseed();
+  }else{
+    dailySeedLabel=null;
+    reseed(createSeed());
+  }
+  if(restart){
+    resetGameState({ preserveSeed:true });
+  }else{
+    updateDailyHud();
   }
   return rngSeed;
 }
@@ -865,14 +938,23 @@ function summarizeBroadcastPayload(data){
   if(typeof data.level==='number') summary.level=data.level;
   if(typeof data.lines==='number') summary.lines=data.lines;
   if(typeof data.combo==='number') summary.combo=data.combo;
+  if(typeof data.backToBack==='boolean') summary.backToBack=data.backToBack;
   const currentPiece=data.cur?.t ?? data.current?.t ?? null;
   const nextPiece=data.nextM?.t ?? data.next?.t ?? null;
   const holdPiece=data.holdM?.t ?? data.hold?.t ?? null;
   if(currentPiece) summary.current=currentPiece;
   if(nextPiece) summary.next=nextPiece;
   if(holdPiece) summary.hold=holdPiece;
+  if(Array.isArray(data.queue)){
+    summary.queue=data.queue.slice(0,PREVIEW_COUNT).map(entry=>{
+      if(entry && typeof entry==='object') return entry.t ?? null;
+      return entry ?? null;
+    }).filter(Boolean);
+  }
   if(Number.isInteger(data.seed)) summary.seed=data.seed;
   if(typeof data.randomizerMode==='string' && data.randomizerMode) summary.randomizer=data.randomizerMode;
+  if(typeof data.dailySeedActive==='boolean') summary.daily=data.dailySeedActive;
+  if(typeof data.dailySeedLabel==='string' && data.dailySeedLabel) summary.dailyLabel=data.dailySeedLabel;
   if(Array.isArray(data.grid) || data.grid instanceof Uint8Array){
     summary.hasGrid=true;
     let filled=0;
@@ -956,14 +1038,18 @@ function getPublicState(){
     level,
     lines,
     combo,
+    backToBack,
     canHold,
     showGhost,
     seed:rngSeed,
     randomizerMode:pieceRandomizer.mode,
+    dailySeedActive,
+    dailySeedLabel,
     grid: cloneMatrix(grid),
     current: clonePiece(cur),
     next: clonePiece(nextM),
     hold: clonePiece(holdM),
+    queue: pieceQueue.slice(0,PREVIEW_COUNT).map(t=>({ t })),
   };
 }
 
@@ -1003,6 +1089,7 @@ function snapshotScore(){
     level,
     lines,
     combo,
+    backToBack,
     mode,
     randomizerMode:pieceRandomizer.mode,
     started,
@@ -1094,6 +1181,9 @@ const TetrisAPI={
   get combo(){ return combo; },
   get canHold(){ return canHold; },
   get showGhost(){ return showGhost; },
+  get backToBack(){ return backToBack; },
+  get dailySeedActive(){ return dailySeedActive; },
+  get dailySeedLabel(){ return dailySeedLabel; },
   get ready(){ return tetrisReady; },
   get broadcastChannel(){ return bc; },
   get grid(){ return cloneMatrix(grid); },
@@ -1120,8 +1210,14 @@ const TetrisAPI={
     const parsedSeed=seed!==undefined?parseSeedParam(seed):undefined;
     const appliedMode=pieceRandomizer.setMode(nextMode,typeof parsedSeed==='number'?parsedSeed:undefined);
     rngSeed=pieceRandomizer.seed;
+    pieceQueue.length=0;
+    nextM=null;
     syncRandomizerUrl();
+    updateHudQueue();
     return appliedMode;
+  },
+  setDailySeedMode(enabled){
+    return setDailySeedMode(enabled);
   },
   start(){
     if(over) return false;
@@ -1167,35 +1263,7 @@ const TetrisAPI={
     return rafId;
   },
   reset(){
-    stopGameLoop();
-    grid=createGrid();
-    reseed(createSeed());
-    initGame();
-    score=0;
-    level=1;
-    lines=0;
-    combo=-1;
-    holdM=null;
-    canHold=true;
-    over=false;
-    started=false;
-    paused=false;
-    shellPaused=false;
-    pausedByShell=false;
-    lockTimer=0;
-    lockResetCount=0;
-    clearPipeline.length=0;
-    clearingRows.clear();
-    lastFrame=0;
-    gravityTimer=0;
-    softDropTimer=0;
-    dropMs=700;
-    syncScoreDisplay();
-    updateGhost();
-    runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    gameOverSent = false;
-    lastComboEmitted = -1;
-    return true;
+    return resetGameState();
   },
   onReady: registerReadyCallback,
   offReady(callback){ readyCallbacks.delete(callback); },
@@ -1204,14 +1272,32 @@ const TetrisAPI={
 globalScope.Tetris=TetrisAPI;
 notifyDiagnosticsListeners();
 
-function nextFromBag(){
+function createPieceFromType(type){
+  const key=(type&&SHAPES[type])?type:'I';
+  return { m:SHAPES[key].map(r=>r.slice()), t:key };
+}
+
+function drawNextType(){
   if(mode==='replay'){
     const t=Replay.nextPiece();
-    const key=(t&&SHAPES[t])?t:'I';
-    return {m:SHAPES[key].map(r=>r.slice()),t:key};
+    return (t&&SHAPES[t])?t:'I';
   }
   const t=pieceRandomizer.next();
-  return {m:SHAPES[t].map(r=>r.slice()),t};
+  return (t&&SHAPES[t])?t:'I';
+}
+
+function ensurePieceQueueSize(size=PREVIEW_COUNT+1){
+  const target=Math.max(PREVIEW_COUNT+1,size);
+  while(pieceQueue.length<target){
+    pieceQueue.push(drawNextType());
+  }
+}
+
+function takeNextType(){
+  ensurePieceQueueSize();
+  const type=pieceQueue.shift();
+  ensurePieceQueueSize();
+  return type;
 }
 
 function syncScoreDisplay(){
@@ -1220,7 +1306,49 @@ function syncScoreDisplay(){
   scoreDisplay.dataset.gameScore=String(score); // Surface score for shell integration.
 }
 
+function updateDailyHud(){
+  if(hud && typeof hud.setDaily==='function'){
+    hud.setDaily({ active: dailySeedActive, label: dailySeedLabel });
+  }
+}
+
+function getComboCount(){
+  return combo>=0?combo+1:0;
+}
+
+function updateHudStats(){
+  if(!hud) return;
+  hud.setStats({ score, level, lines });
+  hud.setCombo(getComboCount());
+  hud.setBackToBack(backToBack);
+}
+
+function updateHudHold(){
+  if(!hud) return;
+  const piece=holdM?.t ?? null;
+  hud.setHold({ piece, canHold });
+}
+
+function previewTypes(count=PREVIEW_COUNT){
+  ensurePieceQueueSize(count);
+  return pieceQueue.slice(0,count);
+}
+
+function updateHudQueue(){
+  if(!hud) return;
+  hud.setNext(previewTypes());
+  updateHudHold();
+}
+
 syncScoreDisplay();
+hud=createHud({
+  onToggleDailySeed(enabled){
+    setDailySeedMode(enabled);
+  },
+});
+updateDailyHud();
+updateHudStats();
+updateHudHold();
 let bc=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('tetris'):null;
 if(bc){
   logBroadcastEvent('init',null,{event:'open'});
@@ -1261,19 +1389,67 @@ let pausedByShell=false;
 let rafId=0;
 const clearPipeline=[];
 const clearingRows=new Set();
-let rotated=false;
 
 function initGame(){
   resetParallax();
-  nextM=nextFromBag();
+  pieceQueue.length=0;
+  ensurePieceQueueSize();
   cur=spawn();
+  lastRotationInfo=null;
   updateGhost();
+  updateHudQueue();
+  updateHudStats();
+}
+
+function resetGameState({ preserveSeed=false }={}){
+  stopGameLoop();
+  grid=createGrid();
+  if(!preserveSeed){
+    reseed();
+  }else{
+    pieceQueue.length=0;
+    nextM=null;
+  }
+  scoringSystem.reset();
+  score=0;
+  level=1;
+  lines=0;
+  combo=-1;
+  backToBack=false;
+  holdM=null;
+  canHold=true;
+  over=false;
+  started=false;
+  paused=false;
+  shellPaused=false;
+  pausedByShell=false;
+  lockTimer=0;
+  lockResetCount=0;
+  clearPipeline.length=0;
+  clearingRows.clear();
+  lastFrame=0;
+  gravityTimer=0;
+  softDropTimer=0;
+  dropMs=700;
+  lastRotationInfo=null;
+  initGame();
+  syncScoreDisplay();
+  updateGhost();
+  updateHudStats();
+  updateDailyHud();
+  runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  gameOverSent = false;
+  lastComboEmitted = -1;
+  return true;
 }
 
 function spawn(){
-  const piece=nextM;
-  nextM=nextFromBag();
+  ensurePieceQueueSize();
+  const type=takeNextType();
+  const piece=createPieceFromType(type);
   if(mode==='play') Replay.recordPiece(piece.t);
+  nextM=pieceQueue[0]?createPieceFromType(pieceQueue[0]):null;
+  updateHudQueue();
   return {m:piece.m.map(r=>r.slice()), x:3, y:0, t:piece.t, o:0};
 }
 function collide(p){
@@ -1347,35 +1523,32 @@ function isClearing(){
   return clearPipeline.length>0;
 }
 
-function isTSpin(p){
-  if(p.t!=='T' || !rotated) return false;
-  const corners=[[0,0],[2,0],[0,2],[2,2]];
-  let count=0;
-  for(const [dx,dy] of corners){
-    const nx=p.x+dx, ny=p.y+dy;
-    if(nx<0||nx>=COLS||ny>=ROWS || getGridCell(grid,nx,ny)) count++;
-  }
-  return count>=3;
-}
-
 function lockPiece(soft=0,hard=0){
   const lockedPiece=clonePiece(cur);
   merge(cur);
-  const tSpin=isTSpin(cur);
   const clearedRows=clearLines();
   const cleared=clearedRows.length;
-  let pts=soft + hard*2;
-  if(tSpin){
-    pts+=[0,800,1200,1600][cleared]||400;
-  }else{
-    pts+=[0,100,300,500,800][cleared]||0;
-  }
+  const tspinResult=detectTSpin({
+    piece: lockedPiece,
+    grid: { get: (x,y)=>getGridCell(grid,x,y) },
+    lastRotation: lastRotationInfo,
+    clearedLines: cleared,
+    bounds: { cols: COLS, rows: ROWS },
+  });
+  const scoringResult=scoringSystem.scoreLock({
+    linesCleared: cleared,
+    tspin: tspinResult,
+    softDrop: soft,
+    hardDrop: hard,
+  });
+  score=scoringResult.score;
+  combo=scoringResult.combo;
+  backToBack=scoringResult.backToBack;
+  syncScoreDisplay();
+  const comboCount=getComboCount();
   if(cleared>0){
-    combo++;
-    if(combo>0) pts+=combo*50;
-    const comboCount = combo + 1;
     if(comboCount>1 && combo!==lastComboEmitted){
-      lastComboEmitted = combo;
+      lastComboEmitted=combo;
       gameEvent('combo', {
         slug: GAME_ID,
         count: comboCount,
@@ -1384,23 +1557,27 @@ function lockPiece(soft=0,hard=0){
           level,
         },
       });
+    }else if(comboCount<=1){
+      lastComboEmitted=-1;
     }
   }else{
-    combo=-1;
-    lastComboEmitted = -1;
+    lastComboEmitted=-1;
   }
-  score+=pts;
-  syncScoreDisplay();
-  gameEvent('score', {
-    slug: GAME_ID,
-    value: score,
-    meta: {
-      lines: lines + cleared,
-      combo: combo,
-      cleared,
-      level,
-    },
-  });
+  if(cleared>0){
+    gameEvent('score', {
+      slug: GAME_ID,
+      value: score,
+      delta: scoringResult.points,
+      meta: {
+        lines: lines + cleared,
+        combo: combo,
+        cleared,
+        level,
+        clearType: scoringResult.clearType,
+        tspin: tspinResult.type,
+      },
+    });
+  }
   lines+=cleared;
   GG.addXP(2*cleared);
   let leveledUp=false;
@@ -1427,7 +1604,20 @@ function lockPiece(soft=0,hard=0){
       },
     });
   }
-  rotated=false;
+  if(scoringResult.b2bJustAwarded && cleared===4){
+    gameEvent('score_event', {
+      slug: GAME_ID,
+      name: 'b2b_tetris',
+    });
+  }
+  if(tspinResult.type==='full' && tspinResult.lines===2){
+    gameEvent('score_event', {
+      slug: GAME_ID,
+      name: 'tspin_double',
+    });
+  }
+  updateHudStats();
+  lastRotationInfo=null;
   lockResetCount=0;
 }
 
@@ -1474,7 +1664,9 @@ function onPieceMoved(){
 
 function spawnNextPiece(){
   cur=spawn();
+  lastRotationInfo=null;
   canHold=true;
+  updateHudHold();
   lockTimer=0;
   lockResetCount=0;
   gravityTimer=0;
@@ -1579,12 +1771,22 @@ function draw(){
   ctx.fillText(`Score ${score}`,8,20);
   ctx.fillText(`Level ${level}`,8,40);
   ctx.fillText(`Lines ${lines}`,8,60);
-  if(combo>0) ctx.fillText(`Combo ${combo}`,8,80);
+  const comboCount=getComboCount();
+  if(comboCount>0) ctx.fillText(`Combo x${comboCount}`,8,80);
+  if(backToBack) ctx.fillText('B2B READY',8,100);
   const ox=COLS*cell+16;
   ctx.fillText('NEXT',ox,20);
-  drawMatrix(nextM.m,ox,30,cell);
-  ctx.fillText('HOLD (C)',ox,120);
-  if(holdM) drawMatrix(holdM.m,ox,130,cell);
+  ensurePieceQueueSize();
+  const previewSpacing=Math.max(cell*2.8,48);
+  pieceQueue.slice(0,PREVIEW_COUNT).forEach((type,index)=>{
+    const previewPiece=createPieceFromType(type);
+    drawMatrix(previewPiece.m,ox,30+index*previewSpacing,cell);
+  });
+  const holdLabelY=30+previewSpacing*PREVIEW_COUNT+10;
+  ctx.fillText('HOLD (C)',ox,holdLabelY);
+  if(holdM){
+    drawMatrix(holdM.m,ox,holdLabelY+10,cell);
+  }
 
   if(over){
     ctx.fillStyle='rgba(0,0,0,.6)';
@@ -1612,9 +1814,11 @@ function drop(manual=false){
     return 'lock';
   }
   if(manual){
-    score++;
+    scoringSystem.addDropPoints(1,0);
+    score=scoringSystem.score;
     updateBest();
     syncScoreDisplay();
+    updateHudStats();
   }
   gravityTimer=0;
   onPieceMoved();
@@ -1648,13 +1852,14 @@ function hold(){
     cur=spawn();
   }
   canHold=false;
-  rotated=false;
+  lastRotationInfo=null;
   lockTimer=0;
   lockResetCount=0;
   gravityTimer=0;
   softDropTimer=0;
   updateGhost();
   if(collide(cur)) triggerGameOver();
+  updateHudHold();
   return true;
 }
 
@@ -1667,12 +1872,21 @@ function attemptShift(dx){
 }
 
 function attemptRotate(dir=1){
-  const cand=TetrisEngine.rotate(cur,rotationGrid,dir);
-  if(cand!==cur){
+  const result=TetrisEngine.rotateDetailed(cur,rotationGrid,dir);
+  const cand=result?.piece;
+  if(cand && cand!==cur){
+    const previous={ x:cur.x, y:cur.y, o:cur.o };
     cur=cand;
     playSound('click');
     onPieceMoved();
-    rotated=true;
+    lastRotationInfo={
+      from: previous.o,
+      to: cur.o,
+      kickIndex: Number.isInteger(result?.kickIndex)?result.kickIndex:-1,
+      kicked: !!result?.kicked,
+      offsetX: cur.x-previous.x,
+      offsetY: cur.y-previous.y,
+    };
     return true;
   }
   return false;
@@ -1912,7 +2126,26 @@ function loop(ts){
   ctx.clearRect(0,0,c.width,c.height);
   draw();
   if(bc && mode==='play'){
-    const payload={grid:cloneGrid(grid),cur,nextM,holdM,score,level,lines,over,paused,started,showGhost,combo,seed:rngSeed,randomizerMode:pieceRandomizer.mode};
+    const payload={
+      grid:cloneGrid(grid),
+      cur,
+      nextM,
+      holdM,
+      score,
+      level,
+      lines,
+      over,
+      paused,
+      started,
+      showGhost,
+      combo,
+      backToBack,
+      queue: pieceQueue.slice(0,PREVIEW_COUNT).map(t=>({ t })),
+      seed:rngSeed,
+      randomizerMode:pieceRandomizer.mode,
+      dailySeedActive,
+      dailySeedLabel,
+    };
     bc.postMessage(payload);
     logBroadcastEvent('outbound',payload,{event:'message'});
   }
