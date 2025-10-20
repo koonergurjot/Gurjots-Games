@@ -155,6 +155,7 @@ body.game-shell::after {
   flex-wrap: wrap;
 }
 
+.game-shell__pause-button,
 .game-shell__pause-resume {
   border: none;
   border-radius: 999px;
@@ -162,11 +163,29 @@ body.game-shell::after {
   font-weight: 600;
   font-size: 1rem;
   cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.game-shell__pause-resume,
+.game-shell__pause-button--primary {
   background: linear-gradient(135deg, #22d3ee, #6366f1);
   color: #020617;
   box-shadow: 0 14px 32px rgba(99, 102, 241, 0.35);
 }
 
+.game-shell__pause-button--secondary {
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.4);
+}
+
+.game-shell__pause-button:hover,
+.game-shell__pause-resume:hover {
+  transform: translateY(-1px);
+}
+
+.game-shell__pause-button:focus-visible,
 .game-shell__pause-resume:focus-visible {
   outline: 2px solid #facc15;
   outline-offset: 2px;

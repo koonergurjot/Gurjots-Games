@@ -1,4 +1,4 @@
-import { installPauseManager } from './pause.js';
+import { mountPause } from './pause.js';
 import { installCanvasScaler, getHudSafeGutter } from './canvas.js';
 
 const toAbsoluteUrl = (value) => {
@@ -42,7 +42,6 @@ const applyTheme = dataset.applyTheme !== 'false';
 const slug = dataset.game || dataset.slug || '';
 
 installCanvasScaler();
-installPauseManager({ slug });
 
 if (typeof window !== 'undefined') {
   window.GGShellHud = Object.assign(window.GGShellHud || {}, {
@@ -203,9 +202,63 @@ if (!document.querySelector('.game-shell__back')) {
 
     let lastScoreAnnouncement = null;
     let shellPaused = false;
+    let pauseOverlay = null;
+
+    const emitOverlayEvent = (type, detail) => {
+      try {
+        window.dispatchEvent(new CustomEvent(type, { detail }));
+      } catch (_) {
+        /* ignore */
+      }
+    };
+
+    const normalizeOverlayDetail = (detail, fallbackSource) => {
+      const normalized = detail && typeof detail === 'object' ? { ...detail } : {};
+      if (!normalized.source && fallbackSource) normalized.source = fallbackSource;
+      if (slug && !normalized.slug) normalized.slug = slug;
+      return normalized;
+    };
+
+    const ensurePauseOverlay = () => {
+      if (pauseOverlay) return pauseOverlay;
+      if (!document.body) return null;
+      const host = document.createElement('div');
+      host.className = 'game-shell__pause';
+      host.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(host);
+      pauseOverlay = mountPause(host, {
+        onPause(detail) {
+          if (!shellPaused) {
+            updateShellPauseState(true, normalizeOverlayDetail(detail, 'overlay'));
+          }
+        },
+        onResume(detail) {
+          if (shellPaused) {
+            updateShellPauseState(false, normalizeOverlayDetail(detail, 'overlay'));
+          }
+        },
+        onRestart(detail) {
+          const payload = normalizeOverlayDetail(detail, 'overlay');
+          emitOverlayEvent('ggshell:restart', payload);
+          sendToParent('GAME_RESTART', payload);
+        },
+        onExit(detail) {
+          const payload = normalizeOverlayDetail(detail, 'overlay');
+          emitOverlayEvent('ggshell:exit', payload);
+          sendToParent('GAME_EXIT', payload);
+        },
+      });
+      return pauseOverlay;
+    };
     const updateShellPauseState = (paused, detail) => {
       if (shellPaused === paused) return;
       shellPaused = paused;
+      const overlayDetail = normalizeOverlayDetail(detail, 'shell');
+      const overlay = ensurePauseOverlay();
+      if (overlay) {
+        if (paused) overlay.show(overlayDetail);
+        else overlay.hide(overlayDetail);
+      }
       const eventName = paused ? 'ggshell:pause' : 'ggshell:resume';
       try {
         window.dispatchEvent(new CustomEvent(eventName, { detail }));
@@ -257,6 +310,15 @@ if (!document.querySelector('.game-shell__back')) {
 
     window.GGShellAnnounce = setAnnouncement;
     window.GGShellAnnounceScore = announceScore;
+
+    const initializePauseOverlay = () => {
+      ensurePauseOverlay();
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializePauseOverlay, { once: true });
+    } else {
+      initializePauseOverlay();
+    }
   }
 }
 
