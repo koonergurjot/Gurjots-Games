@@ -33,6 +33,21 @@
       "sprite": "/assets/powerups/lightning.png"
     },
     {
+      "id": "STICKY",
+      "type": "sticky",
+      "duration": 8,
+      "weight": 2,
+      "sprite": "/assets/powerups/heart.png"
+    },
+    {
+      "id": "SHRINK",
+      "type": "narrow",
+      "duration": 8,
+      "widthMultiplier": 0.7,
+      "weight": 1.6,
+      "sprite": "/assets/powerups/slow.png"
+    },
+    {
       "id": "LASER_MULTI",
       "type": "combo",
       "grants": ["LASER", "MULTI"],
