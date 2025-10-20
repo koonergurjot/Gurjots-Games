@@ -17,12 +17,75 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      background: var(--bg-primary, #111827);
+      color: var(--text-primary, #f9fafb);
+      transition: background-color var(--g2048-transition, 0.15s) ease,
+        color var(--g2048-transition, 0.15s) ease;
     }
 
     :root {
+      color-scheme: dark;
       --g2048-clock: 0ms;
       --g2048-frame: 0ms;
       --g2048-transition: 120ms;
+      --bg-primary: #111827;
+      --bg-secondary: #1f2937;
+      --bg-tertiary: #111827;
+      --bg-hover: #1f2937;
+      --border-color: #374151;
+      --text-primary: #f9fafb;
+      --text-secondary: #9ca3af;
+      --accent-color: #3b82f6;
+      --board-bg: #111827;
+      --tile-empty: #1f2937;
+      --tile-text-dark: #111827;
+      --tile-text-light: #f9fafb;
+      --tile-shadow: 0 16px 32px rgba(15, 23, 42, 0.4);
+      --control-shadow: 0 12px 28px rgba(15, 23, 42, 0.3);
+      --control-shadow-hover: 0 16px 36px rgba(15, 23, 42, 0.38);
+      --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.45);
+      --tile-color-2: #fef3c7;
+      --tile-color-4: #fde68a;
+      --tile-color-8: #fbbf24;
+      --tile-color-16: #60a5fa;
+      --tile-color-32: #34d399;
+      --tile-color-64: #fbbf24;
+      --tile-color-128: #a78bfa;
+      --tile-color-256: #f472b6;
+      --tile-color-512: #fb7185;
+      --tile-color-1024: #fbbf24;
+      --tile-color-2048: #fde047;
+      --tile-color-default: #e5e7eb;
+    }
+
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg-primary: #ffffff;
+      --bg-secondary: #f9fafb;
+      --bg-tertiary: #e5e7eb;
+      --bg-hover: #f3f4f6;
+      --border-color: #d1d5db;
+      --text-primary: #111827;
+      --text-secondary: #6b7280;
+      --board-bg: #ffffff;
+      --tile-empty: #e5e7eb;
+      --tile-text-dark: #111827;
+      --tile-text-light: #ffffff;
+      --tile-shadow: 0 18px 34px rgba(30, 41, 59, 0.25);
+      --control-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+      --control-shadow-hover: 0 16px 32px rgba(15, 23, 42, 0.26);
+      --tile-color-2: #fef3c7;
+      --tile-color-4: #fbbf24;
+      --tile-color-8: #f59e0b;
+      --tile-color-16: #ea580c;
+      --tile-color-32: #dc2626;
+      --tile-color-64: #b91c1c;
+      --tile-color-128: #7c3aed;
+      --tile-color-256: #5b21b6;
+      --tile-color-512: #1e40af;
+      --tile-color-1024: #166534;
+      --tile-color-2048: #0f172a;
+      --tile-color-default: #111827;
     }
     
     /* Main layout - Mobile first responsive */
@@ -65,16 +128,25 @@
       font-weight: 500;
       cursor: pointer;
       touch-action: manipulation;
-      transition: all var(--g2048-transition, 0.15s) ease;
+      transition:
+        background-color var(--g2048-transition, 0.15s) ease,
+        border-color var(--g2048-transition, 0.15s) ease,
+        color var(--g2048-transition, 0.15s) ease,
+        box-shadow var(--g2048-transition, 0.15s) ease,
+        transform var(--g2048-transition, 0.15s) ease;
+      box-shadow: var(--control-shadow);
+      will-change: transform;
     }
-    
+
     .theme-toggle:hover {
       background: var(--bg-hover, #1f2937);
+      transform: translateY(-1px);
+      box-shadow: var(--control-shadow-hover);
     }
-    
-    .theme-toggle:focus {
-      outline: 2px solid #3b82f6;
-      outline-offset: 2px;
+
+    .theme-toggle:focus-visible {
+      outline: none;
+      box-shadow: var(--control-shadow-hover), var(--focus-ring);
     }
     
     .score-bar {
@@ -90,8 +162,15 @@
       border-radius: 0.5rem;
       background: var(--bg-tertiary, #111827);
       border: 1px solid var(--border-color, #374151);
+      box-shadow: 0 14px 30px -20px rgba(15, 23, 42, 0.6);
+      transition:
+        transform var(--g2048-transition, 0.15s) ease,
+        box-shadow var(--g2048-transition, 0.15s) ease,
+        background-color var(--g2048-transition, 0.15s) ease,
+        border-color var(--g2048-transition, 0.15s) ease;
+      will-change: transform;
     }
-    
+
     .score-label {
       font-size: 0.75rem;
       font-weight: 600;
@@ -105,8 +184,32 @@
       font-weight: 700;
       color: var(--text-primary, #f9fafb);
       margin: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      transition:
+        transform var(--g2048-transition, 0.15s) ease,
+        color var(--g2048-transition, 0.15s) ease;
+      transform-origin: center;
+      will-change: transform;
     }
-    
+
+    .score-value-text {
+      display: inline-block;
+      min-width: 0;
+      transition:
+        transform var(--g2048-transition, 0.15s) ease,
+        color var(--g2048-transition, 0.15s) ease;
+      transform-origin: center;
+      will-change: transform;
+    }
+
+    .score-value.is-animating,
+    .score-value-text.is-animating {
+      transform: scale(1.08);
+    }
+
     .streak-display {
       display: flex;
       align-items: center;
@@ -130,7 +233,19 @@
     .game-canvas {
       border-radius: 0.75rem;
       border: 1px solid var(--border-color, #374151);
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--tile-shadow);
+      transition:
+        transform var(--g2048-transition, 0.15s) ease,
+        box-shadow var(--g2048-transition, 0.15s) ease,
+        border-color var(--g2048-transition, 0.15s) ease;
+      will-change: transform;
+      background: var(--board-bg, #111827);
+    }
+
+    .game-canvas:focus-visible {
+      outline: none;
+      box-shadow: var(--tile-shadow), var(--focus-ring);
+      transform: translateY(-2px);
     }
     
     /* Footer controls */
@@ -172,18 +287,27 @@
       font-weight: 500;
       cursor: pointer;
       touch-action: manipulation;
-      transition: all var(--g2048-transition, 0.15s) ease;
+      transition:
+        background-color var(--g2048-transition, 0.15s) ease,
+        border-color var(--g2048-transition, 0.15s) ease,
+        color var(--g2048-transition, 0.15s) ease,
+        box-shadow var(--g2048-transition, 0.15s) ease,
+        transform var(--g2048-transition, 0.15s) ease;
+      box-shadow: var(--control-shadow);
+      will-change: transform;
     }
-    
+
     .control-button:hover,
     .control-select:hover {
       background: var(--bg-hover, #1f2937);
+      transform: translateY(-1px);
+      box-shadow: var(--control-shadow-hover);
     }
-    
-    .control-button:focus,
-    .control-select:focus {
-      outline: 2px solid #3b82f6;
-      outline-offset: 2px;
+
+    .control-button:focus-visible,
+    .control-select:focus-visible {
+      outline: none;
+      box-shadow: var(--control-shadow-hover), var(--focus-ring);
     }
     
     .help-text {
@@ -201,6 +325,25 @@
       padding: 0.125rem 0.375rem;
       font-size: 0.75rem;
       font-weight: 600;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .theme-toggle,
+      .control-button,
+      .control-select,
+      .score-item,
+      .score-value,
+      .score-value-text,
+      .game-canvas,
+      #gameOverOverlay .overlay-actions button {
+        transition: none !important;
+        transform: none !important;
+      }
+
+      .score-value.is-animating,
+      .score-value-text.is-animating {
+        transform: none;
+      }
     }
     
     /* Responsive breakpoints */
@@ -308,16 +451,25 @@
       cursor: pointer;
       min-width: 7rem;
       touch-action: manipulation;
-      transition: all 0.15s ease;
+      transition:
+        background-color var(--g2048-transition, 0.15s) ease,
+        border-color var(--g2048-transition, 0.15s) ease,
+        color var(--g2048-transition, 0.15s) ease,
+        box-shadow var(--g2048-transition, 0.15s) ease,
+        transform var(--g2048-transition, 0.15s) ease;
+      box-shadow: var(--control-shadow);
+      will-change: transform;
     }
-    
+
     #gameOverOverlay .overlay-actions button:hover {
       background: var(--bg-hover, #1f2937);
+      transform: translateY(-1px);
+      box-shadow: var(--control-shadow-hover);
     }
-    
-    #gameOverOverlay .overlay-actions button:focus {
-      outline: 2px solid #3b82f6;
-      outline-offset: 2px;
+
+    #gameOverOverlay .overlay-actions button:focus-visible {
+      outline: none;
+      box-shadow: var(--control-shadow-hover), var(--focus-ring);
     }
     
     /* Hide legacy elements */
