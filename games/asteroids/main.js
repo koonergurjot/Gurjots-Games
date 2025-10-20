@@ -22,6 +22,11 @@ const STAR_LAYER_CONFIG = [
   { density: 0.05, speed: 5, size: 1.1, color: '#94a3b8' },
 ];
 const STAR_TWINKLE_SPEED = { min: 0.5, max: 1.2 };
+const DEFAULT_GLOW_CONFIG = {
+  engine: { alpha: 0.32, radius: 24, length: 46, pulse: 0.35 },
+  bullet: { alpha: 0.55, radius: 10 },
+  particles: { alpha: 0.28, radius: 2.2, count: 5 },
+};
 const DIFFICULTY_PRESETS = [
   { key: 'relaxed', label: 'Relaxed', shipSpeed: 0.85, asteroidSpeed: 0.75, score: 0.75 },
   { key: 'standard', label: 'Standard', shipSpeed: 1, asteroidSpeed: 1, score: 1 },
@@ -683,6 +688,50 @@ function normalizeWaveEntry(entry) {
   return normalized;
 }
 
+function mergeGlowConfig(overrides = {}) {
+  return {
+    engine: { ...DEFAULT_GLOW_CONFIG.engine, ...(overrides.engine || {}) },
+    bullet: { ...DEFAULT_GLOW_CONFIG.bullet, ...(overrides.bullet || {}) },
+    particles: { ...DEFAULT_GLOW_CONFIG.particles, ...(overrides.particles || {}) },
+  };
+}
+
+function parseFxModes(search = '') {
+  if (!search || typeof search !== 'string') return new Set();
+  let params;
+  try {
+    params = new URLSearchParams(search);
+  } catch (_) {
+    return new Set();
+  }
+  const modes = new Set();
+  for (const value of params.getAll('fx')) {
+    if (!value) continue;
+    const parts = value.split(',');
+    for (const part of parts) {
+      const trimmed = part.trim().toLowerCase();
+      if (trimmed) modes.add(trimmed);
+    }
+  }
+  return modes;
+}
+
+async function loadFxTuning() {
+  if (typeof fetch !== 'function') return null;
+  try {
+    const response = await fetch(new URL('../../assets/asteroids/fx.json', import.meta.url));
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) {
+    pushEvent('diagnostics', {
+      level: 'info',
+      message: '[asteroids] fx config unavailable, using defaults',
+      details: sanitizeForLog(error),
+    });
+    return null;
+  }
+}
+
 function angleTo(x1, y1, x2, y2) {
   return Math.atan2(y2 - y1, x2 - x1);
 }
@@ -730,6 +779,15 @@ class AsteroidsGame {
     if (!this.ctx) throw new Error('[asteroids] Canvas 2D context unavailable');
 
     this.context = context;
+    const fxModes = parseFxModes(globalScope?.location?.search || '');
+    this.fx = {
+      glow: {
+        enabled: fxModes.has('glow'),
+        config: mergeGlowConfig(),
+      },
+    };
+    this.fxTime = 0;
+    this.shipGlow = 0;
     this.controls = new Controls({
       map: {
         left: ['ArrowLeft', 'KeyA'],
@@ -815,6 +873,18 @@ class AsteroidsGame {
       explode: createAudio('../../assets/audio/explode.wav', 0.6),
     };
 
+    if (this.fx.glow.enabled) {
+      loadFxTuning()
+        .then((config) => {
+          if (config?.glow) {
+            this.fx.glow.config = mergeGlowConfig(config.glow);
+          }
+        })
+        .catch(() => {
+          /* ignore */
+        });
+    }
+
     this.hud = this.createHud();
     this.updateDifficultyUi();
     if (this.hud?.best) this.hud.best.textContent = String(this.bestScore);
@@ -877,12 +947,16 @@ class AsteroidsGame {
     const rect = this.canvas.getBoundingClientRect();
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     this.dpr = dpr;
-    const width = rect.width || BASE_WIDTH;
-    const height = rect.height || BASE_HEIGHT;
-    this.canvas.width = Math.round(width * dpr);
-    this.canvas.height = Math.round(height * dpr);
-    this.width = width;
-    this.height = height;
+    const rawWidth = rect.width || BASE_WIDTH;
+    const rawHeight = rect.height || BASE_HEIGHT;
+    this.width = Math.max(1, Math.round(rawWidth));
+    this.height = Math.max(1, Math.round(rawHeight));
+    this.canvas.width = Math.round(this.width * dpr);
+    this.canvas.height = Math.round(this.height * dpr);
+    if (this.canvas.style) {
+      this.canvas.style.width = `${this.width}px`;
+      this.canvas.style.height = `${this.height}px`;
+    }
     this.world.width = this.width;
     this.world.height = this.height;
   }
@@ -1657,24 +1731,26 @@ class AsteroidsGame {
           ctx.globalAlpha = t * 0.5;
           ctx.fillStyle = event.color || '#f8fafc';
           ctx.beginPath();
-          ctx.arc(point.x, point.y, 2 + 6 * t, 0, TWO_PI);
+          ctx.arc(this.snap(point.x), this.snap(point.y), 2 + 6 * t, 0, TWO_PI);
           ctx.fill();
         }
         ctx.globalAlpha = 1;
         ctx.fillStyle = '#f8fafc';
         ctx.beginPath();
-        ctx.arc(event.x, event.y, event.radius + 1.5, 0, TWO_PI);
+        ctx.arc(this.snap(event.x), this.snap(event.y), event.radius + 1.5, 0, TWO_PI);
         ctx.fill();
       } else if (event.type === 'nebula') {
         const progress = clamp(event.time / event.duration, 0, 1);
         const alpha = Math.sin(progress * Math.PI);
-        const gradient = ctx.createRadialGradient(event.x, event.y, event.radius * 0.2, event.x, event.y, event.radius);
+        const x = this.snap(event.x);
+        const y = this.snap(event.y);
+        const gradient = ctx.createRadialGradient(x, y, event.radius * 0.2, x, y, event.radius);
         gradient.addColorStop(0, `${event.color}80`);
         gradient.addColorStop(1, `${event.color}00`);
         ctx.globalAlpha = alpha * 0.6;
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(event.x, event.y, event.radius, 0, TWO_PI);
+        ctx.arc(x, y, event.radius, 0, TWO_PI);
         ctx.fill();
         ctx.globalAlpha = 1;
       }
@@ -1688,41 +1764,45 @@ class AsteroidsGame {
     if (allowObjective && this.specialWave.type === 'objective' && Array.isArray(this.specialWave.targets)) {
       for (const target of this.specialWave.targets) {
         const pulse = 0.6 + 0.4 * Math.sin(target.pulse);
-        const gradient = ctx.createRadialGradient(target.x, target.y, target.radius * 0.3, target.x, target.y, target.radius * 1.1);
+        const x = this.snap(target.x);
+        const y = this.snap(target.y);
+        const gradient = ctx.createRadialGradient(x, y, target.radius * 0.3, x, y, target.radius * 1.1);
         gradient.addColorStop(0, `rgba(96, 165, 250, ${0.6 * pulse})`);
         gradient.addColorStop(1, 'rgba(96, 165, 250, 0)');
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(target.x, target.y, target.radius * 1.1, 0, TWO_PI);
+        ctx.arc(x, y, target.radius * 1.1, 0, TWO_PI);
         ctx.fill();
         ctx.strokeStyle = 'rgba(191, 219, 254, 0.8)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(target.x, target.y, target.radius * 0.65, 0, TWO_PI);
+        ctx.arc(x, y, target.radius * 0.65, 0, TWO_PI);
         ctx.stroke();
       }
     }
     if (allowBoss && this.specialWave.type === 'boss' && this.specialWave.boss) {
       const boss = this.specialWave.boss;
       const hpRatio = clamp(boss.hp / (boss.maxHp || boss.hp || 1), 0, 1);
-      const bodyGradient = ctx.createRadialGradient(boss.x, boss.y, boss.radius * 0.3, boss.x, boss.y, boss.radius);
+      const bx = this.snap(boss.x);
+      const by = this.snap(boss.y);
+      const bodyGradient = ctx.createRadialGradient(bx, by, boss.radius * 0.3, bx, by, boss.radius);
       bodyGradient.addColorStop(0, 'rgba(248, 113, 113, 0.9)');
       bodyGradient.addColorStop(1, 'rgba(248, 113, 113, 0.1)');
       ctx.fillStyle = bodyGradient;
       ctx.beginPath();
-      ctx.arc(boss.x, boss.y, boss.radius, 0, TWO_PI);
+      ctx.arc(bx, by, boss.radius, 0, TWO_PI);
       ctx.fill();
       ctx.strokeStyle = 'rgba(252, 165, 165, 0.9)';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(boss.x, boss.y, boss.radius * 0.75, 0, TWO_PI);
+      ctx.arc(bx, by, boss.radius * 0.75, 0, TWO_PI);
       ctx.stroke();
 
       // health ring
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(boss.x, boss.y, boss.radius + 8, -Math.PI / 2, -Math.PI / 2 + hpRatio * TWO_PI);
+      ctx.arc(bx, by, boss.radius + 8, -Math.PI / 2, -Math.PI / 2 + hpRatio * TWO_PI);
       ctx.stroke();
     }
   }
@@ -1732,9 +1812,97 @@ class AsteroidsGame {
     for (const projectile of this.enemyProjectiles) {
       ctx.fillStyle = projectile.color || 'rgba(248, 113, 113, 0.9)';
       ctx.beginPath();
-      ctx.arc(projectile.x, projectile.y, projectile.radius, 0, TWO_PI);
+      ctx.arc(this.snap(projectile.x), this.snap(projectile.y), projectile.radius, 0, TWO_PI);
       ctx.fill();
     }
+  }
+
+  renderBulletGlow(ctx, x, y, config, normalized, id = 0) {
+    const bulletConfig = config?.bullet || DEFAULT_GLOW_CONFIG.bullet;
+    const radius = Math.max(4, Number(bulletConfig.radius) || DEFAULT_GLOW_CONFIG.bullet.radius);
+    const baseAlpha = clamp(Number(bulletConfig.alpha) || DEFAULT_GLOW_CONFIG.bullet.alpha, 0, 1);
+    const flicker = 0.85 + 0.15 * Math.sin(this.fxTime * 45 + id * 0.6);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = baseAlpha * flicker * Math.max(0.1, normalized);
+    const gradient = ctx.createRadialGradient(x, y, radius * 0.2, x, y, radius);
+    gradient.addColorStop(0, 'rgba(252, 211, 77, 0.95)');
+    gradient.addColorStop(0.55, 'rgba(165, 243, 252, 0.45)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, TWO_PI);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  renderShip(ctx, ship, shipPos, shipRot, glowConfig) {
+    if (!ship?.alive || !shipPos || !shipRot) return;
+    const blink = ship.invulnerable > 0 && Math.floor(ship.invulnerable * 10) % 2 === 0;
+    if (blink) return;
+    const x = this.snap(shipPos.x);
+    const y = this.snap(shipPos.y);
+    const angle = shipRot?.angle ?? 0;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 2;
+
+    if (glowConfig && this.shipGlow > 0.001) {
+      const engineConfig = glowConfig.engine || DEFAULT_GLOW_CONFIG.engine;
+      const engineAlpha = clamp(Number(engineConfig.alpha) || DEFAULT_GLOW_CONFIG.engine.alpha, 0, 1);
+      const engineRadius = Math.max(6, Number(engineConfig.radius) || DEFAULT_GLOW_CONFIG.engine.radius);
+      const engineLength = Math.max(engineRadius, Number(engineConfig.length) || DEFAULT_GLOW_CONFIG.engine.length);
+      const pulse = clamp(Number(engineConfig.pulse) || DEFAULT_GLOW_CONFIG.engine.pulse, 0, 1);
+      const pulseFactor = 1 + pulse * Math.sin(this.fxTime * 3.6 + angle);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = engineAlpha * this.shipGlow;
+      const gradient = ctx.createRadialGradient(-SHIP_RADIUS * 0.6, 0, engineRadius * 0.3, -SHIP_RADIUS * 0.6, 0, engineLength);
+      gradient.addColorStop(0, 'rgba(134, 239, 172, 0.92)');
+      gradient.addColorStop(0.45, 'rgba(94, 234, 212, 0.45)');
+      gradient.addColorStop(1, 'rgba(14, 165, 233, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.ellipse(-SHIP_RADIUS - engineLength * 0.25, 0, engineRadius, engineLength * 0.65 * pulseFactor, 0, 0, TWO_PI);
+      ctx.fill();
+
+      const particles = glowConfig.particles || DEFAULT_GLOW_CONFIG.particles;
+      const particleCount = Math.max(0, Math.round(Number(particles.count) || 0));
+      if (particleCount > 0) {
+        ctx.globalAlpha = clamp((Number(particles.alpha) || DEFAULT_GLOW_CONFIG.particles.alpha) * this.shipGlow, 0, 1);
+        ctx.fillStyle = 'rgba(165, 243, 252, 1)';
+        for (let i = 0; i < particleCount; i++) {
+          const t = ((this.fxTime * 1.2) + i / particleCount) % 1;
+          const px = -SHIP_RADIUS - engineLength * 0.75 * t;
+          const py = Math.sin(this.fxTime * 6 + i * 1.4) * engineRadius * 0.35;
+          const size = Math.max(0.5, (Number(particles.radius) || DEFAULT_GLOW_CONFIG.particles.radius) * (1 - t));
+          ctx.beginPath();
+          ctx.arc(px, py, size, 0, TWO_PI);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    ctx.strokeStyle = '#34d399';
+    ctx.beginPath();
+    ctx.moveTo(SHIP_RADIUS, 0);
+    ctx.lineTo(-SHIP_RADIUS * 0.8, SHIP_RADIUS * 0.6);
+    ctx.lineTo(-SHIP_RADIUS * 0.5, 0);
+    ctx.lineTo(-SHIP_RADIUS * 0.8, -SHIP_RADIUS * 0.6);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  snap(value) {
+    if (!Number.isFinite(value)) return value;
+    const scale = this.dpr || 1;
+    return Math.round(value * scale) / scale;
   }
 
   spawnShip() {
@@ -1925,6 +2093,7 @@ class AsteroidsGame {
     const shipRot = getComponent(this.world, 'rotation', this.shipEntity);
 
     if (!ship.alive) {
+      this.shipGlow = Math.max(0, this.shipGlow - dt * 4);
       ship.respawn -= dt;
       if (ship.respawn <= 0) {
         ship.alive = true;
@@ -1970,6 +2139,10 @@ class AsteroidsGame {
       shipVel.y *= 1 - Math.min(1, dt * 0.6);
       this.thrustTimer = 0;
     }
+    const glowTarget = thrusting ? 1 : 0;
+    const glowLerp = thrusting ? 9 : 4;
+    this.shipGlow += (glowTarget - this.shipGlow) * Math.min(1, dt * glowLerp);
+    this.shipGlow = clamp(this.shipGlow, 0, 1);
 
     this.bulletCooldown = Math.max(0, this.bulletCooldown - dt);
     if (this.controls.isDown('a') && this.bulletCooldown <= 0) {
@@ -2163,7 +2336,7 @@ class AsteroidsGame {
     });
     addComponent(this.world, 'collider', entity, { radius: 3 });
     addComponent(this.world, 'bullet', entity, {});
-    addComponent(this.world, 'lifetime', entity, { remaining: 0.9, payload: 'bullet' });
+    addComponent(this.world, 'lifetime', entity, { remaining: 0.9, duration: 0.9, payload: 'bullet' });
     try {
       this.sounds.laser();
     } catch (_) {
@@ -2231,9 +2404,18 @@ class AsteroidsGame {
     if (!ctx) return;
     ctx.save();
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, this.width, this.height);
     ctx.fillStyle = '#030712';
     ctx.fillRect(0, 0, this.width, this.height);
+
+    if (this.paused || this.gameOver || this.shopActive) {
+      this.shipGlow = Math.max(0, this.shipGlow - dt * 2.5);
+    }
+
+    this.fxTime += dt;
+    const glowEnabled = Boolean(this.fx?.glow?.enabled);
+    const glowConfig = glowEnabled ? this.fx.glow.config : null;
 
     // starfield
     this.starfieldTime += dt;
@@ -2256,9 +2438,11 @@ class AsteroidsGame {
     for (const entity of particles) {
       const pos = getComponent(this.world, 'position', entity);
       const particle = getComponent(this.world, 'particle', entity);
+      const x = this.snap(pos.x);
+      const y = this.snap(pos.y);
       ctx.fillStyle = particle.color;
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y, particle.size, 0, TWO_PI);
+      ctx.arc(x, y, particle.size, 0, TWO_PI);
       ctx.fill();
     }
 
@@ -2266,14 +2450,24 @@ class AsteroidsGame {
     ctx.fillStyle = '#f8fafc';
     for (const entity of bullets) {
       const pos = getComponent(this.world, 'position', entity);
+      const lifetime = getComponent(this.world, 'lifetime', entity);
+      const x = this.snap(pos.x);
+      const y = this.snap(pos.y);
+      if (glowEnabled && glowConfig) {
+        const duration = typeof lifetime?.duration === 'number' && lifetime.duration > 0 ? lifetime.duration : 0.9;
+        const normalized = clamp((lifetime?.remaining ?? duration) / duration, 0, 1);
+        this.renderBulletGlow(ctx, x, y, glowConfig, normalized, entity);
+      }
       ctx.beginPath();
-      ctx.arc(pos.x, pos.y, 2.5, 0, TWO_PI);
+      ctx.arc(x, y, 2.5, 0, TWO_PI);
       ctx.fill();
     }
 
     const rocks = queryEntities(this.world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.rock);
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
     for (const entity of rocks) {
       const pos = getComponent(this.world, 'position', entity);
       const rot = getComponent(this.world, 'rotation', entity);
@@ -2283,8 +2477,8 @@ class AsteroidsGame {
       const shape = rock.shape;
       for (let i = 0; i < shape.length; i++) {
         const point = shape[i];
-        const px = pos.x + Math.cos(rot.angle) * point.x - Math.sin(rot.angle) * point.y;
-        const py = pos.y + Math.sin(rot.angle) * point.x + Math.cos(rot.angle) * point.y;
+        const px = this.snap(pos.x + Math.cos(rot.angle) * point.x - Math.sin(rot.angle) * point.y);
+        const py = this.snap(pos.y + Math.sin(rot.angle) * point.x + Math.cos(rot.angle) * point.y);
         if (i === 0) ctx.moveTo(px, py);
         else ctx.lineTo(px, py);
       }
@@ -2298,24 +2492,7 @@ class AsteroidsGame {
     const ship = getComponent(this.world, 'ship', this.shipEntity);
     const shipPos = getComponent(this.world, 'position', this.shipEntity);
     const shipRot = getComponent(this.world, 'rotation', this.shipEntity);
-    if (ship.alive) {
-      const blink = ship.invulnerable > 0 && Math.floor(ship.invulnerable * 10) % 2 === 0;
-      if (!blink) {
-        ctx.save();
-        ctx.translate(shipPos.x, shipPos.y);
-        ctx.rotate(shipRot.angle);
-        ctx.strokeStyle = '#34d399';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(SHIP_RADIUS, 0);
-        ctx.lineTo(-SHIP_RADIUS * 0.8, SHIP_RADIUS * 0.6);
-        ctx.lineTo(-SHIP_RADIUS * 0.5, 0);
-        ctx.lineTo(-SHIP_RADIUS * 0.8, -SHIP_RADIUS * 0.6);
-        ctx.closePath();
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
+    this.renderShip(ctx, ship, shipPos, shipRot, glowEnabled ? glowConfig : null);
 
     ctx.restore();
     markFirstFrame();
