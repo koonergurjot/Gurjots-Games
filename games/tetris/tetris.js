@@ -85,7 +85,6 @@ installErrorReporter();
 const GAME_ID='tetris';GG.incPlays();
 preloadFirstFrameAssets(GAME_ID).catch(()=>{});
 const SPRITE_SOURCES={
-  block:'/assets/sprites/block.png',
   effects:{
     spark:'/assets/effects/spark.png',
     explosion:'/assets/effects/explosion.png',
@@ -232,9 +231,8 @@ if(c){
 }
 const ctx=c.getContext('2d');
 if(ctx) ctx.imageSmoothingEnabled=false;
-const spriteStore={ block:null, effects:{}, ui:{ trophy:null } };
+const spriteStore={ effects:{}, ui:{ trophy:null } };
 const spriteRequests=new Set();
-const tintCache=new Map();
 const effects=[];
 
 const PARALLAX_LAYERS=[
@@ -289,8 +287,73 @@ ensureSprites();
 let postedReady=false;
 const COLS=10, ROWS=20;
 const GRID_SIZE=COLS*ROWS;
-const COLORS=['#000','#8b5cf6','#22d3ee','#f59e0b','#ef4444','#10b981','#e879f9','#38bdf8'];
-const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L:[[0,0,7],[7,7,7]]};
+const SHAPES={I:[[1,1,1,1]],O:[[2,2],[2,2]],T:[[0,3,0],[3,3,3]],S:[[0,4,4],[4,4,0]],Z:[[5,5,0],[0,5,5]],J:[[6,0,0],[6,6,6]],L[[0,0,7],[7,7,7]]};
+const PIECE_VALUE_TO_KEY=[null,'I','O','T','S','Z','J','L'];
+const PIECE_KEYS=['I','O','T','S','Z','J','L'];
+const DEFAULT_TILE_CONFIG={
+  I:{ fill:'--tetris-piece-i-fill', stroke:'--tetris-piece-i-stroke', cornerRadius:6 },
+  O:{ fill:'--tetris-piece-o-fill', stroke:'--tetris-piece-o-stroke', cornerRadius:6 },
+  T:{ fill:'--tetris-piece-t-fill', stroke:'--tetris-piece-t-stroke', cornerRadius:6 },
+  S:{ fill:'--tetris-piece-s-fill', stroke:'--tetris-piece-s-stroke', cornerRadius:6 },
+  Z:{ fill:'--tetris-piece-z-fill', stroke:'--tetris-piece-z-stroke', cornerRadius:6 },
+  J:{ fill:'--tetris-piece-j-fill', stroke:'--tetris-piece-j-stroke', cornerRadius:6 },
+  L:{ fill:'--tetris-piece-l-fill', stroke:'--tetris-piece-l-stroke', cornerRadius:6 },
+};
+const FALLBACK_TILE_COLORS={
+  I:'#38bdf8',
+  O:'#facc15',
+  T:'#a855f7',
+  S:'#22c55e',
+  Z:'#ef4444',
+  J:'#3b82f6',
+  L:'#f97316',
+};
+const FALLBACK_TILE_STROKES={
+  I:'#0ea5e9',
+  O:'#d97706',
+  T:'#7c3aed',
+  S:'#16a34a',
+  Z:'#b91c1c',
+  J:'#1d4ed8',
+  L:'#ea580c',
+};
+const tileStyleCache=new Map();
+const tileConfig={};
+for(const key of PIECE_KEYS){
+  tileConfig[key]={ ...DEFAULT_TILE_CONFIG[key] };
+}
+let rootComputedStyle=null;
+function getRootComputedStyle(){
+  if(rootComputedStyle) return rootComputedStyle;
+  if(typeof window==='undefined' || !window.getComputedStyle) return null;
+  rootComputedStyle=window.getComputedStyle(document.documentElement);
+  return rootComputedStyle;
+}
+function getPieceStyle(key){
+  if(!key) return null;
+  if(tileStyleCache.has(key)) return tileStyleCache.get(key);
+  const config=tileConfig[key] || DEFAULT_TILE_CONFIG[key];
+  const fill=resolveStyleColor(config?.fill,FALLBACK_TILE_COLORS[key]||'#ffffff');
+  const stroke=resolveStyleColor(config?.stroke,FALLBACK_TILE_STROKES[key]||adjustLightness(fill,-25));
+  const radiusRaw=config?.cornerRadius;
+  const radius=Number.isFinite(radiusRaw)?Math.max(0,radiusRaw):DEFAULT_TILE_CONFIG[key]?.cornerRadius||0;
+  const style={ fill, stroke, cornerRadius: radius };
+  tileStyleCache.set(key,style);
+  return style;
+}
+if(typeof fetch==='function'){
+  fetch(new URL('../../assets/tetris/tiles.json', import.meta.url)).then(r=>{
+    if(!r.ok) return null;
+    return r.json();
+  }).then(data=>{
+    if(!data || typeof data!=='object') return;
+    for(const key of PIECE_KEYS){
+      if(!data[key] || typeof data[key]!=='object') continue;
+      tileConfig[key]={ ...tileConfig[key], ...data[key] };
+    }
+    tileStyleCache.clear();
+  }).catch(()=>{});
+}
 const PREVIEW_COUNT=3;
 const CLEAR_EFFECT_DURATION=0.6;
 const CLEAR_STAGE_SPLIT=[CLEAR_EFFECT_DURATION*0.5,CLEAR_EFFECT_DURATION*0.5];
@@ -422,13 +485,6 @@ const broadcastState={
 };
 
 function ensureSprites(){
-  if(!spriteStore.block && !spriteRequests.has('block')){
-    spriteRequests.add('block');
-    loadImage(SPRITE_SOURCES.block,{slug:GAME_ID}).then(img=>{
-      spriteStore.block=img;
-      tintCache.clear();
-    }).catch(()=>{}).finally(()=>spriteRequests.delete('block'));
-  }
   for(const [key,src] of Object.entries(SPRITE_SOURCES.effects)){
     if(spriteStore.effects[key]) continue;
     const requestKey=`effect:${key}`;
@@ -622,68 +678,144 @@ function adjustLightness(color,delta){
   return rgbToHex(hslToRgb(hsl));
 }
 
-function getTintedBlock(color){
-  if(!color) return null;
-  if(tintCache.has(color)) return tintCache.get(color);
-  const base=spriteStore.block;
-  const width=(isImageReady(base)?(base.naturalWidth||base.width):24)||24;
-  const height=(isImageReady(base)?(base.naturalHeight||base.height):24)||24;
-  const canvas=document.createElement('canvas');
-  canvas.width=width;
-  canvas.height=height;
-  const context=canvas.getContext('2d');
-  if(!context) return null;
-  context.imageSmoothingEnabled=false;
-  context.clearRect(0,0,width,height);
-  context.fillStyle=color;
-  context.fillRect(0,0,width,height);
-  const gradient=context.createLinearGradient(0,0,0,height);
-  gradient.addColorStop(0,adjustLightness(color,15));
-  gradient.addColorStop(1,adjustLightness(color,-10));
-  context.fillStyle=gradient;
-  context.fillRect(0,0,width,height);
-  const lightRim=adjustLightness(color,25);
-  const darkRim=adjustLightness(color,-25);
-  context.globalAlpha=0.25;
-  context.fillStyle=lightRim;
-  context.fillRect(0,0,width,1);
-  context.fillRect(0,0,1,height);
-  context.globalAlpha=0.20;
-  context.fillStyle=darkRim;
-  context.fillRect(0,height-1,width,1);
-  context.fillRect(width-1,0,1,height);
-  context.globalAlpha=1;
-  tintCache.set(color,canvas);
-  return canvas;
+function normalizeColor(color,fallback){
+  if(!color) return fallback;
+  let value=String(color).trim();
+  if(!value) return fallback;
+  if(value.startsWith('#')){
+    if(value.length===4){
+      const r=value[1];
+      const g=value[2];
+      const b=value[3];
+      return `#${r}${r}${g}${g}${b}${b}`;
+    }
+    if(value.length>=7) return value.slice(0,7);
+    return value;
+  }
+  const match=value.match(/^rgba?\(([^)]+)\)$/i);
+  if(match){
+    const parts=match[1].split(',').map(part=>Number.parseFloat(part.trim()));
+    if(parts.length>=3 && parts.slice(0,3).every(Number.isFinite)){
+      const [r,g,b]=parts;
+      return rgbToHex({ r:Math.round(r), g:Math.round(g), b:Math.round(b) });
+    }
+  }
+  return fallback ?? value;
 }
 
-function drawBlockAtPixel(px,py,size,color,alpha=1,opts={}){
-  if(!ctx || !color || size<=0) return;
-  const shadow=opts.shadow!==false;
-  if(shadow){
-    const shadowSprite=getTintedBlock('#000000');
-    ctx.save();
-    ctx.globalAlpha=alpha*0.35;
-    if(shadowSprite){
-      ctx.drawImage(shadowSprite,px+2,py+2,size,size);
-    }else{
-      ctx.fillStyle='#000000';
-      ctx.fillRect(px+2,py+2,size,size);
-    }
-    ctx.restore();
+function resolveStyleColor(token,fallback){
+  if(!token) return normalizeColor(fallback,fallback);
+  let value=String(token).trim();
+  if(!value) return normalizeColor(fallback,fallback);
+  if(value.startsWith('--')){
+    const styles=getRootComputedStyle();
+    const resolved=styles?.getPropertyValue(value)?.trim();
+    if(resolved) value=resolved;
+    else return normalizeColor(fallback,fallback);
   }
-  const sprite=getTintedBlock(color);
+  return normalizeColor(value,fallback);
+}
+
+function drawRoundedRectPath(context,x,y,width,height,radius){
+  const r=Math.max(0,Math.min(radius,Math.min(width,height)/2));
+  context.moveTo(x+r,y);
+  context.lineTo(x+width-r,y);
+  context.quadraticCurveTo(x+width,y,x+width,y+r);
+  context.lineTo(x+width,y+height-r);
+  context.quadraticCurveTo(x+width,y+height,x+width-r,y+height);
+  context.lineTo(x+r,y+height);
+  context.quadraticCurveTo(x,y+height,x,y+height-r);
+  context.lineTo(x,y+r);
+  context.quadraticCurveTo(x,y,x+r,y);
+}
+
+function drawBlockAtPixel(px,py,size,pieceKey,alpha=1,opts={}){
+  if(!ctx || !pieceKey || size<=0) return;
+  const style=getPieceStyle(pieceKey);
+  if(!style) return;
+  const x=Math.round(px);
+  const y=Math.round(py);
+  const side=Math.max(1,Math.round(size));
+  const radius=Math.min(Math.max(0,style.cornerRadius||0),side/2);
+  const shadowEnabled=opts.shadow!==false && !opts.ghost;
   ctx.save();
   ctx.globalAlpha=alpha;
-  if(sprite){
-    ctx.drawImage(sprite,px,py,size,size);
-  }else{
-    ctx.fillStyle=color;
-    ctx.fillRect(px,py,size,size);
+  if(shadowEnabled){
+    ctx.save();
+    ctx.globalAlpha=alpha*0.35;
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.beginPath();
+    drawRoundedRectPath(ctx,x+2,y+2,side,side,Math.max(0,radius-1));
+    ctx.fill();
+    ctx.restore();
   }
+  if(opts.ghost){
+    ctx.save();
+    ctx.globalAlpha=Math.max(0,Math.min(1,alpha*0.25));
+    ctx.fillStyle=style.fill;
+    ctx.beginPath();
+    drawRoundedRectPath(ctx,x,y,side,side,radius);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.lineWidth=1;
+    ctx.lineJoin='round';
+    ctx.lineCap='round';
+    ctx.setLineDash([Math.max(3,Math.round(side*0.55)),Math.max(2,Math.round(side*0.3))]);
+    ctx.strokeStyle=adjustLightness(style.stroke||style.fill,-25);
+    ctx.globalAlpha=Math.max(0,Math.min(1,alpha*0.8));
+    ctx.translate(0.5,0.5);
+    ctx.beginPath();
+    drawRoundedRectPath(ctx,x,y,side,side,Math.max(0,radius-0.5));
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore();
+    return;
+  }
+  const fillColor=style.fill;
+  const strokeColor=style.stroke||adjustLightness(fillColor,-25);
+  const gradient=ctx.createLinearGradient(x,y,x,y+side);
+  gradient.addColorStop(0,adjustLightness(fillColor,12));
+  gradient.addColorStop(0.55,fillColor);
+  gradient.addColorStop(1,adjustLightness(fillColor,-14));
+  ctx.beginPath();
+  drawRoundedRectPath(ctx,x,y,side,side,radius);
+  ctx.fillStyle=gradient;
+  ctx.fill();
+
+  const capHeight=Math.max(2,Math.round(side*0.35));
+  ctx.save();
+  ctx.beginPath();
+  drawRoundedRectPath(ctx,x+1,y+1,side-2,capHeight,Math.max(0,radius-1));
+  ctx.clip();
+  const capGradient=ctx.createLinearGradient(x,y,x,y+capHeight);
+  capGradient.addColorStop(0,'rgba(255,255,255,0.7)');
+  capGradient.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=capGradient;
+  ctx.fillRect(x,y,side,capHeight);
+  ctx.restore();
+
+  ctx.save();
+  const lineWidth=Math.max(1,Math.round(side*0.08));
+  ctx.lineWidth=lineWidth;
+  ctx.lineJoin='round';
+  ctx.lineCap='round';
+  ctx.strokeStyle=strokeColor;
+  ctx.translate(0.5,0.5);
+  ctx.beginPath();
+  drawRoundedRectPath(ctx,x,y,side,side,Math.max(0,radius-0.5));
+  ctx.stroke();
+  ctx.restore();
   ctx.restore();
 }
 
+function drawTileValue(value,px,py,size,alpha=1,opts={}){
+  const key=PIECE_VALUE_TO_KEY[value]||null;
+  if(!key) return;
+  drawBlockAtPixel(px,py,size,key,alpha,opts);
+}
 function playSound(name){
   try{ playSfx(name); }
   catch(err){ console.warn('[tetris] sfx failed',err); }
@@ -1680,17 +1812,17 @@ function spawnNextPiece(){
 function drawCell(x,y,v,cell){
   if(!v) return;
   const alpha=clearingRows.has(y)?0.6:1;
-  drawBlockAtPixel(x*cell,y*cell,cell,COLORS[v],alpha,{shadow:false});
+  drawTileValue(v,x*cell,y*cell,cell,alpha,{shadow:false});
 }
 function drawPieceCell(x,y,v,cell,alpha=1){
-  drawBlockAtPixel(x*cell,y*cell,cell,COLORS[v],alpha,{shadow:true});
+  drawTileValue(v,x*cell,y*cell,cell,alpha,{shadow:true});
 }
 function drawMatrix(m,ox,oy,cell){
   const previewCell=cell*0.8;
   for(let y=0;y<m.length;y++)
     for(let x=0;x<m[y].length;x++){
       if(!m[y][x]) continue;
-      drawBlockAtPixel(ox+x*previewCell,oy+y*previewCell,previewCell-2,COLORS[m[y][x]],1,{shadow:false});
+      drawTileValue(m[y][x],ox+x*previewCell,oy+y*previewCell,previewCell-2,1,{shadow:false});
     }
 }
 
@@ -1732,7 +1864,7 @@ function drawGhost(cell){
   if(!showGhost||!ghost) return;
   for(let y=0;y<ghost.m.length;y++)
     for(let x=0;x<ghost.m[y].length;x++)
-      if(ghost.m[y][x]) drawBlockAtPixel((ghost.x+x)*cell,(ghost.y+y)*cell,cell,COLORS[ghost.m[y][x]],0.35,{shadow:false});
+      if(ghost.m[y][x]) drawTileValue(ghost.m[y][x],(ghost.x+x)*cell,(ghost.y+y)*cell,cell,0.6,{shadow:false,ghost:true});
 }
 function draw(){
   if(!postedReady){
