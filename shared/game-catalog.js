@@ -1,7 +1,7 @@
 import { normalizeCatalogEntries, toNormalizedList } from './game-catalog-core.js';
 
 const PRIMARY_CATALOG_URL = '/games.json';
-const LEGACY_CATALOG_URLS = ['/public/games.json'];
+const LEGACY_CATALOG_URLS = ['/public/games.json', './games.json'];
 let catalogPromise = null;
 
 async function fetchCatalogSource() {
@@ -17,6 +17,7 @@ async function fetchCatalogSource() {
       return data;
     } catch (err) {
       lastError = err;
+      console.warn('[GG] catalog fetch failed for', url, err);
     }
   }
 
