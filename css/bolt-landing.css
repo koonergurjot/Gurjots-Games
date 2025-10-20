@@ -392,10 +392,9 @@ body.bolt-body{
 .bolt-chip:focus-visible{outline:none;box-shadow:var(--bolt-focus)}
 
 .bolt-status{color:var(--bolt-muted);margin:10px 0 14px}
-.bolt-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-@media (max-width: 1100px){.bolt-grid{grid-template-columns:repeat(3,1fr)}}
-@media (max-width: 760px){ .bolt-grid{grid-template-columns:repeat(2,1fr)}}
-@media (max-width: 420px){ .bolt-grid{grid-template-columns:1fr}}
+.bolt-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+@media (max-width: 1279px){.bolt-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width: 767px){.bolt-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .bolt-section-lead{margin:10px 0 26px;max-width:720px;color:var(--bolt-muted);font-size:18px}
 
@@ -460,7 +459,7 @@ body.bolt-body{
 .bolt-shot img{width:100%;height:100%;object-fit:cover;display:block}
 .bolt-shot svg{width:56%;height:auto;opacity:.9}
 .bolt-badge{position:absolute;top:10px;left:10px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:800;background:rgba(0,0,0,.55);border:1px solid var(--bolt-border)}
-.bolt-card-body{padding:14px 14px 16px;display:flex;flex-direction:column;gap:8px;flex:1}
+.bolt-card-body{padding:14px 14px 16px;display:flex;flex-direction:column;gap:10px;flex:1}
 .bolt-card-title{font-weight:800;font-size:16px}
 .bolt-card-meta{
   display:flex;
@@ -471,6 +470,22 @@ body.bolt-body{
   font-size:12px;
 }
 .bolt-card-desc{margin:0;color:var(--bolt-muted);font-size:14px;line-height:1.6;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.bolt-card-insight{display:flex;flex-direction:column;gap:10px;padding:10px 12px;border-radius:14px;border:1px solid rgba(108,132,255,.18);background:rgba(9,16,36,.72);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);font-size:12px}
+.bolt-card-ach{display:flex;flex-direction:column;gap:6px}
+.bolt-card-progress-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bolt-card-progress-label{font-weight:600;color:var(--bolt-muted);letter-spacing:.02em}
+.bolt-card-progress-count{font-weight:700;color:rgba(226,232,255,.92);font-variant-numeric:tabular-nums}
+.bolt-card-progress-bar{height:6px;border-radius:999px;background:rgba(255,255,255,.08);position:relative;overflow:hidden}
+.bolt-card-progress-fill{position:absolute;inset:0;background:linear-gradient(90deg,#60a5fa 0%,#a855f7 100%);transition:width .25s ease}
+.bolt-card-missions{display:flex;flex-wrap:wrap;gap:6px}
+.bolt-card-mission{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;background:rgba(13,23,48,.72);border:1px solid rgba(113,144,255,.22);color:rgba(222,231,255,.9);font-weight:600;line-height:1}
+.bolt-card-mission-kind{text-transform:uppercase;letter-spacing:.08em;font-size:10px;color:rgba(148,163,255,.85)}
+.bolt-card-mission-count{font-variant-numeric:tabular-nums}
+.bolt-card-mission-clock{display:inline-flex;align-items:center;gap:4px;color:rgba(191,219,254,.85);font-size:11px}
+.bolt-card-mission-clock .bolt-icon-clock{width:12px;height:12px;opacity:.85}
+.bolt-card-mission.is-complete{border-color:rgba(96,191,255,.6);background:rgba(45,123,255,.24);color:rgba(234,245,255,.95)}
+.bolt-card-mission.is-empty{padding:6px 10px;border-style:dashed;border-color:rgba(148,163,255,.32);color:var(--bolt-muted);background:rgba(11,18,38,.6);font-weight:500}
+.bolt-icon-clock{display:inline-block;width:12px;height:12px}
 
 .bolt-card-actions{margin-top:auto;display:flex;gap:10px;padding-top:10px}
 .bolt-btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 14px;border-radius:12px;border:1px solid var(--bolt-border);background:rgba(255,255,255,.08);color:#eef2ff;text-decoration:none;font-weight:800;transition:background .2s ease,box-shadow .2s ease,transform .2s ease,color .2s ease}
