@@ -60,6 +60,26 @@
     ]
   },
   {
+    "id": "career_shooter_boss_rush",
+    "slug": "shooter",
+    "kind": "career",
+    "title": "Rush Down",
+    "desc": "Finish the boss rush mode.",
+    "requires": [
+      { "type": "score_event", "name": "boss_rush_clear", "count": 1 }
+    ]
+  },
+  {
+    "id": "career_shooter_perfect_triple",
+    "slug": "shooter",
+    "kind": "career",
+    "title": "Perfect Pilot",
+    "desc": "Earn three perfect waves in a single boss rush run.",
+    "requires": [
+      { "type": "score_event", "name": "perfect_wave_streak", "count": 1 }
+    ]
+  },
+  {
     "id": "career_snake_giant",
     "slug": "snake",
     "kind": "career",
