@@ -901,7 +901,19 @@ function reseed(seed){
   return rngSeed;
 }
 
-function setDailySeedMode(enabled,{ restart=true }={}){
+function findCompletedRows(){
+  const rows=[];
+  for(let y=0;y<ROWS;y++){
+    let filled=true;
+    for(let x=0;x<COLS;x++){
+      if(!getGridCell(grid,x,y)){ filled=false; break; }
+    }
+    if(filled) rows.push(y);
+  }
+  return rows;
+}
+
+function _setDailySeedMode(enabled,{ restart=true }={}){
   const next=!!enabled;
   if(next===dailySeedActive){
     if(next){
@@ -1217,7 +1229,7 @@ const TetrisAPI={
     return appliedMode;
   },
   setDailySeedMode(enabled){
-    return setDailySeedMode(enabled);
+    return _setDailySeedMode(enabled);
   },
   start(){
     if(over) return false;
@@ -1343,7 +1355,7 @@ function updateHudQueue(){
 syncScoreDisplay();
 hud=createHud({
   onToggleDailySeed(enabled){
-    setDailySeedMode(enabled);
+    _setDailySeedMode(enabled);
   },
 });
 updateDailyHud();
@@ -1506,15 +1518,8 @@ function queueLineClear(rows){
   refreshClearingRows();
 }
 
-function clearLines(){
-  const rows=[];
-  for(let y=0;y<ROWS;y++){
-    let filled=true;
-    for(let x=0;x<COLS;x++){
-      if(!getGridCell(grid,x,y)){ filled=false; break; }
-    }
-    if(filled) rows.push(y);
-  }
+function clearLines(precomputedRows){
+  const rows=precomputedRows?.length?precomputedRows:findCompletedRows();
   if(rows.length) queueLineClear(rows);
   return rows;
 }
@@ -1526,8 +1531,8 @@ function isClearing(){
 function lockPiece(soft=0,hard=0){
   const lockedPiece=clonePiece(cur);
   merge(cur);
-  const clearedRows=clearLines();
-  const cleared=clearedRows.length;
+  const completedRows=findCompletedRows();
+  const cleared=completedRows.length;
   const tspinResult=detectTSpin({
     piece: lockedPiece,
     grid: { get: (x,y)=>getGridCell(grid,x,y) },
@@ -1535,6 +1540,7 @@ function lockPiece(soft=0,hard=0){
     clearedLines: cleared,
     bounds: { cols: COLS, rows: ROWS },
   });
+  clearLines(completedRows);
   const scoringResult=scoringSystem.scoreLock({
     linesCleared: cleared,
     tspin: tspinResult,
