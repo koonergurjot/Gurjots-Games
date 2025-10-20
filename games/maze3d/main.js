@@ -2387,6 +2387,7 @@ function finish(time) {
   showOverlay();
   startTime = 0;
   timerRunning = false;
+  timerStarted = false;
   gameEvent('game_over', {
     slug: 'maze3d',
     value: finalTime,
