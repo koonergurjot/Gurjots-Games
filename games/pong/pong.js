@@ -3,13 +3,21 @@ import { pushEvent } from "../common/diag-adapter.js";
 import { preloadFirstFrameAssets } from "../../shared/game-asset-preloader.js";
 import { play as playSfx } from "../../shared/juice/audio.js";
 import { gameEvent } from "../../shared/telemetry.js";
+import {
+  MATCH_VARIANTS,
+  STAMINA_CONFIG,
+  SPIN_CONFIG,
+  COMBO_CONFIG,
+  LADDER_TIERS,
+  TELEMETRY_SLUG,
+} from "./config.js";
 import "./pauseOverlay.js";
 
 (function(){
   "use strict";
 
-  const SLUG = "pong";
-  const LS_KEY = "pong.v3";
+  const SLUG = TELEMETRY_SLUG;
+  const LS_KEY = "pong.v4";
   const W = 1280, H = 720;
   const STEP = 1/60;
   const MAX_FRAME_DELTA = 0.1;
@@ -109,8 +117,8 @@ import "./pauseOverlay.js";
       pulse: { color: [255, 110, 220], alpha: 0.52 },
     },
   };
-  const SPIN_ACCEL = 22;
-  const SPIN_DECAY = 0.985;
+  const SPIN_ACCEL = SPIN_CONFIG.curveAccel;
+  const SPIN_DECAY = SPIN_CONFIG.decay;
   const TOUCH_DEBOUNCE_MS = 18;
   const TOUCH_MIN_DELTA = 2.5;
   const TOUCH_SCALE = 88;
@@ -252,6 +260,7 @@ import "./pauseOverlay.js";
 
   const DFLT = {
     mode:"1P",            // 1P, 2P, Endless, Mayhem
+    variant:"Classic",
     ai:"Medium",          // Easy, Medium, Hard
     toScore:11,
     winByTwo:true,
@@ -262,6 +271,7 @@ import "./pauseOverlay.js";
     keys:{p1Up:"KeyW", p1Down:"KeyS", p2Up:"ArrowUp", p2Down:"ArrowDown", pause:"Space"},
     aiTable: cloneAiTable(DEFAULT_AI_TABLE),
     aiTableSource: formatAiTable(DEFAULT_AI_TABLE),
+    ladderBest:-1,
   };
 
   const BG_HUE_AMP = 15;
@@ -300,12 +310,24 @@ import "./pauseOverlay.js";
     touchBuffer:[],
     aiBrain:{ targetY:H/2, timer:0 },
     aiSelect:null,
+    variantSelect:null,
+    modeSelect:null,
+    toScoreInput:null,
     aiEditorInput:null,
     aiEditorStatusEl:null,
     lastRallyFrames:[],
     lastRallyMeta:null,
     currentRallyStart:0,
     matchStartTime: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+    stamina:{p1:1,p2:1},
+    rallyCount:0,
+    lastComboEvent:0,
+    comboDisplay:0,
+    ladder:{
+      tiers: LADDER_TIERS.slice(),
+      progress:{ best: Number.isFinite(savedConfig?.ladderBest) ? savedConfig.ladderBest : -1 },
+      currentIndex: 0,
+    },
   };
 
   state.backgroundPreset = getBackgroundPresetForMode(state.mode);
@@ -313,6 +335,104 @@ import "./pauseOverlay.js";
   ensureAiSelection();
   state.aiTableSource = formatAiTable(state.aiTable);
   markRallyStart();
+
+  if(!MATCH_VARIANTS[state.variant]) state.variant = 'Classic';
+
+  function getVariantConfig(){
+    return MATCH_VARIANTS[state.variant] || MATCH_VARIANTS.Classic;
+  }
+
+  function isEnduranceVariant(){
+    return (state.variant || "Classic") === "Endurance";
+  }
+
+  function isLadderVariant(){
+    return (state.variant || "Classic") === "Ladder";
+  }
+
+  function ensureLadderIndex(force){
+    if(!state.ladder) state.ladder = { tiers: LADDER_TIERS.slice(), progress:{ best:-1 }, currentIndex:0 };
+    const tiers = Array.isArray(state.ladder.tiers) && state.ladder.tiers.length ? state.ladder.tiers : LADDER_TIERS;
+    let best = Number.isFinite(state.ladder.progress?.best) ? state.ladder.progress.best : -1;
+    const maxIndex = Math.max(0, tiers.length - 1);
+    if(best > maxIndex) best = maxIndex;
+    if(best < -1) best = -1;
+    if(state.ladder.progress) state.ladder.progress.best = best;
+    if(force || !Number.isFinite(state.ladder.currentIndex)){
+      state.ladder.currentIndex = Math.min(Math.max(best + 1, 0), maxIndex);
+    } else {
+      state.ladder.currentIndex = Math.min(Math.max(state.ladder.currentIndex, 0), maxIndex);
+    }
+    return tiers[state.ladder.currentIndex] || null;
+  }
+
+  function currentLadderTier(){
+    if(!isLadderVariant()) return null;
+    const tiers = Array.isArray(state.ladder?.tiers) && state.ladder.tiers.length ? state.ladder.tiers : LADDER_TIERS;
+    if(!tiers.length) return null;
+    const idx = ensureLadderIndex();
+    return idx || null;
+  }
+
+  function applyVariantRules(){
+    const cfg = getVariantConfig();
+    state.toScore = cfg.toScore;
+    state.winByTwo = cfg.winByTwo;
+    if(isLadderVariant()){
+      ensureLadderIndex(true);
+    }
+  }
+
+  applyVariantRules();
+
+  function refreshMatchControls(){
+    if(state.variantSelect) state.variantSelect.value = state.variant;
+    if(state.modeSelect){
+      state.modeSelect.value = state.mode;
+      state.modeSelect.disabled = isLadderVariant();
+    }
+    if(state.toScoreInput){
+      state.toScoreInput.value = String(state.toScore);
+      state.toScoreInput.disabled = isEnduranceVariant() || isLadderVariant();
+    }
+    if(state.aiSelect) state.aiSelect.disabled = isLadderVariant();
+  }
+
+  function changeVariant(next){
+    const target = MATCH_VARIANTS[next] ? next : 'Classic';
+    if(state.variant === target){
+      applyVariantRules();
+      refreshMatchControls();
+      updateTitleOverlay();
+      updateHUD();
+      return;
+    }
+    state.variant = target;
+    if(isLadderVariant() && state.mode !== '1P'){
+      state.mode = '1P';
+      emitStateChange('mode', state.mode);
+    }
+    applyVariantRules();
+    ensureLadderIndex(true);
+    refreshMatchControls();
+    reset();
+    saveLS();
+  }
+
+  function changeMode(next){
+    let target = next;
+    if(isLadderVariant()) target = '1P';
+    if(!['1P','2P','Endless','Mayhem'].includes(target)) target = '1P';
+    if(state.mode === target){
+      refreshMatchControls();
+      return;
+    }
+    state.mode = target;
+    refreshMatchControls();
+    saveLS();
+    reset();
+    emitStateChange('mode', target);
+  }
 
   const globalScope = typeof window !== "undefined" ? window : undefined;
   const pongReadyQueue = (() => {
@@ -494,6 +614,21 @@ import "./pauseOverlay.js";
     return profile.config || AI_BASE_CONFIG;
   }
 
+  function getLadderAiConfig(){
+    if(!isLadderVariant()) return null;
+    const tier = currentLadderTier();
+    if(!tier) return null;
+    const reactionMs = Number.isFinite(tier.reactionMs) ? tier.reactionMs : 220;
+    const noise = Number.isFinite(tier.predictionNoise) ? tier.predictionNoise : 42;
+    const speed = Number.isFinite(tier.maxSpeed) ? tier.maxSpeed : AI_BASE_CONFIG.speed;
+    return {
+      speed,
+      reaction: Math.max(0.01, reactionMs / 1000),
+      offset: noise * 0.6,
+      noise,
+    };
+  }
+
   // ---------- Utilities ----------
   function post(type, detail){ try{ window.parent && window.parent.postMessage({type, slug:SLUG, detail}, "*"); }catch{} }
   function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
@@ -504,7 +639,21 @@ import "./pauseOverlay.js";
     try{ return JSON.parse(localStorage.getItem(LS_KEY)||"{}"); }catch{return{}}
   }
   function saveLS(){
-    const o={mode:state.mode, ai:state.ai, toScore:state.toScore, winByTwo:state.winByTwo, powerups:state.powerups, sfx:state.sfx, theme:state.theme, reduceMotion:state.reduceMotion, keys:state.keys, aiTable:state.aiTable};
+    const ladderBest = Number.isFinite(state.ladder?.progress?.best) ? state.ladder.progress.best : -1;
+    const o={
+      mode:state.mode,
+      variant:state.variant,
+      ai:state.ai,
+      toScore:state.toScore,
+      winByTwo:state.winByTwo,
+      powerups:state.powerups,
+      sfx:state.sfx,
+      theme:state.theme,
+      reduceMotion:state.reduceMotion,
+      keys:state.keys,
+      aiTable:state.aiTable,
+      ladderBest,
+    };
     try{ localStorage.setItem(LS_KEY, JSON.stringify(o)); }catch{}
   }
 
@@ -822,23 +971,34 @@ import "./pauseOverlay.js";
 
   // ---------- Game objects ----------
   function reset(){
-    state.score.p1=0; state.score.p2=0; updateHUD();
-    state.balls.length=0;
-    powerups.length=0;
-    state.effects.length=0;
-    state.trail.length=0;
-    state.replay.length=0;
+    applyVariantRules();
+    state.score.p1 = 0;
+    state.score.p2 = 0;
+    state.rallyCount = 0;
+    state.lastComboEvent = 0;
+    state.comboDisplay = 0;
+    state.stamina.p1 = 1;
+    state.stamina.p2 = 1;
+    updateHUD();
+    state.balls.length = 0;
+    powerups.length = 0;
+    state.effects.length = 0;
+    state.trail.length = 0;
+    state.replay.length = 0;
     state.lastRallyFrames = [];
     state.lastRallyMeta = null;
     state.backgroundPulse = null;
     state.backgroundPulseStrength = 0;
     state.backgroundPreset = getBackgroundPresetForMode(state.mode);
-    state.p1 = {x:32, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
-    state.p2 = {x:W-50, y:H/2-60, w:18, h:120, dy:0, speed:560, maxH:180, minH:80};
+    const baseSpeed = 560;
+    state.p1 = {x:32, y:H/2-60, w:18, h:120, dy:0, speed:baseSpeed, baseSpeed, maxH:180, minH:80, stamina:1};
+    state.p2 = {x:W-50, y:H/2-60, w:18, h:120, dy:0, speed:baseSpeed, baseSpeed, maxH:180, minH:80, stamina:1};
+    ensureLadderIndex();
     spawnBall(Math.random()<0.5? -1 : 1);
-    state.over=false; state.paused=false;
+    state.over = false;
+    state.paused = false;
     hidePauseOverlay();
-    state.shellPaused=false;
+    state.shellPaused = false;
     state.touches = {};
     state.touchBuffer.length = 0;
     Object.assign(state.axes.keyboard, {p1:0,p2:0});
@@ -858,14 +1018,18 @@ import "./pauseOverlay.js";
     markRallyStart();
     updateTitleOverlay();
     state.matchStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const ladderTier = currentLadderTier();
     gameEvent('play', {
       slug: SLUG,
       meta: {
-        mode: state.mode,
+        mode: state.variant,
+        tier: ladderTier?.id || state.ai,
         toScore: state.toScore,
         winByTwo: state.winByTwo,
+        players: state.mode,
       },
     });
+    refreshMatchControls();
   }
 
   function spawnBall(dir=1, speed=360){
@@ -875,14 +1039,23 @@ import "./pauseOverlay.js";
   }
 
   function award(pointTo){
-    state.score[pointTo]++; updateHUD();
+    state.score[pointTo]++;
+    const playerScore = state.score[pointTo];
+    const opponentScore = state.score[pointTo === "p1" ? "p2" : "p1"];
+    state.rallyCount = 0;
+    state.lastComboEvent = 0;
+    state.comboDisplay = 0;
+    updateHUD();
+    const ladderTier = currentLadderTier();
     gameEvent('score', {
       slug: SLUG,
-      value: state.score.p1,
+      value: playerScore,
       meta: {
-        opponent: state.score.p2,
+        opponent: opponentScore,
         scoredBy: pointTo,
-        mode: state.mode,
+        mode: state.variant,
+        tier: ladderTier?.id || state.ai,
+        players: state.mode,
       },
     });
     triggerBackgroundPulse(pointTo);
@@ -907,19 +1080,42 @@ import "./pauseOverlay.js";
     toast("Match over");
     playSound("explode");
     const winner = state.score.p1 === state.score.p2 ? null : state.score.p1 > state.score.p2 ? 'p1' : 'p2';
-    const details = { winner, left: state.score.p1, right: state.score.p2, mode: state.mode };
+    const ladderTier = currentLadderTier();
+    const details = {
+      winner,
+      left: state.score.p1,
+      right: state.score.p2,
+      mode: state.variant,
+      tier: ladderTier?.id || state.ai,
+      players: state.mode,
+    };
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const durationMs = Math.max(0, Math.round(now - (state.matchStartTime || now)));
+    const winnerScore = winner === 'p2' ? state.score.p2 : state.score.p1;
     gameEvent('game_over', {
       slug: SLUG,
-      value: state.score.p1,
+      value: winnerScore,
       durationMs,
       meta: details,
     });
     if (winner === 'p1') {
-      gameEvent('win', { slug: SLUG, meta: details });
+      if(isLadderVariant()){
+        const best = Number.isFinite(state.ladder?.progress?.best) ? state.ladder.progress.best : -1;
+        const currentIndex = Number.isFinite(state.ladder?.currentIndex) ? state.ladder.currentIndex : 0;
+        const tiers = Array.isArray(state.ladder?.tiers) ? state.ladder.tiers : LADDER_TIERS;
+        if(state.ladder){
+          state.ladder.progress.best = Math.max(best, currentIndex);
+          const nextIndex = Math.min(state.ladder.progress.best + 1, Math.max(0, tiers.length - 1));
+          state.ladder.currentIndex = nextIndex;
+          saveLS();
+        }
+        updateTitleOverlay();
+        refreshMatchControls();
+        updateHUD();
+      }
+      gameEvent('win', { slug: SLUG, meta: { mode: details.mode, tier: details.tier } });
     } else if (winner === 'p2') {
-      gameEvent('lose', { slug: SLUG, meta: details });
+      gameEvent('lose', { slug: SLUG, meta: { mode: details.mode, tier: details.tier } });
     }
     scenes.push(() => createGameOverScene(details)).catch(err => console.error('[pong] gameover scene failed', err));
   }
@@ -929,8 +1125,72 @@ import "./pauseOverlay.js";
   }
 
   function updateHUD(){
-    state.hud.p1.textContent=String(state.score.p1);
-    state.hud.p2.textContent=String(state.score.p2);
+    if(!state.hud) return;
+    const variantCfg = getVariantConfig();
+    const ladderTier = currentLadderTier();
+    if(state.hud.p1) state.hud.p1.textContent = String(state.score.p1);
+    if(state.hud.p2) state.hud.p2.textContent = String(state.score.p2);
+    if(state.hud.mode) state.hud.mode.textContent = variantCfg?.label || state.variant || 'Classic';
+    if(state.hud.tier){
+      let tierLabel = '';
+      if(state.mode === '2P') tierLabel = 'Players: 2P Duel';
+      else if(state.mode === 'Endless' || state.mode === 'Mayhem') tierLabel = `Players: ${state.mode}`;
+      else if(isLadderVariant()) tierLabel = `Tier: ${ladderTier?.label || ladderTier?.id || 'Tier'}`;
+      else tierLabel = `AI: ${state.ai || 'Medium'}`;
+      state.hud.tier.textContent = tierLabel;
+    }
+    if(state.hud.combo){
+      const count = state.comboDisplay || 0;
+      state.hud.combo.textContent = `Rally x${count}`;
+      if(count >= (COMBO_CONFIG.minCount || 0)) state.hud.combo.classList.add('is-hot');
+      else state.hud.combo.classList.remove('is-hot');
+    }
+    const staminaActive = !!variantCfg?.stamina;
+    if(state.hud.staminaGroup){
+      state.hud.staminaGroup.classList.toggle('is-active', staminaActive);
+      if(!staminaActive) state.hud.staminaGroup.setAttribute('aria-hidden', 'true');
+      else state.hud.staminaGroup.removeAttribute('aria-hidden');
+    }
+    if(state.hud.stamina){
+      for(const side of ['p1','p2']){
+        const fill = state.hud.stamina[side];
+        if(!fill) continue;
+        const value = clamp(state.stamina[side] ?? 1, 0, 1);
+        fill.style.setProperty('--fill', String(value));
+        fill.setAttribute('aria-valuenow', String(Math.round(value * 100)));
+      }
+    }
+  }
+
+  function updateTitleOverlay(){
+    const overlay = state.overlay;
+    if(!overlay) return;
+    const variantCfg = getVariantConfig();
+    const tier = currentLadderTier();
+    const heading = overlay.title?.panel?.querySelector?.('.pong-overlay__heading');
+    if(heading){
+      const label = variantCfg?.label || state.variant || 'Classic';
+      heading.textContent = `Pong ${label}`;
+    }
+    if(overlay.title?.message){
+      let message = '';
+      if(isLadderVariant()){
+        const tiers = Array.isArray(state.ladder?.tiers) && state.ladder.tiers.length ? state.ladder.tiers : LADDER_TIERS;
+        const best = Number.isFinite(state.ladder?.progress?.best) ? state.ladder.progress.best : -1;
+        const remaining = Math.max(0, (tiers.length - 1) - Math.max(best, 0));
+        const tierName = tier?.label || tier?.id || 'Next tier';
+        message = remaining > 0 ? `Ladder tier: ${tierName} — ${remaining} to Boss` : `Ladder cleared — rematch the Boss!`;
+      } else if(isEnduranceVariant()){
+        message = 'First to 50 points. Movement drains stamina, resting recovers it.';
+      } else {
+        const target = variantCfg?.toScore || state.toScore;
+        message = `First to ${target} points. Win by ${variantCfg?.winByTwo ? 'two' : 'one'}.`;
+      }
+      overlay.title.message.textContent = message;
+    }
+    if(overlay.pause?.message){
+      overlay.pause.message.textContent = 'Game paused — press Enter to resume';
+    }
   }
 
   // ---------- Input ----------
@@ -1061,7 +1321,9 @@ import "./pauseOverlay.js";
   // ---------- AI ----------
   function moveAI(dt){
     if(state.mode==="2P") return;
-    const config = getAiConfig(state.ai) || AI_BASE_CONFIG;
+    let config = getLadderAiConfig();
+    if(!config) config = getAiConfig(state.ai) || AI_BASE_CONFIG;
+    state.p2.baseSpeed = config.speed;
     state.p2.speed = config.speed;
     const brain = state.aiBrain;
     brain.timer = Math.max(0, brain.timer - dt);
@@ -1103,8 +1365,41 @@ import "./pauseOverlay.js";
   }
 
   // ---------- Physics ----------
-  function updatePaddle(p, dt){
-    p.y = clamp(p.y + p.dy * p.speed * dt, 0, H - p.h);
+  function staminaFor(side, activity, dt){
+    if(!isEnduranceVariant()){
+      state.stamina[side] = 1;
+      return 1;
+    }
+    const cfg = STAMINA_CONFIG;
+    const threshold = cfg.activityThreshold ?? 0;
+    let value = state.stamina[side];
+    if(!Number.isFinite(value)) value = 1;
+    const active = activity >= threshold;
+    if(active){
+      const drainRate = cfg.drainPerSecond ?? 0;
+      value -= drainRate * Math.max(activity, threshold) * dt;
+    } else {
+      const recoveryRate = cfg.recoveryPerSecond ?? 0;
+      value += recoveryRate * dt;
+    }
+    value = clamp(value, 0, 1);
+    state.stamina[side] = value;
+    return value;
+  }
+
+  function updatePaddle(p, dt, side){
+    if(!p) return;
+    const baseSpeed = p.baseSpeed || p.speed || 0;
+    const axis = clamp(p.dy || 0, -1, 1);
+    let staminaValue = 1;
+    if(side){
+      staminaValue = staminaFor(side, Math.abs(axis), dt);
+    }
+    const minFactor = STAMINA_CONFIG.minSpeedFactor ?? 1;
+    const factor = isEnduranceVariant() ? (minFactor + (1 - minFactor) * staminaValue) : 1;
+    p.speed = baseSpeed * factor;
+    p.stamina = staminaValue;
+    p.y = clamp(p.y + axis * p.speed * dt, 0, H - p.h);
   }
 
   function updateBall(b, dt){
@@ -1168,6 +1463,7 @@ import "./pauseOverlay.js";
 
   function respawn(b, dir){
     Object.assign(b, {x:W/2, y:H/2, dx:dir*rand(340,420), dy:rand(-220,220), spin:0, lastHit:null});
+    markRallyStart();
   }
 
   function findEarliestCollision(ball, dt){
@@ -1286,14 +1582,32 @@ import "./pauseOverlay.js";
     ry = (ry / mag) * targetSpeed;
 
     const tangent = { x: -normal.y, y: normal.x };
-    const paddleVelocity = (p.dy || 0) * (p.speed || 0);
-    const tangentAdjust = paddleVelocity * 0.35 + contact.offset * 340;
+    const baseSpeed = p.baseSpeed || p.speed || 1;
+    const paddleVelocity = (p.dy || 0) * baseSpeed;
+    const tangentAdjust = paddleVelocity * (SPIN_CONFIG.tangentFactor || 0) + contact.offset * (SPIN_CONFIG.offsetFactor || 0);
     rx += tangent.x * tangentAdjust;
     ry += tangent.y * tangentAdjust;
 
-    b.dx = rx;
-    b.dy = clamp(ry, -900, 900);
-    b.spin = clamp((paddleVelocity / Math.max(1, p.speed || 1)) * 4 + contact.offset * 5, -8, 8);
+    const afterMag = Math.hypot(rx, ry) || 1;
+    rx = (rx / afterMag) * targetSpeed;
+    ry = (ry / afterMag) * targetSpeed;
+
+    const maxAngleRad = (SPIN_CONFIG.maxAngleDeg ?? 78) * Math.PI / 180;
+    const maxSlope = Math.tan(maxAngleRad);
+    const signX = dir < 0 ? -1 : 1;
+    let absX = Math.abs(rx);
+    absX = Math.max(absX, targetSpeed * 0.25);
+    const limitedRy = clamp(ry, -absX * maxSlope, absX * maxSlope);
+    const ratio = Math.hypot(absX, limitedRy) || 1;
+    const rescale = targetSpeed / ratio;
+    absX *= rescale;
+    const finalRy = limitedRy * rescale;
+
+    b.dx = absX * signX;
+    b.dy = clamp(finalRy, -900, 900);
+    const normalizedVelocity = baseSpeed ? paddleVelocity / baseSpeed : 0;
+    const spinValue = normalizedVelocity * 6 + contact.offset * 4;
+    b.spin = clamp(spinValue, -SPIN_CONFIG.maxSpin, SPIN_CONFIG.maxSpin);
     b.lastHit = p===state.p1 ? "p1" : "p2";
 
     const pushPoint = contact.point;
@@ -1303,6 +1617,22 @@ import "./pauseOverlay.js";
     spawnEffect("spark", b.x, b.y, {scale:0.8, duration:0.35});
     shake(6);
     playSound("hit");
+    state.rallyCount = (state.rallyCount || 0) + 1;
+    state.comboDisplay = state.rallyCount;
+    const ladderTier = currentLadderTier();
+    if(state.rallyCount >= (COMBO_CONFIG.minCount || 1) && state.rallyCount > state.lastComboEvent){
+      state.lastComboEvent = state.rallyCount;
+      gameEvent('combo', {
+        slug: SLUG,
+        count: state.rallyCount,
+        meta: {
+          mode: state.variant,
+          tier: ladderTier?.id || state.ai,
+          players: state.mode,
+        },
+      });
+    }
+    updateHUD();
   }
 
   function computeContactData(ball, paddle, dir, point){
@@ -1421,6 +1751,9 @@ import "./pauseOverlay.js";
 
   function markRallyStart(){
     state.currentRallyStart = Math.max(0, state.replay.length);
+    state.rallyCount = 0;
+    state.comboDisplay = 0;
+    state.lastComboEvent = 0;
   }
 
   function captureLastRally(scoredBy){
@@ -1454,8 +1787,8 @@ import "./pauseOverlay.js";
     else state.p2.speed = state.p1?.speed || state.p2.speed;
     resolveMovementAxes();
 
-    updatePaddle(state.p1, dt);
-    updatePaddle(state.p2, dt);
+    updatePaddle(state.p1, dt, 'p1');
+    updatePaddle(state.p2, dt, 'p2');
 
     maybeSpawnPowerup(dt);
     updatePowerups(dt);
@@ -1594,6 +1927,20 @@ import "./pauseOverlay.js";
     return el;
   }
 
+  function createStaminaBar(side){
+    const label = side === 'p1' ? 'P1 stamina' : 'P2 stamina';
+    const fill = h('div', {
+      class: 'pong-stamina__fill',
+      id: `stamina-fill-${side}`,
+      role: 'progressbar',
+      'aria-valuemin': '0',
+      'aria-valuemax': '100',
+      'aria-valuenow': '100',
+      'aria-label': label,
+    });
+    return h('div', { class: 'pong-stamina__track', 'data-side': side }, fill);
+  }
+
   function buildUI(root){
     document.body.classList.remove("theme-neon","theme-vapor","theme-crt","theme-minimal");
     document.body.classList.add(themeToClass(state.theme));
@@ -1614,7 +1961,7 @@ import "./pauseOverlay.js";
     const overlayTitleMessage = h("p",{class:"pong-overlay__text", id:"pong-overlay-title"},"");
     const overlayStartBtn = h("button",{class:"pong-overlay__btn", id:"pong-overlay-start"},"Start Match");
     const overlayTitlePanel = h("div",{class:"pong-overlay__panel", "data-scene":"title"},
-      h("h2",{class:"pong-overlay__heading"},"Pong Classic"),
+      h("h2",{class:"pong-overlay__heading"},"Pong"),
       overlayTitleMessage,
       h("div",{class:"pong-overlay__actions"}, overlayStartBtn)
     );
@@ -1645,14 +1992,31 @@ import "./pauseOverlay.js";
 
     const wrap = h("div",{class:"pong-canvas-wrap"}, canvasEl, overlayRoot);
 
-    const hud = h("div",{class:"pong-hud"},
-      h("div",{class:"pong-score", id:"score-p1"},"0"),
+    const modeLabel = h("span",{class:"pong-status__mode", id:"hud-mode"},"");
+    const tierLabel = h("span",{class:"pong-status__tier", id:"hud-tier"},"");
+    const comboLabel = h("span",{class:"pong-status__combo", id:"hud-combo"},"");
+    const scoreP1 = h("span",{class:"pong-score", id:"score-p1"},"0");
+    const scoreP2 = h("span",{class:"pong-score", id:"score-p2"},"0");
+    const scoreWrap = h("div",{class:"pong-status__score"},
+      scoreP1,
       h("div",{class:"pong-mid"},"—"),
-      h("div",{class:"pong-score", id:"score-p2"},"0"),
+      scoreP2,
+    );
+    const staminaP1 = createStaminaBar('p1');
+    const staminaP2 = createStaminaBar('p2');
+    const staminaGroup = h("div",{class:"pong-stamina"}, staminaP1, staminaP2);
+    const hud = h("div",{class:"pong-hud"},
+      h("div",{class:"pong-status"},
+        h("div",{class:"pong-status__left"}, modeLabel, tierLabel),
+        scoreWrap,
+        h("div",{class:"pong-status__right"}, comboLabel)
+      ),
+      staminaGroup,
       h("span",{class:"touch-hint"}," • Swipe left/right to move")
     );
 
-    const modeSelect = select(["1P","2P","Endless","Mayhem"], state.mode, v=>{state.mode=v; saveLS(); reset(); emitStateChange("mode", v);});
+    const variantSelect = select(["Classic","Endurance","Ladder"], state.variant, changeVariant);
+    const modeSelect = select(["1P","2P","Endless","Mayhem"], state.mode, changeMode);
     const aiSelect = h("select",{class:"pong-select", id:"pong-ai-select"});
     aiSelect.addEventListener("change", ()=>{
       state.ai = aiSelect.value;
@@ -1670,7 +2034,11 @@ import "./pauseOverlay.js";
 
     const menu = h("div",{class:"pong-menu"},
       h("div",{class:"pong-row"},
-        h("label",{},"Mode:"),
+        h("label",{},"Match Mode:"),
+        variantSelect
+      ),
+      h("div",{class:"pong-row"},
+        h("label",{},"Players:"),
         modeSelect
       ),
       h("div",{class:"pong-row"},
@@ -1679,7 +2047,7 @@ import "./pauseOverlay.js";
       ),
       h("div",{class:"pong-row"},
         h("label",{},"To Score:"),
-        number(state.toScore, v=>{state.toScore=v; saveLS(); updateTitleOverlay();})
+        (state.toScoreInput = number(state.toScore, v=>{state.toScore=v; saveLS(); updateTitleOverlay();}))
       ),
       h("div",{class:"pong-row"},
         h("label",{},"Powerups:"),
@@ -1733,7 +2101,20 @@ import "./pauseOverlay.js";
     renderAiOptions();
     updateAiEditorValue();
     setAiStatus("Edit the JSON to add custom AI profiles or progressive schedules.", "info");
-    state.hud = {p1: hud.querySelector("#score-p1"), p2: hud.querySelector("#score-p2")};
+    state.hud = {
+      p1: scoreP1,
+      p2: scoreP2,
+      mode: modeLabel,
+      tier: tierLabel,
+      combo: comboLabel,
+      stamina: {
+        p1: staminaP1.querySelector('.pong-stamina__fill'),
+        p2: staminaP2.querySelector('.pong-stamina__fill'),
+      },
+      staminaGroup,
+    };
+    state.variantSelect = variantSelect;
+    state.modeSelect = modeSelect;
     state.overlay = {
       root: overlayRoot,
       current: null,
@@ -1748,6 +2129,8 @@ import "./pauseOverlay.js";
     overlayMenuBtn.addEventListener('click', () => dispatchAction('menu', { source: 'ui' }));
     overlayGameOverRestart.addEventListener('click', () => dispatchAction('restart', { source: 'ui' }));
     overlayGameOverMenu.addEventListener('click', () => dispatchAction('menu', { source: 'ui' }));
+
+    refreshMatchControls();
 
     installCanvas();
     ensureContext();
@@ -1798,6 +2181,7 @@ import "./pauseOverlay.js";
       selectEl.value = state.ai;
     }
     if(changed) emitStateChange("difficulty", state.ai);
+    refreshMatchControls();
   }
 
   function updateAiEditorValue(){
@@ -1862,7 +2246,7 @@ import "./pauseOverlay.js";
     state.pauseOverlay = globalScope.PongPauseOverlay.create({
       onResume: ()=>{ setPaused(false, "manual"); },
       onRestart: ()=>{ reset(); setPaused(false, "manual"); },
-      hint: isTouchPreferred() ? "Tap resume to continue" : "Press Space to resume",
+      hint: isTouchPreferred() ? "Tap resume to continue" : "Press Enter to resume",
     });
     return state.pauseOverlay;
   }
@@ -1883,8 +2267,8 @@ import "./pauseOverlay.js";
   }
 
   function pauseHint(reason){
-    if(reason === "shell") return "Paused by host – switch back or press resume";
-    return isTouchPreferred() ? "Tap resume to continue" : "Press Space to resume";
+    if(reason === "shell") return "Paused by host – press Enter to continue";
+    return isTouchPreferred() ? "Tap resume to continue" : "Press Enter to resume";
   }
 
   function setPaused(next, reason){
@@ -2190,9 +2574,15 @@ import "./pauseOverlay.js";
       }
       pressed.add(e.code);
       let handled = false;
-      if(e.code===state.keys.pause){
+      if(e.code === 'Escape'){
+        if(state.paused) handled = dispatchAction('resume', { source: 'keyboard', reason: 'escape', event: e });
+        else handled = dispatchAction('pause', { source: 'keyboard', reason: 'escape', event: e });
+      } else if(e.code===state.keys.pause){
         handled = dispatchAction('pause', { source: 'keyboard', reason: 'user', event: e });
-      } else if (e.code === 'Enter'){ handled = dispatchAction('start', { source: 'keyboard', event: e }); }
+      } else if (e.code === 'Enter'){
+        if(state.paused && !state.shellPaused) handled = dispatchAction('resume', { source: 'keyboard', event: e });
+        else handled = dispatchAction('start', { source: 'keyboard', event: e });
+      }
       if(handled) e.preventDefault();
       bindMove();
     }, {passive:false});
