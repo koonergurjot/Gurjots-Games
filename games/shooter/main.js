@@ -6,6 +6,18 @@ import './diagnostics-adapter.js';
 import { BossRushMode, DEFAULT_BOSS_RUSH_STAGES } from './shooter.js';
 import { ShooterUI } from './ui.js';
 
+const ASSET_BASE_URL = new URL('../../', import.meta.url);
+
+function resolveAsset(path) {
+  if (!path) return path;
+  try {
+    const normalized = path.startsWith('/') ? path.slice(1) : path;
+    return new URL(normalized, ASSET_BASE_URL).href;
+  } catch (_) {
+    return path;
+  }
+}
+
 const markFirstFrame = (() => {
   let done = false;
   return () => {
@@ -30,6 +42,22 @@ export function boot() {
     ctx.imageSmoothingEnabled = false;
   }
   let postedReady = false;
+
+  const audioSupported = typeof Audio !== 'undefined';
+  let audioReady = typeof window === 'undefined';
+  let audioUnlockAttached = false;
+
+  function ensureAudioUnlock() {
+    if (audioReady || audioUnlockAttached || typeof window === 'undefined') return;
+    audioUnlockAttached = true;
+    const unlock = () => {
+      audioReady = true;
+    };
+    window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+    window.addEventListener('keydown', unlock, { once: true });
+  }
+
+  ensureAudioUnlock();
 
   const COLLISION_LAYERS = {
     PLAYER: 1 << 0,
@@ -265,15 +293,15 @@ export function boot() {
 
   const SLUG = 'shooter';
   const ASSET_PATHS = {
-    bullet: '../../assets/sprites/bullet.png',
+    bullet: resolveAsset('/assets/sprites/bullet.png'),
     enemies: [
-      '../../assets/sprites/enemy1.png',
-      '../../assets/sprites/enemy2.png',
+      resolveAsset('/assets/sprites/enemy1.png'),
+      resolveAsset('/assets/sprites/enemy2.png'),
     ],
-    explosion: '../../assets/effects/explosion.png',
-    portal: '../../assets/effects/portal.png',
-    shoot: '../../assets/audio/laser.wav',
-    gameover: '../../assets/audio/gameover.wav',
+    explosion: resolveAsset('/assets/effects/explosion.png'),
+    portal: resolveAsset('/assets/effects/portal.png'),
+    shoot: resolveAsset('/assets/audio/laser.wav'),
+    gameover: resolveAsset('/assets/audio/gameover.wav'),
   };
 
   const sprites = {
@@ -284,8 +312,8 @@ export function boot() {
   };
 
   const PARALLAX_LAYERS = [
-    { key: 'layer1', src: '/assets/backgrounds/parallax/space_layer1.png', speed: 40, alpha: 0.85 },
-    { key: 'layer2', src: '/assets/backgrounds/parallax/space_layer2.png', speed: 80, alpha: 1 },
+    { key: 'layer1', src: resolveAsset('/assets/backgrounds/parallax/space_layer1.png'), speed: 40, alpha: 0.85 },
+    { key: 'layer2', src: resolveAsset('/assets/backgrounds/parallax/space_layer2.png'), speed: 80, alpha: 1 },
   ];
   const parallaxLayers = PARALLAX_LAYERS.map(config => ({
     key: config.key,
@@ -528,18 +556,63 @@ export function boot() {
   }
 
   function createSoundPlayer(src, volume = 0.6) {
-    let base = getCachedAudio(src);
-    if (!base) {
-      loadAudio(src, { slug: SLUG }).then(audio => { base = audio; }).catch(() => {});
-    }
-    return () => {
-      const audio = base || getCachedAudio(src);
+    let base = null;
+    let loadPromise = null;
+    let failed = false;
+
+    const playFrom = (audio) => {
       if (!audio) return;
       try {
         const instance = audio.cloneNode(true);
         instance.volume = volume;
         instance.play().catch(() => {});
-      } catch (_) {}
+      } catch (error) {
+        console.warn('[shooter] audio playback failed', error);
+      }
+    };
+
+    const ensureBase = () => {
+      if (base || failed) return base ? Promise.resolve(base) : Promise.resolve(null);
+      if (!audioReady) return Promise.resolve(null);
+      const cached = getCachedAudio(src);
+      if (cached) {
+        base = cached;
+        return Promise.resolve(base);
+      }
+      if (!audioSupported) {
+        failed = true;
+        return Promise.resolve(null);
+      }
+      if (!loadPromise) {
+        loadPromise = loadAudio(src, { slug: SLUG })
+          .then(audio => {
+            base = audio;
+            return audio;
+          })
+          .catch(error => {
+            failed = true;
+            console.error('[shooter] failed to load audio', error);
+            return null;
+          })
+          .finally(() => {
+            loadPromise = null;
+          });
+      }
+      return loadPromise;
+    };
+
+    return () => {
+      if (!audioReady) {
+        ensureAudioUnlock();
+        return;
+      }
+      const existing = base || getCachedAudio(src);
+      if (existing) {
+        base = existing;
+        playFrom(existing);
+        return;
+      }
+      ensureBase().then(playFrom);
     };
   }
 
@@ -550,25 +623,33 @@ export function boot() {
 
   loadImage(ASSET_PATHS.bullet, { slug: SLUG }).then(img => {
     sprites.bullet = img;
-  }).catch(() => {});
+  }).catch(error => {
+    console.error('[shooter] failed to load bullet sprite', error);
+  });
 
   ASSET_PATHS.enemies.forEach((path, index) => {
     loadImage(path, { slug: SLUG }).then(img => {
       sprites.enemies[index] = img;
-    }).catch(() => {});
+    }).catch(error => {
+      console.error('[shooter] failed to load enemy sprite', error);
+    });
   });
 
   if (sprites.explosion) prepareExplosionSprite();
   loadImage(ASSET_PATHS.explosion, { slug: SLUG }).then(img => {
     sprites.explosion = img;
     prepareExplosionSprite();
-  }).catch(() => {});
+  }).catch(error => {
+    console.error('[shooter] failed to load explosion sprite', error);
+  });
 
   if (sprites.portal) preparePortalSprite();
   loadImage(ASSET_PATHS.portal, { slug: SLUG }).then(img => {
     sprites.portal = img;
     preparePortalSprite();
-  }).catch(() => {});
+  }).catch(error => {
+    console.error('[shooter] failed to load portal sprite', error);
+  });
 
   const keys = new Set();
   addEventListener('keydown', e => keys.add(e.key));

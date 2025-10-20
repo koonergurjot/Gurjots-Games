@@ -4,6 +4,41 @@ import { pushEvent } from '/games/common/diag-adapter.js';
 import { gameEvent } from '../../shared/telemetry.js';
 import { createShopUi } from './ui.js';
 
+const ASSET_BASE_URL = new URL('../../', import.meta.url);
+
+function resolveAsset(path) {
+  if (!path) return path;
+  try {
+    const normalized = path.startsWith('/') ? path.slice(1) : path;
+    return new URL(normalized, ASSET_BASE_URL).href;
+  } catch (_) {
+    return path;
+  }
+}
+
+const audioSupported = typeof Audio !== 'undefined';
+const audioGate = (() => {
+  let ready = typeof window === 'undefined';
+  let attached = false;
+  const markReady = () => {
+    ready = true;
+  };
+  return {
+    ensure() {
+      if (ready || attached || typeof window === 'undefined') return;
+      attached = true;
+      const unlock = () => {
+        markReady();
+      };
+      window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+      window.addEventListener('keydown', unlock, { once: true });
+    },
+    isReady() {
+      return ready;
+    },
+  };
+})();
+
 const SLUG = 'asteroids';
 const TWO_PI = Math.PI * 2;
 const BASE_WIDTH = 960;
@@ -719,10 +754,11 @@ function parseFxModes(search = '') {
 async function loadFxTuning() {
   if (typeof fetch !== 'function') return null;
   try {
-    const response = await fetch(new URL('../../assets/asteroids/fx.json', import.meta.url));
-    if (!response.ok) return null;
+    const response = await fetch(resolveAsset('/assets/asteroids/fx.json'));
+    if (!response?.ok) throw new Error(`HTTP ${response?.status}`);
     return await response.json();
   } catch (error) {
+    console.error('[asteroids] failed to load fx config', error);
     pushEvent('diagnostics', {
       level: 'info',
       message: '[asteroids] fx config unavailable, using defaults',
@@ -755,16 +791,52 @@ function makeAsteroidShape(radius) {
 }
 
 function createAudio(src, volume = 0.6) {
-  const audio = new Audio(src);
-  audio.volume = volume;
-  audio.preload = 'auto';
-  return () => {
+  let base = null;
+  let failed = false;
+  let playbackWarned = false;
+
+  audioGate.ensure();
+
+  const ensureBase = () => {
+    if (base || failed) return;
+    if (!audioGate.isReady()) return;
+    if (!audioSupported) {
+      failed = true;
+      return;
+    }
     try {
-      const instance = audio.cloneNode(true);
+      base = new Audio(src);
+      base.preload = 'auto';
+      base.volume = volume;
+    } catch (error) {
+      failed = true;
+      console.warn('[asteroids] failed to initialize audio source', error);
+      pushEvent('diagnostics', {
+        level: 'info',
+        message: '[asteroids] audio init failed',
+        details: sanitizeForLog(error),
+      });
+    }
+  };
+
+  return () => {
+    if (!audioGate.isReady()) {
+      audioGate.ensure();
+      return;
+    }
+    if (!base && !failed) {
+      ensureBase();
+    }
+    if (!base) return;
+    try {
+      const instance = base.cloneNode(true);
       instance.volume = volume;
       instance.play().catch(() => {});
-    } catch (err) {
-      // ignore playback failures (likely due to user gesture requirements)
+    } catch (error) {
+      if (!playbackWarned) {
+        playbackWarned = true;
+        console.warn('[asteroids] audio playback failed', error);
+      }
     }
   };
 }
@@ -869,8 +941,8 @@ class AsteroidsGame {
     this.enemyProjectiles = [];
 
     this.sounds = {
-      laser: createAudio('../../assets/audio/laser.wav', 0.45),
-      explode: createAudio('../../assets/audio/explode.wav', 0.6),
+      laser: createAudio(resolveAsset('/assets/audio/laser.wav'), 0.45),
+      explode: createAudio(resolveAsset('/assets/audio/explode.wav'), 0.6),
     };
 
     if (this.fx.glow.enabled) {
