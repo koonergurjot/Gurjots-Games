@@ -1,45 +1,56 @@
 
+/* [GFX-PONG] Palette values (see assets/pong/palette.svg for swatches) */
 :root {
-  --pong-bg:#0b0f14;
-  --pong-fg:#e8f1ff;
-  --pong-accent:#69e1ff;
-  --pong-muted:#7a8aa0;
-  --pong-good:#45e27b;
-  --pong-bad:#ff6b6b;
-  --pong-grid:#132033;
-  --pong-glow: rgba(105,225,255,0.28);
+  --pong-color-bg:#0b0f14;
+  --pong-color-fg:#e8f1ff;
+  --pong-color-accent:#69e1ff;
+  --pong-color-muted:#7a8aa0;
+  --pong-color-good:#45e27b;
+  --pong-color-bad:#ff6b6b;
+  --pong-color-grid:#132033;
+  --pong-color-glow: rgba(105,225,255,0.28);
+
+  --pong-bg:var(--pong-color-bg);
+  --pong-fg:var(--pong-color-fg);
+  --pong-accent:var(--pong-color-accent);
+  --pong-muted:var(--pong-color-muted);
+  --pong-good:var(--pong-color-good);
+  --pong-bad:var(--pong-color-bad);
+  --pong-grid:var(--pong-color-grid);
+  --pong-glow:var(--pong-color-glow);
 }
 
 /* THEME: Neon */
 .theme-neon {
-  --pong-bg:#05070c;
-  --pong-fg:#e7f7ff;
-  --pong-accent:#69e1ff;
-  --pong-grid:#112038;
+  --pong-color-bg:#05070c;
+  --pong-color-fg:#e7f7ff;
+  --pong-color-accent:#69e1ff;
+  --pong-color-grid:#112038;
+  --pong-color-glow: rgba(105,225,255,0.28);
 }
 /* THEME: Vapor */
 .theme-vapor {
-  --pong-bg:#0b0012;
-  --pong-fg:#ffe8ff;
-  --pong-accent:#ff66cc;
-  --pong-grid:#2a0a3a;
-  --pong-glow: rgba(255,102,204,0.28);
+  --pong-color-bg:#0b0012;
+  --pong-color-fg:#ffe8ff;
+  --pong-color-accent:#ff66cc;
+  --pong-color-grid:#2a0a3a;
+  --pong-color-glow: rgba(255,102,204,0.28);
 }
 /* THEME: Classic CRT */
 .theme-crt {
-  --pong-bg:#000000;
-  --pong-fg:#e0ffe0;
-  --pong-accent:#7cff7c;
-  --pong-grid:#002200;
-  --pong-glow: rgba(124,255,124,0.18);
+  --pong-color-bg:#000000;
+  --pong-color-fg:#e0ffe0;
+  --pong-color-accent:#7cff7c;
+  --pong-color-grid:#002200;
+  --pong-color-glow: rgba(124,255,124,0.18);
 }
 /* THEME: Minimal Light */
 .theme-minimal {
-  --pong-bg:#f7f8fb;
-  --pong-fg:#0b1220;
-  --pong-accent:#2b6cff;
-  --pong-grid:#e6e9f2;
-  --pong-glow: rgba(43,108,255,0.12);
+  --pong-color-bg:#f7f8fb;
+  --pong-color-fg:#0b1220;
+  --pong-color-accent:#2b6cff;
+  --pong-color-grid:#e6e9f2;
+  --pong-color-glow: rgba(43,108,255,0.12);
 }
 
 * { box-sizing: border-box; }

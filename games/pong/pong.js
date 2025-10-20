@@ -118,6 +118,34 @@ import "./pauseOverlay.js";
     },
   };
 
+  // [GFX-PONG] Query/localStorage flag for optional FX
+  const FX_PARAM_KEY = "fx";
+  const FX_TRAIL_VALUE = "trail";
+
+  function parseTrailPreference(saved){
+    let stored = !!(saved && saved.fxTrail);
+    let fromQuery = null;
+    if(typeof window !== "undefined" && typeof window.location?.search === "string"){
+      try {
+        const params = new URLSearchParams(window.location.search);
+        if(params.has(FX_PARAM_KEY)){
+          const raw = params.get(FX_PARAM_KEY);
+          if(typeof raw === "string"){
+            const normalized = raw.trim().toLowerCase();
+            if(normalized === FX_TRAIL_VALUE){
+              fromQuery = true;
+            } else if(normalized === "0" || normalized === "off" || normalized === "none" || normalized === "false"){
+              fromQuery = false;
+            }
+          }
+        }
+      } catch (_) {
+        /* noop */
+      }
+    }
+    return fromQuery === null ? stored : fromQuery;
+  }
+
   const markFirstFrame = (() => {
     let done = false;
     return () => {
@@ -281,6 +309,7 @@ import "./pauseOverlay.js";
     sfx:true,
     theme:"neon",         // neon | vapor | crt | minimal
     reduceMotion:false,
+    fxTrail:false,
     keys:{p1Up:"KeyW", p1Down:"KeyS", p2Up:"ArrowUp", p2Down:"ArrowDown", pause:"Space"},
     aiTable: cloneAiTable(DEFAULT_AI_TABLE),
     aiTableSource: formatAiTable(DEFAULT_AI_TABLE),
@@ -301,7 +330,8 @@ import "./pauseOverlay.js";
     canvas:null, ctx:null, ratio:1, scaleX:1, scaleY:1, paused:false, over:false,
     score:{p1:0,p2:0}, ball:null, balls:[], p1:null, p2:null, hud:null, loopId:0,
     effects:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
-    trail:[], trailMax:20, touches:{}, replay:[], replayMax:12*60, recording:true,
+    // [GFX-PONG] Trail buffer honoring DPR-aware glow
+    trail:[], trailMax:120, trailEnabled: parseTrailPreference(savedConfig), touches:{}, replay:[], replayMax:12*60, recording:true,
     shellPaused:false,
     images:{ powerups:{}, effects:{} },
     backgroundLayers:null,
@@ -310,6 +340,7 @@ import "./pauseOverlay.js";
     backgroundPreset:null,
     backgroundPulse:null,
     backgroundPulseStrength:0,
+    dpr: typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1,
     pauseOverlay:null,
     debugHud:null,
     debugVisible:false,
@@ -543,7 +574,7 @@ import "./pauseOverlay.js";
   function drawSprite(img, x, y, w, h, alpha=1){
     if(!img || !img.complete || !img.naturalWidth) return;
     const ctx = state.ctx;
-    ctx.save();
+    ctx.save(); // [GFX-PONG] Theme-tinted paddle fill
     ctx.globalAlpha = alpha;
     ctx.drawImage(img, x, y, w, h);
     ctx.restore();
@@ -663,6 +694,7 @@ import "./pauseOverlay.js";
       sfx:state.sfx,
       theme:state.theme,
       reduceMotion:state.reduceMotion,
+      fxTrail: !!state.trailEnabled,
       keys:state.keys,
       aiTable:state.aiTable,
       ladderBest,
@@ -879,9 +911,51 @@ import "./pauseOverlay.js";
     }
   }
 
+  // [GFX-PONG] Pixel snapping helper for DPR-aware lines
+  function snapToPixel(value, scale){
+    if(!Number.isFinite(scale) || scale <= 0) return value;
+    return Math.round(value * scale) / scale;
+  }
+
+  // [GFX-PONG] Overlay a crisp court grid tied to theme colors
+  function drawCourtGrid(){
+    const ctx = state.ctx;
+    if(!ctx) return;
+    const color = getCSS("--pong-grid");
+    if(!color) return;
+    const scaleX = state.scaleX || 1;
+    const scaleY = state.scaleY || 1;
+    if(!scaleX || !scaleY) return;
+    const dpr = state.dpr || (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
+    ctx.save(); // [GFX-PONG] Preserve transform while plotting crisp grid
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.18;
+    const spacing = 80;
+    ctx.lineWidth = 1 / scaleX;
+    for(let x = spacing; x < W; x += spacing){
+      const snappedX = snapToPixel(x, scaleX);
+      const deviceX = Math.round(snappedX * scaleX * dpr) / (scaleX * dpr);
+      ctx.beginPath();
+      ctx.moveTo(deviceX, 0);
+      ctx.lineTo(deviceX, H);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1 / scaleY;
+    for(let y = spacing; y < H; y += spacing){
+      const snappedY = snapToPixel(y, scaleY);
+      const deviceY = Math.round(snappedY * scaleY * dpr) / (scaleY * dpr);
+      ctx.beginPath();
+      ctx.moveTo(0, deviceY);
+      ctx.lineTo(W, deviceY);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function clear(){
     ensureSprites();
     drawParallaxBackground();
+    drawCourtGrid();
   }
   function getCSS(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#fff"; }
 
@@ -938,31 +1012,40 @@ import "./pauseOverlay.js";
   }
 
   function drawPaddleSprite(p){
-    const img = state.images?.paddle;
-    if(img && img.complete && img.naturalWidth){
-      drawSprite(img, p.x, p.y, p.w, p.h, 1);
+    const ctx = state.ctx;
+    if(!ctx) return;
+    ctx.save(); // [GFX-PONG] Theme-tinted paddle fill
+    ctx.fillStyle = getCSS("--pong-fg");
+    const paddleGlow = getCSS("--pong-glow");
+    if(paddleGlow){
+      ctx.shadowColor = paddleGlow;
+      ctx.shadowBlur = 6;
     } else {
-      const ctx = state.ctx;
-      ctx.fillStyle = getCSS("--pong-fg");
-      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
     }
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+    ctx.restore();
   }
 
   function drawBallSprite(b, alpha=1){
-    const img = state.images?.ball;
-    const size = b.r * 2;
-    if(img && img.complete && img.naturalWidth){
-      drawSpriteCentered(img, b.x, b.y, size, size, alpha);
+    const ctx = state.ctx;
+    if(!ctx) return;
+    ctx.save(); // [GFX-PONG] Theme-aware ball + glow
+    ctx.globalAlpha = alpha;
+    const glow = getCSS("--pong-glow");
+    if(glow){
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = Math.max(6, b.r * 1.4);
     } else {
-      const ctx = state.ctx;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = getCSS("--pong-fg");
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
-      ctx.fill();
-      ctx.restore();
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
     }
+    ctx.fillStyle = getCSS("--pong-fg");
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawPowerupSprite(pu){
@@ -1828,7 +1911,7 @@ import "./pauseOverlay.js";
     drawPaddleSprite(state.p1);
     drawPaddleSprite(state.p2);
 
-    if(!state.reduceMotion){
+    if(state.trailEnabled && !state.reduceMotion){
       for(const b of state.balls){
         state.trail.push({x:b.x,y:b.y,r:b.r,life:0.35,duration:0.35});
       }
@@ -1838,11 +1921,13 @@ import "./pauseOverlay.js";
         if(t.life>0){
           const duration = t.duration || 0.35;
           const fade = Math.max(0, Math.min(1, t.life / duration));
-          drawBallSprite({x:t.x, y:t.y, r:t.r}, fade*0.6);
+          drawBallSprite({x:t.x, y:t.y, r:t.r}, fade*0.5); // [GFX-PONG] Trail fade via globalAlpha
           t2.push(t);
         }
       }
-      state.trail = t2.slice(-120);
+      state.trail = t2.slice(-state.trailMax);
+    } else {
+      state.trail.length = 0;
     }
 
     for(const b of state.balls){ drawBallSprite(b); }
@@ -2561,6 +2646,7 @@ import "./pauseOverlay.js";
     state.scaleX = scaleX;
     state.scaleY = scaleY;
     state.ratio = scaleY;
+    state.dpr = dpr; // [GFX-PONG] Persist DPR for crisp grid math
   }
 
   // ---------- Events ----------
