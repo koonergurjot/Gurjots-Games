@@ -1216,7 +1216,9 @@ function showGameOverModal(title,message){
 
 function check(){
   won = won || grid.flat().some(v=>v>=2048);
-  if(won){
+  if(timeAttackExpired){
+    over = true;
+  }else if(won){
     over = false;
   }else{
     const quickNoMoves = !canMove(grid);
