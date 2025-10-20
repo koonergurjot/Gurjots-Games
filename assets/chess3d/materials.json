@@ -1,0 +1,14 @@
+{
+  "classic": {
+    "w": { "metalness": 0.1, "roughness": 0.55 },
+    "b": { "metalness": 0.16, "roughness": 0.6 }
+  },
+  "metal": {
+    "w": { "metalness": 0.82, "roughness": 0.32 },
+    "b": { "metalness": 0.9, "roughness": 0.28 }
+  },
+  "glass": {
+    "w": { "metalness": 0.2, "roughness": 0.18 },
+    "b": { "metalness": 0.28, "roughness": 0.22 }
+  }
+}

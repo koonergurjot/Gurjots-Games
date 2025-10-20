@@ -1,19 +1,38 @@
 import { mergeGeometries } from "./lib/BufferGeometryUtils.js";
-import { createToonRampMaterial } from "./materials/toonRampMaterial.js";
 
 let THREERef;
 let sceneRef;
 let helpersRef;
 
 const instancers = new Map();
+const geometryCache = new Map();
 const piecesBySquare = new Map();
 const animations = [];
 const captureAnimations = [];
 let currentPieceStyle = "classic";
 
-const MAX_INSTANCES = { P: 16, R: 4, N: 4, B: 4, Q: 2, K: 2 };
+const COLORS = ["w", "b"];
+const MAX_INSTANCES_PER_COLOR = { P: 8, N: 2, B: 2, R: 2, Q: 1, K: 1 };
 const PIECE_TYPES = ["P", "N", "B", "R", "Q", "K"];
 const BASE_OFFSET = 0.12;
+
+const DEFAULT_MATERIAL_CONFIG = {
+  classic: {
+    w: { metalness: 0.08, roughness: 0.58 },
+    b: { metalness: 0.12, roughness: 0.62 },
+  },
+  metal: {
+    w: { metalness: 0.74, roughness: 0.34 },
+    b: { metalness: 0.82, roughness: 0.28 },
+  },
+  glass: {
+    w: { metalness: 0.18, roughness: 0.18 },
+    b: { metalness: 0.26, roughness: 0.22 },
+  },
+};
+
+let materialsConfig = null;
+let materialsConfigPromise = null;
 
 const tmpMatrix = new (class {
   constructor() {
@@ -43,6 +62,97 @@ const paletteColors = {
   w: null,
   b: null,
 };
+
+const instancerKey = (type, color) => `${type}:${color}`;
+
+function clamp01(value, fallback) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return clamp01(fallback, 0.5);
+  if (num <= 0) return 0;
+  if (num >= 1) return 1;
+  return num;
+}
+
+function normalizeMaterialConfig(source) {
+  const normalized = {};
+  const raw = source && typeof source === "object" ? source : {};
+  const styles = new Set([
+    ...Object.keys(DEFAULT_MATERIAL_CONFIG),
+    ...Object.keys(raw),
+  ]);
+  styles.forEach((style) => {
+    const styleSource = raw[style] && typeof raw[style] === "object" ? raw[style] : {};
+    const fallbackStyle =
+      (DEFAULT_MATERIAL_CONFIG[style] && DEFAULT_MATERIAL_CONFIG[style]) ||
+      DEFAULT_MATERIAL_CONFIG.classic;
+    normalized[style] = {};
+    COLORS.forEach((color) => {
+      const preset = styleSource[color] && typeof styleSource[color] === "object"
+        ? styleSource[color]
+        : null;
+      const fallback =
+        (fallbackStyle && fallbackStyle[color]) || DEFAULT_MATERIAL_CONFIG.classic[color];
+      normalized[style][color] = {
+        metalness: clamp01(preset?.metalness, fallback?.metalness ?? 0.5),
+        roughness: clamp01(preset?.roughness, fallback?.roughness ?? 0.5),
+      };
+    });
+  });
+  return normalized;
+}
+
+let normalizedDefaultConfig;
+function getDefaultMaterialConfig() {
+  if (!normalizedDefaultConfig) {
+    normalizedDefaultConfig = normalizeMaterialConfig(DEFAULT_MATERIAL_CONFIG);
+  }
+  return normalizedDefaultConfig;
+}
+
+async function ensureMaterialsLoaded() {
+  if (materialsConfig) return materialsConfig;
+  if (!materialsConfigPromise) {
+    materialsConfigPromise = fetch("/assets/chess3d/materials.json", { cache: "no-store" })
+      .then((res) => {
+        if (!res || !res.ok) {
+          throw new Error(`bad status ${res?.status ?? "unknown"}`);
+        }
+        return res.json();
+      })
+      .catch((err) => {
+        console?.warn?.("chess3d", "[Pieces] failed to load materials.json", err);
+        return getDefaultMaterialConfig();
+      })
+      .then((data) => {
+        try {
+          return normalizeMaterialConfig(data);
+        } catch (error) {
+          console?.warn?.("chess3d", "[Pieces] failed to normalize material config", error);
+          return getDefaultMaterialConfig();
+        }
+      });
+  }
+  materialsConfig = await materialsConfigPromise;
+  return materialsConfig;
+}
+
+function getMaterialPreset(style, color) {
+  const config = materialsConfig || getDefaultMaterialConfig();
+  const styleConfig = config[style] || config.classic || getDefaultMaterialConfig().classic;
+  return styleConfig[color] || getDefaultMaterialConfig().classic[color];
+}
+
+function applyMaterialPreset(instancer, style) {
+  if (!instancer || !instancer.material) return;
+  const { color } = instancer;
+  const preset = getMaterialPreset(style, color);
+  instancer.material.metalness = clamp01(preset?.metalness, instancer.material.metalness);
+  instancer.material.roughness = clamp01(preset?.roughness, instancer.material.roughness);
+  if (paletteColors[color]) {
+    instancer.material.color.copy(paletteColors[color]);
+  }
+  instancer.material.needsUpdate = true;
+}
 
 function ensurePalette(style) {
   const THREE = THREERef;
@@ -158,39 +268,43 @@ function ensureInstancers() {
   if (instancers.size) return;
   ensurePalette(currentPieceStyle);
   const THREE = THREERef;
-  const material = createToonRampMaterial(THREE, {
-    vertexColors: true,
-    bandCount: 4,
-    ambient: 0.32,
-    specIntensity: 0.2,
-    shininess: 56,
-    fillIntensity: 0.12,
-  });
   PIECE_TYPES.forEach((type) => {
-    const geometry = buildGeometry(type, THREE);
-    const capacity = MAX_INSTANCES[type];
-    const mesh = new THREE.InstancedMesh(geometry, material, capacity);
-    mesh.count = 0;
-    if (mesh.instanceMatrix?.setUsage) {
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    let geometry = geometryCache.get(type);
+    if (!geometry) {
+      geometry = buildGeometry(type, THREE);
+      geometryCache.set(type, geometry);
     }
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    sceneRef.add(mesh);
-    instancers.set(type, {
-      mesh,
-      capacity,
-      count: 0,
-      indexMap: new Map(),
+    COLORS.forEach((color) => {
+      const capacity = MAX_INSTANCES_PER_COLOR[type] ?? 1;
+      const baseColor = paletteColors[color]?.clone?.() || new THREE.Color(palette.classic[color]);
+      const material = new THREE.MeshStandardMaterial({
+        color: baseColor,
+        metalness: 0.25,
+        roughness: 0.6,
+      });
+      material.envMapIntensity = 0.5;
+      material.side = THREE.FrontSide;
+      material.shadowSide = THREE.FrontSide;
+      const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+      mesh.count = 0;
+      if (mesh.instanceMatrix?.setUsage) {
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      }
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      sceneRef.add(mesh);
+      instancers.set(instancerKey(type, color), {
+        mesh,
+        capacity,
+        count: 0,
+        indexMap: new Map(),
+        material,
+        color,
+        type,
+      });
     });
   });
-}
-
-function applyPieceColor(piece) {
-  const { mesh } = piece.instancer;
-  const color = piece.color === "w" ? paletteColors.w : paletteColors.b;
-  mesh.setColorAt(piece.index, color);
-  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  instancers.forEach((inst) => applyMaterialPreset(inst, currentPieceStyle));
 }
 
 function setPieceMatrix(piece, position, options = {}) {
@@ -205,7 +319,7 @@ function setPieceMatrix(piece, position, options = {}) {
 }
 
 function spawnPiece(type, color, square) {
-  const inst = instancers.get(type);
+  const inst = instancers.get(instancerKey(type, color));
   if (!inst || inst.count >= inst.capacity) return null;
   const index = inst.count;
   inst.count += 1;
@@ -215,7 +329,6 @@ function spawnPiece(type, color, square) {
   piecesBySquare.set(square, piece);
   const pos = helpersRef.squareToPosition(square);
   setPieceMatrix(piece, pos);
-  applyPieceColor(piece);
   return piece;
 }
 
@@ -228,9 +341,6 @@ function releasePiece(piece) {
     const matrix = new THREERef.Matrix4();
     inst.mesh.getMatrixAt(lastIndex, matrix);
     inst.mesh.setMatrixAt(piece.index, matrix);
-    const color = new THREERef.Color();
-    inst.mesh.getColorAt(lastIndex, color);
-    inst.mesh.setColorAt(piece.index, color);
     if (lastPiece) {
       lastPiece.index = piece.index;
       inst.indexMap.set(piece.index, lastPiece);
@@ -240,7 +350,6 @@ function releasePiece(piece) {
   inst.count -= 1;
   inst.mesh.count = inst.count;
   inst.mesh.instanceMatrix.needsUpdate = true;
-  if (inst.mesh.instanceColor) inst.mesh.instanceColor.needsUpdate = true;
 }
 
 function clearBoard() {
@@ -258,7 +367,9 @@ export async function createPieces(scene, THREE, helpers) {
   THREERef = THREE;
   sceneRef = scene;
   helpersRef = helpers;
+  await ensureMaterialsLoaded();
   ensureInstancers();
+  instancers.forEach((inst) => applyMaterialPreset(inst, currentPieceStyle));
 }
 
 export function applySnapshot(pieces = []) {
@@ -378,9 +489,14 @@ export function update(time) {
 export function setPieceStyle(style) {
   currentPieceStyle = style;
   ensurePalette(style);
-  instancers.forEach((inst) => {
-    inst.indexMap.forEach((piece) => applyPieceColor(piece));
-  });
+  instancers.forEach((inst) => applyMaterialPreset(inst, style));
+  if (!materialsConfig) {
+    ensureMaterialsLoaded()
+      .then(() => {
+        instancers.forEach((inst) => applyMaterialPreset(inst, currentPieceStyle));
+      })
+      .catch(() => {});
+  }
 }
 
 export function getPieceStyle() {
