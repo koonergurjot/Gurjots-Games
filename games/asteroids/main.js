@@ -944,6 +944,12 @@ class AsteroidsGame {
 
   resizeCanvas() {
     if (!this.canvas) return;
+    if (this.canvas.style) {
+      this.canvas.style.width = '';
+      this.canvas.style.height = '';
+      this.canvas.style.removeProperty?.('width');
+      this.canvas.style.removeProperty?.('height');
+    }
     const rect = this.canvas.getBoundingClientRect();
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
     this.dpr = dpr;
@@ -953,12 +959,6 @@ class AsteroidsGame {
     this.height = Math.max(1, Math.round(rawHeight));
     this.canvas.width = Math.round(this.width * dpr);
     this.canvas.height = Math.round(this.height * dpr);
-    if (this.canvas.style) {
-      this.canvas.style.width = '';
-      this.canvas.style.height = '';
-      this.canvas.style.removeProperty?.('width');
-      this.canvas.style.removeProperty?.('height');
-    }
     this.world.width = this.width;
     this.world.height = this.height;
   }
