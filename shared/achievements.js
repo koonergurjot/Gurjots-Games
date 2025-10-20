@@ -22,7 +22,7 @@ let ACH_KEY = getAchievementStorageKey(profile);
 let STAT_KEY = getStatStorageKey(profile);
 
 let unlocks = {};
-let stats = { plays: {}, totalPlays: 0 };
+let stats = { plays: {}, totalPlays: 0, missions: { daily: 0, weekly: 0, career: 0, total: 0 } };
 
 function load() {
   unlocks = {};
@@ -36,6 +36,13 @@ function load() {
     const parsed = raw ? JSON.parse(raw) : {};
     stats.plays = parsed.plays || {};
     stats.totalPlays = parsed.totalPlays || 0;
+    const missions = parsed.missions && typeof parsed.missions === 'object' ? parsed.missions : {};
+    stats.missions = {
+      daily: Number.isFinite(Number(missions.daily)) ? Number(missions.daily) : 0,
+      weekly: Number.isFinite(Number(missions.weekly)) ? Number(missions.weekly) : 0,
+      career: Number.isFinite(Number(missions.career)) ? Number(missions.career) : 0,
+      total: Number.isFinite(Number(missions.total)) ? Number(missions.total) : 0,
+    };
   } catch { /* ignore */ }
 }
 
@@ -65,7 +72,12 @@ function saveUnlocks(){
   try { localStorage.setItem(ACH_KEY, JSON.stringify(unlocks)); } catch {}
 }
 function saveStats(){
-  try { localStorage.setItem(STAT_KEY, JSON.stringify({ plays: stats.plays, totalPlays: stats.totalPlays })); } catch {}
+  try {
+    localStorage.setItem(
+      STAT_KEY,
+      JSON.stringify({ plays: stats.plays, totalPlays: stats.totalPlays, missions: stats.missions })
+    );
+  } catch {}
 }
 
 export const registry = [
@@ -74,6 +86,9 @@ export const registry = [
   { id: 'five_games', title: 'Variety Gamer', desc: 'Play five different games', icon: '🎮', condition: (e, s) => Object.keys(s.plays).length >= 5 },
   { id: 'asteroids_1000', title: 'Space Ace', desc: 'Score 1000 in Asteroids', icon: '🚀', condition: (e) => e.slug === 'asteroids' && e.type === 'score' && Number(e.value) >= 1000 },
   { id: 'pong_perfect', title: 'Perfect Pong', desc: 'Win Pong 11-0', icon: '🏓', condition: (e) => e.slug === 'pong' && e.type === 'game_over' && e.value && e.value.right >= 11 && e.value.left === 0 },
+  { id: 'mission_daily_3', title: 'Routine Runner', desc: 'Complete 3 daily missions', icon: '📆', condition: (_e, s) => (s.missions?.daily || 0) >= 3 },
+  { id: 'mission_weekly_5', title: 'Weekend Warrior', desc: 'Complete 5 weekly missions', icon: '🛡️', condition: (_e, s) => (s.missions?.weekly || 0) >= 5 },
+  { id: 'mission_total_25', title: 'Mission Master', desc: 'Complete 25 missions overall', icon: '🏅', condition: (_e, s) => (s.missions?.total || 0) >= 25 },
 ];
 
 const toastQueue = [];
@@ -127,6 +142,14 @@ export function emitEvent(event = {}) {
   if (event.type === 'play') {
     stats.totalPlays++;
     stats.plays[event.slug] = (stats.plays[event.slug] || 0) + 1;
+    saveStats();
+  } else if (event.type === 'mission_complete') {
+    const kind = event?.mission?.kind;
+    stats.missions = stats.missions || { daily: 0, weekly: 0, career: 0, total: 0 };
+    if (kind === 'daily' || kind === 'weekly' || kind === 'career') {
+      stats.missions[kind] = (stats.missions[kind] || 0) + 1;
+    }
+    stats.missions.total = (stats.missions.total || 0) + 1;
     saveStats();
   }
 

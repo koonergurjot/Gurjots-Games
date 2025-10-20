@@ -197,6 +197,25 @@
       </div>
     </section>
 
+    <!-- MISSIONS PANEL -->
+    <section class="bolt-missions-panel" id="missions">
+      <div class="bolt-container bolt-missions-inner">
+        <div class="bolt-missions-header">
+          <div>
+            <p class="bolt-missions-eyebrow">Stay on track</p>
+            <h2 class="bolt-missions-title">Mission Hub</h2>
+          </div>
+          <div class="bolt-mission-filters" role="group" aria-label="Filter missions">
+            <button type="button" class="bolt-mission-filter is-active" data-mission-filter="daily" aria-pressed="true">Daily</button>
+            <button type="button" class="bolt-mission-filter" data-mission-filter="weekly" aria-pressed="false">Weekly</button>
+            <button type="button" class="bolt-mission-filter" data-mission-filter="career" aria-pressed="false">Career</button>
+          </div>
+        </div>
+        <div class="bolt-missions-list" data-mission-list role="list"></div>
+        <p class="bolt-missions-note">Daily missions reset at 00:00 UTC. Weekly missions reset every Monday.</p>
+      </div>
+    </section>
+
     <!-- SOCIAL PROOF SECTION -->
     <section class="bolt-social-proof" aria-labelledby="social-proof-title">
       <div class="bolt-container">
@@ -346,6 +365,111 @@
       var y = document.getElementById('bolt-year');
       if (y) y.textContent = new Date().getFullYear();
     });
+  </script>
+  <script type="module">
+    import { subscribe, whenReady } from './shared/missions.js';
+
+    const missionList = document.querySelector('[data-mission-list]');
+    const filterButtons = Array.from(document.querySelectorAll('[data-mission-filter]'));
+
+    if (missionList && filterButtons.length) {
+      let latestSnapshot = null;
+      let currentFilter = filterButtons.find(btn => btn.classList.contains('is-active'))?.dataset.missionFilter || filterButtons[0].dataset.missionFilter;
+
+      function updateButtons() {
+        filterButtons.forEach(button => {
+          const isActive = button.dataset.missionFilter === currentFilter;
+          button.classList.toggle('is-active', isActive);
+          button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+      }
+
+      function formatGame(slug) {
+        if (!slug) return 'Unknown';
+        return slug
+          .split(/[-_]/)
+          .filter(Boolean)
+          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
+      }
+
+      function requirementSummary(mission) {
+        if (!mission?.requirements?.length) return '';
+        return mission.requirements
+          .map(req => {
+            if (req.target > 0) {
+              const current = Math.min(req.current ?? 0, req.target);
+              return `${current} / ${req.target}`;
+            }
+            if (req.completed) return 'Completed';
+            const value = Number(req.current ?? req.raw ?? 0);
+            return value > 0 ? String(value) : 'In progress';
+          })
+          .join(' • ');
+      }
+
+      function createCard(mission) {
+        const article = document.createElement('article');
+        article.className = 'bolt-mission-card';
+        article.setAttribute('role', 'listitem');
+        if (mission.completed) article.classList.add('is-complete');
+
+        const pct = Math.min(100, Math.max(0, mission?.progress?.percentage ?? 0));
+        const summary = requirementSummary(mission);
+        const status = mission.completed
+          ? `<span class="bolt-mission-card__badge">Completed</span>${summary ? `<span class="bolt-mission-card__requirements">${summary}</span>` : ''}`
+          : `<span class="bolt-mission-card__requirements">${summary || 'Keep playing to progress.'}</span>`;
+
+        article.innerHTML = `
+          <div class="bolt-mission-card__header">
+            <span class="bolt-mission-card__kind">${mission.kind === 'daily' ? 'Daily' : mission.kind === 'weekly' ? 'Weekly' : 'Career'}</span>
+            <span class="bolt-mission-card__game">${formatGame(mission.slug)}</span>
+          </div>
+          <h3 class="bolt-mission-card__title">${mission.title}</h3>
+          <p class="bolt-mission-card__desc">${mission.desc}</p>
+          <div class="bolt-mission-card__progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${mission.title} progress">
+            <div class="bolt-mission-card__progress-fill" style="width:${pct}%"></div>
+          </div>
+          <div class="bolt-mission-card__status">${status}</div>
+        `;
+        return article;
+      }
+
+      function render() {
+        missionList.innerHTML = '';
+        if (!latestSnapshot || latestSnapshot.loaded === false) {
+          missionList.innerHTML = '<div class="bolt-mission-empty">Loading missions…</div>';
+          return;
+        }
+        const filtered = latestSnapshot.missions.filter(mission => !currentFilter || mission.kind === currentFilter);
+        if (!filtered.length) {
+          const label = currentFilter === 'weekly' ? 'weekly' : currentFilter === 'career' ? 'career' : 'daily';
+          missionList.innerHTML = `<div class="bolt-mission-empty">No ${label} missions available right now. Check back soon!</div>`;
+          return;
+        }
+        filtered.forEach(mission => missionList.appendChild(createCard(mission)));
+      }
+
+      filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          const next = button.dataset.missionFilter;
+          if (!next || next === currentFilter) return;
+          currentFilter = next;
+          updateButtons();
+          render();
+        });
+      });
+
+      updateButtons();
+
+      const handleUpdate = snapshot => {
+        latestSnapshot = snapshot;
+        render();
+      };
+
+      subscribe(handleUpdate);
+      whenReady().then(handleUpdate);
+    }
   </script>
   <script type="module" src="js/profile-overlay.js"></script>
   <script type="module" src="js/bolt-landing.js?v=20250911175011"></script>
