@@ -873,6 +873,9 @@ function applyCanvasScale(){
     ctx.resetTransform?.();
     ctx.scale(canvasScale,canvasScale);
   }
+  if('imageSmoothingEnabled' in ctx){
+    ctx.imageSmoothingEnabled=false;
+  }
   if(trailBuffer){
     trailBuffer.width=pixelW;
     trailBuffer.height=pixelH;
@@ -883,6 +886,9 @@ function applyCanvasScale(){
     }else{
       trailCtx.resetTransform?.();
       trailCtx.scale(canvasScale,canvasScale);
+    }
+    if('imageSmoothingEnabled' in trailCtx){
+      trailCtx.imageSmoothingEnabled=false;
     }
   }
   invalidateBrickPatterns();
