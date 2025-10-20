@@ -6,6 +6,7 @@ import '../../shared/ui/hud.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import '../common/diagnostics/adapter.js';
 import { gameEvent } from '../../shared/telemetry.js';
+import { initSnakeUI } from './ui.js';
 
 window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fallback */ };
 
@@ -285,12 +286,8 @@ hud.innerHTML = `
           <option value="32">32×32</option>
         </select>
       </label>
-      <label class="hud-field">Boundary
-        <select id="wrapSel">
-          <option value="1">Wrap</option>
-          <option value="0">No Wrap</option>
-        </select>
-      </label>
+      <label class="hud-field hud-field--toggle"><input type="checkbox" id="wallsToggle"/> Walls enabled</label>
+      <label class="hud-field hud-field--toggle"><input type="checkbox" id="wrapToggle"/> Wrap edges</label>
     </div>
   </div>
   <div class="hud-panel hud-panel--skins">
@@ -422,6 +419,36 @@ function parseJSONSafe(raw, fallback) {
   }
 }
 
+function getProfileId() {
+  try {
+    const id = window.localStorage?.getItem('profile');
+    return typeof id === 'string' && id.length ? id : 'default';
+  } catch (_) {
+    return 'default';
+  }
+}
+
+const OPTIONS_STORAGE_KEY = `snake:options:${getProfileId()}`;
+
+function loadOptionState() {
+  const raw = parseJSONSafe(safeStorageGetItem(OPTIONS_STORAGE_KEY), null);
+  if (!raw || typeof raw !== 'object') {
+    return { wrap: true, walls: true };
+  }
+  return {
+    wrap: raw.wrap !== false,
+    walls: raw.walls !== false
+  };
+}
+
+function saveOptionState(options) {
+  const payload = {
+    wrap: options.wrap !== false,
+    walls: options.walls !== false
+  };
+  safeStorageSetItem(OPTIONS_STORAGE_KEY, JSON.stringify(payload));
+}
+
 diagnosticsEnabled = safeStorageGetItem(DIAGNOSTICS_KEY) === '1';
 
 function escapeHtml(value) {
@@ -462,13 +489,37 @@ toggle.onchange = ()=>{ params.set('daily', toggle.checked ? '1':'0'); location.
 renderMissions();
 renderComboPanel();
 const sizeSel = document.getElementById('sizeSel');
-const wrapSel = document.getElementById('wrapSel');
+const wallsToggle = document.getElementById('wallsToggle');
+const wrapToggle = document.getElementById('wrapToggle');
+const optionState = loadOptionState();
 const N = parseInt(params.get('size') || '32');
-const WRAP = params.get('wrap') !== '0';
+let wrapEnabled = params.has('wrap') ? params.get('wrap') !== '0' : optionState.wrap;
+let wallsEnabled = optionState.walls;
+let uiController = null;
+let hudDirty = true;
 sizeSel.value = String(N);
-wrapSel.value = WRAP ? '1' : '0';
 sizeSel.onchange = ()=>{ params.set('size', sizeSel.value); location.search = params.toString(); };
-wrapSel.onchange = ()=>{ params.set('wrap', wrapSel.value); location.search = params.toString(); };
+if (wrapToggle) {
+  wrapToggle.checked = wrapEnabled;
+  wrapToggle.addEventListener('change', () => {
+    wrapEnabled = !!wrapToggle.checked;
+    saveOptionState({ wrap: wrapEnabled, walls: wallsEnabled });
+    requestHudSync();
+  });
+}
+if (wallsToggle) {
+  wallsToggle.checked = wallsEnabled;
+  wallsToggle.addEventListener('change', () => {
+    wallsEnabled = !!wallsToggle.checked;
+    if (!wallsEnabled) {
+      obstacles = [];
+      buildBoard(food);
+    }
+    saveOptionState({ wrap: wrapEnabled, walls: wallsEnabled });
+    renderMissions();
+    requestHudSync();
+  });
+}
 
 const c = ensureGameCanvas();
 bootLog('canvas:resolved', { width: c.width, height: c.height });
@@ -506,6 +557,12 @@ const SPEED_BASE_MS = 120;
 const SPEED_MIN_MS = 60;
 const SPEEDUP_INTERVAL = 4;
 const SPEED_STEP_MS = 6;
+const SPEED_TIER_MAX = Math.max(1, Math.floor((SPEED_BASE_MS - SPEED_MIN_MS) / SPEED_STEP_MS) + 1);
+const SPEED_BURST_MULTIPLIER = 0.6;
+const SPEED_BURST_MIN_MS = 5000;
+const SPEED_BURST_RANGE_MS = 3000;
+let speedTier = 1;
+let lastSpeedTierEmitted = 1;
 let speedMs = SPEED_BASE_MS;
 let score = 0;
 let runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -515,9 +572,42 @@ let bestScore = storedBest != null ? Number(storedBest) : 0;
 if (!Number.isFinite(bestScore)) bestScore = 0;
 let dead = false;
 let deadHandled = false;
+let speedBoostActive = false;
+let speedBoostUntil = 0;
 const GAME_ID = 'snake';
 GG.incPlays();
 const tokens = getThemeTokens('snake');
+uiController = initSnakeUI({
+  score,
+  bestScore,
+  speedTier,
+  wallsEnabled,
+  wrapEnabled
+});
+requestHudSync();
+
+function requestHudSync() {
+  hudDirty = true;
+}
+
+function syncHud() {
+  if (!hudDirty || !uiController) return;
+  hudDirty = false;
+  try {
+    uiController.updateTopBar({
+      score,
+      bestScore,
+      speedTier,
+      wallsEnabled,
+      wrapEnabled,
+      boostActive: speedBoostActive,
+      boostRemainingMs: speedBoostActive ? Math.max(0, speedBoostUntil - performance.now()) : 0
+    });
+  } catch (_) {}
+  if (window.GG && typeof window.GG.setMeta === 'function') {
+    window.GG.setMeta(GAME_ID, `Best: ${bestScore} • Speed T${speedTier}`);
+  }
+}
 let postedReady=false;
 const SNAKE_SKINS = [
   { id: 'default', name: 'Purple', color: tokens['snake-purple'] || '#8b5cf6', unlock: p => true },
@@ -598,42 +688,52 @@ const PROGRESS_KEY = 'snake:progress';
 const SKIN_KEY = 'snake:skin';
 const MISSIONS = [
   {
-    id: 'score-30',
-    name: 'Score 30',
-    goal: 30,
-    type: 'score',
-    description: 'Reach 30 points in a single run.'
+    id: 'score-walls-off',
+    name: 'Walls? Nah.',
+    goal: 200,
+    type: 'walls-score',
+    description: 'Score 200 points in a single run with walls disabled.'
   },
   {
-    id: 'combo-4',
-    name: 'Combo Artist',
-    goal: 4,
-    type: 'combo',
-    description: 'Chain snacks before the combo timer expires.'
+    id: 'top-speed-90',
+    name: 'Blazing Focus',
+    goal: 90000,
+    type: 'top-speed',
+    description: 'Survive 90 seconds while at top speed.'
   },
   {
-    id: 'plays-10',
-    name: 'Seasoned Pilot',
-    goal: 10,
-    type: 'plays',
-    description: 'Complete 10 lifetime runs.'
-  },
-  {
-    id: 'daily-clear',
-    name: 'Daily Clear',
-    goal: 1,
-    type: 'daily',
-    description: "Win today's daily challenge to log performance."
+    id: 'poison-gourmet',
+    name: 'Toxic Gourmet',
+    goal: 5,
+    type: 'poison',
+    description: 'Eat 5 poison snacks in one run.'
   }
 ];
-const defaultProgress = { plays: 0, best: 0 };
+const defaultProgress = {
+  plays: 0,
+  best: 0,
+  missions: {
+    wallsOffScore: 0,
+    topSpeedMs: 0,
+    poisonCount: 0
+  }
+};
 const progressData = parseJSONSafe(safeStorageGetItem(PROGRESS_KEY), defaultProgress) || defaultProgress;
 let progress = {
   plays: Number(progressData.plays) || 0,
-  best: Number(progressData.best) || 0
+  best: Number(progressData.best) || 0,
+  missions: {
+    wallsOffScore: Number(progressData.missions?.wallsOffScore) || 0,
+    topSpeedMs: Number(progressData.missions?.topSpeedMs) || 0,
+    poisonCount: Number(progressData.missions?.poisonCount) || 0
+  }
 };
 function saveProgress() {
-  safeStorageSetItem(PROGRESS_KEY, JSON.stringify({ plays: progress.plays, best: progress.best }));
+  safeStorageSetItem(PROGRESS_KEY, JSON.stringify({
+    plays: progress.plays,
+    best: progress.best,
+    missions: progress.missions
+  }));
 }
 progress.plays++;
 saveProgress();
@@ -669,6 +769,22 @@ let snakeColorHead = '#8b5cf6';
 let snakeColorRGB = { r: 139, g: 92, b: 246 };
 let fruitColor = '#22d3ee';
 let obstacles = [];
+let runMissionState = { wallsOffScore: 0, topSpeedMs: 0, poisonCount: 0 };
+let poisonStreak = 0;
+let poisonFlashUntil = 0;
+let lastTopSpeedSecondsShown = 0;
+const FoodType = Object.freeze({
+  Apple: 'apple',
+  Banana: 'banana',
+  Chili: 'chili',
+  Poison: 'poison'
+});
+const FOOD_WEIGHTS = [
+  { type: FoodType.Apple, weight: 0.55 },
+  { type: FoodType.Banana, weight: 0.25 },
+  { type: FoodType.Chili, weight: 0.1 },
+  { type: FoodType.Poison, weight: 0.1 }
+];
 let won = false;
 let winHandled = false;
 const spriteEffects = [];
@@ -827,8 +943,6 @@ function fromIndex(idx) {
 
 function cellTypeFromPickup(pickup) {
   if (!pickup) return CellType.Empty;
-  if (pickup.effect === 'portal') return CellType.Portal;
-  if (pickup.effect === 'shrink') return CellType.Shrink;
   return CellType.Food;
 }
 
@@ -886,12 +1000,6 @@ function triggerDeathEffect(head) {
   const clampedY = Math.min(Math.max(head.y, 0), N - 1);
   spawnSpriteEffect('explosion', clampedX, clampedY, { duration: 600, scale: 1.6 });
 }
-const SPECIAL_FOOD = [
-  { icon: '⭐', color: '#fbbf24', points: 5, chance: 0.08, effect: 'score' },
-  { icon: '💎', color: '#60a5fa', points: 10, chance: 0.02, effect: 'score' },
-  { icon: '🌀', color: '#38bdf8', points: 0, chance: 0.04, effect: 'portal' },
-  { icon: '🪄', color: '#c084fc', points: 0, chance: 0.04, effect: 'shrink' }
-];
 function applySkin() {
   const s = SNAKE_SKINS.find(t => t.id === snakeSkinId);
   const f = FRUIT_SKINS.find(t => t.id === fruitSkinId);
@@ -947,23 +1055,26 @@ function getMissionStats(mission) {
   let statusText = '';
   let disabled = false;
   switch (mission.type) {
-    case 'score':
-      value = score;
-      statusText = `${Math.min(value, goal)} / ${goal} pts`;
+    case 'walls-score': {
+      const tracked = Math.max(progress.missions.wallsOffScore || 0, runMissionState.wallsOffScore || 0);
+      value = tracked;
+      statusText = `${Math.min(tracked, goal)} / ${goal} pts`;
       break;
-    case 'combo':
-      value = comboBest;
-      statusText = `Best x${Math.max(1, comboBest)} / x${goal}`;
+    }
+    case 'top-speed': {
+      const tracked = Math.max(progress.missions.topSpeedMs || 0, runMissionState.topSpeedMs || 0);
+      value = tracked;
+      const seconds = Math.floor(tracked / 1000);
+      const goalSeconds = Math.floor(goal / 1000);
+      statusText = `${Math.min(seconds, goalSeconds)} / ${goalSeconds} s`;
       break;
-    case 'plays':
-      value = progress.plays;
-      statusText = `${Math.min(value, goal)} / ${goal} runs`;
+    }
+    case 'poison': {
+      const tracked = Math.max(progress.missions.poisonCount || 0, runMissionState.poisonCount || 0);
+      value = tracked;
+      statusText = `${Math.min(tracked, goal)} / ${goal} snacks`;
       break;
-    case 'daily':
-      value = DAILY_MODE && won ? 1 : 0;
-      disabled = !DAILY_MODE;
-      statusText = disabled ? 'Play Daily mode to progress' : `${value}/${goal} clears`;
-      break;
+    }
     default:
       value = 0;
       statusText = `${value}/${goal}`;
@@ -1073,8 +1184,6 @@ function scheduleDiagnosticsRender() {
   else setTimeout(cb, 32);
 }
 let paused = false;
-let level = 1;
-let lastLevelEmitted = 1;
 
 let engine = null;
 
@@ -1287,12 +1396,18 @@ function resetGame(reason = 'manual', options = {}) {
   deadHandled = false;
   paused = false;
   moveAcc = 0;
-  level = 1;
-  lastLevelEmitted = 1;
+  speedTier = 1;
+  lastSpeedTierEmitted = 1;
+  speedBoostActive = false;
+  speedBoostUntil = 0;
   tickCounter = 0;
   foodsEaten = 0;
   spriteEffects.length = 0;
-  speedMs = SPEED_BASE_MS;
+  runMissionState = { wallsOffScore: 0, topSpeedMs: 0, poisonCount: 0 };
+  lastTopSpeedSecondsShown = 0;
+  poisonStreak = 0;
+  poisonFlashUntil = 0;
+  recalcSpeedMs();
   score = 0;
   comboCount = 0;
   comboBest = 0;
@@ -1320,6 +1435,7 @@ function resetGame(reason = 'manual', options = {}) {
   buildBoard(null);
   food = spawnFood();
   fruitSpawnTime = performance.now();
+  requestHudSync();
   bootLog('game:reset', { reason, seed });
   runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
   gameOverReported = false;
@@ -1345,8 +1461,12 @@ function reportGameOutcome(result) {
     result,
     score,
     length: snake.length,
-    level,
+    speedTier,
     comboBest,
+    wallsEnabled,
+    wrapEnabled,
+    poisonCount: runMissionState.poisonCount,
+    topSpeedMs: Math.round(runMissionState.topSpeedMs)
   };
   gameEvent('game_over', {
     slug: SLUG,
@@ -1383,7 +1503,7 @@ document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') tog
   c.addEventListener('touchend', () => start = null);
 })();
 
-function pickBaseFruit() {
+function pickFruitArt() {
   let art = FRUIT_ART.length ? FRUIT_ART[Math.floor(rand() * FRUIT_ART.length)] : { icon: '🍎', label: '🍎', spriteKey: 'fruit' };
   if (fruitSkinId === 'gems' && FRUIT_ART.length) {
     art = FRUIT_ART[gemSpriteIndex % FRUIT_ART.length];
@@ -1392,11 +1512,73 @@ function pickBaseFruit() {
   return {
     icon: art.icon,
     label: art.label ?? art.icon,
-    spriteKey: art.spriteKey || 'fruit',
-    color: fruitColor,
-    points: 1,
-    effect: 'score'
+    spriteKey: art.spriteKey || 'fruit'
   };
+}
+
+function createFoodOfType(type) {
+  switch (type) {
+    case FoodType.Apple: {
+      const art = pickFruitArt();
+      return {
+        type,
+        icon: art.icon,
+        label: art.label,
+        spriteKey: art.spriteKey,
+        color: fruitColor,
+        points: 1
+      };
+    }
+    case FoodType.Banana:
+      return {
+        type,
+        icon: '🍌',
+        label: '🍌',
+        spriteKey: null,
+        color: '#facc15',
+        points: 2
+      };
+    case FoodType.Chili:
+      return {
+        type,
+        icon: '🌶️',
+        label: '🌶️',
+        spriteKey: null,
+        color: '#f97316',
+        points: 0
+      };
+    case FoodType.Poison:
+      return {
+        type,
+        icon: '☠️',
+        label: '☠️',
+        spriteKey: null,
+        color: '#a855f7',
+        points: 5
+      };
+    default:
+      return {
+        type: FoodType.Apple,
+        icon: '🍎',
+        label: '🍎',
+        spriteKey: 'fruit',
+        color: fruitColor,
+        points: 1
+      };
+  }
+}
+
+function pickFoodTypeWeighted() {
+  let total = 0;
+  for (const entry of FOOD_WEIGHTS) total += entry.weight;
+  if (total <= 0) return FoodType.Apple;
+  const target = rand() * total;
+  let acc = 0;
+  for (const entry of FOOD_WEIGHTS) {
+    acc += entry.weight;
+    if (target <= acc) return entry.type;
+  }
+  return FOOD_WEIGHTS.length ? FOOD_WEIGHTS[FOOD_WEIGHTS.length - 1].type : FoodType.Apple;
 }
 
 function spawnFood() {
@@ -1420,17 +1602,11 @@ function spawnFood() {
     return null;
   }
 
-  const r = rand();
-  let type = null;
-  let acc = 0;
-  for (const t of SPECIAL_FOOD) {
-    acc += t.chance;
-    if (r < acc) { type = t; break; }
-  }
-  if (!type) type = pickBaseFruit();
+  const selectedType = pickFoodTypeWeighted();
+  const base = createFoodOfType(selectedType);
   const idx = freeCells[(rand() * freeCells.length) | 0];
   const coords = fromIndex(idx);
-  const fruit = { ...type, x: coords.x, y: coords.y, index: idx };
+  const fruit = { ...base, x: coords.x, y: coords.y, index: idx };
   playSfx('click');
   buildBoard(fruit);
   updateDebugPanel();
@@ -1438,29 +1614,11 @@ function spawnFood() {
 }
 
 function addObstacleRow() {
+  if (!wallsEnabled) return;
   const y = Math.floor(rand() * N);
   for (let x = 4; x < N - 4; x++) obstacles.push({ x, y });
   buildBoard(food);
   updateDebugPanel();
-}
-
-function maybeLevelUp() {
-  const previousLevel = level;
-  level = 1 + Math.floor(score / 5);
-  if (level > lastLevelEmitted) {
-    lastLevelEmitted = level;
-    gameEvent('level_up', {
-      slug: SLUG,
-      level,
-      meta: {
-        score,
-      },
-    });
-  }
-  const bestList = parseJSONSafe(safeStorageGetItem('gg:lb:' + GAME_ID), []);
-  const bestEntry = Array.isArray(bestList) ? bestList[0] : null;
-  const best = Number(bestEntry?.score) || score;
-  GG.setMeta(GAME_ID, 'Best: ' + best + ' • Lv ' + level);
 }
 
 let lastTickTime = performance.now();
@@ -1482,9 +1640,53 @@ function pumpReplayInputs() {
   }
 }
 
-function applySpeedCurve() {
-  if (foodsEaten > 0 && foodsEaten % SPEEDUP_INTERVAL === 0) {
-    speedMs = Math.max(SPEED_MIN_MS, speedMs - SPEED_STEP_MS);
+function recalcSpeedMs() {
+  const tierIndex = Math.max(0, speedTier - 1);
+  const baseSpeed = Math.max(SPEED_MIN_MS, SPEED_BASE_MS - tierIndex * SPEED_STEP_MS);
+  let next = baseSpeed;
+  if (speedBoostActive) {
+    next = Math.max(SPEED_MIN_MS * 0.5, Math.floor(baseSpeed * SPEED_BURST_MULTIPLIER));
+  }
+  speedMs = next;
+}
+
+function updateSpeedTierFromFoods() {
+  const expectedTier = Math.min(SPEED_TIER_MAX, 1 + Math.floor(foodsEaten / SPEEDUP_INTERVAL));
+  if (expectedTier > speedTier) {
+    speedTier = expectedTier;
+    if (speedTier > lastSpeedTierEmitted) {
+      lastSpeedTierEmitted = speedTier;
+      gameEvent('level_up', {
+        slug: SLUG,
+        level: speedTier
+      });
+    }
+  }
+  recalcSpeedMs();
+  requestHudSync();
+}
+
+function activateSpeedBurst(durationMs) {
+  const now = performance.now();
+  speedBoostActive = true;
+  speedBoostUntil = now + durationMs;
+  recalcSpeedMs();
+  if (uiController && typeof uiController.setBoostActive === 'function') {
+    try { uiController.setBoostActive(true, durationMs); } catch (_) {}
+  }
+  requestHudSync();
+}
+
+function updateSpeedBurst(now = performance.now()) {
+  if (!speedBoostActive) return;
+  if (now >= speedBoostUntil) {
+    speedBoostActive = false;
+    speedBoostUntil = 0;
+    recalcSpeedMs();
+    if (uiController && typeof uiController.setBoostActive === 'function') {
+      try { uiController.setBoostActive(false, 0); } catch (_) {}
+    }
+    requestHudSync();
   }
 }
 
@@ -1492,49 +1694,63 @@ function applyPickupEffect(pickup, head) {
   const result = { grow: true, extraTailRemoval: 0 };
   foodsEaten++;
   const points = Number(pickup.points) || 0;
-  if (points > 0) {
+  if (points !== 0) {
     score += points;
-    GG.addXP(points);
-    gameEvent('score', {
-      slug: SLUG,
-      value: score,
-      meta: {
-        points,
-        combo: comboCount,
-        level,
-      },
-    });
+    if (points > 0) GG.addXP(points);
   }
-  playSfx('power');
-  spawnSpriteEffect('spark', head.x, head.y, { duration: 500, scale: pickup.effect === 'shrink' ? 1 : 1.25 });
-  applySpeedCurve();
-  switch (pickup.effect) {
-    case 'portal': {
-      result.grow = false;
-      const snapshot = buildBoard(null);
-      const empties = [];
-      for (let i = 0; i < snapshot.length; i++) {
-        if (snapshot[i] === CellType.Empty) empties.push(i);
-      }
-      if (empties.length) {
-        const idx = empties[(rand() * empties.length) | 0];
-        const dest = fromIndex(idx);
-        head.x = dest.x;
-        head.y = dest.y;
-        snake[0].x = dest.x;
-        snake[0].y = dest.y;
-      }
+  if (!wallsEnabled) {
+    runMissionState.wallsOffScore = Math.max(runMissionState.wallsOffScore, score);
+    if (runMissionState.wallsOffScore > progress.missions.wallsOffScore) {
+      progress.missions.wallsOffScore = runMissionState.wallsOffScore;
+      saveProgress();
+    }
+  }
+  const now = performance.now();
+  let hazardComboMeta = 0;
+  switch (pickup.type) {
+    case FoodType.Chili: {
+      poisonStreak = 0;
+      const duration = SPEED_BURST_MIN_MS + Math.floor(rand() * SPEED_BURST_RANGE_MS);
+      activateSpeedBurst(duration);
       break;
     }
-    case 'shrink': {
+    case FoodType.Poison: {
+      poisonStreak += 1;
+      hazardComboMeta = poisonStreak;
+      runMissionState.poisonCount += 1;
+      if (runMissionState.poisonCount > progress.missions.poisonCount) {
+        progress.missions.poisonCount = runMissionState.poisonCount;
+        saveProgress();
+      }
       result.grow = false;
-      result.extraTailRemoval = Math.min(2, Math.max(0, snake.length - 1));
+      const lengthAfterBase = Math.max(0, snake.length - 1);
+      const shrink = lengthAfterBase > 2 ? 1 : 0;
+      result.extraTailRemoval = shrink;
+      poisonFlashUntil = now + 800;
+      if (uiController && typeof uiController.flashPoisonWarning === 'function') {
+        try { uiController.flashPoisonWarning(); } catch (_) {}
+      }
       break;
     }
     default:
+      poisonStreak = 0;
       break;
   }
-  maybeLevelUp();
+  playSfx('power');
+  spawnSpriteEffect('spark', head.x, head.y, { duration: 500, scale: pickup.type === FoodType.Poison ? 0.9 : 1.25 });
+  updateSpeedTierFromFoods();
+  const meta = {
+    points,
+    foodType: pickup.type,
+    combo: comboCount,
+    speedTier,
+    hazardCombo: hazardComboMeta,
+    walls: wallsEnabled,
+    wrap: wrapEnabled
+  };
+  gameEvent('score', { slug: SLUG, value: score, meta });
+  requestHudSync();
+  renderMissions();
   return result;
 }
 
@@ -1547,7 +1763,24 @@ function step() {
   lastSnake = snake.map(s => ({ ...s }));
   const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
   lastDir = { ...dir };
-  if (WRAP) {
+  const now = performance.now();
+  const deltaSinceLast = Math.max(0, now - lastTickTime);
+  if (speedTier >= SPEED_TIER_MAX && deltaSinceLast > 0) {
+    runMissionState.topSpeedMs += deltaSinceLast;
+    const seconds = Math.floor(runMissionState.topSpeedMs / 1000);
+    let missionsUpdated = false;
+    if (runMissionState.topSpeedMs > progress.missions.topSpeedMs) {
+      progress.missions.topSpeedMs = runMissionState.topSpeedMs;
+      saveProgress();
+      missionsUpdated = true;
+    }
+    if (seconds !== lastTopSpeedSecondsShown) {
+      lastTopSpeedSecondsShown = seconds;
+      missionsUpdated = true;
+    }
+    if (missionsUpdated) renderMissions();
+  }
+  if (wrapEnabled) {
     if (head.x < 0) head.x = N - 1;
     if (head.x >= N) head.x = 0;
     if (head.y < 0) head.y = N - 1;
@@ -1597,7 +1830,7 @@ function step() {
   }
   buildBoard(food);
   tickCounter++;
-  lastTickTime = performance.now();
+  lastTickTime = now;
   updateDebugPanel();
 }
 
@@ -1607,6 +1840,7 @@ function draw() {
     try { window.parent?.postMessage({ type:'GAME_READY', slug:'snake' }, '*'); } catch {}
   }
   const time = performance.now();
+  syncHud();
   const side = Math.min(c.width, c.height);
   const offsetX = (c.width - side) / 2;
   const offsetY = (c.height - side) / 2;
@@ -1673,6 +1907,15 @@ function draw() {
     scoreNode.dataset.gameScore = String(score);
   }
 
+  if (poisonFlashUntil > time) {
+    const remaining = Math.max(0, poisonFlashUntil - time);
+    const alpha = Math.min(1, remaining / 800);
+    ctx.save();
+    ctx.fillStyle = `rgba(239,68,68,${0.18 * alpha})`;
+    ctx.fillRect(offsetX, offsetY, side, side);
+    ctx.restore();
+  }
+
   ctx.save();
   ctx.translate(offsetX, offsetY);
 
@@ -1703,10 +1946,38 @@ function draw() {
 
   // snake interpolation
   const t = Math.min((time - lastTickTime) / speedMs, 1);
+  const flameActive = speedBoostActive && speedBoostUntil > time;
   snake.forEach((s, idx) => {
     const prev = lastSnake[idx] || lastSnake[lastSnake.length - 1];
     const x = (prev.x + (s.x - prev.x) * t) * CELL;
     const y = (prev.y + (s.y - prev.y) * t) * CELL;
+    if (idx === 0 && flameActive) {
+      const centerX = x + CELL / 2;
+      const centerY = y + CELL / 2;
+      const backX = centerX - lastDir.x * CELL * 0.7;
+      const backY = centerY - lastDir.y * CELL * 0.7;
+      const leftX = centerX - lastDir.y * CELL * 0.35;
+      const leftY = centerY + lastDir.x * CELL * 0.35;
+      const rightX = centerX + lastDir.y * CELL * 0.35;
+      const rightY = centerY - lastDir.x * CELL * 0.35;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(249,115,22,0.75)';
+      ctx.beginPath();
+      ctx.moveTo(backX, backY);
+      ctx.lineTo(leftX, leftY);
+      ctx.lineTo(rightX, rightY);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,221,89,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(centerX - lastDir.x * CELL * 0.4, centerY - lastDir.y * CELL * 0.4);
+      ctx.lineTo((leftX + centerX) / 2, (leftY + centerY) / 2);
+      ctx.lineTo((rightX + centerX) / 2, (rightY + centerY) / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
     const sprite = idx === 0 ? ensureSprite('snakeHead') : ensureSprite('snakeBody');
     if (sprite && sprite.complete && sprite.naturalWidth) {
       ctx.drawImage(sprite, x, y, CELL, CELL);
@@ -1744,9 +2015,11 @@ function draw() {
   ctx.font = 'bold 20px Inter, system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText(`Score: ${score} (Best: ${bestScore}) • Lv ${level}`, offsetX + 16, offsetY + 28);
+  const wallStatus = wallsEnabled ? 'Walls' : 'No Walls';
+  const wrapStatus = wrapEnabled ? 'Wrap' : 'No Wrap';
+  ctx.fillText(`Score: ${score} (Best: ${bestScore}) • Speed T${speedTier} • ${wallStatus} • ${wrapStatus}`, offsetX + 16, offsetY + 28);
 
-  if (score > 0 && score % 10 === 0 && obstacles.length < Math.floor(score / 10) * (N / 2)) addObstacleRow();
+  if (wallsEnabled && score > 0 && score % 10 === 0 && obstacles.length < Math.floor(score / 10) * (N / 2)) addObstacleRow();
 
   if (paused) {
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -1803,6 +2076,7 @@ function saveScore(s) {
   if (s > bestScore) {
     bestScore = s;
     safeStorageSetItem('snake:best', String(bestScore));
+    requestHudSync();
   }
   progress.best = Math.max(progress.best, s);
   saveProgress();
@@ -1833,6 +2107,7 @@ document.addEventListener('keydown', e => {
 engine = new GameEngine();
 engine.update = dt => {
   if (dead || paused || won) return;
+  updateSpeedBurst(performance.now());
   moveAcc += dt * 1000;
   while (moveAcc >= speedMs) {
     moveAcc -= speedMs;
