@@ -21,6 +21,43 @@ let PAD=12, S=80, GAP=10;
 const TILE_RADIUS = 9;
 let canvasCssWidth=0, canvasCssHeight=0;
 const LS_SIZE='g2048.size';
+const LS_MODE='g2048.mode';
+const GAME_MODES={
+  classic:{
+    key:'classic',
+    label:'Classic',
+    allowUndo:true,
+    timeLimitMs:null,
+    spawnWeights:{2:0.9,4:0.1}
+  },
+  noUndo:{
+    key:'noUndo',
+    label:'No-Undo',
+    allowUndo:false,
+    timeLimitMs:null,
+    spawnWeights:{2:0.9,4:0.1}
+  },
+  timeAttack:{
+    key:'timeAttack',
+    label:'Time Attack',
+    allowUndo:true,
+    timeLimitMs:180000,
+    spawnWeights:{2:0.9,4:0.1},
+    badge:'TA'
+  },
+  hardRandom:{
+    key:'hardRandom',
+    label:'Hard Randomizer',
+    allowUndo:true,
+    timeLimitMs:null,
+    spawnWeights:{2:0.7,4:0.3}
+  }
+};
+
+const storedMode=localStorage.getItem(LS_MODE);
+let currentModeKey = storedMode && GAME_MODES[storedMode] ? storedMode : 'classic';
+let currentMode = GAME_MODES[currentModeKey];
+
 const sizeSel=document.getElementById('sizeSel');
 const diffSel=document.getElementById('diffSel');
 let N=parseInt(localStorage.getItem(LS_SIZE) || '4');
@@ -65,12 +102,16 @@ function updateUI() {
   updateScoreDisplay();
   updateUndoDisplay();
   updateStreakDisplay();
+  updateModeHelpText();
 }
 
 function updateScoreDisplay() {
   const currentScoreEl = document.getElementById('currentScore');
   const bestScoreEl = document.getElementById('bestScore');
-  if(currentScoreEl) {
+  if(scoreValueText && currentScoreEl){
+    scoreValueText.textContent = score.toLocaleString();
+    currentScoreEl.setAttribute('aria-label', `Current score: ${score.toLocaleString()}`);
+  } else if(currentScoreEl) {
     currentScoreEl.textContent = score.toLocaleString();
     currentScoreEl.setAttribute('aria-label', `Current score: ${score.toLocaleString()}`);
   }
@@ -78,23 +119,65 @@ function updateScoreDisplay() {
     bestScoreEl.textContent = best.toLocaleString();
     bestScoreEl.setAttribute('aria-label', `Best score: ${best.toLocaleString()}`);
   }
+  if(scoreBadge){
+    const showBadge = !!currentMode.timeLimitMs;
+    scoreBadge.style.display = showBadge ? 'inline-flex' : 'none';
+    if(showBadge){
+      const badgeText = currentMode.badge || 'TA';
+      scoreBadge.textContent = badgeText;
+      scoreBadge.setAttribute('title', `${currentMode.label}`);
+      scoreBadge.setAttribute('aria-label', `${currentMode.label} mode active`);
+    } else {
+      scoreBadge.removeAttribute('title');
+      scoreBadge.removeAttribute('aria-label');
+    }
+  }
 }
 
 function updateUndoDisplay() {
   const undoCountEl = document.getElementById('undoCount');
   const undoBtn = document.getElementById('undoBtn');
   const redoBtn = document.getElementById('redoBtn');
+  const allowUndo = !!currentMode.allowUndo;
+  if(undoLabelEl){
+    undoLabelEl.textContent = allowUndo ? 'Undo' : 'Undo';
+  }
+  if(actionsGroup){
+    actionsGroup.style.display = allowUndo ? '' : 'none';
+  }
+  if(!allowUndo){
+    if(undoCountEl){
+      undoCountEl.textContent = '—';
+      undoCountEl.setAttribute('aria-label', 'Undo not available in this mode');
+    }
+    if(undoBtn){
+      undoBtn.disabled = true;
+      undoBtn.style.display = 'none';
+      undoBtn.setAttribute('aria-hidden','true');
+    }
+    if(redoBtn){
+      redoBtn.disabled = true;
+      redoBtn.style.display = 'none';
+      redoBtn.setAttribute('aria-hidden','true');
+    }
+    return;
+  }
+
   if(undoCountEl) {
     undoCountEl.textContent = undoLeft;
     undoCountEl.setAttribute('aria-label', `Undo moves remaining: ${undoLeft}`);
   }
   if(undoBtn) {
+    undoBtn.style.display = '';
+    undoBtn.removeAttribute('aria-hidden');
     const canUndoMove = undoLeft > 0 && historyManager.canUndo() && !anim;
     undoBtn.disabled = !canUndoMove;
     undoBtn.textContent = canUndoMove ? `Undo (${undoLeft})` : 'No Undo';
     undoBtn.setAttribute('aria-label', canUndoMove ? `Undo last move, ${undoLeft} remaining` : 'No undo moves available');
   }
   if(redoBtn){
+    redoBtn.style.display = '';
+    redoBtn.removeAttribute('aria-hidden');
     const canRedoMove = historyManager.canRedo() && !anim;
     redoBtn.disabled = !canRedoMove;
     redoBtn.textContent = canRedoMove ? 'Redo Move' : 'No Redo';
@@ -107,7 +190,237 @@ function updateStreakDisplay() {
   if(streakEl) {
     const span = streakEl.querySelector('span');
     if(span) span.textContent = `×${mergeStreak}`;
-    streakEl.setAttribute('aria-label', `Streak multiplier: ${mergeStreak}x`);
+    const timerSpeech = currentMode.timeLimitMs ? ` Time remaining ${formatTimeForSpeech(timeRemainingMs ?? currentMode.timeLimitMs)}.` : '';
+    streakEl.setAttribute('aria-label', `Streak multiplier: ${mergeStreak}x.${timerSpeech}`.trim());
+  }
+  updateTimerDisplay();
+}
+
+function formatTime(ms){
+  const safeMs = Math.max(0, typeof ms === 'number' ? ms : 0);
+  const totalSeconds = Math.floor(safeMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+}
+
+function formatTimeForSpeech(ms){
+  const safeMs = Math.max(0, typeof ms === 'number' ? ms : 0);
+  const totalSeconds = Math.round(safeMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if(minutes > 0){
+    if(seconds === 0) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+    return `${minutes} minute${minutes === 1 ? '' : 's'} ${seconds} second${seconds === 1 ? '' : 's'}`;
+  }
+  return `${seconds} second${seconds === 1 ? '' : 's'}`;
+}
+
+function updateTimerDisplay(){
+  if(!timerDisplay){
+    return;
+  }
+  if(currentMode.timeLimitMs){
+    timerDisplay.style.display = 'inline-flex';
+    const remaining = typeof timeRemainingMs === 'number' ? Math.max(0, Math.round(timeRemainingMs)) : currentMode.timeLimitMs;
+    timerDisplay.textContent = formatTime(remaining);
+    timerDisplay.setAttribute('aria-label', `Time remaining: ${formatTimeForSpeech(remaining)}`);
+  } else {
+    timerDisplay.style.display = 'none';
+    timerDisplay.removeAttribute('aria-label');
+  }
+}
+
+function updateModeHelpText(){
+  if(!modeNoteEl){
+    return;
+  }
+  const notes=[];
+  if(!currentMode.allowUndo){
+    notes.push('Undo is disabled in this mode.');
+  }
+  if(currentMode.timeLimitMs){
+    notes.push('Time Attack ends automatically after three minutes.');
+  }
+  if(currentModeKey==='hardRandom'){
+    notes.push('Hard Randomizer increases the odds of spawning 4 tiles.');
+  }
+  if(!notes.length){
+    modeNoteEl.style.display='none';
+    modeNoteEl.textContent='';
+    return;
+  }
+  modeNoteEl.style.display='block';
+  modeNoteEl.textContent=notes.join(' ');
+}
+
+function setupModeUI(){
+  const controlsGrid = document.querySelector('.controls-grid');
+  if(controlsGrid && !modeSelect){
+    const existing = controlsGrid.querySelector('#modeSel');
+    if(existing){
+      modeSelect = existing;
+    } else {
+      const group = document.createElement('div');
+      group.className = 'control-group';
+      const label = document.createElement('div');
+      label.className = 'control-label';
+      label.textContent = 'Mode';
+      const select = document.createElement('select');
+      select.id = 'modeSel';
+      select.className = 'control-select';
+      select.setAttribute('aria-label','Select gameplay mode');
+      Object.values(GAME_MODES).forEach(mode => {
+        const option = document.createElement('option');
+        option.value = mode.key;
+        option.textContent = mode.label;
+        select.appendChild(option);
+      });
+      group.append(label, select);
+      controlsGrid.insertBefore(group, controlsGrid.firstChild);
+      modeSelect = select;
+    }
+  }
+
+  if(modeSelect && !modeSelect.dataset.modeInitialized){
+    modeSelect.dataset.modeInitialized = 'true';
+    modeSelect.addEventListener('change', () => {
+      setMode(modeSelect.value, 'mode-change');
+    });
+  }
+
+  const currentScoreEl = document.getElementById('currentScore');
+  if(currentScoreEl && !scoreValueText){
+    const scoreTextSpan = document.createElement('span');
+    scoreTextSpan.className = 'score-value-text';
+    scoreTextSpan.textContent = currentScoreEl.textContent || '0';
+    Object.assign(scoreTextSpan.style, {
+      display:'inline-block',
+      minWidth:'0'
+    });
+    currentScoreEl.textContent = '';
+    currentScoreEl.appendChild(scoreTextSpan);
+    scoreValueText = scoreTextSpan;
+  }
+  if(currentScoreEl && !scoreBadge){
+    scoreBadge = document.createElement('span');
+    scoreBadge.className = 'mode-badge';
+    Object.assign(scoreBadge.style, {
+      marginLeft:'0.5rem',
+      padding:'0.125rem 0.5rem',
+      borderRadius:'999px',
+      background:'var(--accent-color, #3b82f6)',
+      color:'#ffffff',
+      fontSize:'0.65rem',
+      fontWeight:'700',
+      letterSpacing:'0.08em',
+      textTransform:'uppercase',
+      display:'none',
+      alignItems:'center',
+      verticalAlign:'middle'
+    });
+    currentScoreEl.appendChild(scoreBadge);
+  }
+
+  const scoreBar = document.querySelector('.score-bar');
+  if(scoreBar && !undoLabelEl){
+    const items = scoreBar.querySelectorAll('.score-item');
+    undoLabelEl = items?.[2]?.querySelector('.score-label') || undoLabelEl;
+  }
+
+  if(!timerDisplay){
+    const streakEl = document.getElementById('streakDisplay');
+    if(streakEl){
+      timerDisplay = document.createElement('span');
+      timerDisplay.className = 'timer-display';
+      Object.assign(timerDisplay.style, {
+        marginLeft:'0.75rem',
+        fontSize:'0.875rem',
+        fontWeight:'600',
+        color:'var(--accent-color, #3b82f6)',
+        display:'none'
+      });
+      streakEl.appendChild(timerDisplay);
+    }
+  }
+
+  if(!modeNoteEl){
+    const helpTextEl = document.querySelector('.help-text');
+    if(helpTextEl){
+      modeNoteEl = document.createElement('p');
+      modeNoteEl.className = 'help-text mode-note';
+      Object.assign(modeNoteEl.style, {
+        marginTop:'0.35rem',
+        fontSize:'0.75rem',
+        opacity:'0.85',
+        display:'none'
+      });
+      helpTextEl.insertAdjacentElement('afterend', modeNoteEl);
+    }
+  }
+
+  if(!actionsGroup){
+    const undoBtn = document.getElementById('undoBtn');
+    if(undoBtn){
+      actionsGroup = undoBtn.closest('.control-group');
+    }
+  }
+
+  if(modeSelect){
+    modeSelect.value = currentModeKey;
+  }
+}
+
+function refreshUndoCapacity(){
+  maxUndo = currentMode.allowUndo ? BASE_MAX_UNDO : 0;
+  if(undoLeft > maxUndo){
+    undoLeft = maxUndo;
+  }
+}
+
+function updateModeDiagnostics(){
+  if(!diagHandleRef){
+    return;
+  }
+  diagHandleRef.flags = {
+    mode: currentModeKey,
+    noUndo: !currentMode.allowUndo,
+    timeAttack: !!currentMode.timeLimitMs
+  };
+}
+
+function applyModeSettings(){
+  refreshUndoCapacity();
+  if(modeSelect && modeSelect.value !== currentModeKey){
+    modeSelect.value = currentModeKey;
+  }
+  updateModeDiagnostics();
+  updateUI();
+  if(currentMode.timeLimitMs){
+    if(reduceMotion && !gameLoop.running){
+      gameLoop.start();
+    }
+  }else if(reduceMotion && gameLoop.running){
+    gameLoop.stop();
+  }
+}
+
+function setMode(newModeKey, reason='mode-change'){
+  const normalized = GAME_MODES[newModeKey] ? newModeKey : 'classic';
+  const changed = normalized !== currentModeKey;
+  if(!changed && reason !== 'mode-change-refresh'){
+    updateUI();
+    return;
+  }
+  currentModeKey = normalized;
+  currentMode = GAME_MODES[currentModeKey];
+  localStorage.setItem(LS_MODE, currentModeKey);
+  timeRemainingMs = currentMode.timeLimitMs ?? null;
+  timeAttackExpired = false;
+  hasEmitted4096 = false;
+  applyModeSettings();
+  if(changed){
+    reset(false, reason);
   }
 }
 
@@ -118,7 +431,8 @@ const overlayRestartBtn=document.getElementById('overlayRestart');
 const overlayBackBtn=document.getElementById('overlayBack');
 let gameOverShown=false;
 
-const MAX_UNDO = FEATURES.oneStepUndo ? 1 : 3;
+const BASE_MAX_UNDO = FEATURES.oneStepUndo ? 1 : 3;
+let maxUndo = currentMode.allowUndo ? BASE_MAX_UNDO : 0;
 const LS_UNDO='g2048.undo', LS_BEST='g2048.best', LS_THEME='g2048.theme';
 const ANIM_TIME=120;
 
@@ -251,10 +565,24 @@ let currentTheme=localStorage.getItem(LS_THEME) || 'dark';
 
 let grid, score=0, over=false, won=false, hintDir=null;
 let runStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
-let undoLeft=parseInt(localStorage.getItem(LS_UNDO) ?? MAX_UNDO);
+let undoLeft = currentMode.allowUndo ? parseInt(localStorage.getItem(LS_UNDO) ?? BASE_MAX_UNDO) : 0;
 let best=parseInt(localStorage.getItem(LS_BEST) ?? 0);
-if(isNaN(undoLeft)) undoLeft=MAX_UNDO;
+if(isNaN(undoLeft)) undoLeft=currentMode.allowUndo ? BASE_MAX_UNDO : 0;
 if(isNaN(best)) best=0;
+
+let timeRemainingMs = currentMode.timeLimitMs ?? null;
+let timeAttackExpired = false;
+let highestTile = 0;
+let hasEmitted4096 = false;
+let undosUsed = 0;
+let scoreBadge = null;
+let timerDisplay = null;
+let undoLabelEl = null;
+let modeSelect = null;
+let diagHandleRef = null;
+let modeNoteEl = null;
+let actionsGroup = null;
+let scoreValueText = null;
 
 // Merge-streak multiplier system
 let mergeStreak = 1;      // Current streak multiplier (x1, x2, x3...)
@@ -304,6 +632,10 @@ function snapshotForDiagnostics(reason, extra = {}) {
     over,
     won,
     grid: board,
+    mode: currentModeKey,
+    highestTile,
+    undosUsed,
+    timeRemainingMs,
     ...extra,
   };
 }
@@ -331,8 +663,11 @@ function recordScoreEvent(reason, extra = {}) {
       value: score,
       meta: {
         reason,
-        delta: extra.delta,
+        delta: typeof extra.delta === 'number' ? extra.delta : Number(extra.delta || 0),
         streak: extra.streak,
+        mode: currentModeKey,
+        maxTile: highestTile,
+        timeRemainingMs,
       },
     });
   }
@@ -488,7 +823,13 @@ function reset(keepUndo=false, reasonOverride){
   grid=Array.from({length:N},()=>Array(N).fill(0));
   score=0; over=false; won=false; hintDir=null; anim=null;
   lastAnnouncedScore = 0;
+  highestTile = 0;
+  hasEmitted4096 = false;
+  undosUsed = 0;
+  timeAttackExpired = false;
+  timeRemainingMs = currentMode.timeLimitMs ?? null;
 
+  refreshUndoCapacity();
   rng = new DeterministicRng(DeterministicRng.randomSeed());
   pendingHistoryCommit = false;
   undoSpendStack = [];
@@ -509,7 +850,16 @@ function reset(keepUndo=false, reasonOverride){
     rngState: rng.serialize(),
     meta: { mergeStreak, lastMoveHadMerge }
   });
-  if(!keepUndo){ undoLeft=MAX_UNDO; localStorage.setItem(LS_UNDO,undoLeft); updateUI(); }
+  if(!keepUndo || !currentMode.allowUndo){
+    undoLeft = maxUndo;
+    if(currentMode.allowUndo){
+      localStorage.setItem(LS_UNDO,undoLeft);
+    } else {
+      localStorage.removeItem(LS_UNDO);
+    }
+  } else {
+    undoLeft = Math.min(undoLeft, maxUndo);
+  }
   applyTheme();
   updateUI();
   net?.send('move',{grid,score});
@@ -525,15 +875,110 @@ function reset(keepUndo=false, reasonOverride){
       meta: {
         reason,
         size: N,
+        mode: currentModeKey,
+        timeLimitMs: currentMode.timeLimitMs || null,
       },
     });
   }
   recordScoreEvent(reason, { delta: score - previousScore });
   recordReadyEvent(reason);
 
+  updateTimerDisplay();
+  updateModeDiagnostics();
+
   if(reduceMotion){
     draw();
   }
+}
+
+function selectSpawnValue(randomSource){
+  const weights = currentMode?.spawnWeights || GAME_MODES.classic.spawnWeights;
+  const entries = Object.entries(weights || {}).map(([value, weight]) => [Number(value), Number(weight)]).filter(([, weight]) => Number.isFinite(weight) && weight > 0);
+  if(!entries.length){
+    return 2;
+  }
+  const totalWeight = entries.reduce((sum, [, weight]) => sum + weight, 0) || 1;
+  let r = randomSource();
+  let cumulative = 0;
+  for(let i=0;i<entries.length;i++){
+    const [value, weight] = entries[i];
+    cumulative += weight / totalWeight;
+    if(r <= cumulative || i === entries.length - 1){
+      return value;
+    }
+  }
+  return entries[entries.length - 1][0];
+}
+
+function updateHighestTile(sourceGrid = grid){
+  if(!Array.isArray(sourceGrid)){
+    return;
+  }
+  const flattened = sourceGrid.flat();
+  if(!flattened.length){
+    return;
+  }
+  const newMax = Math.max(highestTile, ...flattened);
+  if(newMax !== highestTile){
+    highestTile = newMax;
+    if(highestTile >= 4096 && !hasEmitted4096){
+      hasEmitted4096 = true;
+      gameEvent('score_event', {
+        slug: GAME_SLUG,
+        value: highestTile,
+        meta: {
+          name: 'tile_4096',
+          tileValue: highestTile,
+          score,
+          mode: currentModeKey,
+        },
+      });
+    }
+  }
+}
+
+function handleTimeAttackTimeout(){
+  if(timeAttackExpired || !currentMode.timeLimitMs){
+    return;
+  }
+  timeAttackExpired = true;
+  timeRemainingMs = 0;
+  updateTimerDisplay();
+  over = true;
+  won = false;
+  if(!gameOverShown){
+    showGameOverModal('Time up!', 'Time Attack run ended. Try again?');
+  }
+  const durationMs = currentMode.timeLimitMs;
+  const payload = {
+    slug: GAME_SLUG,
+    value: score,
+    durationMs,
+    meta: {
+      won: false,
+      boardSize: N,
+      mode: currentModeKey,
+      reason: 'time_attack_timeout',
+      undosUsed,
+      maxTile: highestTile,
+      timeLimitMs: currentMode.timeLimitMs,
+      timeRemainingMs: 0,
+    },
+  };
+  gameEvent('game_over', payload);
+  gameEvent('lose', {
+    slug: GAME_SLUG,
+    meta: {
+      score,
+      boardSize: N,
+      mode: currentModeKey,
+      reason: 'time_attack_timeout',
+      undosUsed,
+      maxTile: highestTile,
+      timeLimitMs: currentMode.timeLimitMs,
+      timeRemainingMs: 0,
+    },
+  });
 }
 
 function addTile(options = {}){
@@ -548,8 +993,10 @@ function addTile(options = {}){
   const randomSource = rng ? () => rng.next() : () => Math.random();
   const index = Math.floor(randomSource()*empty.length);
   const [x,y]=empty[index];
-  const value = randomSource()<0.9?2:4;
+  updateHighestTile(grid);
+  const value = selectSpawnValue(randomSource);
   grid[y][x] = value;
+  updateHighestTile(grid);
 
   if(skipAnimation || reduceMotion){
     newTileAnim = null;
@@ -565,6 +1012,7 @@ function addTile(options = {}){
 }
 
 function undoMove(){
+  if(!currentMode.allowUndo) return false;
   if(anim) return false;
   if(undoLeft<=0) return false;
   if(!historyManager.canUndo()) return false;
@@ -575,6 +1023,7 @@ function undoMove(){
 
   undoLeft--; localStorage.setItem(LS_UNDO,undoLeft);
   undoSpendStack.push(1);
+  undosUsed++;
 
   grid=copyGrid(state.grid);
   score=state.score;
@@ -583,6 +1032,7 @@ function undoMove(){
   lastMoveHadMerge = state.meta?.lastMoveHadMerge ?? false;
   over=false; won=false; hintDir=null;
   pendingHistoryCommit=false;
+  updateHighestTile(grid);
 
   newTileAnim = null;
   mergedAnim.clear();
@@ -599,6 +1049,7 @@ function undoMove(){
 }
 
 function redoMove(){
+  if(!currentMode.allowUndo) return false;
   if(anim) return false;
   if(!historyManager.canRedo()) return false;
 
@@ -608,7 +1059,7 @@ function redoMove(){
 
   const restored = undoSpendStack.length ? undoSpendStack.pop() : 0;
   if(restored>0){
-    undoLeft = Math.min(MAX_UNDO, undoLeft + restored);
+    undoLeft = Math.min(maxUndo, undoLeft + restored);
     localStorage.setItem(LS_UNDO,undoLeft);
   }
 
@@ -619,6 +1070,7 @@ function redoMove(){
   lastMoveHadMerge = state.meta?.lastMoveHadMerge ?? false;
   over=false; won=false; hintDir=null;
   pendingHistoryCommit=false;
+  updateHighestTile(grid);
 
   newTileAnim = null;
   mergedAnim.clear();
@@ -673,6 +1125,8 @@ function move(dir){
         count: mergeStreak,
         meta: {
           gained,
+          mode: currentModeKey,
+          maxTile: highestTile,
         },
       });
     }
@@ -772,6 +1226,7 @@ function check(){
     showGameOverModal(won?'2048!':'Game over', won?'You made 2048! Want to go again?':'No moves left. Try again?');
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const durationMs = Math.max(0, Math.round(now - (runStartTime || now)));
+    const reason = won ? 'win' : 'no_moves';
     gameEvent('game_over', {
       slug: GAME_SLUG,
       value: score,
@@ -779,6 +1234,12 @@ function check(){
       meta: {
         won,
         boardSize: N,
+        mode: currentModeKey,
+        reason,
+        undosUsed,
+        maxTile: highestTile,
+        timeRemainingMs,
+        timeLimitMs: currentMode.timeLimitMs,
       },
     });
     if (won) {
@@ -787,6 +1248,11 @@ function check(){
         meta: {
           score,
           boardSize: N,
+          mode: currentModeKey,
+          undosUsed,
+          maxTile: highestTile,
+          timeRemainingMs,
+          timeLimitMs: currentMode.timeLimitMs,
         },
       });
     } else {
@@ -795,6 +1261,12 @@ function check(){
         meta: {
           score,
           boardSize: N,
+          mode: currentModeKey,
+          reason,
+          undosUsed,
+          maxTile: highestTile,
+          timeRemainingMs,
+          timeLimitMs: currentMode.timeLimitMs,
         },
       });
     }
@@ -825,6 +1297,10 @@ addEventListener('keydown', e=>{
 
   if(ctrlLike && !e.shiftKey && keyLower === 'z'){
     e.preventDefault();
+    if(!currentMode.allowUndo){
+      announceToScreenReader('Undo is disabled in this mode.');
+      return;
+    }
     const undone = undoMove();
     announceToScreenReader(undone ? 'Move undone.' : 'No moves to undo.');
     return;
@@ -832,6 +1308,10 @@ addEventListener('keydown', e=>{
 
   if(ctrlLike && (keyLower === 'y' || (keyLower === 'z' && e.shiftKey))){
     e.preventDefault();
+    if(!currentMode.allowUndo){
+      announceToScreenReader('Redo is disabled in this mode.');
+      return;
+    }
     const redone = redoMove();
     announceToScreenReader(redone ? 'Move redone.' : 'No moves to redo.');
     return;
@@ -862,13 +1342,21 @@ addEventListener('keydown', e=>{
     announceToScreenReader('Game restarted. New game board ready.');
   }
   if(keyLower==='u') {
-    const undone = undoMove();
-    announceToScreenReader(undone ? 'Move undone.' : 'No moves to undo.');
+    if(!currentMode.allowUndo){
+      announceToScreenReader('Undo is disabled in this mode.');
+    } else {
+      const undone = undoMove();
+      announceToScreenReader(undone ? 'Move undone.' : 'No moves to undo.');
+    }
   }
   if(keyLower==='y') {
-    const redone = redoMove();
-    if(redone){
-      announceToScreenReader('Move redone.');
+    if(!currentMode.allowUndo){
+      announceToScreenReader('Redo is disabled in this mode.');
+    } else {
+      const redone = redoMove();
+      if(redone){
+        announceToScreenReader('Move redone.');
+      }
     }
   }
   if(e.key==='h'||e.key==='H') {
@@ -1160,6 +1648,17 @@ function hideHint(){
 const gameLoop=new GameEngine();
 gameLoop.update=dt=>{
   animationClock.tick(dt);
+  if(currentMode.timeLimitMs && !timeAttackExpired && !over && !won){
+    if(typeof timeRemainingMs !== 'number'){
+      timeRemainingMs = currentMode.timeLimitMs;
+    }
+    timeRemainingMs = Math.max(0, (timeRemainingMs ?? currentMode.timeLimitMs) - dt*1000);
+    if(timeRemainingMs <= 0){
+      timeRemainingMs = 0;
+      handleTimeAttackTimeout();
+    }
+    updateTimerDisplay();
+  }
   if(reduceMotion){
     return;
   }
@@ -1263,6 +1762,9 @@ const handleReduceMotionChange = (eventMatches) => {
     newTileAnim = null;
     mergedAnim.clear();
     renderCache.skipFrames = 0;
+    if(currentMode.timeLimitMs && !gameLoop.running){
+      gameLoop.start();
+    }
   }else{
     renderCache.skipFrames = 0;
     renderCache.lastFrameTime = 0;
@@ -1286,6 +1788,7 @@ if(reduceMotionQuery){
 }
 
 const diagHandle = window.__g2048 = window.__g2048 || {};
+diagHandleRef = diagHandle;
 diagHandle.gameLoop = gameLoop;
 diagHandle.reset = reset;
 Object.defineProperty(diagHandle, 'score', {
@@ -1323,10 +1826,31 @@ Object.defineProperty(diagHandle, 'size', {
   enumerable: true,
   get(){ return N; }
 });
+Object.defineProperty(diagHandle, 'mode', {
+  configurable: true,
+  enumerable: true,
+  get(){ return currentModeKey; }
+});
+Object.defineProperty(diagHandle, 'timeRemainingMs', {
+  configurable: true,
+  enumerable: true,
+  get(){ return timeRemainingMs; }
+});
+Object.defineProperty(diagHandle, 'highestTile', {
+  configurable: true,
+  enumerable: true,
+  get(){ return highestTile; }
+});
+Object.defineProperty(diagHandle, 'undosUsed', {
+  configurable: true,
+  enumerable: true,
+  get(){ return undosUsed; }
+});
 diagHandle.readyEvents = diagReadyEvents;
 diagHandle.scoreEvents = diagScoreEvents;
 diagHandle.readyListeners = diagReadyListeners;
 diagHandle.scoreListeners = diagScoreListeners;
+updateModeDiagnostics();
 
 document.getElementById('hintBtn')?.addEventListener('click',()=>{ getHint(); });
 document.getElementById('themeToggle')?.addEventListener('click',()=>{
@@ -1338,10 +1862,18 @@ document.getElementById('themeToggle')?.addEventListener('click',()=>{
 
 // Add undo button functionality
 document.getElementById('undoBtn')?.addEventListener('click',()=>{
+  if(!currentMode.allowUndo){
+    announceToScreenReader('Undo is disabled in this mode.');
+    return;
+  }
   const undone = undoMove();
   announceToScreenReader(undone ? 'Move undone.' : 'No moves to undo.');
 });
 document.getElementById('redoBtn')?.addEventListener('click',()=>{
+  if(!currentMode.allowUndo){
+    announceToScreenReader('Redo is disabled in this mode.');
+    return;
+  }
   const redone = redoMove();
   announceToScreenReader(redone ? 'Move redone.' : 'No moves to redo.');
 });
@@ -1514,10 +2046,12 @@ function showInitializationErrorOverlay(){
 
 function initializeGame(){
   try{
+    setupModeUI();
+    applyModeSettings();
     updateCanvas();
     applyTheme();
     reset(true);
-    if(!reduceMotion){
+    if(!reduceMotion || currentMode.timeLimitMs){
       gameLoop.start();
     }
     net?.send('move',{grid,score});
