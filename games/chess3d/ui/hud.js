@@ -37,7 +37,21 @@ export function mountHUD({ onNew, onFlip, onCoords, onRotate }) {
   hud.appendChild(btnCoords);
   hud.appendChild(btnRotate);
 
+  const openingLabel = document.createElement('div');
+  openingLabel.className = 'hud-opening';
+  openingLabel.textContent = 'Opening: —';
+  hud.appendChild(openingLabel);
+
   if (onRotate) onRotate(auto);
+
+  return {
+    setOpeningLabel(nextLabel) {
+      const normalized = typeof nextLabel === 'string' && nextLabel.trim()
+        ? nextLabel.trim()
+        : '—';
+      openingLabel.textContent = `Opening: ${normalized}`;
+    },
+  };
 }
 
 export function addGameButtons({ onResign, onDraw } = {}) {

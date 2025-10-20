@@ -126,7 +126,7 @@ let gameState = null;
 let startRenderLoopImpl = () => {};
 let stopRenderLoopImpl = () => {};
 let currentState = 'menu';
-let runStartTime = now();
+let runStartTime = 0;
 let gameOverSent = false;
 const stateListeners = new Set();
 const globalScope = typeof window !== 'undefined' ? window : undefined;
@@ -136,21 +136,304 @@ const now = () => (typeof performance !== 'undefined' && typeof performance.now 
   ? performance.now()
   : Date.now());
 
+runStartTime = now();
+
+const FAST_MATE_WINDOW_MS = 30_000;
+const OPENING_UNKNOWN_LABEL = 'Unknown Opening';
+
+let gameStartTimestamp = runStartTime;
+let fastMateEventSent = false;
+
+const OPENING_BUCKETS = [
+  {
+    key: 'italian',
+    label: 'Italian Game',
+    eco: 'C50-C54',
+    patterns: [
+      ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4'],
+      ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5'],
+    ],
+  },
+  {
+    key: 'ruy-lopez',
+    label: 'Ruy Lopez',
+    eco: 'C60-C99',
+    patterns: [
+      ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5'],
+      ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6'],
+    ],
+  },
+  {
+    key: 'sicilian',
+    label: 'Sicilian Defence',
+    eco: 'B20-B99',
+    patterns: [
+      ['e4', 'c5'],
+      ['e4', 'c5', 'Nf3', 'd6'],
+      ['e4', 'c5', 'Nf3', 'Nc6'],
+      ['e4', 'c5', 'Nf3', 'e6'],
+    ],
+  },
+  {
+    key: 'french',
+    label: 'French Defence',
+    eco: 'C00-C19',
+    patterns: [
+      ['e4', 'e6'],
+      ['e4', 'e6', 'd4', 'd5'],
+    ],
+  },
+  {
+    key: 'caro-kann',
+    label: 'Caro-Kann Defence',
+    eco: 'B10-B19',
+    patterns: [
+      ['e4', 'c6'],
+      ['e4', 'c6', 'd4', 'd5'],
+    ],
+  },
+  {
+    key: 'scandinavian',
+    label: 'Scandinavian Defence',
+    eco: 'B01',
+    patterns: [
+      ['e4', 'd5'],
+    ],
+  },
+  {
+    key: 'queens-gambit',
+    label: "Queen's Gambit",
+    eco: 'D06-D69',
+    patterns: [
+      ['d4', 'd5', 'c4'],
+      ['d4', 'd5', 'c4', 'e6'],
+      ['d4', 'd5', 'c4', 'c6'],
+    ],
+  },
+  {
+    key: 'slav',
+    label: 'Slav Defence',
+    eco: 'D10-D19',
+    patterns: [
+      ['d4', 'd5', 'c4', 'c6'],
+    ],
+  },
+  {
+    key: 'kings-indian',
+    label: "King's Indian Defence",
+    eco: 'E60-E99',
+    patterns: [
+      ['d4', 'Nf6', 'c4', 'g6'],
+      ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'Bg7'],
+    ],
+  },
+  {
+    key: 'english',
+    label: 'English Opening',
+    eco: 'A10-A39',
+    patterns: [
+      ['c4'],
+      ['c4', 'e5'],
+      ['c4', 'c5'],
+    ],
+  },
+  {
+    key: 'reti',
+    label: 'Réti Opening',
+    eco: 'A04-A09',
+    patterns: [
+      ['Nf3'],
+      ['Nf3', 'd5'],
+      ['Nf3', 'Nf6'],
+    ],
+  },
+  {
+    key: 'london',
+    label: 'London System',
+    eco: 'D02-D03',
+    patterns: [
+      ['d4', 'Nf6', 'Bf4'],
+      ['d4', 'Nf6', 'Nf3', 'd5', 'Bf4'],
+    ],
+  },
+  {
+    key: 'benoni',
+    label: 'Benoni Defence',
+    eco: 'A60-A79',
+    patterns: [
+      ['d4', 'Nf6', 'c4', 'c5'],
+    ],
+  },
+  {
+    key: 'modern',
+    label: 'Modern Defence',
+    eco: 'B06',
+    patterns: [
+      ['e4', 'g6'],
+    ],
+  },
+];
+
+const OPENING_DEFAULT = { key: 'unknown', label: OPENING_UNKNOWN_LABEL, eco: '', matchLength: 0 };
+
+let currentOpeningInfo = { ...OPENING_DEFAULT };
+let openingLabelUpdater = () => {};
+
+function createOpeningInfo(base = {}) {
+  const key = typeof base.key === 'string' && base.key.trim() ? base.key.trim() : OPENING_DEFAULT.key;
+  const label = typeof base.label === 'string' && base.label.trim() ? base.label.trim() : OPENING_UNKNOWN_LABEL;
+  const eco = typeof base.eco === 'string' && base.eco.trim() ? base.eco.trim() : '';
+  const matchLength = typeof base.matchLength === 'number' && Number.isFinite(base.matchLength)
+    ? Math.max(0, base.matchLength)
+    : 0;
+  return { key, label, eco, matchLength };
+}
+
+function formatOpeningDisplay(info) {
+  const payload = info && typeof info === 'object' ? info : OPENING_DEFAULT;
+  const name = payload.label || OPENING_UNKNOWN_LABEL;
+  return payload.eco ? `${name} (${payload.eco})` : name;
+}
+
+function updateOpeningLabelDisplay() {
+  if (typeof openingLabelUpdater === 'function') {
+    openingLabelUpdater(formatOpeningDisplay(currentOpeningInfo));
+  }
+}
+
+function resetOpeningTracker() {
+  currentOpeningInfo = createOpeningInfo(OPENING_DEFAULT);
+  updateOpeningLabelDisplay();
+}
+
+function normalizeSanMove(move) {
+  if (typeof move !== 'string') return '';
+  const raw = move.trim();
+  if (!raw) return '';
+  const castle = raw.replace(/0/g, 'O');
+  if (/^O-O(-O)?[+#?!]*$/i.test(castle)) {
+    return castle.toUpperCase().startsWith('O-O-O') ? 'O-O-O' : 'O-O';
+  }
+  let sanitized = raw.replace(/[+#?!]/g, '');
+  sanitized = sanitized.replace(/x/g, '');
+  sanitized = sanitized.replace(/=.*/g, '');
+  return sanitized;
+}
+
+function matchOpeningFromMoves(sanMoves = []) {
+  if (!Array.isArray(sanMoves) || !sanMoves.length) {
+    return createOpeningInfo(OPENING_DEFAULT);
+  }
+  const normalized = sanMoves.slice(0, 10).map(normalizeSanMove);
+  let best = null;
+  for (const bucket of OPENING_BUCKETS) {
+    const patterns = Array.isArray(bucket.patterns) ? bucket.patterns : [];
+    for (const pattern of patterns) {
+      const sequence = Array.isArray(pattern) ? pattern : [];
+      const length = sequence.length;
+      if (!length || normalized.length < length) continue;
+      let matches = true;
+      for (let i = 0; i < length; i += 1) {
+        if (normalized[i] !== sequence[i]) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        if (!best || length > best.matchLength) {
+          best = createOpeningInfo({ ...bucket, matchLength: length });
+        }
+      }
+    }
+  }
+  if (best) return best;
+
+  const first = normalized[0] || '';
+  const second = normalized[1] || '';
+  if (!first) return createOpeningInfo(OPENING_DEFAULT);
+  if (first === 'e4' && second === 'e5') {
+    return createOpeningInfo({ key: 'open-game', label: 'Open Game', eco: 'C20-C99', matchLength: 2 });
+  }
+  if (first === 'e4') {
+    return createOpeningInfo({ key: 'kings-pawn', label: "King's Pawn Opening", eco: 'B00-C99', matchLength: 1 });
+  }
+  if (first === 'd4' && second === 'd5') {
+    return createOpeningInfo({ key: 'queens-pawn', label: "Queen's Pawn Game", eco: 'D00-D69', matchLength: 2 });
+  }
+  if (first === 'd4') {
+    return createOpeningInfo({ key: 'indian-game', label: 'Indian Defence', eco: 'E00-E99', matchLength: 1 });
+  }
+  if (first === 'c4') {
+    return createOpeningInfo({ key: 'english', label: 'English Opening', eco: 'A10-A39', matchLength: 1 });
+  }
+  if (first === 'Nf3') {
+    return createOpeningInfo({ key: 'reti', label: 'Réti Opening', eco: 'A04-A09', matchLength: 1 });
+  }
+  return createOpeningInfo(OPENING_DEFAULT);
+}
+
+function updateOpeningFromMoves(moves) {
+  const candidate = matchOpeningFromMoves(moves);
+  if (!candidate) return;
+  const currentLength = currentOpeningInfo?.matchLength || 0;
+  if (candidate.key === currentOpeningInfo.key) {
+    if (candidate.matchLength !== currentLength) {
+      currentOpeningInfo = candidate;
+      updateOpeningLabelDisplay();
+    }
+    return;
+  }
+  if (candidate.matchLength > currentLength || currentOpeningInfo.key === OPENING_DEFAULT.key) {
+    currentOpeningInfo = candidate;
+    updateOpeningLabelDisplay();
+  }
+}
+
+function getOpeningMetaPayload() {
+  if (!currentOpeningInfo) return undefined;
+  const meta = {
+    key: currentOpeningInfo.key,
+    name: currentOpeningInfo.label,
+  };
+  if (currentOpeningInfo.eco) meta.eco = currentOpeningInfo.eco;
+  if (typeof currentOpeningInfo.matchLength === 'number') {
+    meta.movesMatched = currentOpeningInfo.matchLength;
+  }
+  return meta;
+}
+
+function markFastMateIfEligible() {
+  if (fastMateEventSent) return;
+  const baseline = typeof gameStartTimestamp === 'number' ? gameStartTimestamp : runStartTime;
+  const elapsed = Math.max(0, now() - (baseline || now()));
+  if (elapsed < FAST_MATE_WINDOW_MS) {
+    pushEvent('score_event', { name: 'fast_mate_30s' });
+    fastMateEventSent = true;
+  }
+}
+
 function notifyStateChange(nextState, details = {}) {
   const normalized = typeof nextState === 'string' ? nextState.trim() : '';
   if (!normalized) return;
   const previous = currentState;
-  if (normalized === previous && !details?.force) return;
+  const reason = typeof details?.reason === 'string' ? details.reason : '';
+  const playRequestedWhileActive = normalized === 'play' && previous === 'play' && reason === 'new-game';
+  if (normalized === previous && !details?.force && !playRequestedWhileActive) return;
   currentState = normalized;
   const payload = Object.assign({ previous, state: normalized }, details || {});
   if (normalized === 'play') {
     runStartTime = now();
+    gameStartTimestamp = runStartTime;
     gameOverSent = false;
+    fastMateEventSent = false;
+    const openingMeta = getOpeningMetaPayload();
+    const meta = {
+      reason: payload.reason || '',
+    };
+    if (openingMeta) meta.opening = openingMeta;
     gameEvent('play', {
       slug: 'chess3d',
-      meta: {
-        reason: payload.reason || '',
-      },
+      meta,
     });
   } else if (normalized === 'gameover' && !gameOverSent) {
     gameOverSent = true;
@@ -160,10 +443,12 @@ function notifyStateChange(nextState, details = {}) {
     if (message.includes('white wins')) result = 'win';
     else if (message.includes('black wins')) result = 'lose';
     const value = result === 'win' ? 1 : result === 'lose' ? 0 : 0.5;
+    const openingMeta = getOpeningMetaPayload();
     const meta = {
       message: payload.message || '',
       reason: payload.reason || '',
     };
+    if (openingMeta) meta.opening = openingMeta;
     gameEvent('game_over', {
       slug: 'chess3d',
       value,
@@ -185,40 +470,6 @@ function notifyStateChange(nextState, details = {}) {
       warn('chess3d', '[Chess3D] state listener failed', err);
     }
   });
-  if (normalized === 'play') {
-    runStartTime = now();
-    gameOverSent = false;
-    gameEvent('play', {
-      slug: 'chess3d',
-      meta: {
-        reason: payload.reason || '',
-      },
-    });
-  } else if (normalized === 'gameover' && !gameOverSent) {
-    gameOverSent = true;
-    const durationMs = Math.max(0, Math.round(now() - (runStartTime || now())));
-    const message = String(payload.message || '').toLowerCase();
-    let result = 'draw';
-    if (message.includes('white wins')) result = 'win';
-    else if (message.includes('black wins')) result = 'lose';
-    const value = result === 'win' ? 1 : result === 'lose' ? 0 : 0.5;
-    const meta = {
-      message: payload.message || '',
-      reason: payload.reason || '',
-    };
-    gameEvent('game_over', {
-      slug: 'chess3d',
-      value,
-      durationMs,
-      meta,
-    });
-    if (result === 'win' || result === 'lose') {
-      gameEvent(result, {
-        slug: 'chess3d',
-        meta,
-      });
-    }
-  }
 }
 
 const chess3dController = {
@@ -288,8 +539,12 @@ function handlePostMove(){
       }
     });
   }catch(_){ }
-  if (gameState?.inCheckmate) endGame(`${gameState.turn === 'w' ? 'Black' : 'White'} wins by checkmate`);
-  else if (gameState?.inStalemate) endGame('Draw by stalemate');
+  if (gameState?.inCheckmate) {
+    markFastMateIfEligible();
+    endGame(`${gameState.turn === 'w' ? 'Black' : 'White'} wins by checkmate`);
+  } else if (gameState?.inStalemate) {
+    endGame('Draw by stalemate');
+  }
   if (autoRotate) flipCamera();
 }
 
@@ -427,7 +682,7 @@ function flipCamera() {
   requestAnimationFrame(animate);
 }
 
-mountHUD({
+const hudControls = mountHUD({
   onNew: () => {
     victoryPlayed = false;
     if (victorySound) {
@@ -438,6 +693,7 @@ mountHUD({
     }
     gameOver = false;
     stage.style.pointerEvents = 'auto';
+    resetOpeningTracker();
     logic.startNewGame();
     updateStatus();
     searchToken++;
@@ -452,6 +708,13 @@ mountHUD({
   onCoords: toggleCoords,
   onRotate: (val) => { autoRotate = val; },
 });
+
+if (hudControls && typeof hudControls.setOpeningLabel === 'function') {
+  openingLabelUpdater = (label) => {
+    hudControls.setOpeningLabel(label);
+  };
+  updateOpeningLabelDisplay();
+}
 
 difficultyEl?.addEventListener('change', () => {
   logic.stopSearch();
@@ -594,6 +857,7 @@ async function boot(){
       applySnapshot(snapshot.pieces);
       try { lastMoveHelper?.clear?.(); } catch (_) {}
       evalMoodEffect?.update(lastEvaluation);
+      resetOpeningTracker();
     }
     updateStatus();
     if (reason === 'move' && snapshot.lastMove) {
@@ -607,9 +871,13 @@ async function boot(){
         }
       } catch (_) {}
       handlePostMove();
+      updateOpeningFromMoves(logic.historySAN());
       maybeAIMove();
     } else if (shouldReset) {
       handlePostMove();
+      updateOpeningFromMoves(logic.historySAN());
+    } else {
+      updateOpeningFromMoves(logic.historySAN());
     }
   };
 
