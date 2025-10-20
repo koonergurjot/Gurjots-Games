@@ -5,7 +5,26 @@ import { getProfile } from './profile.js';
 export const MISSIONS_UPDATED_EVENT = 'missions:updated';
 export const MISSION_COMPLETED_EVENT = 'missions:completed';
 
-const MISSION_SOURCES = ['/shared/missions.json', '/public/shared/missions.json'];
+const MISSION_SOURCES = (() => {
+  const sources = new Set();
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta?.url) {
+      sources.add(new URL('./missions.json', import.meta.url).href);
+    }
+  } catch (err) {
+    console.warn('[missions] failed to resolve missions relative to module', err);
+  }
+  if (typeof window !== 'undefined' && window?.location?.href) {
+    try {
+      sources.add(new URL('shared/missions.json', window.location.href).href);
+    } catch (err) {
+      console.warn('[missions] failed to resolve missions relative to window', err);
+    }
+  }
+  sources.add('/shared/missions.json');
+  sources.add('/public/shared/missions.json');
+  return Array.from(sources);
+})();
 const DEFAULT_STATE = () => ({
   version: 1,
   totals: { daily: 0, weekly: 0, career: 0, all: 0 },
