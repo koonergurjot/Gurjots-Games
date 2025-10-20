@@ -117,19 +117,57 @@ function updateUI() {
   updateModeHelpText();
 }
 
+function pulseScoreElement(element) {
+  if (!element || reduceMotion) {
+    return;
+  }
+
+  element.classList.remove('is-animating');
+  if (element.__pulseTimeout) {
+    clearTimeout(element.__pulseTimeout);
+    element.__pulseTimeout = null;
+  }
+
+  const schedule = () => {
+    element.classList.add('is-animating');
+    element.__pulseTimeout = setTimeout(() => {
+      element.classList.remove('is-animating');
+      element.__pulseTimeout = null;
+    }, SCORE_PULSE_DURATION_MS);
+  };
+
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(schedule);
+  } else {
+    schedule();
+  }
+}
+
 function updateScoreDisplay() {
   const currentScoreEl = document.getElementById('currentScore');
   const bestScoreEl = document.getElementById('bestScore');
   if(scoreValueText && currentScoreEl){
     scoreValueText.textContent = score.toLocaleString();
     currentScoreEl.setAttribute('aria-label', `Current score: ${score.toLocaleString()}`);
+    if(lastDisplayedScore !== score){
+      pulseScoreElement(scoreValueText);
+      lastDisplayedScore = score;
+    }
   } else if(currentScoreEl) {
     currentScoreEl.textContent = score.toLocaleString();
     currentScoreEl.setAttribute('aria-label', `Current score: ${score.toLocaleString()}`);
+    if(lastDisplayedScore !== score){
+      pulseScoreElement(currentScoreEl);
+      lastDisplayedScore = score;
+    }
   }
   if(bestScoreEl) {
     bestScoreEl.textContent = best.toLocaleString();
     bestScoreEl.setAttribute('aria-label', `Best score: ${best.toLocaleString()}`);
+    if(lastDisplayedBest !== best){
+      pulseScoreElement(bestScoreEl);
+      lastDisplayedBest = best;
+    }
   }
   if(scoreBadge){
     const showBadge = !!currentMode.timeLimitMs;
@@ -526,52 +564,109 @@ let rng = new DeterministicRng(DeterministicRng.randomSeed());
 let pendingHistoryCommit = false;
 let undoSpendStack = [];
 
-const themes={
-  light:{
-    boardBg:'#ffffff',
-    empty:'#e5e7eb',
-    text:'#111827',
-    tileTextDark:'#111827',  // 16.7:1 contrast on white backgrounds
-    tileTextLight:'#ffffff', // 21:1 contrast on dark backgrounds
-    // WCAG-AA compliant colors with 4.5:1+ contrast ratios
-    tileColors:{
-      2:'#fef3c7',      // Light amber - 4.6:1 with dark text
-      4:'#fbbf24',      // Amber - 4.8:1 with dark text  
-      8:'#f59e0b',      // Orange - 4.9:1 with dark text
-      16:'#ea580c',     // Orange-600 - 5.2:1 with white text
-      32:'#dc2626',     // Red-600 - 5.3:1 with white text
-      64:'#b91c1c',     // Red-700 - 6.8:1 with white text
-      128:'#7c3aed',    // Purple-600 - 4.8:1 with white text
-      256:'#5b21b6',    // Purple-800 - 7.1:1 with white text
-      512:'#1e40af',    // Blue-800 - 8.6:1 with white text
-      1024:'#166534',   // Green-800 - 9.2:1 with white text
-      2048:'#0f172a',   // Slate-900 - 16.7:1 with white text
-      default:'#111827' // Gray-900 - 16.7:1 with white text
+const TILE_VALUE_KEYS = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048];
+
+const FALLBACK_THEMES = {
+  light: {
+    boardBg: '#ffffff',
+    empty: '#e5e7eb',
+    text: '#111827',
+    tileTextDark: '#111827', // 16.7:1 contrast on white backgrounds
+    tileTextLight: '#ffffff', // 21:1 contrast on dark backgrounds
+    tileColors: {
+      2: '#fef3c7',      // Light amber - 4.6:1 with dark text
+      4: '#fbbf24',      // Amber - 4.8:1 with dark text
+      8: '#f59e0b',      // Orange - 4.9:1 with dark text
+      16: '#ea580c',     // Orange-600 - 5.2:1 with white text
+      32: '#dc2626',     // Red-600 - 5.3:1 with white text
+      64: '#b91c1c',     // Red-700 - 6.8:1 with white text
+      128: '#7c3aed',    // Purple-600 - 4.8:1 with white text
+      256: '#5b21b6',    // Purple-800 - 7.1:1 with white text
+      512: '#1e40af',    // Blue-800 - 8.6:1 with white text
+      1024: '#166534',   // Green-800 - 9.2:1 with white text
+      2048: '#0f172a',   // Slate-900 - 16.7:1 with white text
+      default: '#111827' // Gray-900 - 16.7:1 with white text
     }
   },
-  dark:{
-    boardBg:'#111827',
-    empty:'#1f2937',
-    text:'#f9fafb',
-    tileTextDark:'#111827',  // 16.7:1 contrast on light backgrounds
-    tileTextLight:'#f9fafb', // 15.3:1 contrast on dark backgrounds
-    // WCAG-AA compliant colors with 4.5:1+ contrast ratios
-    tileColors:{
-      2:'#fef3c7',      // Light amber - 13.2:1 with dark text
-      4:'#fde68a',      // Amber-200 - 11.8:1 with dark text
-      8:'#fbbf24',      // Amber-400 - 8.1:1 with dark text
-      16:'#60a5fa',     // Blue-400 - 4.6:1 with dark text
-      32:'#34d399',     // Green-400 - 4.7:1 with dark text
-      64:'#fbbf24',     // Amber-400 - 8.1:1 with dark text
-      128:'#a78bfa',    // Purple-400 - 4.5:1 with dark text
-      256:'#f472b6',    // Pink-400 - 4.9:1 with dark text
-      512:'#fb7185',    // Rose-400 - 5.1:1 with dark text
-      1024:'#fbbf24',   // Amber-400 - 8.1:1 with dark text
-      2048:'#fde047',   // Yellow-400 - 12.6:1 with dark text
-      default:'#e5e7eb' // Gray-200 - 15.3:1 with dark text
+  dark: {
+    boardBg: '#111827',
+    empty: '#1f2937',
+    text: '#f9fafb',
+    tileTextDark: '#111827', // 16.7:1 contrast on light backgrounds
+    tileTextLight: '#f9fafb', // 15.3:1 contrast on dark backgrounds
+    tileColors: {
+      2: '#fef3c7',      // Light amber - 13.2:1 with dark text
+      4: '#fde68a',      // Amber-200 - 11.8:1 with dark text
+      8: '#fbbf24',      // Amber-400 - 8.1:1 with dark text
+      16: '#60a5fa',     // Blue-400 - 4.6:1 with dark text
+      32: '#34d399',     // Green-400 - 4.7:1 with dark text
+      64: '#fbbf24',     // Amber-400 - 8.1:1 with dark text
+      128: '#a78bfa',    // Purple-400 - 4.5:1 with dark text
+      256: '#f472b6',    // Pink-400 - 4.9:1 with dark text
+      512: '#fb7185',    // Rose-400 - 5.1:1 with dark text
+      1024: '#fbbf24',   // Amber-400 - 8.1:1 with dark text
+      2048: '#fde047',   // Yellow-400 - 12.6:1 with dark text
+      default: '#e5e7eb' // Gray-200 - 15.3:1 with dark text
     }
   }
 };
+
+function cloneThemeConfig(config) {
+  return {
+    boardBg: config.boardBg,
+    empty: config.empty,
+    text: config.text,
+    tileTextDark: config.tileTextDark,
+    tileTextLight: config.tileTextLight,
+    tileColors: { ...config.tileColors }
+  };
+}
+
+const themes = {
+  light: cloneThemeConfig(FALLBACK_THEMES.light),
+  dark: cloneThemeConfig(FALLBACK_THEMES.dark)
+};
+
+const SCORE_PULSE_DURATION_MS = 220;
+
+function readCssColor(style, variableName, fallback) {
+  if (!style || typeof style.getPropertyValue !== 'function') {
+    return fallback;
+  }
+  const value = style.getPropertyValue(variableName);
+  return value ? value.trim() || fallback : fallback;
+}
+
+function syncThemeFromCSS(themeName, computedStyle) {
+  const fallback = FALLBACK_THEMES[themeName];
+  if (!fallback) {
+    return themes[themeName];
+  }
+
+  const style = computedStyle || (typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null);
+  if (!style) {
+    themes[themeName] = cloneThemeConfig(fallback);
+    return themes[themeName];
+  }
+
+  const next = cloneThemeConfig(fallback);
+  next.boardBg = readCssColor(style, '--board-bg', fallback.boardBg);
+  next.empty = readCssColor(style, '--tile-empty', fallback.empty);
+  next.text = readCssColor(style, '--text-primary', fallback.text);
+  next.tileTextDark = readCssColor(style, '--tile-text-dark', fallback.tileTextDark);
+  next.tileTextLight = readCssColor(style, '--tile-text-light', fallback.tileTextLight);
+
+  const defaultColor = readCssColor(style, '--tile-color-default', fallback.tileColors.default);
+  next.tileColors.default = defaultColor;
+
+  TILE_VALUE_KEYS.forEach(value => {
+    const fallbackColor = fallback.tileColors[value] || defaultColor;
+    next.tileColors[value] = readCssColor(style, `--tile-color-${value}`, fallbackColor);
+  });
+
+  themes[themeName] = next;
+  return next;
+}
 
 let currentTheme=localStorage.getItem(LS_THEME) || 'dark';
 
@@ -581,6 +676,9 @@ let undoLeft = currentMode.allowUndo ? parseInt(localStorage.getItem(LS_UNDO) ??
 let best=parseInt(localStorage.getItem(LS_BEST) ?? 0);
 if(isNaN(undoLeft)) undoLeft=currentMode.allowUndo ? BASE_MAX_UNDO : 0;
 if(isNaN(best)) best=0;
+
+let lastDisplayedScore = 0;
+let lastDisplayedBest = 0;
 
 let timeRemainingMs = currentMode.timeLimitMs ?? null;
 let timeAttackExpired = false;
@@ -783,43 +881,48 @@ function updateCanvas(){
 }
 
 function applyTheme(){
-  const t=themes[currentTheme];
-  
-  // Update CSS custom properties for theming
   const root = document.documentElement;
-  root.style.setProperty('--bg-primary', currentTheme==='dark'?'#111827':'#ffffff');
-  root.style.setProperty('--bg-secondary', currentTheme==='dark'?'#1f2937':'#f9fafb');
-  root.style.setProperty('--bg-tertiary', currentTheme==='dark'?'#111827':'#e5e7eb');
-  root.style.setProperty('--bg-hover', currentTheme==='dark'?'#374151':'#f3f4f6');
-  root.style.setProperty('--text-primary', t.text);
-  root.style.setProperty('--text-secondary', currentTheme==='dark'?'#9ca3af':'#6b7280');
-  root.style.setProperty('--border-color', currentTheme==='dark'?'#374151':'#d1d5db');
-  root.style.setProperty('--accent-color', '#3b82f6');
-  
-  // Update body background and text
-  document.body.style.background = root.style.getPropertyValue('--bg-primary');
-  
+  if(root?.dataset){
+    root.dataset.theme = currentTheme;
+  }
+
+  const computed = (typeof window !== 'undefined' && typeof getComputedStyle === 'function')
+    ? getComputedStyle(root)
+    : null;
+  const t = syncThemeFromCSS(currentTheme, computed);
+
+  const backgroundColor = readCssColor(computed, '--bg-primary', t.boardBg);
+  const textColor = readCssColor(computed, '--text-primary', t.text);
+  const borderColor = readCssColor(
+    computed,
+    '--border-color',
+    currentTheme === 'dark' ? '#374151' : '#d1d5db'
+  );
+
+  document.body.style.background = backgroundColor;
+  document.body.style.color = textColor;
+
+  c.style.borderColor = borderColor;
+  if(oppC) oppC.style.borderColor = borderColor;
+
   // Update theme toggle aria-label dynamically
   const themeToggle = document.getElementById('themeToggle');
   if (themeToggle) {
     const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
     themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
   }
-  document.body.style.color = t.text;
-  
-  // Update canvas border
-  c.style.borderColor = currentTheme==='dark'?'#374151':'#d1d5db';
-  if(oppC) oppC.style.borderColor = c.style.borderColor;
-  
+
   // Update theme toggle button text
   const themeBtn=document.getElementById('themeToggle');
   if(themeBtn) themeBtn.textContent = currentTheme==='dark'?'Light':'Dark';
-  
+
   // Update game over overlay ARIA attributes
   if(gameOverOverlay){
     gameOverOverlay.setAttribute('aria-hidden', gameOverOverlay.classList.contains('hidden')?'true':'false');
   }
-  
+
+  renderCache.tileColors.clear();
+
   // Update all UI elements with current values
   updateUI();
 
@@ -1416,6 +1519,7 @@ function draw(anim){
   if (renderCache.theme !== currentTheme) {
     renderCache.theme = currentTheme;
     renderCache.formattedStrings.clear(); // Clear string cache on theme change
+    renderCache.tileColors.clear();
   }
   
   // Clear canvas efficiently
