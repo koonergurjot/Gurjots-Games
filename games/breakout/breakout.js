@@ -52,13 +52,20 @@ window.fitCanvasToParent = window.fitCanvasToParent || function(){ /* no-op fall
 const BASE_W=1000;
 const BASE_H=800;
 
+const LOGICAL_WIDTH=BASE_W;
+const LOGICAL_HEIGHT=BASE_H;
+let canvasScale=1;
+
 const GAME_ID='breakout';GG.incPlays();
 preloadFirstFrameAssets(GAME_ID).catch(()=>{});
 
 const SPRITE_SOURCES={
   paddle:'/assets/sprites/paddle.png',
-  brick:'/assets/tilesets/industrial.png',
   ball:'/assets/sprites/ball.png'
+};
+
+const PATTERN_SOURCES={
+  brick:'/assets/breakout/brick.svg'
 };
 
 const BRICK_TILESET={
@@ -78,6 +85,7 @@ const BRICK_TOP=60;
 const BRICK_SPACING=8;
 const BRICK_ROW_HEIGHT=26;
 const BRICK_HEIGHT=20;
+const BRICK_HIT_FLASH_DURATION=0.16;
 
 const markFirstFrame = (() => {
   let done = false;
@@ -237,6 +245,54 @@ function drawBrickSheen(context,brick){
   }
 }
 
+function drawBrickHitFlash(context,brick){
+  const remaining=brick?.flashTimer||0;
+  if(!(remaining>0)) return;
+  const baseColor=normaliseColor(getBrickBaseColor(brick))||'#aab4ff';
+  const rgb=hexToRgb(baseColor);
+  const duration=Math.max(1e-3,BRICK_HIT_FLASH_DURATION);
+  const progress=Math.max(0,Math.min(1,remaining/duration));
+  const boost=Math.pow(progress,0.55);
+  const r=Math.min(255,rgb.r+160);
+  const g=Math.min(255,rgb.g+160);
+  const b=Math.min(255,rgb.b+160);
+  context.save();
+  context.globalCompositeOperation='lighter';
+  context.globalAlpha=0.45+0.35*boost;
+  context.fillStyle=`rgb(${r},${g},${b})`;
+  context.fillRect(brick.x,brick.y,brick.w,brick.h);
+  context.restore();
+}
+
+function drawPaddleSheen(context,paddleRect){
+  if(!context||!paddleRect)return;
+  const {x,y,w,h}=paddleRect;
+  if(!(w>0&&h>0))return;
+  context.save();
+  const vertical=context.createLinearGradient(x,y,x,y+h);
+  vertical.addColorStop(0,'rgba(255,255,255,0.38)');
+  vertical.addColorStop(0.5,'rgba(255,255,255,0.12)');
+  vertical.addColorStop(1,'rgba(255,255,255,0)');
+  context.globalCompositeOperation='lighter';
+  context.fillStyle=vertical;
+  context.fillRect(x,y,w,h);
+  const sweep=context.createLinearGradient(x,y,x+w,y+h);
+  sweep.addColorStop(0,'rgba(255,255,255,0)');
+  sweep.addColorStop(0.5,'rgba(255,255,255,0.22)');
+  sweep.addColorStop(1,'rgba(255,255,255,0)');
+  context.globalCompositeOperation='screen';
+  context.globalAlpha=0.55;
+  context.beginPath();
+  context.moveTo(x+w*0.1,y+1);
+  context.lineTo(x+w*0.78,y+1);
+  context.lineTo(x+w*0.58,y+h-1);
+  context.lineTo(x+w*0.02,y+h-1);
+  context.closePath();
+  context.fillStyle=sweep;
+  context.fill();
+  context.restore();
+}
+
 const EFFECT_SOURCES={
   spark:'/assets/effects/spark.png',
   explosion:'/assets/effects/explosion.png'
@@ -255,7 +311,9 @@ const pendingImages=new Set();
 const spriteImages={};
 const effectImages={};
 const powerupImages={};
+const patternImages={};
 const powerupCompositeCache=new Map();
+const brickPatternCache=new Map();
 
 const PARALLAX_CONFIG=[
   {key:'layer1',src:'/assets/backgrounds/parallax/arcade_layer1.png',speed:28,alpha:0.85},
@@ -422,14 +480,14 @@ function updateParallaxPalette(dt){
 }
 
 const trailBuffer=typeof OffscreenCanvas!=='undefined'
-  ? new OffscreenCanvas(BASE_W,BASE_H)
-  : (()=>{const canvas=document.createElement('canvas');canvas.width=BASE_W;canvas.height=BASE_H;return canvas;})();
+  ? new OffscreenCanvas(LOGICAL_WIDTH,LOGICAL_HEIGHT)
+  : (()=>{const canvas=document.createElement('canvas');canvas.width=LOGICAL_WIDTH;canvas.height=LOGICAL_HEIGHT;return canvas;})();
 const trailCtx=trailBuffer?.getContext?.('2d',{alpha:true})||null;
 const TRAIL_FADE_ALPHA=0.18;
 
 function resetTrailBuffer(){
   if(!trailCtx)return;
-  trailCtx.clearRect(0,0,trailBuffer.width,trailBuffer.height);
+  trailCtx.clearRect(0,0,LOGICAL_WIDTH,LOGICAL_HEIGHT);
 }
 
 function drawTrailGlow(context,x,y,radius,strength=1){
@@ -449,7 +507,7 @@ function renderTrailLayer(){
   trailCtx.save();
   trailCtx.globalCompositeOperation='source-over';
   trailCtx.fillStyle=`rgba(5,8,20,${TRAIL_FADE_ALPHA})`;
-  trailCtx.fillRect(0,0,trailBuffer.width,trailBuffer.height);
+  trailCtx.fillRect(0,0,LOGICAL_WIDTH,LOGICAL_HEIGHT);
   trailCtx.restore();
   trailCtx.save();
   trailCtx.globalCompositeOperation='lighter';
@@ -460,7 +518,7 @@ function renderTrailLayer(){
   trailCtx.restore();
   ctx.save();
   ctx.globalAlpha=0.85;
-  ctx.drawImage(trailBuffer,0,0,c.width,c.height);
+  ctx.drawImage(trailBuffer,0,0,LOGICAL_WIDTH,LOGICAL_HEIGHT);
   ctx.restore();
 }
 
@@ -498,6 +556,7 @@ function isImageReady(img){
 function primeImages(){
   Object.entries(SPRITE_SOURCES).forEach(([key,src])=>{requestImage(spriteImages,key,src);});
   Object.entries(EFFECT_SOURCES).forEach(([key,src])=>{requestImage(effectImages,key,src);});
+  Object.entries(PATTERN_SOURCES).forEach(([key,src])=>{requestImage(patternImages,key,src);});
   for(const [id,sources] of POWERUP_SPRITES.entries()){
     sources.forEach((src,index)=>{requestImage(powerupImages,`${id}:${index}`,src);});
   }
@@ -508,6 +567,46 @@ function createScratchCanvas(width,height){
   if(typeof OffscreenCanvas!=='undefined'){return new OffscreenCanvas(width,height);}
   if(typeof document!=='undefined'){const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;return canvas;}
   return null;
+}
+
+function invalidateBrickPatterns(){
+  brickPatternCache.clear();
+}
+
+function getBrickPatternFill(context,baseColor){
+  if(!context) return null;
+  const img=requestImage(patternImages,'brick',PATTERN_SOURCES.brick);
+  if(!isImageReady(img)) return null;
+  const tint=normaliseColor(baseColor)||'#ffffff';
+  const patternScale=Math.max(1,Math.min(4,canvasScale||1));
+  const key=`${tint}|${patternScale}`;
+  const cached=brickPatternCache.get(key);
+  if(cached && cached.image===img && cached.pattern) return cached.pattern;
+  const baseWidth=Math.max(1,Math.round((img.naturalWidth||img.width||32)));
+  const baseHeight=Math.max(1,Math.round((img.naturalHeight||img.height||16)));
+  const scaledWidth=Math.max(1,Math.round(baseWidth*patternScale));
+  const scaledHeight=Math.max(1,Math.round(baseHeight*patternScale));
+  const scratch=createScratchCanvas(scaledWidth,scaledHeight);
+  if(!scratch) return null;
+  scratch.width=scaledWidth;
+  scratch.height=scaledHeight;
+  const scratchCtx=scratch.getContext('2d');
+  if(!scratchCtx) return null;
+  scratchCtx.clearRect(0,0,scaledWidth,scaledHeight);
+  scratchCtx.fillStyle=tint;
+  scratchCtx.fillRect(0,0,scaledWidth,scaledHeight);
+  scratchCtx.save();
+  scratchCtx.scale(patternScale,patternScale);
+  scratchCtx.globalCompositeOperation='multiply';
+  scratchCtx.drawImage(img,0,0,baseWidth,baseHeight);
+  scratchCtx.globalCompositeOperation='screen';
+  scratchCtx.globalAlpha=0.35;
+  scratchCtx.drawImage(img,0,0,baseWidth,baseHeight);
+  scratchCtx.restore();
+  const pattern=context.createPattern(scratch,'repeat');
+  if(!pattern) return null;
+  brickPatternCache.set(key,{pattern,image:img,scale:patternScale,canvas:scratch});
+  return pattern;
 }
 
 function getPowerUpVisual(def){
@@ -741,19 +840,73 @@ if(!c){
 
 if(!c.dataset.basew)c.dataset.basew=String(BASE_W);
 if(!c.dataset.baseh)c.dataset.baseh=String(BASE_H);
-c.width=BASE_W;
-c.height=BASE_H;
-fitCanvasToParent(c,BASE_W,BASE_H,24);addEventListener('resize',()=>fitCanvasToParent(c,BASE_W,BASE_H,24));
 const ctx=c.getContext('2d');
-if(ctx&&'imageSmoothingEnabled' in ctx){ctx.imageSmoothingEnabled=false;}
+if(!ctx){
+  throw new Error('Breakout: unable to obtain a 2D rendering context.');
+}
+if('imageSmoothingEnabled' in ctx){ctx.imageSmoothingEnabled=false;}
+
+function getDevicePixelRatio(){
+  if(typeof window==='undefined'||!Number.isFinite(window.devicePixelRatio))return 1;
+  const ratio=window.devicePixelRatio;
+  if(!Number.isFinite(ratio)||ratio<=0)return 1;
+  return Math.max(1,Math.min(4,ratio));
+}
+
+function applyCanvasScale(){
+  const desiredScale=getDevicePixelRatio();
+  const pixelW=Math.max(1,Math.round(LOGICAL_WIDTH*desiredScale));
+  const pixelH=Math.max(1,Math.round(LOGICAL_HEIGHT*desiredScale));
+  if(canvasScale===desiredScale && c.width===pixelW && c.height===pixelH){
+    return;
+  }
+  canvasScale=desiredScale;
+  c.width=pixelW;
+  c.height=pixelH;
+  if(c.style){
+    c.style.width=`${LOGICAL_WIDTH}px`;
+    c.style.height=`${LOGICAL_HEIGHT}px`;
+  }
+  if(typeof ctx.setTransform==='function'){
+    ctx.setTransform(canvasScale,0,0,canvasScale,0,0);
+  }else{
+    ctx.resetTransform?.();
+    ctx.scale(canvasScale,canvasScale);
+  }
+  if(trailBuffer){
+    trailBuffer.width=pixelW;
+    trailBuffer.height=pixelH;
+  }
+  if(trailCtx){
+    if(typeof trailCtx.setTransform==='function'){
+      trailCtx.setTransform(canvasScale,0,0,canvasScale,0,0);
+    }else{
+      trailCtx.resetTransform?.();
+      trailCtx.scale(canvasScale,canvasScale);
+    }
+  }
+  invalidateBrickPatterns();
+  resetTrailBuffer();
+}
+
+function refreshCanvasLayout(){
+  applyCanvasScale();
+  fitCanvasToParent(c,LOGICAL_WIDTH,LOGICAL_HEIGHT,24);
+}
+
+refreshCanvasLayout();
+addEventListener('resize',refreshCanvasLayout);
+if(typeof window!=='undefined'){
+  window.addEventListener('orientationchange',refreshCanvasLayout);
+}
 installErrorReporter();
 let postedReady=false;
 
 const paddleBaseW=120;
-let paddle={w:paddleBaseW,h:14,x:c.width/2-paddleBaseW/2,y:c.height-40};
+let paddle={w:paddleBaseW,h:14,x:LOGICAL_WIDTH/2-paddleBaseW/2,y:LOGICAL_HEIGHT-40};
 let paddlePrevX=paddle.x;
 let paddleVelocity=0;
-let ball={x:c.width/2,y:c.height-60,vx:240,vy:-360,r:8,stuck:true,speed:420};
+let ball={x:LOGICAL_WIDTH/2,y:LOGICAL_HEIGHT-60,vx:240,vy:-360,r:8,stuck:true,speed:420};
 let bricks=[];let score=0,lives=3,level=1;let bestLevel=parseInt(localStorage.getItem('gg:bestlvl:breakout')||'1');
 let telemetryGameOverSent=false;
 let currentLevelData=null;let levelDropChance=0.2;let levelDropWeights=null;
@@ -778,7 +931,7 @@ function recomputePaddleWidth(){
   const width=Math.max(minWidth,Math.min(maxWidth,desired));
   const center=paddle.x+paddle.w/2;
   paddle.w=width;
-  paddle.x=Math.max(0,Math.min(c.width-width,center-width/2));
+  paddle.x=Math.max(0,Math.min(LOGICAL_WIDTH-width,center-width/2));
 }
 
 function releaseBall(entity){
@@ -845,16 +998,16 @@ function loadLevel(){
   if(!rows.length||!cols){
     // Fallback simple level if manifest missing.
     const fallbackCols=10;
-    const bw=(c.width-BRICK_PADDING_X*2-(fallbackCols-1)*BRICK_SPACING)/fallbackCols;
+    const bw=(LOGICAL_WIDTH-BRICK_PADDING_X*2-(fallbackCols-1)*BRICK_SPACING)/fallbackCols;
     for(let r=0;r<5;r++){
       for(let i=0;i<fallbackCols;i++){
         const variantIndex=BRICK_TILESET.variants.length?((r+i)%BRICK_TILESET.variants.length):0;
-        bricks.push({x:BRICK_PADDING_X+i*(bw+BRICK_SPACING),y:BRICK_TOP+r*BRICK_ROW_HEIGHT,w:bw,h:BRICK_HEIGHT,hp:1,maxHp:1,variant:variantIndex,score:10,dropMultiplier:1,surfaceStyle:createBrickSurfaceStyle()});
+        bricks.push({x:BRICK_PADDING_X+i*(bw+BRICK_SPACING),y:BRICK_TOP+r*BRICK_ROW_HEIGHT,w:bw,h:BRICK_HEIGHT,hp:1,maxHp:1,variant:variantIndex,score:10,dropMultiplier:1,surfaceStyle:createBrickSurfaceStyle(),flashTimer:0});
       }
     }
     return;
   }
-  const bw=(c.width-BRICK_PADDING_X*2-(cols-1)*BRICK_SPACING)/cols;
+  const bw=(LOGICAL_WIDTH-BRICK_PADDING_X*2-(cols-1)*BRICK_SPACING)/cols;
   for(let r=0;r<rows.length;r++){
     const row=rows[r]||'';
     for(let i=0;i<cols;i++){
@@ -880,7 +1033,8 @@ function loadLevel(){
         dropWeights:material.weights||null,
         alive:true,
         type:brickType,
-        surfaceStyle:createBrickSurfaceStyle()
+        surfaceStyle:createBrickSurfaceStyle(),
+        flashTimer:0
       });
       if(brickType==='gold'){
         goldBricksTotal++;
@@ -916,15 +1070,15 @@ gameEvent('play',{ slug: GAME_ID });
 
 c.addEventListener('pointermove',e=>{
   const r=c.getBoundingClientRect();
-  const scaleX=c.width/r.width;
+  const scaleX=LOGICAL_WIDTH/r.width;
   const mx=(e.clientX-r.left)*scaleX;
-  const center=Math.max(paddle.w/2,Math.min(c.width-paddle.w/2,mx));
+  const center=Math.max(paddle.w/2,Math.min(LOGICAL_WIDTH-paddle.w/2,mx));
   paddle.x=center-paddle.w/2;
   if(ball.stuck){
     const offset=typeof ball.stickyOffset==='number'
       ? Math.max(ball.r,Math.min(paddle.w-ball.r,ball.stickyOffset))
       : paddle.w/2;
-    ball.x=Math.max(ball.r,Math.min(c.width-ball.r,paddle.x+offset));
+    ball.x=Math.max(ball.r,Math.min(LOGICAL_WIDTH-ball.r,paddle.x+offset));
   }
   if(Array.isArray(multiBalls)){
     for(const m of multiBalls){
@@ -932,7 +1086,7 @@ c.addEventListener('pointermove',e=>{
       const offset=typeof m.stickyOffset==='number'
         ? Math.max(m.r,Math.min(paddle.w-m.r,m.stickyOffset))
         : m.r;
-      m.x=Math.max(m.r,Math.min(c.width-m.r,paddle.x+offset));
+      m.x=Math.max(m.r,Math.min(LOGICAL_WIDTH-m.r,paddle.x+offset));
     }
   }
 });
@@ -955,7 +1109,7 @@ c.addEventListener('pointerdown',()=>{
     multiBalls.length=0;
     powerups.length=0;
     paddle.w=paddleBaseW;
-    paddle.x=c.width/2-paddleBaseW/2;
+    paddle.x=LOGICAL_WIDTH/2-paddleBaseW/2;
     recomputePaddleWidth();
     resetMissionState();
     score=0;lives=3;level=1;
@@ -975,7 +1129,7 @@ c.addEventListener('pointerdown',()=>{
 
 addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft')paddle.x=Math.max(0,paddle.x-24);
-  if(e.key==='ArrowRight')paddle.x=Math.min(c.width-paddle.w,paddle.x+24);
+  if(e.key==='ArrowRight')paddle.x=Math.min(LOGICAL_WIDTH-paddle.w,paddle.x+24);
   if(e.code==='Space'||e.key===' '){
     releaseBall(ball);
     if(Array.isArray(multiBalls))multiBalls.forEach(releaseBall);
@@ -1137,7 +1291,7 @@ function applyPU(p){
 function updatePU(dt){
   for(const p of powerups){
     p.y+=p.v*dt;
-    if(p.y>c.height+24)p.dead=true;
+    if(p.y>LOGICAL_HEIGHT+24)p.dead=true;
     const catchTop=paddle.y-6;
     const catchBottom=paddle.y+paddle.h+6;
     if(p.y>=catchTop&&p.y<=catchBottom&&p.x>=paddle.x&&p.x<=paddle.x+paddle.w){p.dead=true;applyPU(p);}
@@ -1175,6 +1329,7 @@ function damageBrick(brick,impact,options={}){
   }
   brick.hp=Math.max(0,brick.hp-1);
   const destroyed=brick.hp<=0;
+  brick.flashTimer=Math.max(brick.flashTimer||0,BRICK_HIT_FLASH_DURATION);
   const centerX=brick.x+brick.w/2;
   const centerY=brick.y+brick.h/2;
   const fxScale=Math.max(0.55,Math.min(1.25,brick.w/80));
@@ -1270,7 +1425,7 @@ function getParallaxMetrics(layer){
   const baseW=img?.naturalWidth||img?.width||layer.width||0;
   const baseH=img?.naturalHeight||img?.height||layer.height||0;
   if(!baseW||!baseH) return null;
-  const destHeight=c.height||BASE_H;
+  const destHeight=LOGICAL_HEIGHT;
   const destWidth=destHeight*(baseW/baseH);
   if(!Number.isFinite(destWidth)||destWidth<=0) return null;
   layer.width=baseW;
@@ -1303,7 +1458,7 @@ function drawParallaxBackground(){
   ctx.save();
   ctx.imageSmoothingEnabled=false;
   ctx.fillStyle='#050516';
-  ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillRect(0,0,LOGICAL_WIDTH,LOGICAL_HEIGHT);
   ensureParallaxLayers();
   const palette=parallaxPaletteState.current;
   for(const layer of parallaxLayers){
@@ -1314,7 +1469,7 @@ function drawParallaxBackground(){
     ctx.save();
     ctx.globalAlpha=layer.alpha ?? 1;
     const tint=layer.key==='layer1'?palette.layer1:palette.layer2;
-    for(let x=startX; x<c.width; x+=metrics.width){
+    for(let x=startX; x<LOGICAL_WIDTH; x+=metrics.width){
       ctx.drawImage(layer.image,x,0,metrics.width,metrics.height);
       if(tint && tint.alpha>0){
         ctx.save();
@@ -1430,7 +1585,7 @@ function findNextCollision(entity,dt){
     const t=(entity.r-entity.x)/vx;
     if(t>=0&&t<=dt)consider({time:t,normal:{x:1,y:0},type:'wall'});
   }else if(vx>0){
-    const t=((c.width-entity.r)-entity.x)/vx;
+    const t=((LOGICAL_WIDTH-entity.r)-entity.x)/vx;
     if(t>=0&&t<=dt)consider({time:t,normal:{x:-1,y:0},type:'wall'});
   }
   if(vy<0){
@@ -1553,14 +1708,14 @@ function step(dt){
     const offset=typeof ball.stickyOffset==='number'
       ? Math.max(ball.r,Math.min(paddle.w-ball.r,ball.stickyOffset))
       : paddle.w/2;
-    const destX=Math.max(ball.r,Math.min(c.width-ball.r,paddle.x+offset));
+    const destX=Math.max(ball.r,Math.min(LOGICAL_WIDTH-ball.r,paddle.x+offset));
     ball.x=destX;
     ball.y=paddle.y-ball.r-6;
   }else{
     advanceBall(ball,dt);
   }
 
-  if(ball.y>c.height+20){
+  if(ball.y>LOGICAL_HEIGHT+20){
     lives--;
     playSound('explode');
     resetBall();
@@ -1600,13 +1755,13 @@ function step(dt){
       const offset=typeof m.stickyOffset==='number'
         ? Math.max(m.r,Math.min(paddle.w-m.r,m.stickyOffset))
         : m.r;
-      m.x=Math.max(m.r,Math.min(c.width-m.r,paddle.x+offset));
+      m.x=Math.max(m.r,Math.min(LOGICAL_WIDTH-m.r,paddle.x+offset));
       m.y=paddle.y-m.r-6;
       survivors.push(m);
       continue;
     }
     advanceBall(m,dt);
-    if(m.y>c.height+20)continue;
+    if(m.y>LOGICAL_HEIGHT+20)continue;
     survivors.push(m);
   }
   multiBalls=survivors;
@@ -1662,6 +1817,14 @@ function step(dt){
   updatePU(dt);
   updateEffects(dt);
 
+  if(Number.isFinite(dt) && dt>0){
+    for(const brick of bricks){
+      if(brick&&brick.flashTimer>0){
+        brick.flashTimer=Math.max(0,brick.flashTimer-dt);
+      }
+    }
+  }
+
   if(bricks.length&&bricks.every(b=>b.hp<=0)){
     level++;
     gameEvent('level_up', {
@@ -1691,7 +1854,8 @@ function draw(){
     colorBuckets.get(baseColor).push(b);
   }
   for(const [color,list] of colorBuckets.entries()){
-    ctx.fillStyle=color;
+    const pattern=getBrickPatternFill(ctx,color);
+    ctx.fillStyle=pattern||color;
     for(const brick of list){
       ctx.fillRect(brick.x,brick.y,brick.w,brick.h);
     }
@@ -1699,6 +1863,7 @@ function draw(){
   for(const b of bricks){
     if(b.hp<=0)continue;
     drawBrickSheen(ctx,b);
+    drawBrickHitFlash(ctx,b);
   }
   const paddleSprite=requestImage(spriteImages,'paddle',SPRITE_SOURCES.paddle);
   if(paddleSprite&&paddleSprite.complete&&paddleSprite.naturalWidth){
@@ -1706,6 +1871,7 @@ function draw(){
   }else{
     ctx.fillStyle='#e6e7ea';ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
   }
+  drawPaddleSheen(ctx,paddle);
   const ballSprite=requestImage(spriteImages,'ball',SPRITE_SOURCES.ball);
   const ballSize=ball.r*2;
   if(ballSprite&&ballSprite.complete&&ballSprite.naturalWidth){
