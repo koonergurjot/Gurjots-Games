@@ -158,9 +158,8 @@ bootLog('init:start', { readyState: document.readyState });
 const SLUG = 'snake';
 
 const SPRITE_SOURCES = {
-  snakeHead: '/assets/sprites/enemy2.png',
-  snakeBody: '/assets/sprites/block.png',
-  fruit: '/assets/sprites/collectibles/gem_red.png',
+  fruit: '/assets/snake/apple.svg',
+  fruitGemRed: '/assets/sprites/collectibles/gem_red.png',
   fruitGemBlue: '/assets/sprites/collectibles/gem_blue.png',
   fruitGemGreen: '/assets/sprites/collectibles/gem_green.png',
   obstacle: '/assets/tilesets/industrial.png',
@@ -177,8 +176,12 @@ let backgroundOverlayColor = null;
 let lastBackgroundTime = performance.now();
 
 function ensureSprite(name) {
-  if (spriteCache[name]) return spriteCache[name];
+  if (Object.prototype.hasOwnProperty.call(spriteCache, name)) return spriteCache[name];
   const source = SPRITE_SOURCES[name];
+  if (!source) {
+    spriteCache[name] = null;
+    return null;
+  }
   if (Array.isArray(source)) {
     const images = source.map(src => {
       const img = new Image();
@@ -553,8 +556,15 @@ if (ctx) {
   if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
   if ('msImageSmoothingEnabled' in ctx) ctx.msImageSmoothingEnabled = false;
 }
+const pauseOverlay = document.querySelector('.snake-pause-overlay');
+function setPauseOverlayActive(active) {
+  if (!pauseOverlay) return;
+  pauseOverlay.dataset.active = active ? 'true' : 'false';
+  pauseOverlay.setAttribute('aria-hidden', active ? 'false' : 'true');
+}
+setPauseOverlayActive(false);
 // The playfield is always rendered as a square grid inside the canvas.
-let CELL = Math.min(c.width, c.height) / N;
+let CELL = Math.max(1, Math.floor(Math.min(c.width, c.height) / N));
 // Track the rendered square's offset for pointer-to-grid conversions.
 let boardOffsetX = 0;
 let boardOffsetY = 0;
@@ -590,6 +600,38 @@ let speedBoostUntil = 0;
 const GAME_ID = 'snake';
 GG.incPlays();
 const tokens = getThemeTokens('snake');
+const CSS_PALETTE = (() => {
+  if (typeof window === 'undefined' || !window.getComputedStyle) return {};
+  const root = document.documentElement;
+  if (!root) return {};
+  try {
+    const styles = window.getComputedStyle(root);
+    const read = (name, fallback) => {
+      const value = styles.getPropertyValue(name);
+      return value && value.trim() ? value.trim() : fallback;
+    };
+    return {
+      boardBase: read('--snake-board-base', ''),
+      boardAccent: read('--snake-board-accent', ''),
+      snakeHead: read('--snake-head', ''),
+      snakeBody: read('--snake-body', ''),
+      fruit: read('--snake-fruit', ''),
+      fruitLeaf: read('--snake-fruit-leaf', ''),
+      foreground: read('--fg', ''),
+      muted: read('--muted', '')
+    };
+  } catch (_) {
+    return {};
+  }
+})();
+const DEFAULT_COLORS = {
+  boardBase: CSS_PALETTE.boardBase || '#111623',
+  boardAccent: CSS_PALETTE.boardAccent || '#0f1320',
+  snakeHead: CSS_PALETTE.snakeHead || '#38bdf8',
+  snakeBody: CSS_PALETTE.snakeBody || '#22d3ee',
+  fruit: CSS_PALETTE.fruit || '#ff6b6b'
+};
+const HUD_TEXT_COLOR = CSS_PALETTE.foreground || '#e6e7ea';
 uiController = initSnakeUI({
   score,
   bestScore,
@@ -623,29 +665,50 @@ function syncHud() {
 }
 let postedReady=false;
 const SNAKE_SKINS = [
-  { id: 'default', name: 'Purple', color: tokens['snake-purple'] || '#8b5cf6', unlock: p => true },
-  { id: 'gold', name: 'Gold', color: tokens['snake-gold'] || '#fcd34d', unlock: p => p.best >= 10 },
-  { id: 'emerald', name: 'Emerald', color: tokens['snake-emerald'] || '#10b981', unlock: p => p.plays >= 5 }
+  {
+    id: 'default',
+    name: 'Aurora',
+    color: tokens['snake-purple'] || DEFAULT_COLORS.snakeBody,
+    head: tokens['snake-purple-head'] || DEFAULT_COLORS.snakeHead,
+    body: tokens['snake-purple-body'] || DEFAULT_COLORS.snakeBody,
+    unlock: p => true
+  },
+  {
+    id: 'gold',
+    name: 'Solaris',
+    color: tokens['snake-gold'] || '#facc15',
+    head: tokens['snake-gold-head'] || '#f59e0b',
+    body: tokens['snake-gold'] || '#facc15',
+    unlock: p => p.best >= 10
+  },
+  {
+    id: 'emerald',
+    name: 'Verdant',
+    color: tokens['snake-emerald'] || '#10b981',
+    head: tokens['snake-emerald-head'] || '#34d399',
+    body: tokens['snake-emerald'] || '#10b981',
+    unlock: p => p.plays >= 5
+  }
 ];
 const FRUIT_SKINS = [
   {
     id: 'classic',
     name: 'Classic',
     icons: ['🍎','🍌','🍇','🍒','🍊','🍉'],
-    color: tokens['fruit-classic'] || '#22d3ee',
+    color: tokens['fruit-classic'] || DEFAULT_COLORS.fruit,
     unlock: p => true
   },
   {
     id: 'gems',
     name: 'Gems',
     icons: ['💎','🔶','🔷'],
-    sprites: ['fruit', 'fruitGemBlue', 'fruitGemGreen'],
+    sprites: ['fruitGemRed', 'fruitGemBlue', 'fruitGemGreen'],
     color: tokens['fruit-gems'] || '#eab308',
     unlock: p => p.best >= 15
   }
 ];
 const BOARD_THEMES = [
-  { id: 'dark', name: 'Dark', colors: [tokens['board-dark1'] || '#111623', tokens['board-dark2'] || '#0f1320'], unlock: p => true },
+  { id: 'dark', name: 'Dark', colors: [tokens['board-dark1'] || DEFAULT_COLORS.boardBase, tokens['board-dark2'] || DEFAULT_COLORS.boardAccent], unlock: p => true },
   { id: 'light', name: 'Light', colors: [tokens['board-light1'] || '#f3f4f6', tokens['board-light2'] || '#e5e7eb'], unlock: p => p.plays >= 3 }
 ];
 const BACKGROUND_THEMES = [
@@ -777,10 +840,10 @@ function hexToRgb(hex) {
   const n = parseInt(hex.slice(1), 16);
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
-let boardColors = ['#111623', '#0f1320'];
-let snakeColorHead = '#8b5cf6';
-let snakeColorRGB = { r: 139, g: 92, b: 246 };
-let fruitColor = '#22d3ee';
+let boardColors = [DEFAULT_COLORS.boardBase, DEFAULT_COLORS.boardAccent];
+let snakeColorHead = DEFAULT_COLORS.snakeHead;
+let snakeBodyColor = DEFAULT_COLORS.snakeBody;
+let fruitColor = DEFAULT_COLORS.fruit;
 let obstacles = [];
 let runMissionState = { wallsOffScore: 0, topSpeedMs: 0, poisonCount: 0 };
 let poisonStreak = 0;
@@ -998,9 +1061,9 @@ function drawSpriteEffects(ctx, time) {
     const img = ensureSprite(fx.type);
     if (!img || !img.complete || !img.naturalWidth) continue;
     const alpha = 1 - Math.min(1, Math.max(0, progress));
-    const size = CELL * (fx.scale || 1);
-    const drawX = (fx.x + (fx.offsetX ?? 0.5)) * CELL - size / 2;
-    const drawY = (fx.y + (fx.offsetY ?? 0.5)) * CELL - size / 2;
+    const size = Math.max(1, Math.round(CELL * (fx.scale || 1)));
+    const drawX = Math.round((fx.x + (fx.offsetX ?? 0.5)) * CELL - size / 2);
+    const drawY = Math.round((fx.y + (fx.offsetY ?? 0.5)) * CELL - size / 2);
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.drawImage(img, drawX, drawY, size, size);
@@ -1017,9 +1080,11 @@ function applySkin() {
   const s = SNAKE_SKINS.find(t => t.id === snakeSkinId);
   const f = FRUIT_SKINS.find(t => t.id === fruitSkinId);
   const b = BOARD_THEMES.find(t => t.id === boardSkinId);
-  boardColors = b.colors;
-  snakeColorHead = s.color;
-  snakeColorRGB = hexToRgb(s.color);
+  boardColors = Array.isArray(b.colors) ? b.colors.slice() : [DEFAULT_COLORS.boardBase, DEFAULT_COLORS.boardAccent];
+  const headHex = (s && (s.head || s.color)) || DEFAULT_COLORS.snakeHead;
+  const bodyHex = (s && (s.body || s.color)) || DEFAULT_COLORS.snakeBody;
+  snakeColorHead = headHex;
+  snakeBodyColor = bodyHex;
   const fallbackIcons = Array.isArray(f.icons) && f.icons.length ? f.icons : ['🍎'];
   if (Array.isArray(f.sprites) && f.sprites.length) {
     FRUIT_ART = f.sprites.map((spriteKey, idx) => ({
@@ -1032,7 +1097,7 @@ function applySkin() {
   }
   FRUITS = FRUIT_ART.map(art => art.icon);
   gemSpriteIndex = 0;
-  fruitColor = f.color;
+  fruitColor = f.color || DEFAULT_COLORS.fruit;
   setBackgroundTheme(backgroundThemeId);
   saveSkinSelection();
   invalidateGridTexture();
@@ -1380,12 +1445,14 @@ function pauseGame(reason = 'manual') {
   if (paused) return;
   paused = true;
   bootLog('game:paused', { reason });
+  setPauseOverlayActive(true);
 }
 
 function resumeGame(reason = 'manual') {
   if (!paused) return;
   paused = false;
   bootLog('game:resumed', { reason });
+  setPauseOverlayActive(false);
 }
 
 function togglePause(reason = 'toggle') {
@@ -1408,6 +1475,7 @@ function resetGame(reason = 'manual', options = {}) {
   dead = false;
   deadHandled = false;
   paused = false;
+  setPauseOverlayActive(false);
   moveAcc = 0;
   speedTier = 1;
   lastSpeedTierEmitted = 1;
@@ -1854,15 +1922,17 @@ function draw() {
   }
   const time = performance.now();
   syncHud();
-  const side = Math.min(c.width, c.height);
-  const offsetX = (c.width - side) / 2;
-  const offsetY = (c.height - side) / 2;
+  const maxSide = Math.min(c.width, c.height);
+  const cellSize = Math.max(1, Math.floor(maxSide / N));
+  const side = cellSize * N;
+  const offsetX = Math.floor((c.width - side) / 2);
+  const offsetY = Math.floor((c.height - side) / 2);
   const backgroundDelta = Math.min(Math.max(time - lastBackgroundTime, 0), 1000);
   lastBackgroundTime = time;
   decayCombo(time);
   renderComboPanel(time);
   // CELL is derived from the square side length so that N cells always fit exactly.
-  CELL = side / N;
+  CELL = cellSize;
   // Store offsets so any canvas-space interaction can subtract them before using CELL.
   boardOffsetX = offsetX;
   boardOffsetY = offsetY;
@@ -1937,21 +2007,21 @@ function draw() {
     const ft = Math.min((time - fruitSpawnTime) / 300, 1);
     const fruitSpriteKey = food.spriteKey || null;
     const fruitImg = fruitSpriteKey ? ensureSprite(fruitSpriteKey) : null;
-    const size = CELL * (0.6 + 0.4 * ft);
-    const drawX = (food.x + 0.5) * CELL - size / 2;
-    const drawY = (food.y + 0.5) * CELL - size / 2;
+    const size = Math.max(1, Math.round(CELL * (0.6 + 0.4 * ft)));
+    const drawX = Math.round((food.x + 0.5) * CELL - size / 2);
+    const drawY = Math.round((food.y + 0.5) * CELL - size / 2);
     ctx.save();
     ctx.globalAlpha = ft;
     if (fruitImg && !Array.isArray(fruitImg) && fruitImg.complete && fruitImg.naturalWidth) {
       ctx.drawImage(fruitImg, drawX, drawY, size, size);
     } else if (typeof food.icon === 'string') {
-      ctx.fillStyle = food.color || '#f87171';
-      ctx.font = `${Math.floor(size * 0.8)}px Inter, system-ui, sans-serif`;
+      ctx.fillStyle = food.color || fruitColor;
+      ctx.font = `${Math.max(10, Math.floor(size * 0.8))}px Inter, system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(food.icon, drawX + size / 2, drawY + size / 2);
     } else {
-      ctx.fillStyle = food.color || '#f87171';
+      ctx.fillStyle = food.color || fruitColor;
       ctx.fillRect(drawX, drawY, size, size);
     }
     ctx.restore();
@@ -1962,8 +2032,10 @@ function draw() {
   const flameActive = speedBoostActive && speedBoostUntil > time;
   snake.forEach((s, idx) => {
     const prev = lastSnake[idx] || lastSnake[lastSnake.length - 1];
-    const x = (prev.x + (s.x - prev.x) * t) * CELL;
-    const y = (prev.y + (s.y - prev.y) * t) * CELL;
+    const interpolatedX = (prev.x + (s.x - prev.x) * t) * CELL;
+    const interpolatedY = (prev.y + (s.y - prev.y) * t) * CELL;
+    const x = Math.round(interpolatedX);
+    const y = Math.round(interpolatedY);
     if (idx === 0 && flameActive) {
       const centerX = x + CELL / 2;
       const centerY = y + CELL / 2;
@@ -1991,13 +2063,21 @@ function draw() {
       ctx.fill();
       ctx.restore();
     }
-    const sprite = idx === 0 ? ensureSprite('snakeHead') : ensureSprite('snakeBody');
-    if (sprite && sprite.complete && sprite.naturalWidth) {
-      ctx.drawImage(sprite, x, y, CELL, CELL);
-    } else {
-      const fade = 0.8 - (idx / snake.length) * 0.5;
-      ctx.fillStyle = idx === 0 ? snakeColorHead : `rgba(${snakeColorRGB.r},${snakeColorRGB.g},${snakeColorRGB.b},${fade})`;
+    if (idx === 0) {
+      ctx.save();
+      ctx.fillStyle = snakeColorHead;
       ctx.fillRect(x, y, CELL, CELL);
+      const inset = Math.max(1, Math.round(CELL * 0.18));
+      ctx.fillStyle = snakeBodyColor;
+      ctx.fillRect(x + inset, y + inset, CELL - inset * 2, CELL - inset * 2);
+      ctx.restore();
+    } else {
+      ctx.save();
+      const fade = Math.max(0.35, 0.9 - (idx / Math.max(1, snake.length)) * 0.45);
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = snakeBodyColor;
+      ctx.fillRect(x, y, CELL, CELL);
+      ctx.restore();
     }
   });
 
@@ -2012,11 +2092,17 @@ function draw() {
       const tileIndex = totalTiles > 0 ? idx % totalTiles : 0;
       const sx = (tileIndex % columns) * tileSize;
       const sy = Math.floor(tileIndex / columns) * tileSize;
-      ctx.drawImage(obstacleSprite, sx, sy, tileSize, tileSize, o.x * CELL, o.y * CELL, CELL, CELL);
+      const drawX = Math.round(o.x * CELL);
+      const drawY = Math.round(o.y * CELL);
+      ctx.drawImage(obstacleSprite, sx, sy, tileSize, tileSize, drawX, drawY, CELL, CELL);
     });
   } else {
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    obstacles.forEach(o => ctx.fillRect(o.x * CELL, o.y * CELL, CELL, CELL));
+    obstacles.forEach(o => {
+      const drawX = Math.round(o.x * CELL);
+      const drawY = Math.round(o.y * CELL);
+      ctx.fillRect(drawX, drawY, CELL, CELL);
+    });
   }
 
   drawSpriteEffects(ctx, time);
@@ -2024,24 +2110,28 @@ function draw() {
   ctx.restore();
 
   // HUD
-  ctx.fillStyle = '#e6e7ea';
+  ctx.fillStyle = HUD_TEXT_COLOR;
   ctx.font = 'bold 20px Inter, system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   const wallStatus = wallsEnabled ? 'Walls' : 'No Walls';
   const wrapStatus = wrapEnabled ? 'Wrap' : 'No Wrap';
-  ctx.fillText(`Score: ${score} (Best: ${bestScore}) • Speed T${speedTier} • ${wallStatus} • ${wrapStatus}`, offsetX + 16, offsetY + 28);
+  const hudTextX = Math.round(offsetX + 16);
+  const hudTextY = Math.round(offsetY + 28);
+  ctx.fillText(`Score: ${score} (Best: ${bestScore}) • Speed T${speedTier} • ${wallStatus} • ${wrapStatus}`, hudTextX, hudTextY);
 
   if (wallsEnabled && score > 0 && score % 10 === 0 && obstacles.length < Math.floor(score / 10) * (N / 2)) addObstacleRow();
 
   if (paused) {
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.fillStyle = '#e6e7ea';
-    ctx.font = 'bold 32px Inter';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('Paused — P to resume', c.width / 2, c.height / 2);
+    if (!pauseOverlay) {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.fillStyle = HUD_TEXT_COLOR;
+      ctx.font = 'bold 32px Inter';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Paused — P to resume', c.width / 2, c.height / 2);
+    }
   } else if (won) {
     if (!winHandled) {
       playSfx('power');
@@ -2053,7 +2143,7 @@ function draw() {
     }
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, 0, c.width, c.height);
-    ctx.fillStyle = '#e6e7ea';
+    ctx.fillStyle = HUD_TEXT_COLOR;
     ctx.font = 'bold 42px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -2066,7 +2156,7 @@ function draw() {
     }
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, 0, c.width, c.height);
-    ctx.fillStyle = '#e6e7ea';
+    ctx.fillStyle = HUD_TEXT_COLOR;
     ctx.font = 'bold 42px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

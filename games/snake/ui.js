@@ -14,9 +14,9 @@ function ensureStyle() {
       gap: 12px;
       padding: 10px 14px;
       border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(17, 23, 53, 0.82);
-      color: #e6e7ea;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(17, 23, 53, 0.86);
+      color: var(--fg);
       font-size: 14px;
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
       transition: box-shadow 0.2s ease, transform 0.2s ease;
@@ -34,7 +34,7 @@ function ensureStyle() {
     }
     .snake-topbar__best {
       font-size: 12px;
-      color: rgba(230, 231, 234, 0.75);
+      color: var(--muted);
       letter-spacing: 0.03em;
     }
     .snake-topbar__speed {
@@ -52,18 +52,18 @@ function ensureStyle() {
     .snake-topbar__toggle {
       padding: 4px 10px;
       border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      background: rgba(148, 163, 184, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(56, 189, 248, 0.18);
       font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.08em;
     }
     .snake-topbar__toggle[data-active="off"] {
       opacity: 0.5;
-      background: rgba(148, 163, 184, 0.08);
+      background: rgba(148, 163, 184, 0.12);
     }
     .snake-topbar--boost {
-      box-shadow: 0 0 18px rgba(249, 115, 22, 0.35);
+      box-shadow: 0 0 18px rgba(124, 93, 250, 0.45);
     }
     .snake-topbar--poison {
       animation: snake-topbar-warning 0.45s ease-out;
