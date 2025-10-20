@@ -6,6 +6,10 @@ const MOBILE_MAX_DPR = 2;
 
 const MOBILE_UA_PATTERN = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
 
+const SKIP_CONTEXT_SYMBOL = typeof Symbol === 'function'
+  ? Symbol.for('ggshell.canvas.skip2dContext')
+  : null;
+
 function isMobileViewport() {
   if (typeof window === 'undefined') return false;
   if (typeof navigator !== 'undefined' && MOBILE_UA_PATTERN.test(navigator.userAgent || '')) {
@@ -130,11 +134,29 @@ export function scaleCanvas(canvas, arg1, arg2, arg3) {
   canvas.height = Math.max(1, pixelHeight);
 
   let ctx = null;
-  if (canvas && typeof canvas.getContext === 'function') {
-    try {
-      ctx = canvas.getContext('2d');
-    } catch (err) {
-      ctx = null;
+  const shouldSkipContext = SKIP_CONTEXT_SYMBOL && canvas?.[SKIP_CONTEXT_SYMBOL];
+  const view = canvas?.ownerDocument?.defaultView;
+  const has2dContext = !!(view?.CanvasRenderingContext2D);
+  const nativeGetContext = view?.HTMLCanvasElement?.prototype?.getContext;
+  const isNativeGetContext = typeof nativeGetContext === 'function'
+    ? canvas?.getContext === nativeGetContext
+    : false;
+
+  if (!shouldSkipContext && canvas && typeof canvas.getContext === 'function') {
+    if (!has2dContext && isNativeGetContext && SKIP_CONTEXT_SYMBOL) {
+      canvas[SKIP_CONTEXT_SYMBOL] = true;
+    } else {
+      try {
+        ctx = canvas.getContext('2d');
+        if (!ctx && SKIP_CONTEXT_SYMBOL) {
+          canvas[SKIP_CONTEXT_SYMBOL] = true;
+        }
+      } catch (err) {
+        if (SKIP_CONTEXT_SYMBOL) {
+          canvas[SKIP_CONTEXT_SYMBOL] = true;
+        }
+        ctx = null;
+      }
     }
   }
   if (ctx && typeof ctx.setTransform === 'function') {
