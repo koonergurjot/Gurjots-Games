@@ -113,6 +113,14 @@ const evalDpr=window.devicePixelRatio||1;
 evaluationHistoryCanvas.width=Math.round(evalCssWidth*evalDpr);
 evaluationHistoryCanvas.height=Math.round(evalCssHeight*evalDpr);
 evaluationHistoryCtx.setTransform(evalDpr,0,0,evalDpr,0,0);
+const AI_LEVELS=[
+  { id:'1', label:'Level 1', depth:1, rating:900, delta:10 },
+  { id:'2', label:'Level 2', depth:2, rating:1050, delta:15 },
+  { id:'3', label:'Level 3', depth:3, rating:1200, delta:20 },
+  { id:'4', label:'Level 4', depth:4, rating:1350, delta:25 },
+  { id:'5', label:'Level 5', depth:5, rating:1500, delta:30 },
+];
+const AI_LEVEL_MAP=new Map(AI_LEVELS.map(level=>[level.id,level]));
 function configureDifficultySelect(){
   if(!depthEl) return;
   depthEl.innerHTML='';
@@ -223,14 +231,6 @@ const TIME_CONTROLS=[
   { id:'bullet', label:'Bullet 1 | 0', baseMs:60*1000, incrementMs:0, summary:'Bullet • 1 min' },
   { id:'classic', label:'Classical 15 | 10', baseMs:15*60*1000, incrementMs:10000, summary:'Classical • 15 min +10s' },
 ];
-const AI_LEVELS=[
-  { id:'1', label:'Level 1', depth:1, rating:900, delta:10 },
-  { id:'2', label:'Level 2', depth:2, rating:1050, delta:15 },
-  { id:'3', label:'Level 3', depth:3, rating:1200, delta:20 },
-  { id:'4', label:'Level 4', depth:4, rating:1350, delta:25 },
-  { id:'5', label:'Level 5', depth:5, rating:1500, delta:30 },
-];
-const AI_LEVEL_MAP=new Map(AI_LEVELS.map(level=>[level.id,level]));
 const LADDER_MIN_RATING=800;
 const DAILY_PUZZLE_LIMIT=10;
 const timeControlMap=new Map(TIME_CONTROLS.map(tc=>[tc.id,tc]));
