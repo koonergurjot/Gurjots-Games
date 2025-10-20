@@ -772,30 +772,30 @@ function check(){
     showGameOverModal(won?'2048!':'Game over', won?'You made 2048! Want to go again?':'No moves left. Try again?');
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const durationMs = Math.max(0, Math.round(now - (runStartTime || now)));
+    const maxTile = Math.max(0, ...grid.flat());
+    const normalizedUndo = Math.max(0, Math.min(MAX_UNDO, Number(undoLeft)));
+    const undosUsed = Math.max(0, MAX_UNDO - Math.round(normalizedUndo));
+    const meta = {
+      won,
+      boardSize: N,
+      maxTile,
+      undosUsed,
+    };
     gameEvent('game_over', {
       slug: GAME_SLUG,
       value: score,
       durationMs,
-      meta: {
-        won,
-        boardSize: N,
-      },
+      meta,
     });
     if (won) {
       gameEvent('win', {
         slug: GAME_SLUG,
-        meta: {
-          score,
-          boardSize: N,
-        },
+        meta,
       });
     } else {
       gameEvent('lose', {
         slug: GAME_SLUG,
-        meta: {
-          score,
-          boardSize: N,
-        },
+        meta,
       });
     }
   }
