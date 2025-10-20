@@ -1,0 +1,19 @@
+{
+  "glow": {
+    "engine": {
+      "alpha": 0.36,
+      "radius": 26,
+      "length": 52,
+      "pulse": 0.42
+    },
+    "bullet": {
+      "alpha": 0.6,
+      "radius": 12
+    },
+    "particles": {
+      "alpha": 0.32,
+      "radius": 2.4,
+      "count": 6
+    }
+  }
+}
