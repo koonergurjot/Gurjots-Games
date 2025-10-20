@@ -5,6 +5,19 @@ import { installErrorReporter } from '../../shared/debug/error-reporter.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import { registerGameDiagnostics } from '../common/diagnostics/adapter.js';
 import { gameEvent } from '../../shared/telemetry.js';
+import {
+  initUi,
+  loadLadderRating,
+  saveLadderRating,
+  loadLevelSelection,
+  saveLevelSelection,
+  loadPuzzleProgress,
+  savePuzzleProgress,
+  hasMilestone,
+  markMilestone,
+  onProfileChange,
+  updateRatingDisplay,
+} from './ui.js';
 
 installErrorReporter();
 getThemeTokens();
@@ -87,6 +100,38 @@ const evalDpr=window.devicePixelRatio||1;
 evaluationHistoryCanvas.width=Math.round(evalCssWidth*evalDpr);
 evaluationHistoryCanvas.height=Math.round(evalCssHeight*evalDpr);
 evaluationHistoryCtx.setTransform(evalDpr,0,0,evalDpr,0,0);
+function configureDifficultySelect(){
+  if(!depthEl) return;
+  depthEl.innerHTML='';
+  AI_LEVELS.forEach(level=>{
+    const option=document.createElement('option');
+    option.value=level.id;
+    option.textContent=level.label;
+    depthEl.appendChild(option);
+  });
+  const saved=loadLevelSelection();
+  if(saved && AI_LEVEL_MAP.has(saved)){
+    depthEl.value=saved;
+  }else if(AI_LEVELS.length){
+    depthEl.value=AI_LEVELS[1]?.id||AI_LEVELS[0].id;
+  }
+}
+configureDifficultySelect();
+initUi();
+updateRatingDisplay(localLadderRating);
+if(depthEl){
+  depthEl.addEventListener('change',()=>{
+    const selected=depthEl.value;
+    if(!AI_LEVEL_MAP.has(selected) && AI_LEVELS.length){
+      depthEl.value=AI_LEVELS[0].id;
+    }
+    saveLevelSelection(depthEl.value);
+    if(activeMatch){
+      activeMatch.level=getSelectedAiLevel();
+      activeMatch.levelId=activeMatch.level.id;
+    }
+  });
+}
 const EMPTY = '.';
 // Simple FEN start
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
@@ -98,6 +143,10 @@ let lastMove=null; let lastMoveInfo=null; let premove=null;
 let puzzleIndex=-1, puzzleStep=0;
 let puzzleStreak=0;
 let bestPuzzleStreak=0;
+let puzzleSolvedCount=0;
+let dailyPuzzleDateKey=null;
+let storedPuzzleCurrent=-1;
+let puzzlesState={ status:'loading', total:0, error:null };
 let puzzleHintUsed=false;
 let hintMove=null;
 let anim=null;
@@ -111,6 +160,11 @@ let lastSentMove=null;
 const netMoveQueue=[];
 let postedReady=false;
 let victorySoundPlayed=false;
+let localLadderRating=loadLadderRating();
+let hasLoggedElo1400=hasMilestone('elo1400');
+let activeMatch=null;
+let nonPuzzlePlyCount=0;
+let mateInThreeAwarded=false;
 
 function resetVictorySound(){
   victorySoundPlayed=false;
@@ -156,6 +210,16 @@ const TIME_CONTROLS=[
   { id:'bullet', label:'Bullet 1 | 0', baseMs:60*1000, incrementMs:0, summary:'Bullet • 1 min' },
   { id:'classic', label:'Classical 15 | 10', baseMs:15*60*1000, incrementMs:10000, summary:'Classical • 15 min +10s' },
 ];
+const AI_LEVELS=[
+  { id:'1', label:'Level 1', depth:1, rating:900, delta:10 },
+  { id:'2', label:'Level 2', depth:2, rating:1050, delta:15 },
+  { id:'3', label:'Level 3', depth:3, rating:1200, delta:20 },
+  { id:'4', label:'Level 4', depth:4, rating:1350, delta:25 },
+  { id:'5', label:'Level 5', depth:5, rating:1500, delta:30 },
+];
+const AI_LEVEL_MAP=new Map(AI_LEVELS.map(level=>[level.id,level]));
+const LADDER_MIN_RATING=800;
+const DAILY_PUZZLE_LIMIT=10;
 const timeControlMap=new Map(TIME_CONTROLS.map(tc=>[tc.id,tc]));
 let activeTimeControl=timeControlMap.get(timeControlSelect.value)||timeControlMap.get('rapid')||TIME_CONTROLS[0];
 timeControlSelect.value=activeTimeControl.id;
@@ -398,31 +462,81 @@ function updateAdvantageSwingList(){
 function updateTrainingHUD(){
   if(!trainingStatusEl || !trainingProgressEl || !trainingStreakEl) return;
   const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
-  const total=puzzles.length;
+  const total=Math.min(puzzles.length, DAILY_PUZZLE_LIMIT);
+  const statusState=puzzlesState.status||'loading';
   if(onlineMode){
     trainingStatusEl.textContent='Training is unavailable during online play.';
     trainingProgressEl.textContent='';
+    if(trainingStartBtn){
+      trainingStartBtn.textContent='Daily Puzzles';
+      trainingStartBtn.disabled=true;
+    }
+  } else if(statusState==='loading'){
+    trainingStatusEl.textContent='Loading daily puzzles...';
+    trainingProgressEl.textContent='';
+    if(trainingStartBtn){
+      trainingStartBtn.textContent='Loading...';
+      trainingStartBtn.disabled=true;
+    }
+  } else if(statusState==='error'){
+    trainingStatusEl.textContent='Daily puzzles are currently unavailable.';
+    trainingProgressEl.textContent='Check your connection and try again.';
+    if(trainingStartBtn){
+      trainingStartBtn.textContent='Retry Download';
+      trainingStartBtn.disabled=onlineMode;
+    }
   } else if(puzzleIndex>=0 && puzzles[puzzleIndex]){
     const puzzle=puzzles[puzzleIndex];
     const steps=Array.isArray(puzzle.solution)?puzzle.solution.length:0;
     const displayStep=Math.min(puzzleStep+1, Math.max(steps,1));
-    trainingStatusEl.textContent=puzzle.goal||`Challenge ${puzzleIndex+1}`;
-    if(steps>0){
-      trainingProgressEl.textContent=`Step ${displayStep} / ${steps}`;
-    } else {
-      trainingProgressEl.textContent=`Challenge ${puzzleIndex+1} of ${total}`;
+    const baseLabel=`Puzzle ${puzzleIndex+1} of ${total}`;
+    trainingStatusEl.textContent=puzzle.goal||`Puzzle ${puzzleIndex+1}`;
+    trainingProgressEl.textContent=steps>0?`${baseLabel} • Step ${displayStep} / ${steps}`:baseLabel;
+    if(trainingStartBtn){
+      trainingStartBtn.textContent='In Progress';
+      trainingStartBtn.disabled=true;
+    }
+  } else if(total<=0){
+    trainingStatusEl.textContent='No daily puzzles available yet.';
+    trainingProgressEl.textContent='';
+    if(trainingStartBtn){
+      trainingStartBtn.textContent='Start Daily Puzzles';
+      trainingStartBtn.disabled=true;
     }
   } else {
-    trainingStatusEl.textContent='Start a guided challenge to sharpen your tactics.';
-    trainingProgressEl.textContent=total?`${total} challenges available`:'No challenges available.';
+    const solved=Math.min(puzzleSolvedCount, total);
+    const pointer=puzzleIndex>=0?puzzleIndex:(storedPuzzleCurrent>=0?storedPuzzleCurrent:-1);
+    const remaining=Math.max(0, total-solved);
+    if(solved>=total){
+      trainingStatusEl.textContent='Daily puzzles complete — come back tomorrow!';
+      trainingProgressEl.textContent=`Solved ${solved} of ${total}.`;
+      if(trainingStartBtn){
+        trainingStartBtn.textContent='All Clear';
+        trainingStartBtn.disabled=true;
+      }
+    } else {
+      const nextIndex=pointer>=0?pointer:solved;
+      trainingStatusEl.textContent=`Daily puzzle ${nextIndex+1} is ready.`;
+      trainingProgressEl.textContent=`Solved ${solved} of ${total} • ${remaining} remaining.`;
+      if(trainingStartBtn){
+        if(pointer>=0 && pointer!==solved){
+          trainingStartBtn.textContent='Resume Puzzle';
+        } else if(solved>0){
+          trainingStartBtn.textContent='Next Puzzle';
+        } else {
+          trainingStartBtn.textContent='Start Daily Puzzles';
+        }
+        trainingStartBtn.disabled=onlineMode;
+      }
+    }
   }
   const streakLabel=(bestPuzzleStreak>0 && puzzleStreak!==bestPuzzleStreak)
     ?`Streak ${puzzleStreak} (Best ${bestPuzzleStreak})`
     :`Streak ${puzzleStreak}`;
   trainingStreakEl.textContent=streakLabel;
-  if(trainingStartBtn) trainingStartBtn.disabled=onlineMode;
   if(trainingHintBtn){
-    trainingHintBtn.disabled=onlineMode || puzzleIndex<0;
+    const disableHint=onlineMode || puzzleIndex<0 || puzzlesState.status!=='ready';
+    trainingHintBtn.disabled=disableHint;
   }
 }
 
@@ -431,16 +545,209 @@ function startPuzzleLadder(){
     status('Training is unavailable during online play.');
     return;
   }
-  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
-  if(!puzzles.length){
-    status('No training challenges available.');
+  if(puzzlesState.status==='loading'){
+    status('Daily puzzles are still loading.');
     return;
   }
-  puzzleStreak=0;
+  if(puzzlesState.status==='error'){
+    status('Reloading daily puzzles...');
+    if(typeof window!=='undefined' && typeof window.reloadChessPuzzles==='function'){
+      window.reloadChessPuzzles();
+    }
+    return;
+  }
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  const total=Math.min(puzzles.length, DAILY_PUZZLE_LIMIT);
+  if(!total){
+    status('No daily puzzles available.');
+    return;
+  }
+  if(puzzleSolvedCount>=total){
+    status('Daily puzzles complete — come back tomorrow!');
+    return;
+  }
   puzzleHintUsed=false;
   hintMove=null;
-  loadPuzzle(0,{ reason:'training-start' });
+  const target=storedPuzzleCurrent>=0
+    ?Math.max(0, Math.min(storedPuzzleCurrent, total-1))
+    :Math.max(0, Math.min(puzzleSolvedCount, total-1));
+  loadPuzzle(target,{ reason:'training-start' });
+  status(`Daily puzzle ${target+1} loaded.`);
 }
+
+function persistPuzzleProgress(overrides={}){
+  if(!dailyPuzzleDateKey) return;
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  const total=Math.min(puzzles.length, DAILY_PUZZLE_LIMIT);
+  let currentPointer=puzzleIndex>=0?puzzleIndex:(storedPuzzleCurrent>=0?storedPuzzleCurrent:null);
+  if(total<=0) currentPointer=null;
+  const data={
+    solved: Math.max(0, Math.min(puzzleSolvedCount, total)),
+    current: currentPointer,
+    streak: Math.max(0, puzzleStreak),
+    best: Math.max(puzzleStreak, bestPuzzleStreak),
+  };
+  if(overrides && typeof overrides==='object'){
+    Object.assign(data, overrides);
+  }
+  if(total<=0){
+    data.current=null;
+  }
+  if(data.current!=null){
+    const clamped=Math.max(0, Math.min(Number(data.current), total-1));
+    data.current=Number.isFinite(clamped)?Math.round(clamped):null;
+  }
+  if(data.current!=null && total<=0){
+    data.current=null;
+  }
+  savePuzzleProgress(dailyPuzzleDateKey, data);
+  storedPuzzleCurrent=data.current!=null?data.current:-1;
+}
+
+function applyStoredPuzzleProgress(){
+  if(!dailyPuzzleDateKey){
+    puzzleSolvedCount=0;
+    storedPuzzleCurrent=-1;
+    puzzleStreak=0;
+    bestPuzzleStreak=0;
+    puzzleHintUsed=false;
+    hintMove=null;
+    updateTrainingHUD();
+    return;
+  }
+  const progress=loadPuzzleProgress(dailyPuzzleDateKey);
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  const total=Math.min(puzzles.length, DAILY_PUZZLE_LIMIT);
+  puzzleSolvedCount=Math.max(0, Math.min(progress.solved||0, total));
+  puzzleStreak=Math.max(0, progress.streak||0);
+  bestPuzzleStreak=Math.max(puzzleStreak, progress.best||0);
+  if(Number.isInteger(progress.current) && progress.current>=0 && progress.current<total){
+    storedPuzzleCurrent=progress.current;
+  } else {
+    storedPuzzleCurrent=-1;
+  }
+  puzzleHintUsed=false;
+  hintMove=null;
+  updateTrainingHUD();
+}
+
+function handleDailyPuzzleState(detail){
+  if(!detail || typeof detail!=='object') return;
+  puzzlesState={
+    status: detail.status||'loading',
+    total:Array.isArray(detail.puzzles)?detail.puzzles.length:0,
+    error:detail.error||null,
+  };
+  if(puzzlesState.status==='ready' && Array.isArray(detail.puzzles)){
+    window.puzzles=detail.puzzles.slice();
+  }
+  if(Object.prototype.hasOwnProperty.call(detail,'dateKey')){
+    dailyPuzzleDateKey=detail.dateKey||null;
+  }
+  if(puzzlesState.status==='ready'){
+    puzzleIndex=-1;
+    puzzleStep=0;
+    applyStoredPuzzleProgress();
+  } else if(puzzlesState.status==='error'){
+    window.puzzles=[];
+    puzzleIndex=-1;
+    puzzleStep=0;
+  }
+  updateTrainingHUD();
+  updatePuzzleAvailability();
+}
+
+function getSelectedAiLevel(){
+  const id=depthEl?depthEl.value:null;
+  if(id && AI_LEVEL_MAP.has(id)) return AI_LEVEL_MAP.get(id);
+  return AI_LEVELS[0];
+}
+
+function ratingChangeFor(level, result){
+  const delta=Number(level?.delta)||15;
+  if(result==='win') return delta;
+  if(result==='lose') return -delta;
+  return 0;
+}
+
+function beginLocalMatch(reason){
+  if(onlineMode || puzzleIndex>=0) return;
+  const level=getSelectedAiLevel();
+  const now=nowMs();
+  activeMatch={
+    startTime: now,
+    level,
+    levelId: level.id,
+    ratingBefore: localLadderRating,
+    reason: reason||'reset',
+  };
+  nonPuzzlePlyCount=0;
+  mateInThreeAwarded=false;
+  const meta={
+    level: level.id,
+    opponentRating: level.rating,
+    ratingBefore: localLadderRating,
+    reason: reason||'reset',
+  };
+  gameEvent('match_start',{ slug:'chess', meta });
+}
+
+function finishLocalMatch(result, meta={}){
+  if(!activeMatch) return;
+  const now=nowMs();
+  const durationMs=Math.max(0, Math.round(now-(activeMatch.startTime||now)));
+  const level=activeMatch.level||getSelectedAiLevel();
+  let ratingAfter=localLadderRating;
+  if(result==='win' || result==='lose'){
+    const delta=ratingChangeFor(level, result);
+    ratingAfter=Math.max(LADDER_MIN_RATING, Math.round(localLadderRating+delta));
+    localLadderRating=ratingAfter;
+    saveLadderRating(localLadderRating);
+  }
+  const eventMeta={
+    level: level.id,
+    opponentRating: level.rating,
+    ratingBefore: activeMatch.ratingBefore,
+    ratingAfter,
+    reason: meta.reason||activeMatch.reason||'',
+  };
+  if(result==='win'){
+    gameEvent('match_win',{ slug:'chess', meta:eventMeta });
+  } else if(result==='lose'){
+    gameEvent('match_lose',{ slug:'chess', meta:eventMeta });
+  }
+  gameEvent('match_end',{ slug:'chess', result, durationMs, meta:eventMeta });
+  if(result==='win' && ratingAfter>=1400 && !hasLoggedElo1400){
+    markMilestone('elo1400');
+    hasLoggedElo1400=true;
+    gameEvent('score_event',{ slug:'chess', name:'beat_elo_1400' });
+  }
+  activeMatch=null;
+}
+
+if(typeof window!=='undefined'){
+  window.addEventListener('chess:puzzles-state',(event)=>{
+    handleDailyPuzzleState(event&&event.detail?event.detail:{});
+  });
+  if(window.chessDailyPuzzlesState){
+    handleDailyPuzzleState(window.chessDailyPuzzlesState);
+  }
+}
+
+onProfileChange(()=>{
+  localLadderRating=loadLadderRating();
+  updateRatingDisplay(localLadderRating);
+  hasLoggedElo1400=hasMilestone('elo1400');
+  if(puzzlesState.status==='ready'){
+    applyStoredPuzzleProgress();
+  } else {
+    puzzleSolvedCount=0;
+    storedPuzzleCurrent=-1;
+    puzzleStreak=0;
+    bestPuzzleStreak=0;
+    updateTrainingHUD();
+  }
+});
 
 function showPuzzleHint(){
   if(onlineMode || puzzleIndex<0) return;
@@ -451,6 +758,7 @@ function showPuzzleHint(){
   hintMove=strToMove(puzzle.solution[stepIndex]);
   puzzleHintUsed=true;
   puzzleStreak=0;
+  persistPuzzleProgress();
   updateTrainingHUD();
   status('Hint highlighted — streak reset.');
   draw();
@@ -462,6 +770,7 @@ function failPuzzle(message){
   puzzleHintUsed=false;
   clearHint();
   puzzleStreak=0;
+  persistPuzzleProgress();
   updateTrainingHUD();
   status(message||'Incorrect, try again.');
   loadPuzzle(puzzleIndex,{ reason:'puzzle-retry' });
@@ -471,6 +780,7 @@ function handlePuzzleSolved(){
   const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
   if(!puzzles.length || puzzleIndex<0) return;
   const current=puzzleIndex;
+  const total=Math.min(puzzles.length, DAILY_PUZZLE_LIMIT);
   if(!puzzleHintUsed){
     puzzleStreak++;
     if(puzzleStreak>bestPuzzleStreak) bestPuzzleStreak=puzzleStreak;
@@ -479,17 +789,27 @@ function handlePuzzleSolved(){
   }
   puzzleHintUsed=false;
   clearHint();
+  puzzleSolvedCount=Math.max(puzzleSolvedCount, Math.min(current+1, total));
+  gameEvent('score_event', { slug:'chess', name:'puzzle_solved' });
+  if(puzzleStreak===10){
+    gameEvent('combo', { slug:'chess', count:10, name:'puzzle_streak' });
+    gameEvent('score_event', { slug:'chess', name:'puzzle_streak_10' });
+  }
+  persistPuzzleProgress();
   updateTrainingHUD();
   const next=current+1;
-  if(next<puzzles.length){
+  if(next<total){
+    persistPuzzleProgress({ current: next });
     loadPuzzle(next,{ reason:'puzzle-advance' });
-    status(`Challenge ${current+1} complete!`);
+    status(`Puzzle ${current+1} complete!`);
   } else {
     puzzleIndex=-1;
     puzzleStep=0;
+    storedPuzzleCurrent=-1;
+    persistPuzzleProgress({ current:null, solved:puzzleSolvedCount });
     updateTrainingHUD();
     reset({ reason:'puzzle-complete' });
-    status('Ladder complete! Continue in free play.');
+    status('Daily puzzles complete — continue in free play.');
   }
 }
 
@@ -722,6 +1042,9 @@ function handleGameOverState(stateId, extra={}){
         meta,
       });
     }
+    if(!onlineMode && puzzleIndex<0){
+      finishLocalMatch(result, { reason: meta.reason || payload?.message || stateId });
+    }
   }
   return payload;
 }
@@ -937,6 +1260,11 @@ if(trainingHintBtn){
 function reset(options={}){
   resetVictorySound();
   if(puzzleIndex>=0){ loadPuzzle(puzzleIndex, options); return; }
+  if(!onlineMode && activeMatch){
+    finishLocalMatch('draw', { reason: options.reason||'reset' });
+  }
+  nonPuzzlePlyCount=0;
+  mateInThreeAwarded=false;
   board = parseFEN(START); turn='w'; sel=null; moves=[]; over=false; overMsg=null;
   castleRights={w:{K:true,Q:true},b:{K:true,Q:true}};
   epTarget=null;
@@ -972,6 +1300,9 @@ function reset(options={}){
       reason: payload.reason,
     },
   });
+  if(!onlineMode && puzzleIndex<0){
+    beginLocalMatch(options.reason||'reset');
+  }
 }
 function loadPuzzle(i, options={}){
   resetVictorySound();
@@ -979,11 +1310,15 @@ function loadPuzzle(i, options={}){
     status('Puzzles are unavailable during online play.');
     return;
   }
-  if(!window.puzzles || !Array.isArray(window.puzzles) || !window.puzzles[i]){
+  const puzzles=Array.isArray(window.puzzles)?window.puzzles:[];
+  const total=Math.min(puzzles.length, DAILY_PUZZLE_LIMIT);
+  if(!total || !window.puzzles || !Array.isArray(window.puzzles) || i<0 || i>=total || !window.puzzles[i]){
     status('Puzzle unavailable.');
     return;
   }
   puzzleIndex=i; puzzleStep=0;
+  storedPuzzleCurrent=i;
+  puzzleSolvedCount=Math.max(0, Math.min(puzzleSolvedCount, total));
   const p=window.puzzles[i];
   board=parseFEN(p.fen); turn='w'; sel=null; moves=[]; over=false; overMsg=null;
   castleRights={w:{K:true,Q:true},b:{K:true,Q:true}};
@@ -1002,6 +1337,7 @@ function loadPuzzle(i, options={}){
   const goal=p.goal?` — ${p.goal}`:'';
   status(`${title}${goal}`.trim());
   draw();
+  persistPuzzleProgress();
   const payload=emitState('playing', {
     reason: options.reason||'puzzle-load',
     move:null,
@@ -1237,8 +1573,6 @@ function updateRankings(list){
   }
 }
 function updatePuzzleAvailability(){
-  if(trainingStartBtn) trainingStartBtn.disabled=onlineMode;
-  if(trainingHintBtn) trainingHintBtn.disabled=onlineMode || puzzleIndex<0;
   updateTrainingHUD();
 }
 function clearNetworkQueues(){ netMoveQueue.length=0; lastSentMove=null; }
@@ -1452,6 +1786,9 @@ function finalizeMove({source,moveStr}){
   }
   turn=(turn==='w'?'b':'w');
   recordPosition();
+  if(!onlineMode && puzzleIndex<0){
+    nonPuzzlePlyCount++;
+  }
   recordEvaluationSample({ mover });
   dispatchMoveEvent({
     mover,
@@ -1492,6 +1829,13 @@ function finalizeMove({source,moveStr}){
       source:finishingSource,
       premoveExecuted:!!premoveInfo,
     });
+    if(!onlineMode && puzzleIndex<0 && !mateInThreeAwarded && finishingMover===localColor){
+      const moveCount=Math.ceil(nonPuzzlePlyCount/2);
+      if(moveCount<=3){
+        mateInThreeAwarded=true;
+        gameEvent('score_event',{ slug:'chess', name:'mate_in_3' });
+      }
+    }
     draw();
     scheduleProcessNetQueue();
     return;
@@ -1653,7 +1997,8 @@ function aiMove(){
     return;
   }
   aiUnavailableNotified=false;
-  const depth=parseInt(depthEl.value,10)||1;
+  const level=getSelectedAiLevel();
+  const depth=Math.max(1, parseInt(level.depth,10)||1);
   const fen=boardToFEN()+" "+turn;
   const aiEngine=window.ai;
   const move=aiEngine.bestMove(fen, depth);

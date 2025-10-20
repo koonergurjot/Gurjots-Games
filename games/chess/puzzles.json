@@ -1,0 +1,248 @@
+{
+  "default": [
+    {
+      "fen": "6k1/5ppp/8/8/8/5Q2/5PPP/6K1 w - - 0 1",
+      "solution": ["f3a8"],
+      "title": "Long diagonal laser",
+      "goal": "Deliver mate in one.",
+      "hint": "Swing the queen to the corner.",
+      "pgn": "1. Qa8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/4QPPP/6K1 w - - 0 1",
+      "solution": ["e2e8"],
+      "title": "Center beam",
+      "goal": "Finish with a queen lift.",
+      "hint": "The eighth rank is exposed.",
+      "pgn": "1. Qe8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/5PPP/5Q1K w - - 0 1",
+      "solution": ["f1f7"],
+      "title": "Lateral mate",
+      "goal": "Target the seventh rank.",
+      "hint": "Use the f-file.",
+      "pgn": "1. Qxf7#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/4Q3/8/5PPP/6K1 w - - 0 1",
+      "solution": ["e4e8"],
+      "title": "Straight shot",
+      "goal": "Push the queen forward.",
+      "hint": "There's no defender on e8.",
+      "pgn": "1. Qe8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/6Q1/5PPP/6K1 w - - 0 1",
+      "solution": ["g3b8"],
+      "title": "Far corner finish",
+      "goal": "Spot the diagonal mate.",
+      "hint": "Aim at b8.",
+      "pgn": "1. Qb8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/2Q5/5PPP/6K1 w - - 0 1",
+      "solution": ["c3c8"],
+      "title": "Vertical lift",
+      "goal": "Climb the c-file.",
+      "hint": "The diagonal is clear.",
+      "pgn": "1. Qc8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/3Q1PPP/6K1 w - - 0 1",
+      "solution": ["d2d8"],
+      "title": "Direct approach",
+      "goal": "March straight up.",
+      "hint": "Look at the d-file.",
+      "pgn": "1. Qd8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/2RQ1PPP/6K1 w - - 0 1",
+      "solution": ["c2c8"],
+      "title": "Rook rocket",
+      "goal": "Use the rook to finish.",
+      "hint": "The c-file is open.",
+      "pgn": "1. Rc8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/5PPP/2R3K1 w - - 0 1",
+      "solution": ["c1c8"],
+      "title": "Back rank squeeze",
+      "goal": "Deliver mate with the rook.",
+      "hint": "Swing the rook up.",
+      "pgn": "1. Rc8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/5PPP/1R4K1 w - - 0 1",
+      "solution": ["b1b8"],
+      "title": "File takeover",
+      "goal": "Control the b-file.",
+      "hint": "The rook can climb the file.",
+      "pgn": "1. Rb8#"
+    }
+  ],
+  "2024-01-01": [
+    {
+      "fen": "6k1/5ppp/8/8/8/5Q2/5PPP/6K1 w - - 0 1",
+      "solution": ["f3a8"],
+      "title": "Long diagonal laser",
+      "goal": "Deliver mate in one.",
+      "hint": "Swing the queen to the corner.",
+      "pgn": "1. Qa8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/4QPPP/6K1 w - - 0 1",
+      "solution": ["e2e8"],
+      "title": "Center beam",
+      "goal": "Finish with a queen lift.",
+      "hint": "The eighth rank is exposed.",
+      "pgn": "1. Qe8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/5PPP/5Q1K w - - 0 1",
+      "solution": ["f1f7"],
+      "title": "Lateral mate",
+      "goal": "Target the seventh rank.",
+      "hint": "Use the f-file.",
+      "pgn": "1. Qxf7#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/4Q3/8/5PPP/6K1 w - - 0 1",
+      "solution": ["e4e8"],
+      "title": "Straight shot",
+      "goal": "Push the queen forward.",
+      "hint": "There's no defender on e8.",
+      "pgn": "1. Qe8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/6Q1/5PPP/6K1 w - - 0 1",
+      "solution": ["g3b8"],
+      "title": "Far corner finish",
+      "goal": "Spot the diagonal mate.",
+      "hint": "Aim at b8.",
+      "pgn": "1. Qb8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/2Q5/5PPP/6K1 w - - 0 1",
+      "solution": ["c3c8"],
+      "title": "Vertical lift",
+      "goal": "Climb the c-file.",
+      "hint": "The diagonal is clear.",
+      "pgn": "1. Qc8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/3Q1PPP/6K1 w - - 0 1",
+      "solution": ["d2d8"],
+      "title": "Direct approach",
+      "goal": "March straight up.",
+      "hint": "Look at the d-file.",
+      "pgn": "1. Qd8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/2RQ1PPP/6K1 w - - 0 1",
+      "solution": ["c2c8"],
+      "title": "Rook rocket",
+      "goal": "Use the rook to finish.",
+      "hint": "The c-file is open.",
+      "pgn": "1. Rc8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/5PPP/2R3K1 w - - 0 1",
+      "solution": ["c1c8"],
+      "title": "Back rank squeeze",
+      "goal": "Deliver mate with the rook.",
+      "hint": "Swing the rook up.",
+      "pgn": "1. Rc8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/5PPP/1R4K1 w - - 0 1",
+      "solution": ["b1b8"],
+      "title": "File takeover",
+      "goal": "Control the b-file.",
+      "hint": "The rook can climb the file.",
+      "pgn": "1. Rb8#"
+    }
+  ],
+  "2024-01-02": [
+    {
+      "fen": "6k1/5ppp/8/8/2B5/5Q2/5PPP/6K1 w - - 0 1",
+      "solution": ["f3f7", "g8h8", "f7f8"],
+      "title": "Classic ladder",
+      "goal": "Force mate in two.",
+      "hint": "Start by sacrificing on f7.",
+      "pgn": "1. Qxf7+ Kh8 2. Qf8#"
+    },
+    {
+      "fen": "6k1/5pp1/8/8/2R5/5Q2/5PPP/6K1 w - - 0 1",
+      "solution": ["c4c8", "g8h7", "f3h5"],
+      "title": "Windmill finish",
+      "goal": "Chase the king to the corner.",
+      "hint": "Lead with the rook check.",
+      "pgn": "1. Rc8+ Kh7 2. Qh5#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/1B3Q2/5PPP/6K1 w - - 0 1",
+      "solution": ["f3f7", "g8h8", "f7g8"],
+      "title": "Diagonal dragnet",
+      "goal": "Finish with a supported queen hop.",
+      "hint": "Use the b3 bishop to guard g8.",
+      "pgn": "1. Qxf7+ Kh8 2. Qg8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/6N1/8/5Q2/5PPP/6K1 w - - 0 1",
+      "solution": ["f3f7", "g8h8", "f7f8"],
+      "title": "Knight assist",
+      "goal": "Knight support keeps the king out.",
+      "hint": "The g5 knight guards f7.",
+      "pgn": "1. Qxf7+ Kh8 2. Qf8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/4RPPP/6K1 w - - 0 1",
+      "solution": ["e2e8"],
+      "title": "Rook elevator",
+      "goal": "Mate on the back rank.",
+      "hint": "Send the rook straight up.",
+      "pgn": "1. Re8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/2R2PPP/6K1 w - - 0 1",
+      "solution": ["c2c8"],
+      "title": "Open file finale",
+      "goal": "Punish the unguarded king.",
+      "hint": "The c-file is yours.",
+      "pgn": "1. Rc8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/1R3PPP/6K1 w - - 0 1",
+      "solution": ["b2b8"],
+      "title": "Side entry",
+      "goal": "March the rook into the attack.",
+      "hint": "Ride the b-file.",
+      "pgn": "1. Rb8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/R4PPP/6K1 w - - 0 1",
+      "solution": ["a2a8"],
+      "title": "Corner climb",
+      "goal": "Elevate the a-rook for mate.",
+      "hint": "Nothing blocks the a-file.",
+      "pgn": "1. Ra8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/3R1PPP/6K1 w - - 0 1",
+      "solution": ["d2d8"],
+      "title": "Central column",
+      "goal": "Lock down the eighth rank.",
+      "hint": "Drive the rook up the d-file.",
+      "pgn": "1. Rd8#"
+    },
+    {
+      "fen": "6k1/5ppp/8/8/8/8/5PPP/4R1K1 w - - 0 1",
+      "solution": ["e1e8"],
+      "title": "Anchor mate",
+      "goal": "Finish with the lone rook.",
+      "hint": "The e-file is clear.",
+      "pgn": "1. Re8#"
+    }
+  ]
+}
