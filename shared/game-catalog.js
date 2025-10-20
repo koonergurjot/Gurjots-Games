@@ -2,11 +2,46 @@ import { normalizeCatalogEntries, toNormalizedList } from './game-catalog-core.j
 
 const PRIMARY_CATALOG_URL = '/games.json';
 const LEGACY_CATALOG_URLS = ['/public/games.json'];
+const LOCAL_RELATIVE_CANDIDATES = ['./games.json'];
 let catalogPromise = null;
 
+function buildCandidateUrls() {
+  const seen = new Set();
+  const urls = [];
+  const push = (value) => {
+    if (!value) return;
+    const normalized = typeof value === 'string' ? value : String(value);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    urls.push(normalized);
+  };
+
+  push(PRIMARY_CATALOG_URL);
+  LEGACY_CATALOG_URLS.forEach(push);
+  LOCAL_RELATIVE_CANDIDATES.forEach(push);
+
+  try {
+    const moduleRelative = new URL('../games.json', import.meta.url);
+    push(moduleRelative.href);
+  } catch (_) {
+    /* noop */
+  }
+
+  if (typeof window !== 'undefined' && window.location) {
+    try {
+      const local = new URL('./games.json', window.location.href);
+      push(local.href);
+    } catch (_) {
+      /* noop */
+    }
+  }
+
+  return urls;
+}
+
 async function fetchCatalogSource() {
-  const urls = [PRIMARY_CATALOG_URL, ...LEGACY_CATALOG_URLS];
-  let lastError = null;
+  const urls = buildCandidateUrls();
+  const failures = [];
 
   for (const url of urls) {
     try {
@@ -16,15 +51,30 @@ async function fetchCatalogSource() {
       if (!Array.isArray(data)) throw new Error('games.json did not contain an array');
       return data;
     } catch (err) {
-      lastError = err;
+      failures.push({ url, error: err });
+      console.warn('[GG][catalog] failed to load catalog source', { url, message: err?.message || String(err) });
     }
   }
 
-  const err = lastError || new Error('failed to fetch catalog');
-  console.warn('[GG] falling back to offline game catalog', err);
-  const offline = await import('../data/games-offline.js');
-  const fallback = offline?.games || offline?.default || [];
-  return Array.isArray(fallback) ? fallback : [];
+  console.error('[GG][catalog] falling back to bundled catalog', {
+    attempts: failures.map(entry => ({
+      url: entry.url,
+      message: entry.error?.message || String(entry.error),
+    })),
+  });
+
+  try {
+    const offline = await import('../data/games-offline.js');
+    const fallback = offline?.games || offline?.default || [];
+    if (!Array.isArray(fallback)) {
+      console.error('[GG][catalog] offline fallback is not an array');
+      return [];
+    }
+    return fallback;
+  } catch (error) {
+    console.error('[GG][catalog] failed to load offline fallback', error);
+    return [];
+  }
 }
 
 async function buildCatalog() {

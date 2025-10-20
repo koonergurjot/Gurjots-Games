@@ -31,6 +31,19 @@ const STORAGE_KEYS = {
   best: `${SLUG}:best`,
 };
 
+const markFirstFrame = (() => {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    try {
+      window.ggFirstFrame?.();
+    } catch (_) {
+      /* noop */
+    }
+  };
+})();
+
 const globalScope = typeof window !== 'undefined' ? window : undefined;
 
 let activeGame = null;
@@ -2305,6 +2318,7 @@ class AsteroidsGame {
     }
 
     ctx.restore();
+    markFirstFrame();
   }
 
   getScore() {
