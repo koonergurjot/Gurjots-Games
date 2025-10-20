@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "tileSize": 16,
+    "description": "Sprite frames for the pixel platformer demo using shared Gurjot's Games art."
+  },
+  "frames": {
+    "player_idle_0": { "image": "/assets/sprites/player/platformer_idle.png", "x": 0, "y": 0, "w": 16, "h": 16, "duration": 220 },
+    "player_run_0": { "image": "/assets/sprites/player/platformer_run.png", "x": 0, "y": 0, "w": 16, "h": 16, "duration": 90 },
+    "player_run_1": { "image": "/assets/sprites/player/platformer_run.png", "x": 16, "y": 0, "w": 16, "h": 16, "duration": 90 },
+    "player_run_2": { "image": "/assets/sprites/player/platformer_run.png", "x": 32, "y": 0, "w": 16, "h": 16, "duration": 90 },
+    "player_run_3": { "image": "/assets/sprites/player/platformer_run.png", "x": 48, "y": 0, "w": 16, "h": 16, "duration": 90 },
+    "player_run_4": { "image": "/assets/sprites/player/platformer_run.png", "x": 64, "y": 0, "w": 16, "h": 16, "duration": 90 },
+    "player_run_5": { "image": "/assets/sprites/player/platformer_run.png", "x": 80, "y": 0, "w": 16, "h": 16, "duration": 90 },
+    "player_run_6": { "image": "/assets/sprites/player/platformer_run.png", "x": 96, "y": 0, "w": 16, "h": 16, "duration": 90 },
+    "player_run_7": { "image": "/assets/sprites/player/platformer_run.png", "x": 112, "y": 0, "w": 16, "h": 16, "duration": 90 },
+    "player_jump_0": { "image": "/assets/sprites/player/platformer_jump.png", "x": 0, "y": 0, "w": 16, "h": 16, "duration": 120 },
+    "tile_grass_top": { "image": "/assets/tilesets/grass.png", "x": 0, "y": 0, "w": 16, "h": 16 },
+    "tile_grass_fill": { "image": "/assets/tilesets/grass.png", "x": 0, "y": 16, "w": 16, "h": 16 },
+    "tile_grass_corner": { "image": "/assets/tilesets/grass.png", "x": 16, "y": 0, "w": 16, "h": 16 }
+  },
+  "animations": {
+    "player_idle": {
+      "frames": ["player_idle_0"],
+      "loop": true
+    },
+    "player_run": {
+      "frames": [
+        "player_run_0",
+        "player_run_1",
+        "player_run_2",
+        "player_run_3",
+        "player_run_4",
+        "player_run_5",
+        "player_run_6",
+        "player_run_7"
+      ],
+      "loop": true
+    },
+    "player_jump": {
+      "frames": ["player_jump_0"],
+      "loop": false
+    }
+  }
+}
