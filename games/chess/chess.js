@@ -116,22 +116,8 @@ function configureDifficultySelect(){
     depthEl.value=AI_LEVELS[1]?.id||AI_LEVELS[0].id;
   }
 }
-configureDifficultySelect();
 initUi();
-updateRatingDisplay(localLadderRating);
-if(depthEl){
-  depthEl.addEventListener('change',()=>{
-    const selected=depthEl.value;
-    if(!AI_LEVEL_MAP.has(selected) && AI_LEVELS.length){
-      depthEl.value=AI_LEVELS[0].id;
-    }
-    saveLevelSelection(depthEl.value);
-    if(activeMatch){
-      activeMatch.level=getSelectedAiLevel();
-      activeMatch.levelId=activeMatch.level.id;
-    }
-  });
-}
+let localLadderRating=loadLadderRating();
 const EMPTY = '.';
 // Simple FEN start
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
@@ -160,7 +146,6 @@ let lastSentMove=null;
 const netMoveQueue=[];
 let postedReady=false;
 let victorySoundPlayed=false;
-let localLadderRating=loadLadderRating();
 let hasLoggedElo1400=hasMilestone('elo1400');
 let activeMatch=null;
 let nonPuzzlePlyCount=0;
@@ -218,6 +203,21 @@ const AI_LEVELS=[
   { id:'5', label:'Level 5', depth:5, rating:1500, delta:30 },
 ];
 const AI_LEVEL_MAP=new Map(AI_LEVELS.map(level=>[level.id,level]));
+configureDifficultySelect();
+if(depthEl){
+  depthEl.addEventListener('change',()=>{
+    const selected=depthEl.value;
+    if(!AI_LEVEL_MAP.has(selected) && AI_LEVELS.length){
+      depthEl.value=AI_LEVELS[0].id;
+    }
+    saveLevelSelection(depthEl.value);
+    if(activeMatch){
+      activeMatch.level=getSelectedAiLevel();
+      activeMatch.levelId=activeMatch.level.id;
+    }
+  });
+}
+updateRatingDisplay(localLadderRating);
 const LADDER_MIN_RATING=800;
 const DAILY_PUZZLE_LIMIT=10;
 const timeControlMap=new Map(TIME_CONTROLS.map(tc=>[tc.id,tc]));
