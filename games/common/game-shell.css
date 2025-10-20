@@ -90,6 +90,88 @@ body.game-shell::after {
   font-size: 0.85em;
 }
 
+.game-shell__missions {
+  width: min(100%, 960px);
+  background: rgba(13, 19, 33, 0.88);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: clamp(12px, 4vw, 20px);
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.5);
+  color: #e8ecff;
+}
+
+.game-shell__missions[data-loading='true']::after {
+  content: 'Loading missions…';
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.game-shell__pause {
+  position: fixed;
+  inset: 0;
+  display: none;
+  place-items: center;
+  padding: clamp(16px, 8vw, 48px);
+  background: rgba(2, 6, 23, 0.82);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+}
+
+.game-shell__pause.is-active {
+  display: grid;
+}
+
+.game-shell__pause-panel {
+  width: min(100%, 420px);
+  background: linear-gradient(165deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  border-radius: 22px;
+  padding: clamp(20px, 5vw, 32px);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+  display: grid;
+  gap: 16px;
+  text-align: center;
+  color: #f8fafc;
+}
+
+.game-shell__pause-title {
+  margin: 0;
+  font-size: clamp(1.25rem, 4vw, 1.6rem);
+  font-weight: 700;
+}
+
+.game-shell__pause-hint {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.game-shell__pause-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.game-shell__pause-resume {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 22px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  background: linear-gradient(135deg, #22d3ee, #6366f1);
+  color: #020617;
+  box-shadow: 0 14px 32px rgba(99, 102, 241, 0.35);
+}
+
+.game-shell__pause-resume:focus-visible {
+  outline: 2px solid #facc15;
+  outline-offset: 2px;
+}
+
 .game-shell__surface > canvas,
 .game-shell__surface > .game-shell__canvas,
 .game-shell__surface > .game-shell__frame {

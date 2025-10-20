@@ -1,3 +1,6 @@
+import { installPauseManager } from './pause.js';
+import { installCanvasScaler, getHudSafeGutter } from './canvas.js';
+
 const toAbsoluteUrl = (value) => {
   if (!value) return null;
   try {
@@ -37,6 +40,15 @@ if (!current) {
 const dataset = current?.dataset || {};
 const applyTheme = dataset.applyTheme !== 'false';
 const slug = dataset.game || dataset.slug || '';
+
+installCanvasScaler();
+installPauseManager({ slug });
+
+if (typeof window !== 'undefined') {
+  window.GGShellHud = Object.assign(window.GGShellHud || {}, {
+    gutter: getHudSafeGutter(),
+  });
+}
 const diagSrc = dataset.diagSrc || '/games/common/diag-autowire.js';
 const backHref = dataset.backHref || '/index.html';
 const preloadTargets = (dataset.preloadFirst || '')
@@ -88,6 +100,76 @@ const whenDomReady = (fn) => {
   } else {
     document.addEventListener('DOMContentLoaded', fn, { once: true });
   }
+};
+
+const ensureMissionsHost = () => {
+  if (!slug || typeof document === 'undefined') return null;
+  let host = document.querySelector('[data-gg-missions-hud]');
+  if (!host) {
+    host = document.createElement('section');
+    host.className = 'game-shell__missions';
+    host.dataset.ggMissionsHud = 'true';
+    host.setAttribute('aria-live', 'polite');
+    host.setAttribute('data-loading', 'true');
+    const surface = document.querySelector('.game-shell__surface');
+    const target = surface || document.body || document.documentElement;
+    if (surface) {
+      surface.prepend(host);
+    } else if (target && typeof target.prepend === 'function') {
+      target.prepend(host);
+    }
+  }
+  return host;
+};
+
+const attemptMountMissions = () => {
+  if (!slug || typeof window === 'undefined') return false;
+  const api = window.Missions;
+  if (!api || typeof api.mountHUD !== 'function') return false;
+  const host = ensureMissionsHost();
+  if (!host) return false;
+  try {
+    api.mountHUD({ slug, target: host });
+    host.dataset.loading = 'false';
+    host.dataset.ready = 'true';
+    host.removeAttribute('hidden');
+    return true;
+  } catch (err) {
+    console.warn('[game-shell] missions HUD mount failed', err);
+    return false;
+  }
+};
+
+const installMissions = () => {
+  if (!slug || typeof window === 'undefined') return;
+  const host = ensureMissionsHost();
+  if (!host) return;
+  const hydrate = () => attemptMountMissions();
+  if (hydrate()) return;
+  let attempts = 0;
+  const tick = () => {
+    attempts += 1;
+    if (hydrate()) {
+      window.clearInterval(intervalId);
+      return;
+    }
+    if (attempts > 40) {
+      window.clearInterval(intervalId);
+      host.dataset.loading = 'false';
+      host.dataset.ready = 'false';
+      host.setAttribute('hidden', '');
+    }
+  };
+  const intervalId = window.setInterval(tick, 500);
+  const onMissionsReady = () => {
+    if (hydrate()) {
+      window.removeEventListener('missions:ready', onMissionsReady);
+      window.removeEventListener('ggmissions:ready', onMissionsReady);
+    }
+  };
+  window.addEventListener('missions:ready', onMissionsReady);
+  window.addEventListener('ggmissions:ready', onMissionsReady);
+  window.addEventListener('beforeunload', () => window.clearInterval(intervalId), { once: true });
 };
 
 if (applyTheme) {
@@ -304,12 +386,20 @@ const fitCanvas = (canvas) => {
   if (!canvas || watchedCanvases.has(canvas)) return;
   watchedCanvases.add(canvas);
   const resize = () => {
-    if (typeof window.fitCanvasToParent === 'function') {
-      try {
-        window.fitCanvasToParent(canvas);
-      } catch (err) {
-        console.warn('[game-shell] fitCanvasToParent failed', err);
+    try {
+      const globalFit = typeof window.fitCanvasToParent === 'function' ? window.fitCanvasToParent : null;
+      const shellCanvas = window.GGShellCanvas || {};
+      const preferred = typeof shellCanvas.fit === 'function'
+        ? shellCanvas.fit
+        : (typeof shellCanvas.scaleCanvas === 'function' ? shellCanvas.scaleCanvas : null);
+      if (preferred && preferred !== globalFit) {
+        preferred(canvas);
       }
+      if (globalFit) {
+        globalFit(canvas);
+      }
+    } catch (err) {
+      console.warn('[game-shell] fitCanvasToParent failed', err);
     }
   };
   resize();
@@ -414,6 +504,7 @@ if (typeof document !== 'undefined') {
     installControlsOverlay();
     ensureScoreObservers();
     installVisibilityHelper();
+    installMissions();
     preloadFirstFrameAssets();
   });
 }
