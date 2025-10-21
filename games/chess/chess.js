@@ -22,10 +22,50 @@ import {
 installErrorReporter();
 getThemeTokens();
 
-const victoryAudio=(typeof Audio!=='undefined')?new Audio('/assets/audio/victory.wav'):null;
-if(victoryAudio){
-  victoryAudio.preload='auto';
-  victoryAudio.volume=0.85;
+const VICTORY_AUDIO_SRC='/assets/audio/victory.wav';
+const audioSupported=typeof Audio!=='undefined';
+let audioReady=typeof window==='undefined';
+let audioUnlockAttached=false;
+let victoryAudio=null;
+let victoryAudioFailed=false;
+
+function ensureAudioUnlock(){
+  if(audioReady||audioUnlockAttached||typeof window==='undefined') return;
+  audioUnlockAttached=true;
+  const unlock=()=>{
+    audioReady=true;
+    prepareVictoryAudio();
+  };
+  window.addEventListener('pointerdown',unlock,{ once:true, passive:true });
+  window.addEventListener('keydown',unlock,{ once:true });
+}
+
+function prepareVictoryAudio(){
+  if(!audioReady||victoryAudio||victoryAudioFailed||!audioSupported) return;
+  try{
+    victoryAudio=new Audio(VICTORY_AUDIO_SRC);
+    victoryAudio.preload='auto';
+    victoryAudio.volume=0.85;
+  }catch(err){
+    victoryAudioFailed=true;
+    console.warn('[chess] failed to prepare victory audio',err);
+  }
+}
+
+function getVictoryAudio(){
+  if(!audioReady){
+    ensureAudioUnlock();
+    return null;
+  }
+  if(!victoryAudio && !victoryAudioFailed){
+    prepareVictoryAudio();
+  }
+  return victoryAudio;
+}
+
+ensureAudioUnlock();
+if(audioReady){
+  prepareVictoryAudio();
 }
 
 const markFirstFrame = (() => {
@@ -189,18 +229,21 @@ let mateInThreeAwarded=false;
 
 function resetVictorySound(){
   victorySoundPlayed=false;
-  if(victoryAudio){
+  const audio=getVictoryAudio();
+  if(audio){
     try{
-      victoryAudio.pause();
-      victoryAudio.currentTime=0;
+      audio.pause();
+      audio.currentTime=0;
     }catch{}
   }
 }
 
 function playVictorySound(){
-  if(victorySoundPlayed||!victoryAudio) return;
+  if(victorySoundPlayed) return;
+  const audio=getVictoryAudio();
+  if(!audio) return;
   victorySoundPlayed=true;
-  try{ victoryAudio.currentTime=0; victoryAudio.play().catch(()=>{}); }
+  try{ audio.currentTime=0; audio.play().catch(()=>{}); }
   catch{}
 }
 
