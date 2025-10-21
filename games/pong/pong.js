@@ -21,6 +21,8 @@ import "./pauseOverlay.js";
   const W = 1280, H = 720;
   const STEP = 1/60;
   const MAX_FRAME_DELTA = 0.1;
+  const MAX_SIM_DELTA = 1/30;
+  const MAX_ACCUMULATED_DELTA = MAX_SIM_DELTA * 3;
   const ASSET_BASE_URL = new URL("../../", import.meta.url);
 
   function resolveAsset(path){
@@ -31,6 +33,92 @@ import "./pauseOverlay.js";
     } catch {
       return path;
     }
+  }
+
+  function sanitizeSeed(value, fallback){
+    if(typeof value === "number" && Number.isFinite(value)){
+      return value >>> 0;
+    }
+    if(typeof value === "string" && value.trim()){
+      const parsed = Number.parseInt(value, 10);
+      if(Number.isFinite(parsed)){
+        return parsed >>> 0;
+      }
+    }
+    if(typeof fallback === "number" && Number.isFinite(fallback)){
+      return fallback >>> 0;
+    }
+    return 0x9e3779b9; // default golden ratio seed
+  }
+
+  function querySeed(){
+    if(typeof window === "undefined" || typeof window.location?.search !== "string") return null;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if(params.has("seed")){
+        return params.get("seed");
+      }
+      if(params.has("rng")){
+        return params.get("rng");
+      }
+    } catch(err){
+      console.warn("[pong] failed to read seed from query", err);
+    }
+    return null;
+  }
+
+  function createMulberry32(seed){
+    let t = seed >>> 0;
+    return function mulberry32(){
+      t |= 0;
+      t = (t + 0x6D2B79F5) | 0;
+      let r = Math.imul(t ^ (t >>> 15), 1 | t);
+      r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+      return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function combineSeed(base, salt){
+    const next = (base + salt * 0x9E3779B1) >>> 0;
+    return next || 0x1b873593; // keep non-zero seed to avoid degenerate RNG
+  }
+
+  function createAchievementBus(options = {}){
+    const listeners = new Map();
+    const unlocked = new Set();
+    const allowRepeat = !!options.allowRepeat;
+    return {
+      on(name, handler){
+        if(typeof name !== "string" || typeof handler !== "function") return () => {};
+        const key = name.trim();
+        const stack = listeners.get(key) || [];
+        stack.push(handler);
+        listeners.set(key, stack);
+        return () => {
+          const arr = listeners.get(key);
+          if(!arr) return;
+          const idx = arr.indexOf(handler);
+          if(idx >= 0) arr.splice(idx, 1);
+        };
+      },
+      emit(name, payload){
+        const key = typeof name === "string" ? name.trim() : "";
+        if(!key) return;
+        if(!allowRepeat && unlocked.has(key)) return;
+        unlocked.add(key);
+        const handlers = listeners.get(key);
+        if(!handlers || !handlers.length) return;
+        for(const fn of [...handlers]){
+          try {
+            fn(payload || {});
+          } catch(err){
+            console.error("[pong] achievement handler failed", err);
+          }
+        }
+      },
+      reset(){ unlocked.clear(); },
+      has(name){ return unlocked.has(name); },
+    };
   }
 
   const DEFAULT_AI_TABLE = {
@@ -290,6 +378,12 @@ import "./pauseOverlay.js";
   }
 
   const savedConfig = loadLS();
+  const seedFromQuery = querySeed();
+  const nowSeed = (typeof performance !== "undefined" ? Math.floor(performance.now()) : Date.now()) >>> 0;
+  const baseSeed = sanitizeSeed(seedFromQuery ?? savedConfig?.seed, nowSeed);
+  if(savedConfig && typeof savedConfig === "object"){
+    savedConfig.seed = baseSeed;
+  }
   let initialAiData;
   try {
     initialAiData = buildAiData(savedConfig.aiTable || DEFAULT_AI_TABLE);
@@ -310,6 +404,8 @@ import "./pauseOverlay.js";
     theme:"neon",         // neon | vapor | crt | minimal
     reduceMotion:false,
     fxTrail:false,
+    highContrast:false,
+    seed: baseSeed,
     keys:{p1Up:"KeyW", p1Down:"KeyS", p2Up:"ArrowUp", p2Down:"ArrowDown", pause:"Space"},
     aiTable: cloneAiTable(DEFAULT_AI_TABLE),
     aiTableSource: formatAiTable(DEFAULT_AI_TABLE),
@@ -326,13 +422,20 @@ import "./pauseOverlay.js";
     aiTable: initialAiData.raw,
     aiProfiles: initialAiData.profiles,
     aiTableSource: formatAiTable(initialAiData.raw),
+    baseSeed,
+    rngSeed: baseSeed,
+    matchIndex: 0,
+    random: createMulberry32(baseSeed),
+    matchSeed: baseSeed,
     running:false, t0:0, last:0, dt:0, acc:0,
+    frameDelta: STEP,
     canvas:null, ctx:null, ratio:1, scaleX:1, scaleY:1, paused:false, over:false,
     score:{p1:0,p2:0}, ball:null, balls:[], p1:null, p2:null, hud:null, loopId:0,
     effects:[], shakes:0, themeClass:"theme-neon", gamepad:null, keyModal:null,
     // [GFX-PONG] Trail buffer honoring DPR-aware glow
     trail:[], trailMax:120, trailEnabled: parseTrailPreference(savedConfig), touches:{}, replay:[], replayMax:12*60, recording:true,
     shellPaused:false,
+    autoPaused:false,
     images:{ powerups:{}, effects:{} },
     backgroundLayers:null,
     backgroundCanvas:null,
@@ -345,12 +448,17 @@ import "./pauseOverlay.js";
     debugHud:null,
     debugVisible:false,
     debugData:{ ballSpeed:0, dt:0, lastNormal:{x:0,y:0} },
+    trailLayer:null,
+    toastHost:null,
     axes:{
       keyboard:{p1:0,p2:0},
       touch:{p1:0,p2:0},
       ai:{p1:0,p2:0},
       combined:{p1:0,p2:0},
     },
+    achievements:null,
+    howToModal:null,
+    howToCanvas:null,
     touchBuffer:[],
     aiBrain:{ targetY:H/2, timer:0 },
     aiSelect:null,
@@ -372,7 +480,10 @@ import "./pauseOverlay.js";
       progress:{ best: Number.isFinite(savedConfig?.ladderBest) ? savedConfig.ladderBest : -1 },
       currentIndex: 0,
     },
+    visibilityPauseWasRunning:false,
   };
+
+  state.achievements = createAchievementBus();
 
   state.backgroundPreset = getBackgroundPresetForMode(state.mode);
   state.ai = mapLegacyAiName(state.ai);
@@ -428,6 +539,19 @@ import "./pauseOverlay.js";
   }
 
   applyVariantRules();
+
+  function applyHighContrastSetting(force){
+    const enable = force !== undefined ? !!force : !!state.highContrast;
+    state.highContrast = enable;
+    if(typeof document !== "undefined"){
+      const target = document.body || document.documentElement;
+      if(!target) return;
+      if(enable) target.setAttribute("data-contrast", "high");
+      else target.removeAttribute("data-contrast");
+    }
+  }
+
+  applyHighContrastSetting(state.highContrast);
 
   function refreshMatchControls(){
     if(state.variantSelect) state.variantSelect.value = state.variant;
@@ -676,7 +800,33 @@ import "./pauseOverlay.js";
   // ---------- Utilities ----------
   function post(type, detail){ try{ window.parent && window.parent.postMessage({type, slug:SLUG, detail}, "*"); }catch{} }
   function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
-  function rand(a,b){ return Math.random()*(b-a)+a; }
+  function random(){
+    if(!state.random){
+      const seed = sanitizeSeed(state.rngSeed ?? state.baseSeed ?? baseSeed, baseSeed);
+      state.random = createMulberry32(seed);
+      state.rngSeed = seed;
+      state.matchSeed = seed;
+    }
+    return state.random();
+  }
+  function reseedRandom(seed){
+    const sanitized = sanitizeSeed(seed, baseSeed);
+    state.random = createMulberry32(sanitized);
+    state.rngSeed = sanitized;
+    state.matchSeed = sanitized;
+    return sanitized;
+  }
+  function reseedForMatch(){
+    const nextIndex = (state.matchIndex || 0) + 1;
+    state.matchIndex = nextIndex;
+    const seed = combineSeed(state.baseSeed ?? baseSeed, nextIndex);
+    return reseedRandom(seed);
+  }
+  function rand(a,b){ return random()*(b-a)+a; }
+  function randomId(){
+    const value = Math.floor(random() * 0xffffffff);
+    return value.toString(36);
+  }
   function lerp(a,b,t){ return a+(b-a)*t; }
 
   function loadLS(){
@@ -694,10 +844,12 @@ import "./pauseOverlay.js";
       sfx:state.sfx,
       theme:state.theme,
       reduceMotion:state.reduceMotion,
+      highContrast:!!state.highContrast,
       fxTrail: !!state.trailEnabled,
       keys:state.keys,
       aiTable:state.aiTable,
       ladderBest,
+      seed: state.baseSeed,
     };
     try{ localStorage.setItem(LS_KEY, JSON.stringify(o)); }catch{}
   }
@@ -986,6 +1138,14 @@ import "./pauseOverlay.js";
     });
   }
 
+  function spawnGoalBurst(side){
+    const x = side === "p1" ? 96 : W - 96;
+    const y = H / 2;
+    spawnEffect("explosion", x, y, { scale: 1.6, duration: 0.7 });
+    spawnEffect("spark", x, y - 64, { scale: 1.2, duration: 0.45 });
+    spawnEffect("spark", x, y + 64, { scale: 1.0, duration: 0.4 });
+  }
+
   function updateEffects(dt){
     if(!state.effects || !state.effects.length) return;
     const remaining=[];
@@ -1068,6 +1228,13 @@ import "./pauseOverlay.js";
   // ---------- Game objects ----------
   function reset(){
     applyVariantRules();
+    const seed = reseedForMatch();
+    state.matchSeed = seed;
+    state.autoPaused = false;
+    if(state.achievements){
+      state.achievements.reset();
+    }
+    state.matchStartTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
     state.score.p1 = 0;
     state.score.p2 = 0;
     state.rallyCount = 0;
@@ -1080,6 +1247,9 @@ import "./pauseOverlay.js";
     powerups.length = 0;
     state.effects.length = 0;
     state.trail.length = 0;
+    if(state.trailLayer?.ctx){
+      state.trailLayer.ctx.clearRect(0,0,W,H);
+    }
     state.replay.length = 0;
     state.lastRallyFrames = [];
     state.lastRallyMeta = null;
@@ -1090,7 +1260,7 @@ import "./pauseOverlay.js";
     state.p1 = {x:32, y:H/2-60, w:18, h:120, dy:0, speed:baseSpeed, baseSpeed, maxH:180, minH:80, stamina:1};
     state.p2 = {x:W-50, y:H/2-60, w:18, h:120, dy:0, speed:baseSpeed, baseSpeed, maxH:180, minH:80, stamina:1};
     ensureLadderIndex();
-    spawnBall(Math.random()<0.5? -1 : 1);
+    spawnBall(random()<0.5? -1 : 1);
     state.over = false;
     state.paused = false;
     hidePauseOverlay();
@@ -1216,8 +1386,65 @@ import "./pauseOverlay.js";
     scenes.push(() => createGameOverScene(details)).catch(err => console.error('[pong] gameover scene failed', err));
   }
 
-  function toast(msg){
+  function ensureToastHost(){
+    if(state.toastHost && document.body?.contains(state.toastHost)) return state.toastHost;
+    if(typeof document === "undefined") return null;
+    const host = document.createElement("div");
+    host.className = "pong-toast-host";
+    host.setAttribute("aria-live", "polite");
+    host.setAttribute("role", "status");
+    (document.body || document.documentElement).appendChild(host);
+    state.toastHost = host;
+    return host;
+  }
+
+  function localToast(message, options = {}){
+    const host = ensureToastHost();
+    if(!host) return;
+    const el = document.createElement("div");
+    el.className = "pong-toast";
+    el.setAttribute("role", "alert");
+    el.textContent = message;
+    host.appendChild(el);
+    const duration = Math.max(1200, Number(options.duration) || 3600);
+    requestAnimationFrame(()=>{ el.classList.add("show"); });
+    setTimeout(()=>{
+      el.classList.remove("show");
+      setTimeout(()=>{ el.remove(); }, 240);
+    }, duration);
+  }
+
+  function toast(msg, options = {}){
+    if(typeof msg !== "string" || !msg){
+      return;
+    }
     pushEvent("game", { level:"info", message:`[${SLUG}] ${msg}` });
+    const toastFn = typeof globalScope?.GG?.toast === "function"
+      ? globalScope.GG.toast
+      : (typeof globalScope?.toast === "function" ? globalScope.toast : null);
+    if(toastFn){
+      try {
+        toastFn(msg, { id: options.id, duration: options.duration ?? 3600, ariaLive: "polite" });
+        return;
+      } catch(err){
+        console.warn("[pong] toast dispatch failed", err);
+      }
+    }
+    localToast(msg, options);
+  }
+
+  const achievements = state.achievements;
+  if(achievements){
+    achievements.on("rally10", (payload)=>{
+      const count = Number(payload?.count) || 10;
+      toast("Achievement unlocked: Rally Rookie!", { id: "pong-rally10" });
+      gameEvent("achievement", { slug: SLUG, meta: { id: "rally10", count } });
+    });
+    achievements.on("rally25", (payload)=>{
+      const count = Number(payload?.count) || 25;
+      toast("Achievement unlocked: Rally Legend!", { id: "pong-rally25" });
+      gameEvent("achievement", { slug: SLUG, meta: { id: "rally25", count } });
+    });
   }
 
   function updateHUD(){
@@ -1312,7 +1539,10 @@ import "./pauseOverlay.js";
   }
 
   function bindMove(){
-    state.axes.keyboard.p1 = (pressed.has(state.keys.p1Down)? 1:0) - (pressed.has(state.keys.p1Up)? 1:0);
+    const allowAltForP1 = state.mode !== "2P";
+    const p1UpActive = pressed.has(state.keys.p1Up) || (allowAltForP1 && pressed.has("ArrowUp"));
+    const p1DownActive = pressed.has(state.keys.p1Down) || (allowAltForP1 && pressed.has("ArrowDown"));
+    state.axes.keyboard.p1 = (p1DownActive? 1:0) - (p1UpActive? 1:0);
     if(state.mode==="2P"){
       state.axes.keyboard.p2 = (pressed.has(state.keys.p2Down)? 1:0) - (pressed.has(state.keys.p2Up)? 1:0);
     } else {
@@ -1371,7 +1601,7 @@ import "./pauseOverlay.js";
   }
 
   function onPointerDown(e){
-    const id = e.pointerId ?? `ptr-${Math.random()}`;
+    const id = e.pointerId ?? `ptr-${randomId()}`;
     const pos = pointerToGame(e);
     const side = inputSideFromX(pos.x);
     if(e.pointerType === "mouse"){
@@ -1427,7 +1657,7 @@ import "./pauseOverlay.js";
     if(nearest && nearest.dx > 0){
       if(brain.timer <= 0){
         const predicted = predictY(nearest, config.reaction);
-        const offset = (Math.random()*2 - 1) * config.offset;
+    const offset = (random()*2 - 1) * config.offset;
         const target = clamp(predicted + offset, state.p2.h/2, H - state.p2.h/2);
         brain.targetY = target;
         brain.timer = config.reaction;
@@ -1549,6 +1779,7 @@ import "./pauseOverlay.js";
           award(collision.side);
           recordReplayFrame(snapshotFrame());
           captureLastRally(collision.side);
+          spawnGoalBurst(collision.side);
           respawn(b, collision.side === "p1" ? -1 : 1);
           state.debugData.lastNormal = {x:0,y:0};
           return;
@@ -1711,10 +1942,15 @@ import "./pauseOverlay.js";
     b.y = clamp(pushPoint.y + normal.y * (b.r + 0.5), b.r, H - b.r);
 
     spawnEffect("spark", b.x, b.y, {scale:0.8, duration:0.35});
+    spawnEffect("explosion", pushPoint.x, pushPoint.y, { scale:0.45, duration:0.3 });
     shake(6);
     playSound("hit");
     state.rallyCount = (state.rallyCount || 0) + 1;
     state.comboDisplay = state.rallyCount;
+    if(state.achievements){
+      if(state.rallyCount === 10) state.achievements.emit("rally10", { count: state.rallyCount });
+      if(state.rallyCount === 25) state.achievements.emit("rally25", { count: state.rallyCount });
+    }
     const ladderTier = currentLadderTier();
     if(state.rallyCount >= (COMBO_CONFIG.minCount || 1) && state.rallyCount > state.lastComboEvent){
       state.lastComboEvent = state.rallyCount;
@@ -1774,9 +2010,9 @@ import "./pauseOverlay.js";
   state.powerups = powerups;
   function maybeSpawnPowerup(dt){
     if(!state.powerups) return;
-    if(Math.random() < dt * 0.25){ // avg every ~4s
+    if(random() < dt * 0.25){ // avg every ~4s
       const types = ["grow","shrink","slow","fast","multiball","ghost"];
-      const kind = types[(Math.random()*types.length)|0];
+      const kind = types[(random()*types.length)|0];
       powerups.push({x:rand(200,W-200), y:rand(120,H-120), r:10, kind, life:8});
     }
   }
@@ -1811,7 +2047,7 @@ import "./pauseOverlay.js";
       case "shrink": p.h = clamp(p.h - 40, p.minH, 240); break;
       case "slow": for(const b of state.balls){ b.dx*=0.85; b.dy*=0.85; } break;
       case "fast": for(const b of state.balls){ b.dx*=1.15; b.dy*=1.15; } break;
-      case "multiball": if(state.balls.length<3){ spawnBall(Math.random()<0.5?-1:1, 400); } break;
+      case "multiball": if(state.balls.length<3){ spawnBall(random()<0.5?-1:1, 400); } break;
       case "ghost": // next paddle collision ignores bounce (pass through once)
         const flag = who+"_ghost";
         state[flag] = 1.0; // seconds
@@ -1866,6 +2102,25 @@ import "./pauseOverlay.js";
   }
 
   // ---------- Frame ----------
+  function semiFixedStep(delta){
+    if(delta <= 0) return;
+    const safeDelta = Math.min(delta, MAX_SIM_DELTA);
+    state.dt = safeDelta;
+    state.debugData.dt = safeDelta;
+    state.acc = Math.min((state.acc || 0) + safeDelta, MAX_ACCUMULATED_DELTA);
+    let iterations = 0;
+    while(state.acc >= STEP){
+      update(STEP);
+      state.acc -= STEP;
+      iterations++;
+      if(iterations > 6){
+        // prevent runaway spiral if tab was inactive for a long time
+        state.acc = 0;
+        break;
+      }
+    }
+  }
+
   function update(dt){
     state.dt = dt;
     state.debugData.dt = dt;
@@ -1898,6 +2153,57 @@ import "./pauseOverlay.js";
     recordReplayFrame(snapshotFrame());
   }
 
+  function ensureTrailLayer(){
+    if(state.trailLayer && state.trailLayer.canvas && state.trailLayer.ctx) return state.trailLayer;
+    if(typeof document === "undefined") return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if(!ctx) return null;
+    ctx.globalCompositeOperation = "lighter";
+    state.trailLayer = { canvas, ctx };
+    return state.trailLayer;
+  }
+
+  function drawTrailLayer(dt){
+    if(!state.trailEnabled || state.reduceMotion){
+      if(state.trailLayer?.ctx){
+        state.trailLayer.ctx.clearRect(0,0,W,H);
+      }
+      return;
+    }
+    const layer = ensureTrailLayer();
+    if(!layer) return;
+    const { canvas, ctx } = layer;
+    const fade = Math.min(0.35, Math.max(0.08, dt * 6));
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = `rgba(0,0,0,${fade})`;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
+
+    const accent = getCSS("--pong-accent") || "#69e1ff";
+    for(const ball of state.balls){
+      const radius = ball.r * 2.5;
+      const gradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, radius);
+      gradient.addColorStop(0, accent);
+      gradient.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, radius, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    state.ctx.save();
+    state.ctx.drawImage(canvas, 0, 0, W, H);
+    state.ctx.restore();
+  }
+
   function render(){
     const ctx=state.ctx;
     ctx.save();
@@ -1911,24 +2217,7 @@ import "./pauseOverlay.js";
     drawPaddleSprite(state.p1);
     drawPaddleSprite(state.p2);
 
-    if(state.trailEnabled && !state.reduceMotion){
-      for(const b of state.balls){
-        state.trail.push({x:b.x,y:b.y,r:b.r,life:0.35,duration:0.35});
-      }
-      const t2=[];
-      for(const t of state.trail){
-        t.life -= state.dt;
-        if(t.life>0){
-          const duration = t.duration || 0.35;
-          const fade = Math.max(0, Math.min(1, t.life / duration));
-          drawBallSprite({x:t.x, y:t.y, r:t.r}, fade*0.5); // [GFX-PONG] Trail fade via globalAlpha
-          t2.push(t);
-        }
-      }
-      state.trail = t2.slice(-state.trailMax);
-    } else {
-      state.trail.length = 0;
-    }
+    drawTrailLayer(state.frameDelta || STEP);
 
     for(const b of state.balls){ drawBallSprite(b); }
 
@@ -1981,16 +2270,19 @@ import "./pauseOverlay.js";
 
   function frame(t){
     state.loopId = requestAnimationFrame(frame);
-    const delta = Math.min(MAX_FRAME_DELTA, (t - (state.last||t)) / 1000); // Fixed-step integration with an accumulator; clamp to avoid spiral of death.
+    const elapsed = (t - (state.last||t)) / 1000;
+    const delta = Math.max(0, Math.min(MAX_FRAME_DELTA, elapsed)); // Fixed-step integration with an accumulator; clamp to avoid spiral of death.
     state.last = t;
+    state.frameDelta = delta;
     renderBackground(t);
 
-    updateParallax(delta);
+    updateParallax(Math.min(delta, MAX_SIM_DELTA));
     try { scenes.update(delta); } catch (err) { console.error('[pong] scene update failed', err); }
 
     if(!state.running){
       state.dt = 0;
       state.debugData.dt = 0;
+      state.acc = 0;
       render();
       return;
     }
@@ -2003,11 +2295,7 @@ import "./pauseOverlay.js";
       return;
     }
 
-    state.acc += delta;
-    while(state.acc >= STEP){
-      update(STEP);
-      state.acc -= STEP;
-    }
+    semiFixedStep(delta);
 
     render();
   }
@@ -2045,13 +2333,50 @@ import "./pauseOverlay.js";
     document.body.classList.add(themeToClass(state.theme));
     ensureBackgroundCanvas();
     resizeBackgroundCanvas();
+    applyHighContrastSetting(state.highContrast);
 
-    const bar = h("div",{class:"pong-bar"},
+    const pauseButton = h("button",{
+      class:"pong-btn",
+      type:"button",
+      title:"Pause or resume the match (Space / Esc)",
+      "aria-keyshortcuts":"Escape Space",
+      onclick:()=>{
+        if(state.paused) dispatchAction('resume',{source:'ui', reason:'button'});
+        else dispatchAction('pause',{source:'ui', reason:'user'});
+      }
+    },"Pause (Esc)");
+    const howToButton = h("button",{
+      class:"pong-btn",
+      type:"button",
+      title:"View how to play and control tips",
+      onclick:openHowTo
+    },"How to Play");
+    const keyButton = h("button",{
+      class:"pong-btn",
+      type:"button",
+      title:"Rebind keyboard controls",
+      onclick:openKeybinds
+    },"Rebind Keys");
+    const hubHref = new URL("../../index.html", import.meta.url).href;
+    const hubButton = h("a",{
+      class:"pong-btn pong-btn--link",
+      href:hubHref,
+      title:"Back to Hub",
+      "aria-label":"Back to Hub"
+    },"← Back to Hub");
+    hubButton.addEventListener('click',(event)=>{
+      event.preventDefault();
+      post('GAME_EXIT');
+      window.location.assign(hubHref);
+    });
+    const bar = h("div",{class:"pong-bar", role:"navigation"},
       h("div",{class:"pong-title"},"Pong"),
+      hubButton,
       h("span",{class:"pong-spacer"}),
-      h("span",{class:"pong-kbd"},"Pause: Space"),
-      h("button",{class:"pong-btn",onclick:()=>dispatchAction('pause',{source:'ui', reason:'user'})},"Pause"),
-      h("button",{class:"pong-btn",onclick:openKeybinds},"Keys")
+      h("span",{class:"pong-kbd"},"Pause: Space / Esc"),
+      pauseButton,
+      howToButton,
+      keyButton
     );
 
     const canvasEl = h("canvas",{class:"pong-canvas", id:"game", width:String(W), height:String(H), role:"img", "aria-label":"Pong gameplay"});
@@ -2161,11 +2486,16 @@ import "./pauseOverlay.js";
         select(["neon","vapor","crt","minimal"], state.theme, v=>{state.theme=v; saveLS();
           document.body.classList.remove("theme-neon","theme-vapor","theme-crt","theme-minimal");
           document.body.classList.add(themeToClass(v));
+          renderHowToCanvas(state.howToCanvas);
         })
       ),
       h("div",{class:"pong-row"},
         h("label",{},"Reduce motion:"),
         toggle(state.reduceMotion, v=>{state.reduceMotion=v; saveLS();})
+      ),
+      h("div",{class:"pong-row"},
+        h("label",{},"High contrast:"),
+        toggle(state.highContrast, v=>{ applyHighContrastSetting(v); saveLS(); renderHowToCanvas(state.howToCanvas); })
       ),
       h("button",{class:"pong-btn",onclick:watchLastRally},"Watch Last Rally"),
       h("button",{class:"pong-btn",onclick:()=>dispatchAction('restart',{source:'ui'})},"Reset Match"),
@@ -2181,9 +2511,23 @@ import "./pauseOverlay.js";
       )
     );
 
-    const keyModal = state.keyModal = h("div",{class:"pong-modal", id:"key-modal"},
+    const howToCanvas = h("canvas",{class:"pong-howto-canvas", width:"320", height:"200", role:"img", "aria-label":"Keyboard and pause controls"});
+    state.howToCanvas = howToCanvas;
+    const howToClose = h("button",{class:"pong-btn", type:"button"},"Close");
+    const howToModal = state.howToModal = h("div",{class:"pong-modal", id:"howto-modal", role:"dialog", "aria-modal":"true", "aria-labelledby":"howto-title"},
       h("div",{class:"pong-card"},
-        h("h3",{},"Rebind Keys"),
+        h("h3",{id:"howto-title"},"How to Play"),
+        h("p",{class:"pong-hint"},"Use W/S or ↑/↓ to move, Space to serve, and Esc to pause."),
+        howToCanvas,
+        h("div",{class:"pong-row"}, howToClose)
+      )
+    );
+    howToModal.addEventListener('click', (event)=>{ if(event.target === howToModal) closeHowTo(); });
+    howToClose.addEventListener('click', closeHowTo);
+
+    const keyModal = state.keyModal = h("div",{class:"pong-modal", id:"key-modal", role:"dialog", "aria-modal":"true", "aria-labelledby":"key-modal-title"},
+      h("div",{class:"pong-card"},
+        h("h3",{id:"key-modal-title"},"Rebind Keys"),
         keyRow("P1 Up","p1Up"),
         keyRow("P1 Down","p1Down"),
         keyRow("P2 Up","p2Up"),
@@ -2196,7 +2540,9 @@ import "./pauseOverlay.js";
       )
     );
 
-    root.append(bar, wrap, hud, menu, keyModal);
+    renderHowToCanvas(howToCanvas);
+
+    root.append(bar, wrap, hud, menu, howToModal, keyModal);
     renderAiOptions();
     updateAiEditorValue();
     setAiStatus("Edit the JSON to add custom AI profiles or progressive schedules.", "info");
@@ -2247,12 +2593,90 @@ import "./pauseOverlay.js";
   }
   function prettyKey(code){ return code.replace(/^Key/,'').replace(/^Arrow/,''); }
   function renderKeyRows(){ for(const k of Object.keys(state.keys)){ const el=document.getElementById("key-"+k); if(el) el.textContent=prettyKey(state.keys[k]); } }
-  function openKeybinds(){ state.keyModal.classList.add("show"); renderKeyRows(); }
+  function openHowTo(){
+    if(!state.howToModal) return;
+    renderHowToCanvas(state.howToCanvas);
+    state.howToModal.classList.add("show");
+    state.howToModal.querySelector("button")?.focus();
+  }
+  function closeHowTo(){
+    if(!state.howToModal) return;
+    state.howToModal.classList.remove("show");
+  }
+
+  function openKeybinds(){
+    state.keyModal.classList.add("show");
+    renderKeyRows();
+    state.keyModal.querySelector("button")?.focus();
+  }
   function closeKeybinds(){ state.keyModal.classList.remove("show"); }
   function listenKey(which, span){
     const handler = (e)=>{ e.preventDefault(); state.keys[which]=e.code; span.textContent=prettyKey(e.code); document.removeEventListener("keydown", handler, true); };
     document.addEventListener("keydown", handler, true);
     span.textContent="...";
+  }
+
+  function drawKeyCap(ctx, x, y, label, width = 56, height = 56){
+    const radius = 12;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.moveTo(radius, 0);
+    ctx.lineTo(width - radius, 0);
+    ctx.quadraticCurveTo(width, 0, width, radius);
+    ctx.lineTo(width, height - radius);
+    ctx.quadraticCurveTo(width, height, width - radius, height);
+    ctx.lineTo(radius, height);
+    ctx.quadraticCurveTo(0, height, 0, height - radius);
+    ctx.lineTo(0, radius);
+    ctx.quadraticCurveTo(0, 0, radius, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.28)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = getCSS("--pong-fg");
+    ctx.font = label.length > 2 ? "16px 'Inter', system-ui" : "22px 'Inter', system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, width / 2, height / 2 + 1);
+    ctx.restore();
+  }
+
+  function renderHowToCanvas(canvas){
+    if(!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if(!ctx) return;
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = getCSS("--pong-bg") || "#0b1220";
+    ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle = getCSS("--pong-grid") || "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 10]);
+    ctx.beginPath();
+    ctx.moveTo(w*0.1, h*0.55);
+    ctx.lineTo(w*0.9, h*0.55);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const keyW = 56;
+    const keyH = 56;
+    drawKeyCap(ctx, w*0.18, h*0.18, "↑", keyW, keyH);
+    drawKeyCap(ctx, w*0.18, h*0.18 + keyH + 8, "↓", keyW, keyH);
+    drawKeyCap(ctx, w*0.52, h*0.18, "W", keyW, keyH);
+    drawKeyCap(ctx, w*0.52, h*0.18 + keyH + 8, "S", keyW, keyH);
+    drawKeyCap(ctx, w*0.30, h*0.66, "Space", keyW * 2.4, keyH * 0.8);
+    drawKeyCap(ctx, w*0.68, h*0.66, "Esc", keyW * 1.2, keyH * 0.8);
+
+    ctx.fillStyle = getCSS("--pong-muted") || "#9aa0a6";
+    ctx.font = "16px 'Inter', system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("Move", w*0.22 + keyW/2, h*0.12);
+    ctx.fillText("Serve / Pause", w*0.38 + keyW, h*0.6);
+    ctx.fillText("Back to menu", w*0.74, h*0.6);
   }
 
   function select(options, value, on){
@@ -2367,19 +2791,28 @@ import "./pauseOverlay.js";
 
   function pauseHint(reason){
     if(reason === "shell") return "Paused by host – press Enter to continue";
+    if(reason === "auto") return isTouchPreferred() ? "Game paused while inactive — tap resume to continue" : "Game paused while inactive — press Enter to resume";
     return isTouchPreferred() ? "Tap resume to continue" : "Press Enter to resume";
   }
 
   function setPaused(next, reason){
+    const cause = reason || "manual";
     if(next){
       state.paused = true;
-      state.shellPaused = reason === "shell";
-      showPauseOverlay(pauseHint(reason));
+      state.shellPaused = cause === "shell";
+      state.autoPaused = cause === "auto";
+      if(cause === "auto"){
+        hidePauseOverlay();
+      } else {
+        showPauseOverlay(pauseHint(cause));
+      }
     } else {
       state.paused = false;
       state.shellPaused = false;
+      state.autoPaused = false;
+      state.visibilityPauseWasRunning = false;
       hidePauseOverlay();
-      state.last = performance.now();
+      state.last = typeof performance !== "undefined" ? performance.now() : Date.now();
     }
   }
 
@@ -2388,10 +2821,13 @@ import "./pauseOverlay.js";
     if(target === state.paused){
       if(!target){
         state.shellPaused = false;
+        state.autoPaused = false;
         state.last = performance.now();
         hidePauseOverlay();
       } else if(state.shellPaused){
         showPauseOverlay(pauseHint("shell"));
+      } else if(state.autoPaused){
+        hidePauseOverlay();
       } else {
         showPauseOverlay(pauseHint("manual"));
       }
@@ -2410,6 +2846,19 @@ import "./pauseOverlay.js";
     if(state.shellPaused){
       setPaused(false, "shell");
     }
+  }
+
+  function pauseForVisibility(){
+    if(state.over || state.autoPaused) return;
+    if(state.paused) return;
+    state.visibilityPauseWasRunning = !!state.running;
+    setPaused(true, "auto");
+  }
+
+  function resumeFromVisibility(){
+    if(!state.autoPaused) return;
+    state.visibilityPauseWasRunning = false;
+    setPaused(false, "auto");
   }
   // Replay
   function watchLastRally(){
@@ -2655,7 +3104,9 @@ import "./pauseOverlay.js";
     window.addEventListener("resize", resizeBackgroundCanvas);
     const onShellPause=()=>pauseForShell();
     const onShellResume=()=>{ if(!document.hidden) resumeFromShell(); };
-    const onVisibility=()=>{ if(document.hidden) pauseForShell(); else resumeFromShell(); };
+    const onVisibility=()=>{ if(document.hidden) pauseForVisibility(); else resumeFromVisibility(); };
+    const onWindowBlur=()=>pauseForVisibility();
+    const onWindowFocus=()=>resumeFromVisibility();
     const onMessage=(event)=>{
       const data=event && typeof event.data==="object" ? event.data : null;
       const type=data?.type;
@@ -2665,12 +3116,28 @@ import "./pauseOverlay.js";
     window.addEventListener("ggshell:pause", onShellPause);
     window.addEventListener("ggshell:resume", onShellResume);
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("blur", onWindowBlur);
+    window.addEventListener("focus", onWindowFocus);
     window.addEventListener("message", onMessage, {passive:true});
     window.addEventListener("keydown", e=>{
       if(e.key === "?" || (e.key === "/" && e.shiftKey)){
         toggleDebugHud();
         e.preventDefault();
         return;
+      }
+      if(state.howToModal && state.howToModal.classList.contains("show")){
+        if(e.code === "Escape" || e.code === "Space" || e.code === "Enter"){
+          closeHowTo();
+          e.preventDefault();
+          return;
+        }
+      }
+      if(state.keyModal && state.keyModal.classList.contains("show")){
+        if(e.code === "Escape"){
+          closeKeybinds();
+          e.preventDefault();
+          return;
+        }
       }
       pressed.add(e.code);
       let handled = false;
