@@ -87,6 +87,38 @@
       --tile-color-2048: #0f172a;
       --tile-color-default: #111827;
     }
+
+    :root[data-theme="contrast"] {
+      color-scheme: dark;
+      --bg-primary: #000000;
+      --bg-secondary: #0b0b0f;
+      --bg-tertiary: #151521;
+      --bg-hover: #1f1f2e;
+      --border-color: #f3f4f6;
+      --text-primary: #f9fafb;
+      --text-secondary: #e5e7eb;
+      --board-bg: #000000;
+      --tile-empty: #141422;
+      --tile-text-dark: #050505;
+      --tile-text-light: #ffffff;
+      --tile-shadow: 0 0 0 rgba(0, 0, 0, 0);
+      --control-shadow: 0 0 0 rgba(0, 0, 0, 0.25);
+      --control-shadow-hover: 0 0 12px rgba(250, 250, 250, 0.35);
+      --focus-ring: 0 0 0 3px rgba(250, 204, 21, 0.6);
+      --accent-color: #facc15;
+      --tile-color-2: #22d3ee;
+      --tile-color-4: #38bdf8;
+      --tile-color-8: #a855f7;
+      --tile-color-16: #f97316;
+      --tile-color-32: #ef4444;
+      --tile-color-64: #facc15;
+      --tile-color-128: #34d399;
+      --tile-color-256: #f472b6;
+      --tile-color-512: #f59e0b;
+      --tile-color-1024: #22c55e;
+      --tile-color-2048: #eab308;
+      --tile-color-default: #ffffff;
+    }
     
     /* Main layout - Mobile first responsive */
     .game-container {
@@ -117,7 +149,14 @@
       margin: 0;
       color: var(--text-primary, #f9fafb);
     }
-    
+
+    .header-actions {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .header-action,
     .theme-toggle {
       padding: 0.5rem 1rem;
       border: 1px solid var(--border-color, #374151);
@@ -138,12 +177,14 @@
       will-change: transform;
     }
 
+    .header-action:hover,
     .theme-toggle:hover {
       background: var(--bg-hover, #1f2937);
       transform: translateY(-1px);
       box-shadow: var(--control-shadow-hover);
     }
 
+    .header-action:focus-visible,
     .theme-toggle:focus-visible {
       outline: none;
       box-shadow: var(--control-shadow-hover), var(--focus-ring);
@@ -309,6 +350,52 @@
       outline: none;
       box-shadow: var(--control-shadow-hover), var(--focus-ring);
     }
+
+    .control-input {
+      padding: 0.625rem 1rem;
+      border: 1px solid var(--border-color, #374151);
+      border-radius: 0.5rem;
+      background: var(--bg-tertiary, #111827);
+      color: var(--text-primary, #f9fafb);
+      font-size: 0.875rem;
+      font-weight: 500;
+      width: 100%;
+      transition:
+        background-color var(--g2048-transition, 0.15s) ease,
+        border-color var(--g2048-transition, 0.15s) ease,
+        color var(--g2048-transition, 0.15s) ease,
+        box-shadow var(--g2048-transition, 0.15s) ease,
+        transform var(--g2048-transition, 0.15s) ease;
+    }
+
+    .control-input:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .control-input:focus-visible {
+      outline: none;
+      box-shadow: var(--control-shadow-hover), var(--focus-ring);
+    }
+
+    .control-sublabel {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-secondary, #9ca3af);
+      letter-spacing: 0.05em;
+    }
+
+    .control-group--stacked {
+      gap: 0.35rem;
+    }
+
+    .seed-hint {
+      margin: 0;
+      font-size: 0.7rem;
+      color: var(--text-secondary, #9ca3af);
+      line-height: 1.3;
+    }
     
     .help-text {
       text-align: center;
@@ -329,8 +416,10 @@
 
     @media (prefers-reduced-motion: reduce) {
       .theme-toggle,
+      .header-action,
       .control-button,
       .control-select,
+      .control-input,
       .score-item,
       .score-value,
       .score-value-text,
@@ -394,7 +483,8 @@
     }
     
     /* Game over modal */
-    #gameOverOverlay {
+    #gameOverOverlay,
+    #howToOverlay {
       position: fixed;
       inset: 0;
       display: flex;
@@ -405,12 +495,14 @@
       backdrop-filter: blur(4px);
       z-index: 1500;
     }
-    
-    #gameOverOverlay.hidden { 
-      display: none; 
+
+    #gameOverOverlay.hidden,
+    #howToOverlay.hidden {
+      display: none;
     }
-    
-    #gameOverOverlay .modal-panel {
+
+    #gameOverOverlay .modal-panel,
+    #howToOverlay .modal-panel {
       background: var(--bg-secondary, #1f2937);
       color: var(--text-primary, #f9fafb);
       border-radius: 0.75rem;
@@ -421,26 +513,30 @@
       border: 1px solid var(--border-color, #374151);
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
     }
-    
-    #gameOverOverlay .modal-panel h3 {
+
+    #gameOverOverlay .modal-panel h3,
+    #howToOverlay .modal-panel h3 {
       margin: 0 0 0.75rem;
       font-size: 1.375rem;
       font-weight: 600;
     }
-    
-    #gameOverOverlay .modal-panel p {
+
+    #gameOverOverlay .modal-panel p,
+    #howToOverlay .modal-panel p {
       margin: 0 0 1.5rem;
       color: var(--text-secondary, #9ca3af);
     }
-    
-    #gameOverOverlay .overlay-actions {
+
+    #gameOverOverlay .overlay-actions,
+    #howToOverlay .overlay-actions {
       display: flex;
       gap: 0.75rem;
       justify-content: center;
       flex-wrap: wrap;
     }
-    
-    #gameOverOverlay .overlay-actions button {
+
+    #gameOverOverlay .overlay-actions button,
+    #howToOverlay .overlay-actions button {
       padding: 0.75rem 1.5rem;
       border: 1px solid var(--border-color, #374151);
       border-radius: 0.5rem;
@@ -461,15 +557,40 @@
       will-change: transform;
     }
 
-    #gameOverOverlay .overlay-actions button:hover {
+    #gameOverOverlay .overlay-actions button:hover,
+    #howToOverlay .overlay-actions button:hover {
       background: var(--bg-hover, #1f2937);
       transform: translateY(-1px);
       box-shadow: var(--control-shadow-hover);
     }
 
-    #gameOverOverlay .overlay-actions button:focus-visible {
+    #gameOverOverlay .overlay-actions button:focus-visible,
+    #howToOverlay .overlay-actions button:focus-visible {
       outline: none;
       box-shadow: var(--control-shadow-hover), var(--focus-ring);
+    }
+
+    .howto-list {
+      margin: 0 0 1.25rem;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 0.5rem;
+      text-align: left;
+      color: var(--text-primary, #f9fafb);
+    }
+
+    .howto-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      line-height: 1.45;
+    }
+
+    .howto-list li span {
+      font-weight: 600;
+      color: var(--accent-color, #3b82f6);
     }
     
     /* Hide legacy elements */
@@ -507,7 +628,10 @@
     <header class="game-header" role="banner">
       <div class="header-top">
         <h1 class="game-title">2048</h1>
-        <button id="themeToggle" class="theme-toggle" aria-label="Switch to light theme">Dark</button>
+        <div class="header-actions">
+          <button id="howToBtn" class="header-action" type="button" aria-haspopup="dialog" aria-controls="howToOverlay" title="Open quick instructions for playing 2048">How to Play</button>
+          <button id="themeToggle" class="theme-toggle header-action" type="button" aria-label="Switch theme" title="Switch theme">Theme: Dark</button>
+        </div>
       </div>
       <div class="score-bar" role="region" aria-label="Game scores and statistics">
         <div class="score-item">
@@ -540,7 +664,7 @@
       <div class="controls-grid">
         <div class="control-group">
           <div class="control-label">Hint</div>
-          <button id="hintBtn" class="control-button" aria-label="Show hint for next move">Show Hint</button>
+          <button id="hintBtn" class="control-button" aria-label="Show hint for next move" title="Show a suggested move (press H)">Show Hint</button>
         </div>
         <div class="control-group">
           <div class="control-label">Board Size</div>
@@ -557,16 +681,41 @@
             <option value="5">Hard</option>
           </select>
         </div>
+        <div class="control-group control-group--stacked">
+          <div class="control-label">RNG Mode</div>
+          <select id="rngModeSel" class="control-select" aria-label="Select random number generator mode" title="Choose random or deterministic tile spawns">
+            <option value="random">Random</option>
+            <option value="deterministic">Deterministic</option>
+          </select>
+          <label class="control-sublabel" for="rngSeedInput">Deterministic seed</label>
+          <input id="rngSeedInput" class="control-input" type="text" inputmode="text" autocomplete="off" placeholder="e.g. test-seed" aria-describedby="rngSeedHint" aria-label="Seed used for deterministic tile order" />
+          <p id="rngSeedHint" class="seed-hint">Seeds make tile spawns reproducible for testing. Random mode ignores this value.</p>
+        </div>
         <div class="control-group">
           <div class="control-label">Actions</div>
-          <button id="undoBtn" class="control-button" aria-label="Undo last move">Undo Move</button>
-          <button id="redoBtn" class="control-button" aria-label="Redo last undone move">Redo Move</button>
+          <button id="undoBtn" class="control-button" aria-label="Undo last move" title="Undo previous move (U or Ctrl+Z)">Undo Move</button>
+          <button id="redoBtn" class="control-button" aria-label="Redo last undone move" title="Redo last move (Y or Ctrl+Y)">Redo Move</button>
         </div>
       </div>
       <p class="help-text">
-        Use <strong>arrow keys</strong> to move. Press <kbd>R</kbd> to restart, <kbd>U</kbd> or <kbd>Ctrl+Z</kbd> to undo, <kbd>Y</kbd> or <kbd>Ctrl+Y</kbd> to redo, <kbd>H</kbd> for hints.
+        Use <strong>arrow keys</strong> or <strong>WASD</strong> (swipe on touch) to move. Press <kbd>R</kbd> to restart, <kbd>U</kbd> or <kbd>Ctrl+Z</kbd> to undo, <kbd>Y</kbd> or <kbd>Ctrl+Y</kbd> to redo, <kbd>H</kbd> for hints.
       </p>
     </footer>
+  </div>
+  <div id="howToOverlay" class="hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="howToTitle" aria-describedby="howToBody" tabindex="-1">
+    <div class="modal-panel" role="document">
+      <h3 id="howToTitle">How to play</h3>
+      <p id="howToBody">Combine matching tiles to climb toward 2048 and beyond.</p>
+      <ul class="howto-list">
+        <li><span>Slide</span>Use arrow keys, WASD, or swipe to move every tile in one direction.</li>
+        <li><span>Merge</span>Tiles with the same value collide to double and increase your score.</li>
+        <li><span>Plan</span>Chain merges to build streaks and unlock achievements for 1024, 2048, and more.</li>
+        <li><span>Tools</span>Undo/redo, hints, and deterministic RNG help you practice tricky openings.</li>
+      </ul>
+      <div class="overlay-actions">
+        <button id="howToClose" type="button" title="Close instructions">Got it</button>
+      </div>
+    </div>
   </div>
   <div id="gameOverOverlay" class="hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="gameOverTitle" aria-describedby="gameOverMessage" tabindex="-1">
     <div class="modal-panel" role="document">
