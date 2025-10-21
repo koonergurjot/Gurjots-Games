@@ -58,6 +58,16 @@
       "fadePower": 1.4,
       "shape": "flash",
       "blend": "lighter"
+    },
+    "radialBurst": {
+      "count": 24,
+      "life": [0.18, 0.36],
+      "size": [3, 9],
+      "speed": [140, 260],
+      "colors": ["#ffe29a", "#ffd166", "#ffb677"],
+      "fadePower": 1.5,
+      "shape": "circle",
+      "blend": "lighter"
     }
   }
 }

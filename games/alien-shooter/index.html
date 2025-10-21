@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Alien Shooter FX Test</title>
+    <title>Alien Shooter</title>
     <style>
       :root {
         color-scheme: dark;
@@ -19,20 +19,58 @@
         font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
         color: #dde6ff;
       }
+      body[data-colorblind='true'] {
+        background: radial-gradient(circle at top, #0f172a 0%, #030712 60%);
+      }
       main {
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        height: 100%;
+        min-height: 100%;
         padding: 1.5rem;
+        gap: 1.5rem;
+      }
+      .game-toolbar {
+        width: min(960px, 100%);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         gap: 1rem;
+      }
+      .game-toolbar a {
+        color: #8fb9ff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .game-toolbar a:hover,
+      .game-toolbar a:focus {
+        text-decoration: underline;
+      }
+      .toolbar-right {
+        display: flex;
+        gap: 0.5rem;
+      }
+      button {
+        background: rgba(28, 48, 92, 0.65);
+        border: 1px solid rgba(112, 168, 255, 0.4);
+        color: #e7efff;
+        padding: 0.45rem 0.85rem;
+        border-radius: 999px;
+        font: inherit;
+        cursor: pointer;
+        transition: background 120ms ease, border-color 120ms ease;
+      }
+      button:hover,
+      button:focus-visible {
+        background: rgba(70, 116, 196, 0.75);
+        border-color: rgba(144, 192, 255, 0.6);
+        outline: none;
       }
       #game-wrapper {
         width: min(960px, 100%);
         aspect-ratio: 16 / 9;
         border-radius: 20px;
-        box-shadow: 0 20px 60px rgba(8, 13, 32, 0.45);
+        box-shadow: 0 24px 60px rgba(8, 13, 32, 0.45);
         border: 1px solid rgba(80, 120, 220, 0.2);
         overflow: hidden;
         position: relative;
@@ -45,26 +83,188 @@
         background: transparent;
         cursor: crosshair;
       }
+      #hud {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        pointer-events: none;
+        padding: 1.2rem;
+      }
+      .hud-top {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+      }
+      .hud-pill {
+        background: rgba(12, 18, 32, 0.6);
+        border: 1px solid rgba(144, 168, 220, 0.35);
+        border-radius: 999px;
+        padding: 0.3rem 0.85rem;
+        font-size: 0.9rem;
+        letter-spacing: 0.02em;
+        pointer-events: auto;
+      }
+      #hud-pulse.ready {
+        border-color: rgba(255, 232, 140, 0.6);
+        color: #ffeaa7;
+        background: rgba(48, 28, 6, 0.55);
+      }
+      #hud-status {
+        margin-top: 0.75rem;
+        font-size: 1rem;
+        letter-spacing: 0.04em;
+        color: rgba(214, 230, 255, 0.85);
+        min-height: 1.4em;
+      }
+      .achievement-feed {
+        position: absolute;
+        top: 1.2rem;
+        right: 1.2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: flex-end;
+      }
+      .achievement-callout {
+        pointer-events: auto;
+        background: rgba(12, 18, 32, 0.85);
+        border: 1px solid rgba(120, 196, 255, 0.4);
+        border-radius: 14px;
+        padding: 0.6rem 0.9rem;
+        min-width: 200px;
+        transform: translateY(-12px);
+        opacity: 0;
+        transition: opacity 160ms ease, transform 180ms ease;
+        box-shadow: 0 16px 40px rgba(8, 12, 24, 0.4);
+      }
+      .achievement-callout strong {
+        display: block;
+        font-size: 0.85rem;
+        color: #9be4ff;
+        margin-bottom: 0.2rem;
+      }
+      .achievement-callout span {
+        display: block;
+        font-size: 0.75rem;
+        color: rgba(210, 230, 255, 0.8);
+      }
+      .achievement-callout.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .pause-overlay {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at center, rgba(10, 16, 30, 0.8), rgba(6, 10, 22, 0.92));
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 0.6rem;
+        pointer-events: auto;
+      }
+      .pause-overlay h2 {
+        margin: 0;
+        font-size: 1.8rem;
+        letter-spacing: 0.08em;
+      }
+      .pause-overlay p {
+        margin: 0;
+        max-width: 18rem;
+        color: rgba(220, 230, 255, 0.8);
+        font-size: 0.95rem;
+      }
+      .control-tooltip {
+        align-self: flex-end;
+        display: grid;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        color: rgba(220, 234, 255, 0.72);
+        background: linear-gradient(90deg, rgba(14, 22, 40, 0.7), rgba(22, 30, 48, 0.3));
+        border-radius: 12px;
+        padding: 0.65rem 0.8rem;
+        margin-top: auto;
+        pointer-events: auto;
+        backdrop-filter: blur(6px);
+      }
+      .control-tooltip span {
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+      }
+      kbd {
+        background: rgba(27, 40, 70, 0.7);
+        border-radius: 6px;
+        padding: 0.15rem 0.4rem;
+        border: 1px solid rgba(122, 162, 255, 0.4);
+        font-size: 0.72rem;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      }
       .hint {
         text-align: center;
         font-size: 0.95rem;
         color: rgba(220, 234, 255, 0.72);
-        max-width: 640px;
-        line-height: 1.4;
+        max-width: 720px;
+        line-height: 1.5;
       }
-      a {
-        color: #8fb9ff;
+      @media (max-width: 720px) {
+        main {
+          padding: 1rem;
+          gap: 1rem;
+        }
+        .game-toolbar {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .toolbar-right {
+          justify-content: flex-end;
+        }
+        .control-tooltip {
+          font-size: 0.68rem;
+        }
       }
     </style>
   </head>
   <body>
     <main>
+      <header class="game-toolbar">
+        <a href="/games.html" class="back-link">← Back to arcade</a>
+        <div class="toolbar-right">
+          <button id="theme-toggle" type="button">Color blind: Off</button>
+          <button id="pause-btn" type="button">Pause</button>
+        </div>
+      </header>
       <div id="game-wrapper">
         <canvas id="game" width="960" height="540" aria-label="Alien shooter canvas"></canvas>
+        <div id="hud" aria-live="polite">
+          <div class="hud-top">
+            <span id="hud-score" class="hud-pill">Score 0</span>
+            <span id="hud-wave" class="hud-pill">Wave 1</span>
+            <span id="hud-health" class="hud-pill">Shields ●●●</span>
+            <span id="hud-pulse" class="hud-pill">Pulse Ready</span>
+          </div>
+          <div id="hud-status" class="hud-status" aria-live="assertive"></div>
+          <div id="achievement-feed" class="achievement-feed" aria-live="polite"></div>
+          <div id="pause-overlay" class="pause-overlay" hidden>
+            <h2 id="pause-title">Paused</h2>
+            <p id="pause-details">Focus the window to continue.</p>
+          </div>
+          <div class="control-tooltip" role="presentation">
+            <span><kbd>WASD</kbd>/<kbd>Arrows</kbd> Move</span>
+            <span><kbd>Mouse</kbd>/<kbd>RT</kbd> Aim &amp; Fire</span>
+            <span><kbd>Space</kbd>/<kbd>E</kbd> Pulse Bomb</span>
+            <span><kbd>Esc</kbd>/<kbd>Start</kbd> Pause</span>
+          </div>
+        </div>
       </div>
       <p class="hint">
-        Move with WASD or arrow keys. Hold the mouse button to fire and watch the pooled
-        muzzle flashes. Tap <kbd>Space</kbd> or <kbd>E</kbd> for bigger explosions.
+        Hold the line against escalating waves of drones, strikers, and artillery ships. Earn points for
+        every takedown, drop a pulse bomb to clear space, and chase achievements for flawless waves and
+        deeper loops.
       </p>
     </main>
     <script type="module" src="./main.js"></script>
