@@ -597,6 +597,20 @@ class AnimationClock {
 }
 
 const animationClock = new AnimationClock(ANIM_TIME);
+
+let rngMode='random';
+let rngSeedValue=DEFAULT_RNG_SEED;
+try {
+  const storedMode = localStorage.getItem(LS_RNG_MODE);
+  if(storedMode === 'deterministic'){
+    rngMode = 'deterministic';
+  }
+  const storedSeed = localStorage.getItem(LS_RNG_SEED);
+  if(typeof storedSeed === 'string' && storedSeed.trim()){
+    rngSeedValue = storedSeed.trim();
+  }
+} catch {}
+
 let rng = createRngForCurrentMode();
 let pendingHistoryCommit = false;
 let undoSpendStack = [];
@@ -745,19 +759,6 @@ function syncThemeFromCSS(themeName, computedStyle) {
   themes[themeName] = next;
   return next;
 }
-
-let rngMode='random';
-let rngSeedValue=DEFAULT_RNG_SEED;
-try {
-  const storedMode = localStorage.getItem(LS_RNG_MODE);
-  if(storedMode === 'deterministic'){
-    rngMode = 'deterministic';
-  }
-  const storedSeed = localStorage.getItem(LS_RNG_SEED);
-  if(typeof storedSeed === 'string' && storedSeed.trim()){
-    rngSeedValue = storedSeed.trim();
-  }
-} catch {}
 
 let howToSeen=false;
 try {
