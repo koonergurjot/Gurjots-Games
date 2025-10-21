@@ -110,18 +110,6 @@ function getMaxAnisotropy(renderer) {
   return capabilities.maxAnisotropy || 0;
 }
 
-function clampTextureAnisotropy(texture) {
-  if (!texture || typeof texture !== 'object') return;
-  if (!rendererMaxAnisotropy) return;
-  if (typeof texture.anisotropy === 'number') {
-    const clamped = Math.min(Math.max(texture.anisotropy, 0), rendererMaxAnisotropy);
-    if (texture.anisotropy !== clamped) {
-      texture.anisotropy = clamped;
-      texture.needsUpdate = true;
-    }
-  }
-}
-
 function configureRenderer(renderer, THREE) {
   if (!renderer || !THREE) return;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
