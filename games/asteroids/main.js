@@ -32,8 +32,17 @@ const DIFFICULTY_PRESETS = [
   { key: 'standard', label: 'Standard', shipSpeed: 1, asteroidSpeed: 1, score: 1 },
   { key: 'veteran', label: 'Veteran', shipSpeed: 1.15, asteroidSpeed: 1.25, score: 1.4 },
 ];
+const FIXED_DT = 1 / 120;
+const MAX_FRAME_TIME = 0.25;
+const MAX_ACCUMULATED_STEPS = 6;
+const WRAP_EPSILON = 1e-4;
+const SCREEN_SHAKE_DECAY = 12;
+const SCREEN_SHAKE_MAX = 9;
+const HIT_FLASH_DECAY = 3.5;
+
 const STORAGE_KEYS = {
   best: `${SLUG}:best`,
+  settings: `${SLUG}:settings`,
 };
 
 const markFirstFrame = (() => {
@@ -551,6 +560,23 @@ function addComponent(world, name, entity, values) {
   } else {
     Object.assign(component, values);
   }
+  if (name === 'position') {
+    if (values && Object.prototype.hasOwnProperty.call(values, 'prevX')) {
+      component.prevX = values.prevX;
+    }
+    if (values && Object.prototype.hasOwnProperty.call(values, 'prevY')) {
+      component.prevY = values.prevY;
+    }
+    if (!Number.isFinite(component.prevX)) {
+      component.prevX = Number.isFinite(component.x) ? component.x : 0;
+    }
+    if (!Number.isFinite(component.prevY)) {
+      component.prevY = Number.isFinite(component.y) ? component.y : 0;
+    }
+    component.travelX = Number.isFinite(component.travelX) ? component.travelX : 0;
+    component.travelY = Number.isFinite(component.travelY) ? component.travelY : 0;
+    component.wrapped = Boolean(values?.wrapped);
+  }
   const flag = COMPONENT_FLAGS[name];
   if (typeof flag === 'number') {
     world.signatures[entity] = (world.signatures[entity] || 0) | flag;
@@ -597,14 +623,73 @@ function distanceSquared(x1, y1, x2, y2) {
   return dx * dx + dy * dy;
 }
 
+function segmentIntersectsCircle(ax, ay, bx, by, cx, cy, radius) {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const abLengthSq = abx * abx + aby * aby;
+  if (abLengthSq <= 0.000001) {
+    return distanceSquared(ax, ay, cx, cy) <= radius * radius;
+  }
+  const acx = cx - ax;
+  const acy = cy - ay;
+  let t = (acx * abx + acy * aby) / abLengthSq;
+  t = clamp(t, 0, 1);
+  const closestX = ax + abx * t;
+  const closestY = ay + aby * t;
+  return distanceSquared(closestX, closestY, cx, cy) <= radius * radius;
+}
+
+function bulletIntersectsTarget(position, radius, targetX, targetY, targetRadius) {
+  if (!position) return false;
+  const totalRadius = radius + targetRadius;
+  if (!(totalRadius > 0)) {
+    return false;
+  }
+  const startX = Number.isFinite(position.prevX) ? position.prevX : position.x;
+  const startY = Number.isFinite(position.prevY) ? position.prevY : position.y;
+  const endX = Number.isFinite(position.x) ? position.x : startX;
+  const endY = Number.isFinite(position.y) ? position.y : startY;
+  if (!Number.isFinite(endX) || !Number.isFinite(endY)) {
+    return false;
+  }
+  const sweep =
+    !position.wrapped &&
+    (Math.abs(endX - startX) > WRAP_EPSILON || Math.abs(endY - startY) > WRAP_EPSILON);
+  if (sweep) {
+    return segmentIntersectsCircle(startX, startY, endX, endY, targetX, targetY, totalRadius);
+  }
+  return distanceSquared(endX, endY, targetX, targetY) <= totalRadius * totalRadius;
+}
+
 function physicsSystem(world, dt) {
   const entities = queryEntities(world, COMPONENT_FLAGS.position | COMPONENT_FLAGS.velocity);
   for (const entity of entities) {
     const position = getComponent(world, 'position', entity);
     const velocity = getComponent(world, 'velocity', entity);
-    position.x += velocity.x * dt;
-    position.y += velocity.y * dt;
-    wrapVector(position, world);
+    const startX = Number.isFinite(position.x) ? position.x : 0;
+    const startY = Number.isFinite(position.y) ? position.y : 0;
+    const nextX = startX + velocity.x * dt;
+    const nextY = startY + velocity.y * dt;
+    position.prevX = startX;
+    position.prevY = startY;
+    position.travelX = nextX - startX;
+    position.travelY = nextY - startY;
+    let wrapped = false;
+    let wrappedX = nextX;
+    let wrappedY = nextY;
+    if (Number.isFinite(world.width) && world.width > 0) {
+      const candidate = wrapValue(nextX, world.width);
+      if (Math.abs(candidate - nextX) > WRAP_EPSILON) wrapped = true;
+      wrappedX = candidate;
+    }
+    if (Number.isFinite(world.height) && world.height > 0) {
+      const candidate = wrapValue(nextY, world.height);
+      if (Math.abs(candidate - nextY) > WRAP_EPSILON) wrapped = true;
+      wrappedY = candidate;
+    }
+    position.x = wrappedX;
+    position.y = wrappedY;
+    position.wrapped = wrapped;
   }
 }
 
@@ -645,6 +730,30 @@ const DEFAULT_WAVE_CONFIG = {
   },
 };
 
+const DEFAULT_ENDLESS_WAVE = normalizeWaveEntry(
+  DEFAULT_WAVE_CONFIG.waves[DEFAULT_WAVE_CONFIG.waves.length - 1] || { rocks: [] }
+);
+
+const DEFAULT_SPAWN_SCALING = {
+  startWave: DEFAULT_WAVE_CONFIG.waves.length + 1,
+  label: DEFAULT_ENDLESS_WAVE.label ? `${DEFAULT_ENDLESS_WAVE.label} +` : 'Endless Siege+',
+  base: {
+    3:
+      DEFAULT_ENDLESS_WAVE.rocks.find((entry) => entry.size === 3)?.count ?? 6,
+    2:
+      DEFAULT_ENDLESS_WAVE.rocks.find((entry) => entry.size === 2)?.count ?? 4,
+    1:
+      DEFAULT_ENDLESS_WAVE.rocks.find((entry) => entry.size === 1)?.count ?? 3,
+  },
+  curve: {
+    3: { rate: 0.42, cap: 14, exponent: 1.12 },
+    2: { rate: 0.5, cap: 12, exponent: 1.18 },
+    1: { rate: 0.6, cap: 10, exponent: 1.22 },
+  },
+};
+
+DEFAULT_WAVE_CONFIG.scaling = DEFAULT_SPAWN_SCALING;
+
 async function loadWaveConfig() {
   if (typeof fetch !== 'function') {
     return DEFAULT_WAVE_CONFIG;
@@ -656,6 +765,7 @@ async function loadWaveConfig() {
     return {
       waves: Array.isArray(data?.waves) ? data.waves : DEFAULT_WAVE_CONFIG.waves,
       splits: typeof data?.splits === 'object' ? data.splits : DEFAULT_WAVE_CONFIG.splits,
+      scaling: typeof data?.scaling === 'object' ? data.scaling : DEFAULT_WAVE_CONFIG.scaling,
     };
   } catch (error) {
     pushEvent('diagnostics', {
@@ -668,9 +778,15 @@ async function loadWaveConfig() {
 }
 
 function resolveWaveConfig(config, wave) {
-  if (!config?.waves?.length) return normalizeWaveEntry(DEFAULT_WAVE_CONFIG.waves[0]);
-  const index = Math.min(config.waves.length - 1, Math.max(0, wave - 1));
-  return normalizeWaveEntry(config.waves[index]);
+  const waves = Array.isArray(config?.waves) ? config.waves : [];
+  if (!waves.length) {
+    return normalizeWaveEntry(DEFAULT_WAVE_CONFIG.waves[0]);
+  }
+  if (wave <= waves.length) {
+    const index = Math.min(waves.length - 1, Math.max(0, wave - 1));
+    return normalizeWaveEntry(waves[index]);
+  }
+  return normalizeWaveEntry(generateScaledWave(config, wave));
 }
 
 function resolveSplitRules(config, size) {
@@ -686,6 +802,103 @@ function normalizeWaveEntry(entry) {
     normalized.rocks = [];
   }
   return normalized;
+}
+
+function normalizeSpawnScaling(scaling, baseConfig) {
+  const resolved = scaling && typeof scaling === 'object' ? scaling : {};
+  const fallbackWave = normalizeWaveEntry(
+    (Array.isArray(baseConfig?.waves) && baseConfig.waves.length
+      ? baseConfig.waves[baseConfig.waves.length - 1]
+      : DEFAULT_ENDLESS_WAVE) || { rocks: [] }
+  );
+  const fallbackCounts = { 1: 0, 2: 0, 3: 0 };
+  for (const entry of fallbackWave.rocks) {
+    if (entry && Number.isFinite(entry.count)) {
+      fallbackCounts[entry.size] = Math.max(0, Math.round(entry.count));
+    }
+  }
+
+  const base = { ...fallbackCounts, ...DEFAULT_SPAWN_SCALING.base };
+  if (resolved.base && typeof resolved.base === 'object') {
+    for (const [key, value] of Object.entries(resolved.base)) {
+      const size = Number(key);
+      if (Number.isFinite(size) && Number.isFinite(value)) {
+        base[size] = Math.max(0, Math.round(value));
+      }
+    }
+  }
+
+  const defaultStart = Number.isFinite(DEFAULT_SPAWN_SCALING.startWave)
+    ? Math.max(1, Math.floor(DEFAULT_SPAWN_SCALING.startWave))
+    : (Array.isArray(baseConfig?.waves) ? baseConfig.waves.length : DEFAULT_WAVE_CONFIG.waves.length) + 1;
+  const startWave = Number.isFinite(resolved.startWave)
+    ? Math.max(1, Math.floor(resolved.startWave))
+    : defaultStart;
+
+  const defaultLabel =
+    typeof DEFAULT_SPAWN_SCALING.label === 'string' && DEFAULT_SPAWN_SCALING.label.trim()
+      ? DEFAULT_SPAWN_SCALING.label.trim()
+      : `${fallbackWave.label || 'Endless'} +`;
+  const label =
+    typeof resolved.label === 'string' && resolved.label.trim() ? resolved.label.trim() : defaultLabel;
+
+  const curve = { ...DEFAULT_SPAWN_SCALING.curve };
+  if (resolved.curve && typeof resolved.curve === 'object') {
+    for (const [key, value] of Object.entries(resolved.curve)) {
+      const size = Number(key);
+      if (!Number.isFinite(size)) continue;
+      if (typeof value === 'object' && value !== null) {
+        curve[size] = { ...curve[size], ...value };
+      } else if (Number.isFinite(value)) {
+        curve[size] = { ...curve[size], rate: Number(value) };
+      }
+    }
+  }
+
+  return { startWave, label, base, curve };
+}
+
+function evaluateSpawnCurve(base, curve, waveOffset) {
+  if (!curve || typeof curve !== 'object' || waveOffset <= 0) {
+    return Math.max(0, Math.round(base));
+  }
+
+  const rate = Number.isFinite(curve.rate) ? Math.max(0, curve.rate) : 0.5;
+  const exponent = Number.isFinite(curve.exponent) ? Math.max(1, curve.exponent) : 1.15;
+  const cap = Number.isFinite(curve.cap) ? curve.cap : Number.isFinite(curve.max) ? curve.max : null;
+  const min = Number.isFinite(curve.min) ? curve.min : null;
+
+  let value = base;
+  const amplitude = cap !== null ? Math.max(0, cap - base) : 0;
+  if (amplitude > 0) {
+    const growth = amplitude * (1 - Math.exp(-Math.pow(waveOffset, exponent) * rate));
+    value = base + growth;
+  } else {
+    value = base + Math.pow(waveOffset * rate, exponent);
+  }
+
+  if (min !== null) {
+    value = Math.max(value, min);
+  }
+  if (cap !== null) {
+    value = Math.min(value, cap);
+  }
+
+  return Math.max(0, Math.round(value));
+}
+
+function generateScaledWave(config, wave) {
+  const scaling = normalizeSpawnScaling(config?.scaling, config);
+  const offset = Math.max(0, wave - scaling.startWave);
+  const rocks = [];
+  for (const size of [3, 2, 1]) {
+    const base = Number.isFinite(scaling.base?.[size]) ? scaling.base[size] : 0;
+    const count = offset > 0 ? evaluateSpawnCurve(base, scaling.curve?.[size], offset) : Math.max(0, Math.round(base));
+    if (count > 0) {
+      rocks.push({ size, count });
+    }
+  }
+  return { type: 'asteroids', label: scaling.label, rocks };
 }
 
 function mergeGlowConfig(overrides = {}) {
@@ -810,6 +1023,8 @@ class AsteroidsGame {
     this.handleResize = this.handleResize.bind(this);
     this.handleShopPurchase = this.handleShopPurchase.bind(this);
     this.handleShopSkip = this.handleShopSkip.bind(this);
+    this.handleBlur = this.handleBlur.bind(this);
+    this.handleFocus = this.handleFocus.bind(this);
 
     this.width = BASE_WIDTH;
     this.height = BASE_HEIGHT;
@@ -818,7 +1033,20 @@ class AsteroidsGame {
     this.world = createWorld(this.width, this.height);
     this.shipEntity = null;
 
-    this.difficultyIndex = 1;
+    this.accumulator = 0;
+    this.fixedStep = FIXED_DT;
+    this.maxFrameTime = MAX_FRAME_TIME;
+    this.maxAccumulatedSteps = MAX_ACCUMULATED_STEPS;
+    this.screenShake = 0;
+    this.hitFlash = 0;
+
+    const savedSettings = this.restoreSettings();
+    this.settings = { ...(savedSettings || {}) };
+    const initialDifficulty = Number.isFinite(savedSettings?.difficultyIndex)
+      ? Math.round(savedSettings.difficultyIndex)
+      : 1;
+    const sanitizedDifficulty = clamp(initialDifficulty, 0, DIFFICULTY_PRESETS.length - 1);
+    this.difficultyIndex = sanitizedDifficulty;
     this.tuning = this.createDifficultyTuning(DIFFICULTY_PRESETS[this.difficultyIndex]?.key || 'standard');
     this.shipMaxSpeed = this.tuning.shipMaxSpeed;
 
@@ -848,7 +1076,20 @@ class AsteroidsGame {
     });
 
     this.score = 0;
-    this.bestScore = this.restoreBestScore();
+    this.bestScore = this.restoreBestScore(Number.isFinite(savedSettings?.best) ? savedSettings.best : 0);
+    this.settings.difficultyIndex = this.difficultyIndex;
+    this.settings.best = this.bestScore;
+    const savedBest = Number.isFinite(savedSettings?.best)
+      ? Math.max(0, Math.round(savedSettings.best))
+      : null;
+    const needsPersist =
+      !Number.isFinite(savedSettings?.difficultyIndex) ||
+      initialDifficulty !== sanitizedDifficulty ||
+      savedBest === null ||
+      savedBest !== this.bestScore;
+    if (needsPersist) {
+      this.persistSettings({ difficultyIndex: this.difficultyIndex, best: this.bestScore });
+    }
     this.lives = 3;
     this.paused = true;
     this.gameOver = false;
@@ -903,6 +1144,8 @@ class AsteroidsGame {
     this.starfield = this.createStarLayers();
     if (typeof window !== 'undefined') {
       window.addEventListener('resize', this.handleResize);
+      window.addEventListener('blur', this.handleBlur);
+      window.addEventListener('focus', this.handleFocus);
       document.addEventListener('visibilitychange', this.handleVisibility);
     }
 
@@ -911,7 +1154,7 @@ class AsteroidsGame {
     this.updateLivesDisplay();
     this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Missions: Reach wave 10 without damage and keep accuracy at ≥70%. Press Start to play.');
 
-    this.lastTime = performance.now();
+    this.resetFrameTiming();
     this.rafId = requestAnimationFrame(this.loop);
 
     recordMilestone('game:constructor:end');
@@ -922,6 +1165,8 @@ class AsteroidsGame {
     this.controls?.dispose?.();
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', this.handleResize);
+      window.removeEventListener('blur', this.handleBlur);
+      window.removeEventListener('focus', this.handleFocus);
       document.removeEventListener('visibilitychange', this.handleVisibility);
     }
     this.endSession();
@@ -932,8 +1177,38 @@ class AsteroidsGame {
   }
 
   handleVisibility() {
+    if (typeof document === 'undefined') return;
     if (document.visibilityState === 'hidden') {
+      if (!this.paused && !this.gameOver && !this.shopActive) {
+        this.pause();
+      } else {
+        this.resetFrameTiming();
+      }
+    } else {
+      this.resetFrameTiming();
+    }
+  }
+
+  handleBlur() {
+    if (!this.paused && !this.gameOver && !this.shopActive) {
       this.pause();
+    } else {
+      this.resetFrameTiming();
+    }
+  }
+
+  handleFocus() {
+    this.resetFrameTiming();
+  }
+
+  resetFrameTiming() {
+    this.accumulator = 0;
+    try {
+      this.lastTime = typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    } catch (_) {
+      this.lastTime = Date.now();
     }
   }
 
@@ -979,6 +1254,10 @@ class AsteroidsGame {
         difficultySlider: { value: '0' },
         difficultyLabels: [],
         surface: null,
+        helpPanel: null,
+        helpButton: null,
+        helpToggle: () => {},
+        exitLink: null,
       };
     }
 
@@ -1023,20 +1302,123 @@ class AsteroidsGame {
       <div class="asteroids-overlay__actions">
         <button type="button" data-action="resume">Start</button>
         <button type="button" data-action="restart">Restart</button>
+        <button type="button" data-action="help" aria-expanded="false">How to Play</button>
+        <a href="../../index.html" data-action="exit" class="asteroids-overlay__link">Back to Hub</a>
       </div>
       <div class="asteroids-overlay__difficulty" id="asteroids-difficulty-panel">
         <label for="asteroids-difficulty">Difficulty</label>
         <input type="range" id="asteroids-difficulty" min="0" max="${DIFFICULTY_PRESETS.length - 1}" step="1" value="${this.difficultyIndex}" />
         <div class="asteroids-overlay__difficulty-labels">${difficultyLabels}</div>
       </div>
+      <div class="asteroids-overlay__howto" hidden>
+        <h2>Flight Manual</h2>
+        <ul>
+          <li>Rotate with ←/→ or A/D</li>
+          <li>Thrust with ↑ or W</li>
+          <li>Fire with Space or Enter</li>
+          <li>Press Esc or P to pause</li>
+        </ul>
+        <p>Clear waves, dodge debris, and spend your rewards between rounds to survive longer.</p>
+      </div>
     `;
     surface.appendChild(overlay);
+
+    const actionsRow = overlay.querySelector('.asteroids-overlay__actions');
+    if (actionsRow) {
+      actionsRow.style.display = 'flex';
+      actionsRow.style.flexWrap = 'wrap';
+      actionsRow.style.gap = '12px';
+      actionsRow.style.marginTop = '16px';
+      actionsRow.style.justifyContent = 'center';
+    }
+    const actionButtons = actionsRow ? Array.from(actionsRow.querySelectorAll('button, a')) : [];
+    for (const button of actionButtons) {
+      button.style.padding = '10px 20px';
+      button.style.borderRadius = '999px';
+      button.style.border = '1px solid rgba(148, 163, 184, 0.35)';
+      button.style.background = 'rgba(15, 23, 42, 0.55)';
+      button.style.color = '#e2e8f0';
+      button.style.cursor = 'pointer';
+      button.style.fontWeight = '600';
+      button.style.textDecoration = 'none';
+      button.style.transition = 'transform 120ms ease, border-color 120ms ease, background 120ms ease';
+      button.addEventListener('mouseenter', () => {
+        button.style.transform = 'translateY(-1px)';
+        button.style.borderColor = 'rgba(94, 234, 212, 0.6)';
+        button.style.background = 'rgba(15, 23, 42, 0.75)';
+      });
+      button.addEventListener('mouseleave', () => {
+        button.style.transform = 'translateY(0)';
+        button.style.borderColor = 'rgba(148, 163, 184, 0.35)';
+        button.style.background = 'rgba(15, 23, 42, 0.55)';
+      });
+    }
 
     overlay.querySelector('[data-action="resume"]').addEventListener('click', () => {
       if (this.gameOver) this.restart();
       else this.start();
     });
     overlay.querySelector('[data-action="restart"]').addEventListener('click', () => this.restart());
+
+    const helpPanel = overlay.querySelector('.asteroids-overlay__howto');
+    if (helpPanel) {
+      helpPanel.style.marginTop = '18px';
+      helpPanel.style.padding = '18px';
+      helpPanel.style.background = 'rgba(15, 23, 42, 0.65)';
+      helpPanel.style.borderRadius = '14px';
+      helpPanel.style.border = '1px solid rgba(148, 163, 184, 0.25)';
+      helpPanel.style.fontSize = '14px';
+      helpPanel.style.lineHeight = '1.6';
+      helpPanel.style.textAlign = 'left';
+      const helpTitle = helpPanel.querySelector('h2');
+      if (helpTitle) {
+        helpTitle.style.margin = '0 0 8px';
+        helpTitle.style.fontSize = '16px';
+        helpTitle.style.fontWeight = '700';
+        helpTitle.style.letterSpacing = '0.02em';
+      }
+      const helpList = helpPanel.querySelector('ul');
+      if (helpList) {
+        helpList.style.listStyle = 'disc';
+        helpList.style.paddingLeft = '20px';
+        helpList.style.margin = '0 0 12px';
+      }
+      helpPanel.querySelectorAll('li').forEach((item) => {
+        item.style.margin = '4px 0';
+      });
+      const helpParagraph = helpPanel.querySelector('p');
+      if (helpParagraph) {
+        helpParagraph.style.margin = '0';
+        helpParagraph.style.opacity = '0.85';
+      }
+      helpPanel.setAttribute('role', 'region');
+    }
+
+    const helpButton = overlay.querySelector('[data-action="help"]');
+    const exitLink = overlay.querySelector('[data-action="exit"]');
+    if (exitLink) {
+      exitLink.setAttribute('role', 'button');
+    }
+
+    let setHelpVisibility = () => {};
+    if (helpButton && helpPanel) {
+      setHelpVisibility = (visible) => {
+        if (visible) {
+          helpPanel.removeAttribute('hidden');
+          helpButton.textContent = 'Close Help';
+          helpButton.setAttribute('aria-expanded', 'true');
+        } else {
+          helpPanel.setAttribute('hidden', '');
+          helpButton.textContent = 'How to Play';
+          helpButton.setAttribute('aria-expanded', 'false');
+        }
+      };
+      setHelpVisibility(false);
+      helpButton.addEventListener('click', () => {
+        const willShow = helpPanel.hasAttribute('hidden');
+        setHelpVisibility(willShow);
+      });
+    }
 
     const difficultyPanel = overlay.querySelector('#asteroids-difficulty-panel');
     if (difficultyPanel) {
@@ -1095,6 +1477,10 @@ class AsteroidsGame {
       difficultySlider,
       difficultyLabels: difficultySpans,
       surface,
+      helpPanel,
+      helpButton,
+      helpToggle: setHelpVisibility,
+      exitLink,
     };
   }
 
@@ -1376,6 +1762,7 @@ class AsteroidsGame {
       }
     }
     this.updateDifficultyUi();
+    this.persistSettings({ difficultyIndex: this.difficultyIndex });
   }
 
   updateDifficultyUi() {
@@ -1588,10 +1975,23 @@ class AsteroidsGame {
     const boundsMargin = 40;
     for (const projectile of this.enemyProjectiles) {
       projectile.life -= dt;
+      const startX = projectile.x;
+      const startY = projectile.y;
       projectile.x += projectile.vx * dt;
       projectile.y += projectile.vy * dt;
       if (ship?.alive && ship.invulnerable <= 0 && shipPos && shipCol) {
-        if (distanceSquared(projectile.x, projectile.y, shipPos.x, shipPos.y) < (projectile.radius + shipCol.radius) ** 2) {
+        const collisionRadius = (projectile.radius || 0) + shipCol.radius;
+        if (
+          segmentIntersectsCircle(
+            startX,
+            startY,
+            projectile.x,
+            projectile.y,
+            shipPos.x,
+            shipPos.y,
+            collisionRadius
+          )
+        ) {
           projectile.life = 0;
           this.shipDestroyed();
         }
@@ -1613,8 +2013,7 @@ class AsteroidsGame {
     if (this.specialWave.type === 'boss') {
       const boss = this.specialWave.boss;
       if (!boss) return false;
-      const distance = distanceSquared(bulletPos.x, bulletPos.y, boss.x, boss.y);
-      if (distance < (radius + boss.radius) ** 2) {
+      if (bulletIntersectsTarget(bulletPos, radius, boss.x, boss.y, boss.radius)) {
         boss.hp -= 1;
         this.spawnExplosion(bulletPos.x, bulletPos.y, 0.6);
         if (boss.hp <= 0) {
@@ -1632,7 +2031,7 @@ class AsteroidsGame {
     if (this.specialWave.type === 'objective' && Array.isArray(this.specialWave.targets)) {
       for (let i = 0; i < this.specialWave.targets.length; i++) {
         const target = this.specialWave.targets[i];
-        if (distanceSquared(bulletPos.x, bulletPos.y, target.x, target.y) < (radius + target.radius) ** 2) {
+        if (bulletIntersectsTarget(bulletPos, radius, target.x, target.y, target.radius)) {
           target.hp -= 1;
           this.spawnExplosion(target.x, target.y, 1.2);
           if (target.hp <= 0) {
@@ -1850,6 +2249,15 @@ class AsteroidsGame {
     ctx.lineCap = 'round';
     ctx.lineWidth = 2;
 
+    const flash = clamp(this.hitFlash, 0, 1);
+    if (flash > 0) {
+      ctx.shadowColor = `rgba(248, 113, 113, ${0.35 * flash})`;
+      ctx.shadowBlur = 18 * flash;
+    } else {
+      ctx.shadowColor = 'rgba(0, 0, 0, 0)';
+      ctx.shadowBlur = 0;
+    }
+
     if (glowConfig && this.shipGlow > 0.001) {
       const engineConfig = glowConfig.engine || DEFAULT_GLOW_CONFIG.engine;
       const engineAlpha = clamp(Number(engineConfig.alpha) || DEFAULT_GLOW_CONFIG.engine.alpha, 0, 1);
@@ -1888,13 +2296,18 @@ class AsteroidsGame {
       ctx.restore();
     }
 
-    ctx.strokeStyle = '#34d399';
+    const strokeColor = flash > 0 ? `rgba(236, 253, 245, ${0.65 + 0.35 * flash})` : '#34d399';
+    ctx.strokeStyle = strokeColor;
     ctx.beginPath();
     ctx.moveTo(SHIP_RADIUS, 0);
     ctx.lineTo(-SHIP_RADIUS * 0.8, SHIP_RADIUS * 0.6);
     ctx.lineTo(-SHIP_RADIUS * 0.5, 0);
     ctx.lineTo(-SHIP_RADIUS * 0.8, -SHIP_RADIUS * 0.6);
     ctx.closePath();
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(248, 113, 113, ${0.18 + 0.22 * flash})`;
+      ctx.fill();
+    }
     ctx.stroke();
     ctx.restore();
   }
@@ -2004,12 +2417,14 @@ class AsteroidsGame {
       }
     }
     this.paused = false;
+    this.resetFrameTiming();
     this.hideOverlay();
   }
 
   pause() {
     if (this.paused || this.gameOver || this.shopActive) return;
     this.paused = true;
+    this.resetFrameTiming();
     const summary = this.getAccuracySummary(true);
     const message = summary === 'No shots fired'
       ? 'No shots fired yet. Press Resume or Space to continue.'
@@ -2020,6 +2435,7 @@ class AsteroidsGame {
   resume() {
     if (!this.paused || this.gameOver || this.shopActive) return;
     this.paused = false;
+    this.resetFrameTiming();
     this.hideOverlay();
   }
 
@@ -2049,6 +2465,7 @@ class AsteroidsGame {
     this.hideOverlay();
     this.showOverlay('Asteroids', 'Rotate with ←/→, thrust with ↑, fire with Space/Enter. Missions: Reach wave 10 without damage and keep accuracy at ≥70%. Press Start to play.');
     this.endSession();
+    this.resetFrameTiming();
   }
 
   startSession() {
@@ -2065,14 +2482,28 @@ class AsteroidsGame {
 
   loop(now) {
     recordRafTick(now);
-    const dt = clamp((now - this.lastTime) / 1000, 0, 0.12);
+    if (!Number.isFinite(this.lastTime)) {
+      this.lastTime = now;
+    }
+    let frameTime = (now - this.lastTime) / 1000;
+    if (!Number.isFinite(frameTime) || frameTime < 0) {
+      frameTime = 0;
+    }
+    frameTime = Math.min(frameTime, this.maxFrameTime);
     this.lastTime = now;
 
     if (!this.paused && !this.gameOver && !this.shopActive) {
-      this.step(dt);
+      const maxAccumulated = this.fixedStep * this.maxAccumulatedSteps;
+      this.accumulator = Math.min(this.accumulator + frameTime, maxAccumulated);
+      while (this.accumulator >= this.fixedStep) {
+        this.step(this.fixedStep);
+        this.accumulator -= this.fixedStep;
+      }
+    } else {
+      this.accumulator = 0;
     }
 
-    this.render(dt);
+    this.render(frameTime);
 
     if (!this.postedReady) {
       this.postedReady = true;
@@ -2179,7 +2610,8 @@ class AsteroidsGame {
           if (!this.world.alive[rock]) continue;
           const rockPos = getComponent(this.world, 'position', rock);
           const rockCol = getComponent(this.world, 'collider', rock);
-          if (distanceSquared(bulletPos.x, bulletPos.y, rockPos.x, rockPos.y) < (radius + rockCol.radius) ** 2) {
+          if (!rockPos || !rockCol) continue;
+          if (bulletIntersectsTarget(bulletPos, radius, rockPos.x, rockPos.y, rockCol.radius)) {
             hit = true;
             this.handleAsteroidHit(rock);
             this.registerShotHit();
@@ -2286,6 +2718,11 @@ class AsteroidsGame {
     });
   }
 
+  addScreenShake(amount = 2) {
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    this.screenShake = clamp(this.screenShake + amount, 0, SCREEN_SHAKE_MAX);
+  }
+
   spawnThrusterParticles(pos, angle, vel) {
     for (let i = 0; i < 2; i++) {
       const entity = createEntity(this.world);
@@ -2305,6 +2742,7 @@ class AsteroidsGame {
   }
 
   spawnExplosion(x, y, size) {
+    this.addScreenShake(clamp(1.5 + size * 1.35, 0.8, SCREEN_SHAKE_MAX));
     for (let i = 0; i < 12; i++) {
       const angle = Math.random() * TWO_PI;
       const speed = 80 + Math.random() * 180;
@@ -2314,6 +2752,20 @@ class AsteroidsGame {
       addComponent(this.world, 'collider', entity, { radius: 1.8 });
       addComponent(this.world, 'particle', entity, { color: 'rgba(239, 68, 68, 0.9)', size: 2 + size });
       addComponent(this.world, 'lifetime', entity, { remaining: 0.6, payload: 'particle' });
+    }
+    const emberCount = Math.max(6, Math.round(8 + size * 2));
+    for (let i = 0; i < emberCount; i++) {
+      const angle = Math.random() * TWO_PI;
+      const speed = 40 + Math.random() * 100;
+      const entity = createEntity(this.world);
+      addComponent(this.world, 'position', entity, { x, y });
+      addComponent(this.world, 'velocity', entity, {
+        x: Math.cos(angle) * speed,
+        y: Math.sin(angle) * speed,
+      });
+      addComponent(this.world, 'collider', entity, { radius: 1.2 });
+      addComponent(this.world, 'particle', entity, { color: 'rgba(251, 191, 36, 0.85)', size: 1.2 + size * 0.35 });
+      addComponent(this.world, 'lifetime', entity, { remaining: 0.45 + Math.random() * 0.25, payload: 'particle' });
     }
     try {
       this.sounds.explode();
@@ -2351,6 +2803,8 @@ class AsteroidsGame {
     ship.alive = false;
     ship.respawn = 2;
     const shipPos = getComponent(this.world, 'position', this.shipEntity);
+    this.hitFlash = Math.min(1.2, this.hitFlash + 1.2);
+    this.addScreenShake(6);
     this.spawnExplosion(shipPos.x, shipPos.y, 2);
     this.lives = Math.max(0, this.lives - 1);
     this.tookDamage = true;
@@ -2408,6 +2862,21 @@ class AsteroidsGame {
     ctx.clearRect(0, 0, this.width, this.height);
     ctx.fillStyle = '#030712';
     ctx.fillRect(0, 0, this.width, this.height);
+
+    if (this.hitFlash > 0) {
+      this.hitFlash = Math.max(0, this.hitFlash - dt * HIT_FLASH_DECAY);
+    }
+
+    ctx.save();
+    if (this.screenShake > 0) {
+      const magnitude = this.screenShake * 0.6;
+      this.screenShake = Math.max(0, this.screenShake - dt * SCREEN_SHAKE_DECAY);
+      const offsetX = (Math.random() * 2 - 1) * magnitude;
+      const offsetY = (Math.random() * 2 - 1) * magnitude;
+      ctx.translate(offsetX, offsetY);
+    } else {
+      this.screenShake = 0;
+    }
 
     if (this.paused || this.gameOver || this.shopActive) {
       this.shipGlow = Math.max(0, this.shipGlow - dt * 2.5);
@@ -2495,6 +2964,7 @@ class AsteroidsGame {
     this.renderShip(ctx, ship, shipPos, shipRot, glowEnabled ? glowConfig : null);
 
     ctx.restore();
+    ctx.restore();
     markFirstFrame();
   }
 
@@ -2557,6 +3027,12 @@ class AsteroidsGame {
     if (!this.hud?.overlay) return;
     this.hud.overlayTitle.textContent = title;
     this.hud.overlayMessage.textContent = message;
+    if (typeof this.hud.helpToggle === 'function') {
+      this.hud.helpToggle(false);
+    } else {
+      if (this.hud?.helpPanel) this.hud.helpPanel.setAttribute('hidden', '');
+      if (this.hud?.helpButton) this.hud.helpButton.setAttribute('aria-expanded', 'false');
+    }
     this.hud.overlay.classList.add('is-visible');
   }
 
@@ -2565,16 +3041,68 @@ class AsteroidsGame {
     this.hud.overlay.classList.remove('is-visible');
   }
 
-  restoreBestScore() {
-    if (typeof localStorage === 'undefined') return 0;
-    const value = localStorage.getItem(STORAGE_KEYS.best);
-    const parsed = Number.parseInt(value, 10);
-    return Number.isFinite(parsed) ? parsed : 0;
+  restoreSettings() {
+    if (typeof localStorage === 'undefined') {
+      return { difficultyIndex: this.difficultyIndex ?? 1, best: this.bestScore ?? 0 };
+    }
+    try {
+      const value = localStorage.getItem(STORAGE_KEYS.settings);
+      if (!value) return {};
+      const parsed = JSON.parse(value);
+      if (!parsed || typeof parsed !== 'object') return {};
+      return parsed;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  persistSettings(overrides = {}) {
+    const merged = { ...(this.settings || {}), ...(overrides || {}) };
+    if (Number.isFinite(merged.difficultyIndex)) {
+      merged.difficultyIndex = clamp(Math.round(merged.difficultyIndex), 0, DIFFICULTY_PRESETS.length - 1);
+    }
+    if (Number.isFinite(merged.best)) {
+      merged.best = Math.max(0, Math.round(merged.best));
+    }
+    this.settings = merged;
+    if (typeof localStorage === 'undefined') {
+      return;
+    }
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.settings,
+        JSON.stringify({
+          difficultyIndex: merged.difficultyIndex ?? this.difficultyIndex,
+          best: merged.best ?? this.bestScore,
+        })
+      );
+    } catch (_) {
+      /* noop */
+    }
+  }
+
+  restoreBestScore(fallback = 0) {
+    const safeFallback = Number.isFinite(fallback) ? Math.max(0, Math.round(fallback)) : 0;
+    if (typeof localStorage === 'undefined') return safeFallback;
+    try {
+      const value = localStorage.getItem(STORAGE_KEYS.best);
+      const parsed = Number.parseInt(value, 10);
+      if (Number.isFinite(parsed)) return Math.max(0, parsed);
+    } catch (_) {
+      /* noop */
+    }
+    return safeFallback;
   }
 
   persistBestScore() {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(STORAGE_KEYS.best, String(this.bestScore));
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEYS.best, String(this.bestScore));
+      } catch (_) {
+        /* noop */
+      }
+    }
+    this.persistSettings({ best: this.bestScore });
   }
 }
 function boot(context = {}) {
@@ -2616,6 +3144,10 @@ function boot(context = {}) {
       level: 'error',
       message: '[asteroids] missing game canvas',
       details: { readyState, attemptedSelectors: ['#game-canvas', '#game'] },
+    });
+    renderBootError('Unable to find the Asteroids canvas element.', {
+      readyState,
+      attemptedSelectors: ['#game-canvas', '#game'],
     });
     bootInProgress = false;
     console.error('[asteroids] missing game canvas');
