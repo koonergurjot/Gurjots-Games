@@ -1588,7 +1588,6 @@ let food = null;
 let fruitSpawnTime = performance.now();
 let turnBuffer = [];
 const MAX_TURN_BUFFER = 2;
-let lastTurnTick = 0;
 
 function normalizeDirection(nd) {
   if (!nd || typeof nd.x !== 'number' || typeof nd.y !== 'number') return null;
@@ -1674,7 +1673,6 @@ function resetGame(reason = 'manual', options = {}) {
   speedBoostActive = false;
   speedBoostUntil = 0;
   tickCounter = 0;
-  lastTurnTick = 0;
   foodsEaten = 0;
   applesEaten = 0;
   maxSnakeLength = snake.length;
@@ -2055,7 +2053,6 @@ function step() {
     const nextEntry = turnBuffer.shift();
     if (nextEntry && nextEntry.dir && !directionsOpposite(nextEntry.dir, lastDir)) {
       dir = { x: nextEntry.dir.x, y: nextEntry.dir.y };
-      lastTurnTick = nextEntry.tick;
     }
   }
   lastSnake = snake.map(s => ({ ...s }));
