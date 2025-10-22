@@ -226,15 +226,18 @@ function fetchJson(url) {
     for (const layerConfig of config.layers) {
       if (layerConfig.type === 'image') {
         const image = await loadImage(layerConfig.source || layerConfig.image);
+        const intrinsicWidth = 'naturalWidth' in image ? image.naturalWidth : image.width;
+        const intrinsicHeight = 'naturalHeight' in image ? image.naturalHeight : image.height;
+        const scale = layerConfig.scale ?? 1;
         layers.push({
           type: 'image',
           image,
           parallax: layerConfig.parallax ?? 0.5,
-          scale: layerConfig.scale ?? 1,
+          scale,
           bottom: layerConfig.bottom ?? 0,
           offset: 0,
-          width: image.width * (layerConfig.scale ?? 1),
-          height: image.height * (layerConfig.scale ?? 1),
+          width: intrinsicWidth * scale,
+          height: intrinsicHeight * scale,
         });
       } else if (layerConfig.type === 'gradient') {
         layers.push({
@@ -321,11 +324,13 @@ function fetchJson(url) {
         if (definition?.src || definition?.source) {
           const src = definition.src || definition.source;
           const promise = loadImage(src).then((image) => {
+            const intrinsicWidth = 'naturalWidth' in image ? image.naturalWidth : image.width;
+            const intrinsicHeight = 'naturalHeight' in image ? image.naturalHeight : image.height;
             sprites[name][lod] = {
               ...definition,
               image,
-              width: definition.size?.[0] ?? image.width,
-              height: definition.size?.[1] ?? image.height,
+              width: definition.size?.[0] ?? intrinsicWidth,
+              height: definition.size?.[1] ?? intrinsicHeight,
             };
           });
           loadPromises.push(promise);
