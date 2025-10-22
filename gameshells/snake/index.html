@@ -13,7 +13,38 @@
     }
     </script>
     <script id="gg-diag-autowire" data-shell-diag></script>
-    <style>html,body{height:100%;margin:0;background:#000;overflow:hidden}</style>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 22% 18%, rgba(74, 222, 128, 0.32), transparent 55%),
+          radial-gradient(circle at 78% 70%, rgba(45, 212, 191, 0.32), transparent 55%),
+          linear-gradient(150deg, #031005 0%, #062711 40%, #0b3a1b 100%);
+        color: #dcfce7;
+        overflow: hidden;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+        background-size: 48px 48px;
+        opacity: 0.35;
+      }
+    </style>
   </head>
   <body data-shell-diag>
     <canvas id="game" width="800" height="600" aria-label="Snake canvas"></canvas>

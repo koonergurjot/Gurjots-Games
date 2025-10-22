@@ -12,7 +12,38 @@
       }
     }
     </script>
-    <style>html,body{height:100%;margin:0;background:#000;overflow:hidden}</style>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 25% 20%, rgba(251, 191, 36, 0.38), transparent 55%),
+          radial-gradient(circle at 75% 80%, rgba(249, 115, 22, 0.32), transparent 55%),
+          linear-gradient(165deg, #1a0f07 0%, #32160e 40%, #4a2312 100%);
+        color: #fcefe3;
+        overflow: hidden;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+        background-size: 72px 72px;
+        opacity: 0.3;
+      }
+    </style>
   </head>
   <body>
     <canvas id="game-canvas" width="800" height="600" aria-label="2048 canvas"></canvas>

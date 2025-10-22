@@ -12,7 +12,43 @@
       }
     }
     </script>
-    <style>html,body{height:100%;margin:0;background:#000;overflow:hidden}</style>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 20% 15%, rgba(244, 114, 182, 0.42), transparent 55%),
+          radial-gradient(circle at 80% 25%, rgba(129, 140, 248, 0.35), transparent 55%),
+          linear-gradient(140deg, #060018 0%, #120530 45%, #230046 100%);
+        color: #f8f5ff;
+        overflow: hidden;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image: repeating-linear-gradient(
+          135deg,
+          rgba(255, 255, 255, 0.08) 0px,
+          rgba(255, 255, 255, 0.08) 2px,
+          transparent 2px,
+          transparent 12px
+        );
+        opacity: 0.25;
+        mix-blend-mode: screen;
+      }
+    </style>
   </head>
   <body>
     <canvas id="b" width="1000" height="800" aria-label="Breakout canvas"></canvas>

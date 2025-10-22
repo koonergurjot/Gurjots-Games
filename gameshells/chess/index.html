@@ -13,9 +13,44 @@
       }
     }
     </script>
-    <style>html,body{height:100%;margin:0;background:#000;overflow:hidden}</style>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(160deg, #050b14 0%, #0a1424 55%, #101d33 100%),
+          repeating-linear-gradient(
+            45deg,
+            rgba(22, 32, 52, 0.7) 0,
+            rgba(22, 32, 52, 0.7) 48px,
+            rgba(13, 23, 40, 0.7) 48px,
+            rgba(13, 23, 40, 0.7) 96px
+          );
+        color: #e6e7ea;
+        overflow: hidden;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(circle at 75% 15%, rgba(59, 130, 246, 0.22), transparent 55%);
+        opacity: 0.6;
+        mix-blend-mode: screen;
+      }
+    </style>
   </head>
-  <body style="margin:0;background:#0b1220;color:#e6e7ea;">
+  <body>
     <main style="display:flex;gap:16px;justify-content:center;align-items:flex-start;padding:16px 16px 80px;">
       <div style="position:relative;">
         <canvas

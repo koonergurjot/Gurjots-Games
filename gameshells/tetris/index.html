@@ -13,6 +13,10 @@
     }
     </script>
     <style>
+      :root {
+        color-scheme: dark;
+      }
+
       html,
       body {
         height: 100%;
@@ -27,9 +31,24 @@
         gap: 16px;
         padding: 24px;
         box-sizing: border-box;
-        background: #000;
-        color: #fff;
+        background:
+          radial-gradient(circle at 20% 18%, rgba(59, 130, 246, 0.35), transparent 55%),
+          radial-gradient(circle at 80% 72%, rgba(249, 115, 22, 0.28), transparent 55%),
+          linear-gradient(165deg, #05000f 0%, #120533 45%, #1e0754 100%);
+        color: #f5f3ff;
         overflow: hidden;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+        background-size: 64px 64px;
+        opacity: 0.25;
       }
 
       canvas,

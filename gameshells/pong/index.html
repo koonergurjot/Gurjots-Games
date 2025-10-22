@@ -12,7 +12,43 @@
       }
     }
     </script>
-    <style>html,body{height:100%;margin:0;background:#000;overflow:hidden}</style>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 18% 20%, rgba(59, 130, 246, 0.4), transparent 55%),
+          radial-gradient(circle at 82% 30%, rgba(251, 191, 36, 0.25), transparent 55%),
+          linear-gradient(170deg, #02050c 0%, #041022 50%, #0a1e36 100%);
+        color: #e6f1ff;
+        overflow: hidden;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image: repeating-linear-gradient(
+          0deg,
+          rgba(105, 225, 255, 0.12) 0,
+          rgba(105, 225, 255, 0.12) 2px,
+          transparent 2px,
+          transparent 10px
+        );
+        mix-blend-mode: screen;
+        opacity: 0.35;
+      }
+    </style>
   </head>
   <body>
     <canvas id="game-canvas" width="800" height="600" aria-label="Pong Classic canvas"></canvas>

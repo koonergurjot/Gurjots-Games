@@ -12,7 +12,38 @@
       }
     }
     </script>
-    <style>html,body{height:100%;margin:0;background:#000;overflow:hidden}</style>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 18% 22%, rgba(45, 212, 191, 0.3), transparent 55%),
+          radial-gradient(circle at 82% 78%, rgba(59, 130, 246, 0.35), transparent 55%),
+          linear-gradient(150deg, #021118 0%, #041e28 40%, #062c3a 100%);
+        color: #d1f5f5;
+        overflow: hidden;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image: linear-gradient(rgba(148, 197, 216, 0.12) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 197, 216, 0.12) 1px, transparent 1px);
+        background-size: 64px 64px;
+        opacity: 0.35;
+      }
+    </style>
   </head>
   <body>
     <canvas id="game-canvas" width="800" height="600" aria-label="Maze 3D canvas"></canvas>

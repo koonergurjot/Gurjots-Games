@@ -12,7 +12,39 @@
       }
     }
     </script>
-    <style>html,body{height:100%;margin:0;background:#000;overflow:hidden}</style>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 20% 18%, rgba(74, 222, 128, 0.32), transparent 55%),
+          radial-gradient(circle at 78% 28%, rgba(251, 191, 36, 0.28), transparent 55%),
+          linear-gradient(160deg, #020509 0%, #07121f 45%, #102030 100%);
+        color: #e0f8ef;
+        overflow: hidden;
+        position: relative;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          radial-gradient(circle at center, rgba(244, 244, 245, 0.25) 0, rgba(244, 244, 245, 0.25) 1px, transparent 1px),
+          radial-gradient(circle at center, rgba(148, 163, 184, 0.12) 0, rgba(148, 163, 184, 0.12) 2px, transparent 2px);
+        background-size: 160px 160px, 80px 80px;
+        opacity: 0.35;
+      }
+    </style>
   </head>
   <body>
     <canvas id="game" width="800" height="600" aria-label="Alien Shooter canvas"></canvas>
