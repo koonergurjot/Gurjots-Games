@@ -104,23 +104,9 @@ let handleShellPause = () => {};
 let handleShellResume = () => {};
 let fallbackController = null;
 let fallbackActive = false;
-let rendererMaxAnisotropy = 0;
 let stageRef = null;
 let statusRef = null;
 let coordsRef = null;
-
-function getMaxAnisotropy(renderer) {
-  if (!renderer || !renderer.capabilities) return 0;
-  const { capabilities } = renderer;
-  if (typeof capabilities.getMaxAnisotropy === 'function') {
-    try {
-      return capabilities.getMaxAnisotropy();
-    } catch (_) {
-      return capabilities.maxAnisotropy || 0;
-    }
-  }
-  return capabilities.maxAnisotropy || 0;
-}
 
 function configureRenderer(renderer, THREE) {
   if (!renderer || !THREE) return;
@@ -145,7 +131,6 @@ function configureRenderer(renderer, THREE) {
   if ('outputColorSpace' in renderer && THREE.SRGBColorSpace !== undefined) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
   }
-  rendererMaxAnisotropy = getMaxAnisotropy(renderer);
 }
 
 function activateFallback(options = {}) {
