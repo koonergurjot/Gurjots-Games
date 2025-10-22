@@ -528,6 +528,9 @@ let wrapEnabled = params.has('wrap') ? params.get('wrap') !== '0' : optionState.
 let wallsEnabled = optionState.walls;
 let uiController = null;
 let hudDirty = true;
+let paused = false;
+const storedContrast = safeStorageGetItem('snake:contrast');
+let highContrastEnabled = storedContrast === '1';
 sizeSel.value = String(N);
 sizeSel.onchange = ()=>{ params.set('size', sizeSel.value); location.search = params.toString(); };
 if (wrapToggle) {
@@ -687,8 +690,6 @@ let gameOverReported = false;
 const storedBest = safeStorageGetItem('snake:best');
 let bestScore = storedBest != null ? Number(storedBest) : 0;
 if (!Number.isFinite(bestScore)) bestScore = 0;
-const storedContrast = safeStorageGetItem('snake:contrast');
-let highContrastEnabled = storedContrast === '1';
 const HIGH_CONTRAST_COLORS = {
   boardBase: '#020617',
   boardAccent: '#1f2937',
@@ -1416,8 +1417,6 @@ function scheduleDiagnosticsRender() {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(cb);
   else setTimeout(cb, 32);
 }
-let paused = false;
-
 let engine = null;
 
 function hashSeedString(str) {
