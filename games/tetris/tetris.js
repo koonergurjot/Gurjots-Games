@@ -360,9 +360,41 @@ const CLEAR_STAGE_SPLIT=[CLEAR_EFFECT_DURATION*0.5,CLEAR_EFFECT_DURATION*0.5];
 const LINES_PER_LEVEL=10;
 const LOCK_DELAY=0.5;
 const LOCK_RESET_LIMIT=15;
-const MOVE_DAS=0.16;
-const MOVE_ARR=0.02;
+const DEFAULT_MOVE_DAS=0.16;
+const DEFAULT_MOVE_ARR=0.02;
+const MIN_MOVE_DAS=0;
+const MAX_MOVE_DAS=0.4;
+const MIN_MOVE_ARR=0;
+const MAX_MOVE_ARR=0.1;
 const SOFT_DROP_FACTOR=6;
+
+function clampTiming(value,min,max){
+  if(!Number.isFinite(value)) return min;
+  if(value<min) return min;
+  if(value>max) return max;
+  return value;
+}
+
+function readTimingSetting(key,fallback,min,max){
+  try{
+    const stored=localStorage.getItem(key);
+    if(stored==null) return clampTiming(fallback,min,max);
+    const parsed=Number.parseFloat(stored);
+    if(Number.isFinite(parsed)) return clampTiming(parsed,min,max);
+  }catch(_){ /* ignore */ }
+  return clampTiming(fallback,min,max);
+}
+
+let moveDas=readTimingSetting('tetris:das',DEFAULT_MOVE_DAS,MIN_MOVE_DAS,MAX_MOVE_DAS);
+let moveArr=readTimingSetting('tetris:arr',DEFAULT_MOVE_ARR,MIN_MOVE_ARR,MAX_MOVE_ARR);
+
+function getMoveDas(){
+  return moveDas;
+}
+
+function getMoveArr(){
+  return moveArr;
+}
 
 function createGrid(){
   return new Uint8Array(GRID_SIZE);
@@ -906,20 +938,87 @@ function drawEffects(){
   ctx.imageSmoothingEnabled=false;
   for(const fx of effects){
     const sprite=spriteStore.effects?.[fx.type];
-    if(!isImageReady(sprite)) continue;
     const progress=Math.max(0,Math.min(1,fx.life/fx.duration));
     const alpha=Math.pow(progress,0.6);
-    const baseW=sprite.naturalWidth||sprite.width;
-    const baseH=sprite.naturalHeight||sprite.height;
-    const w=(baseW||32)*(fx.scale||1);
-    const h=(baseH||32)*(fx.scale||1);
-    ctx.save();
-    ctx.globalAlpha=alpha;
-    ctx.translate(fx.x,fx.y);
-    if(fx.rotation) ctx.rotate(fx.rotation);
-    ctx.drawImage(sprite,-w/2,-h/2,w,h);
-    ctx.restore();
+    if(isImageReady(sprite)){
+      const baseW=sprite.naturalWidth||sprite.width;
+      const baseH=sprite.naturalHeight||sprite.height;
+      const w=(baseW||32)*(fx.scale||1);
+      const h=(baseH||32)*(fx.scale||1);
+      ctx.save();
+      ctx.globalAlpha=alpha;
+      ctx.translate(fx.x,fx.y);
+      if(fx.rotation) ctx.rotate(fx.rotation);
+      ctx.drawImage(sprite,-w/2,-h/2,w,h);
+      ctx.restore();
+    }else{
+      drawFallbackEffect(fx,alpha,progress);
+    }
   }
+  ctx.restore();
+}
+
+function drawFallbackEffect(fx,alpha,progress){
+  if(!ctx) return;
+  const type=fx?.type||'';
+  if(type==='spark'){
+    drawFallbackSpark(fx,alpha);
+    return;
+  }
+  if(type==='explosion'){
+    drawFallbackExplosion(fx,alpha,progress);
+  }
+}
+
+function drawFallbackSpark(fx,alpha){
+  const scale=Math.max(0.5,fx?.scale||1);
+  const length=8*scale;
+  ctx.save();
+  ctx.globalAlpha=Math.max(0,Math.min(1,alpha));
+  ctx.translate(fx.x,fx.y);
+  ctx.rotate(fx.rotation||0);
+  ctx.lineCap='round';
+  ctx.strokeStyle='rgba(148, 197, 255, 0.9)';
+  ctx.lineWidth=Math.max(1,scale*1.2);
+  const arms=6;
+  for(let i=0;i<arms;i+=1){
+    const angle=(Math.PI/arms)*i;
+    const dx=Math.cos(angle)*length;
+    const dy=Math.sin(angle)*length;
+    ctx.beginPath();
+    ctx.moveTo(-dx*0.35,-dy*0.35);
+    ctx.lineTo(dx,dy);
+    ctx.stroke();
+  }
+  ctx.fillStyle='rgba(96, 165, 250, 0.35)';
+  ctx.beginPath();
+  ctx.arc(0,0,scale*2.6,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFallbackExplosion(fx,alpha,progress){
+  const scale=Math.max(0.9,fx?.scale||1);
+  const radius=Math.max(6,18*scale);
+  ctx.save();
+  ctx.globalAlpha=Math.max(0,Math.min(1,alpha));
+  ctx.translate(fx.x,fx.y);
+  const gradient=ctx.createRadialGradient(0,0,0,0,0,radius);
+  gradient.addColorStop(0,'rgba(248, 250, 252, 0.9)');
+  gradient.addColorStop(0.4,'rgba(56, 189, 248, 0.6)');
+  gradient.addColorStop(1,'rgba(56, 189, 248, 0)');
+  ctx.fillStyle=gradient;
+  ctx.beginPath();
+  ctx.arc(0,0,radius,0,Math.PI*2);
+  ctx.fill();
+  const haloRadius=Math.max(radius*1.2, radius+6);
+  const haloAlpha=Math.max(0,Math.min(0.45,alpha*0.75));
+  ctx.globalAlpha=haloAlpha*(1-Math.max(0,Math.min(1,progress)));
+  ctx.strokeStyle='rgba(56, 189, 248, 0.5)';
+  ctx.lineWidth=Math.max(1,scale*1.5);
+  ctx.beginPath();
+  ctx.arc(0,0,haloRadius,0,Math.PI*2);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -962,6 +1061,13 @@ const scoreDisplay=document.getElementById('score');
 const scoringSystem=createScoringSystem();
 let hud=null;
 
+function syncHudSettings(){
+  if(!hud || typeof hud.syncSettings!=='function') return;
+  try{
+    hud.syncSettings({ ghost: showGhost, das: getMoveDas(), arr: getMoveArr() });
+  }catch(_){ /* ignore */ }
+}
+
 const moveState={
   left:{active:false,das:0,arr:0},
   right:{active:false,das:0,arr:0},
@@ -975,6 +1081,44 @@ const rotationGrid={
     return getGridCell(grid,x,y);
   },
 };
+
+function setMoveDas(value){
+  const parsed=Number.parseFloat(value);
+  const normalized=Number.isFinite(parsed)?parsed:DEFAULT_MOVE_DAS;
+  moveDas=clampTiming(normalized,MIN_MOVE_DAS,MAX_MOVE_DAS);
+  try{ localStorage.setItem('tetris:das',moveDas.toFixed(3)); }catch(_){ }
+  if(moveState.left.active){
+    moveState.left.das=Math.min(moveState.left.das,moveDas);
+  }
+  if(moveState.right.active){
+    moveState.right.das=Math.min(moveState.right.das,moveDas);
+  }
+  syncHudSettings();
+  return moveDas;
+}
+
+function setMoveArr(value){
+  const parsed=Number.parseFloat(value);
+  const normalized=Number.isFinite(parsed)?parsed:DEFAULT_MOVE_ARR;
+  moveArr=clampTiming(normalized,MIN_MOVE_ARR,MAX_MOVE_ARR);
+  try{ localStorage.setItem('tetris:arr',moveArr.toFixed(3)); }catch(_){ }
+  if(moveArr<=0){
+    if(moveState.left.active) moveState.left.arr=0;
+    if(moveState.right.active) moveState.right.arr=0;
+  }
+  syncHudSettings();
+  return moveArr;
+}
+
+function setGhostPreference(enabled){
+  const next=!!enabled;
+  if(showGhost===next) return showGhost;
+  showGhost=next;
+  try{ localStorage.setItem('tetris:ghost',showGhost?'1':'0'); }catch(_){ }
+  updateGhost();
+  syncHudSettings();
+  return showGhost;
+}
 
 function syncRandomizerUrl(){
   if(typeof history?.replaceState!=='function') return;
@@ -1313,6 +1457,8 @@ const TetrisAPI={
   get combo(){ return combo; },
   get canHold(){ return canHold; },
   get showGhost(){ return showGhost; },
+  get das(){ return getMoveDas(); },
+  get arr(){ return getMoveArr(); },
   get backToBack(){ return backToBack; },
   get dailySeedActive(){ return dailySeedActive; },
   get dailySeedLabel(){ return dailySeedLabel; },
@@ -1350,6 +1496,15 @@ const TetrisAPI={
   },
   setDailySeedMode(enabled){
     return setDailySeedMode(enabled);
+  },
+  setDas(value){
+    return setMoveDas(value);
+  },
+  setArr(value){
+    return setMoveArr(value);
+  },
+  setGhostPreference(enabled){
+    return setGhostPreference(enabled);
   },
   start(){
     if(over) return false;
@@ -1477,10 +1632,17 @@ hud=createHud({
   onToggleDailySeed(enabled){
     setDailySeedMode(enabled);
   },
+  getGhost:()=>showGhost,
+  setGhost:setGhostPreference,
+  getDas:getMoveDas,
+  setDas:setMoveDas,
+  getArr:getMoveArr,
+  setArr:setMoveArr,
 });
 updateDailyHud();
 updateHudStats();
 updateHudHold();
+syncHudSettings();
 let bc=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('tetris'):null;
 if(bc){
   logBroadcastEvent('init',null,{event:'open'});
@@ -1508,6 +1670,7 @@ if(bc && mode==='spectate'){
       rngSeed=Number.isInteger(data.seed)?(data.seed>>>0):pieceRandomizer.seed;
       syncScoreDisplay();
       updateGhost();
+      syncHudSettings();
     }
   };
 }
@@ -2067,22 +2230,29 @@ function updateHorizontalMovement(dt){
   const dir=activeHorizontalDirection();
   if(!dir) return;
   const state=moveState[dir];
-  if(state.das>0){
+  const dasTarget=Math.max(0,getMoveDas());
+  if(state.das>dasTarget){
+    state.das=dasTarget;
+  }
+  if(dasTarget>0 && state.das>0){
     state.das=Math.max(0,state.das-dt);
-    if(state.das===0){
-      executeAction(dir,{record:mode==='play'});
-      state.arr=0;
+    if(state.das>0){
+      return;
     }
+    executeAction(dir,{record:mode==='play'});
+    state.arr=0;
     return;
   }
-  const interval=Math.max(MOVE_ARR,0.001);
+  state.das=0;
+  const arrValue=Math.max(getMoveArr(),0);
+  const interval=arrValue>0?arrValue:0.001;
   state.arr+=dt;
   while(state.arr>=interval){
     const moved=executeAction(dir,{record:mode==='play'});
     state.arr-=interval;
     if(state.arr<0) state.arr=0;
     if(!moved) break;
-    if(MOVE_ARR<=0){
+    if(arrValue<=0){
       state.arr=0;
       break;
     }
@@ -2111,9 +2281,7 @@ addEventListener('keydown',e=>{
   }
   if((key.startsWith('Arrow') || key==='Spacebar' || e.code==='Space') && e.repeat) return;
   if(keyLower==='g'){
-    showGhost=!showGhost;
-    localStorage.setItem('tetris:ghost',showGhost?'1':'0');
-    updateGhost();
+    setGhostPreference(!showGhost);
     return;
   }
   if(mode!=='play') return;
@@ -2136,7 +2304,7 @@ addEventListener('keydown',e=>{
 
   if(key==='ArrowLeft'){
     moveState.left.active=true;
-    moveState.left.das=MOVE_DAS;
+    moveState.left.das=Math.max(0,getMoveDas());
     moveState.left.arr=0;
     moveState.lastDir='left';
     executeAction('left');
@@ -2144,7 +2312,7 @@ addEventListener('keydown',e=>{
   }
   if(key==='ArrowRight'){
     moveState.right.active=true;
-    moveState.right.das=MOVE_DAS;
+    moveState.right.das=Math.max(0,getMoveDas());
     moveState.right.arr=0;
     moveState.lastDir='right';
     executeAction('right');
