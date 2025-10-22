@@ -1,4 +1,95 @@
 import { VfxController } from './vfx.js';
+import { send } from '../common/diag-adapter.js';
+import { drawBootPlaceholder, showErrorOverlay } from '../common/boot-utils.js';
+
+const FX_CONFIG_URL = '/assets/alien-shooter/fx.json';
+const FX_TIMEOUT_MS = 4000;
+
+const FALLBACK_FX_CONFIG = {
+  maxParticles: 320,
+  effects: {
+    explosion: {
+      count: 18,
+      life: [0.28, 0.65],
+      size: [6, 16],
+      speed: [80, 180],
+      gravity: 60,
+      drag: 1.4,
+      colors: ['#ff9f43', '#ffd166', '#fff1b1'],
+      fadePower: 1.6,
+      shape: 'circle',
+      blend: 'lighter',
+    },
+    explosionSparks: {
+      count: 12,
+      life: [0.16, 0.32],
+      size: [18, 36],
+      speed: [340, 520],
+      drag: 3,
+      colors: ['#ffd166', '#ffe29a'],
+      fadePower: 1.2,
+      shape: 'spark',
+      thickness: [1, 3],
+      blend: 'lighter',
+    },
+    dust: {
+      count: 10,
+      life: [0.6, 1.1],
+      size: [4, 12],
+      speed: [26, 80],
+      gravity: -10,
+      drag: 0.9,
+      colors: ['#565264', '#6c6a7a', '#7f7b8b'],
+      fadePower: 2,
+      shape: 'circle',
+      blend: 'source-over',
+    },
+    muzzle: {
+      count: 6,
+      life: [0.05, 0.1],
+      size: [18, 32],
+      speed: [240, 360],
+      drag: 5,
+      colors: ['#ffe066', '#fff3b0'],
+      fadePower: 1,
+      shape: 'spark',
+      thickness: [2, 3],
+      blend: 'lighter',
+      cone: 0.28,
+    },
+    muzzleFlash: {
+      count: 3,
+      life: [0.04, 0.07],
+      size: [26, 40],
+      colors: ['rgba(255, 240, 200, 1)', 'rgba(255, 220, 120, 1)'],
+      fadePower: 1.3,
+      shape: 'flash',
+      blend: 'lighter',
+    },
+  },
+};
+
+function createFallbackFx() {
+  return new VfxController(FALLBACK_FX_CONFIG);
+}
+
+function withTimeout(promise, ms) {
+  if (!Number.isFinite(ms) || ms <= 0) {
+    return promise;
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
 
 const TWO_PI = Math.PI * 2;
 const MAX_TIME_STEP = 1 / 30; // clamp delta to keep physics consistent
@@ -148,7 +239,7 @@ function formatScore(value) {
 }
 
 class AlienShooterGame {
-  constructor(canvas) {
+  constructor(canvas, ctx) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     if (!this.ctx) {
@@ -224,7 +315,7 @@ class AlienShooterGame {
     this.boundLoop = (time) => this.loopFrame(time);
   }
   async init() {
-    this.fx = await VfxController.create('/assets/alien-shooter/fx.json');
+    this.fx = createFallbackFx();
     this.resize();
     this.ready = true;
 
@@ -262,6 +353,15 @@ class AlienShooterGame {
     this.resetRun(true);
 
     requestAnimationFrame(this.boundLoop);
+
+    try {
+      const loadedFx = await withTimeout(VfxController.create(FX_CONFIG_URL), FX_TIMEOUT_MS);
+      if (loadedFx) {
+        this.fx = loadedFx;
+      }
+    } catch (error) {
+      console.warn('[alien-shooter] Falling back to inline FX config', error);
+    }
   }
 
   setTheme(name) {
@@ -1017,18 +1117,24 @@ class AlienShooterGame {
   }
 }
 
-async function boot() {
+function boot() {
   const canvas = document.getElementById('game');
-  if (!canvas) {
-    console.error('[alien-shooter] Missing #game canvas');
+  const ctx = canvas && typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+  if (!canvas || !ctx) {
+    console.error('[alien-shooter] Missing canvas or 2D context');
+    send('GAME_ERROR', { reason: 'no-canvas' });
+    showErrorOverlay('Canvas rendering is not supported on this device.');
     return;
   }
-  const game = new AlienShooterGame(canvas);
-  try {
-    await game.init();
-  } catch (error) {
+
+  drawBootPlaceholder(canvas, ctx, 'Launching…');
+
+  const game = new AlienShooterGame(canvas, ctx);
+  game.init().catch((error) => {
     console.error('[alien-shooter] Failed to start', error);
-  }
+    send('GAME_ERROR', { reason: 'init-failed', message: error?.message });
+    showErrorOverlay('We could not start Alien Shooter.');
+  });
 }
 
 if (document.readyState === 'loading') {

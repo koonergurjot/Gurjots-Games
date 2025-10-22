@@ -47,3 +47,24 @@ export function pushEvent(category, payload) {
 export function isCaptureReady() {
   return !!(globalScope && globalScope.__DIAG_CAPTURE_READY);
 }
+
+export function send(type, payload) {
+  if (!type || typeof type !== 'string') {
+    return null;
+  }
+
+  const message = {
+    type,
+    ...(payload && typeof payload === 'object' ? payload : {}),
+  };
+
+  try {
+    if (globalScope && globalScope.parent && typeof globalScope.parent.postMessage === 'function') {
+      globalScope.parent.postMessage(message, '*');
+    }
+  } catch (_err) {
+    /* ignore postMessage failures */
+  }
+
+  return message;
+}
