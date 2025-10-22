@@ -304,6 +304,13 @@ hud.innerHTML = `
       </label>
       <label class="hud-field hud-field--toggle"><input type="checkbox" id="wallsToggle"/> Walls enabled</label>
       <label class="hud-field hud-field--toggle"><input type="checkbox" id="wrapToggle"/> Wrap edges</label>
+      <div class="hud-field hud-field--actions" role="group" aria-label="Quick actions">
+        <button type="button" class="hud-button" id="howToBtn">How to play</button>
+        <button type="button" class="hud-button" id="pauseBtn" aria-pressed="false">Pause</button>
+        <button type="button" class="hud-button" id="restartBtn">Restart</button>
+        <a href="../../index.html" class="hud-link" id="backLink">← Back to library</a>
+      </div>
+      <label class="hud-field hud-field--toggle"><input type="checkbox" id="contrastToggle"/> High contrast mode</label>
     </div>
   </div>
   <div class="hud-panel hud-panel--skins">
@@ -358,6 +365,14 @@ const comboMeterNode = document.getElementById('comboMeter');
 const comboTimerNode = document.getElementById('comboTimer');
 const diagnosticsToggle = document.getElementById('diagnosticsToggle');
 const watchdogLogNode = document.getElementById('watchdogLog');
+const pauseButtonEl = document.getElementById('pauseBtn');
+const howToButton = document.getElementById('howToBtn');
+const restartButton = document.getElementById('restartBtn');
+const contrastToggle = document.getElementById('contrastToggle');
+const howToOverlay = document.querySelector('.snake-howto');
+const howToCard = howToOverlay ? howToOverlay.querySelector('.snake-howto__card') : null;
+const howToCloseButton = howToOverlay ? howToOverlay.querySelector('[data-action="close"]') : null;
+const howToBackLink = howToOverlay ? howToOverlay.querySelector('[data-action="back"]') : null;
 
 const storageState = {
   native: null,
@@ -537,6 +552,83 @@ if (wallsToggle) {
   });
 }
 
+if (pauseButtonEl) {
+  pauseButtonEl.addEventListener('click', () => {
+    if (paused) resumeGame('ui');
+    else pauseGame('ui');
+  });
+  updatePauseButtonUI();
+}
+
+if (restartButton) {
+  restartButton.addEventListener('click', () => resetGame('ui'));
+}
+
+if (contrastToggle) {
+  contrastToggle.checked = highContrastEnabled;
+  contrastToggle.addEventListener('change', () => {
+    highContrastEnabled = !!contrastToggle.checked;
+    safeStorageSetItem('snake:contrast', highContrastEnabled ? '1' : '0');
+    applySkin();
+    buildBoard(food);
+    requestHudSync();
+  });
+} else {
+  syncHighContrastClass();
+}
+
+function openHowTo() {
+  if (!howToOverlay) return;
+  howToOverlay.hidden = false;
+  howToOverlay.dataset.active = 'true';
+  howToOverlay.setAttribute('aria-hidden', 'false');
+  if (howToCard) howToCard.setAttribute('tabindex', '-1');
+  howToReturnFocus = document.activeElement && typeof document.activeElement.focus === 'function' ? document.activeElement : null;
+  resumeAfterHowTo = !paused && !dead && !won;
+  if (resumeAfterHowTo) {
+    pauseGame('howto');
+    setPauseOverlayActive(false);
+  }
+  const focusTarget = howToCloseButton || howToCard || howToOverlay;
+  if (focusTarget && typeof focusTarget.focus === 'function') {
+    setTimeout(() => focusTarget.focus(), 0);
+  }
+}
+
+function closeHowTo(reason = 'manual') {
+  if (!howToOverlay) return;
+  howToOverlay.dataset.active = 'false';
+  howToOverlay.setAttribute('aria-hidden', 'true');
+  howToOverlay.hidden = true;
+  if (resumeAfterHowTo && reason !== 'back') {
+    resumeGame('howto');
+  }
+  resumeAfterHowTo = false;
+  if (howToReturnFocus && typeof howToReturnFocus.focus === 'function') {
+    setTimeout(() => {
+      try { howToReturnFocus.focus(); } catch (_) {}
+    }, 0);
+  }
+  howToReturnFocus = null;
+}
+
+if (howToButton) {
+  howToButton.addEventListener('click', () => openHowTo());
+}
+if (howToCloseButton) {
+  howToCloseButton.addEventListener('click', () => closeHowTo('close'));
+}
+if (howToBackLink) {
+  howToBackLink.addEventListener('click', () => closeHowTo('back'));
+}
+if (howToOverlay) {
+  howToOverlay.hidden = true;
+  howToOverlay.setAttribute('aria-hidden', 'true');
+  howToOverlay.addEventListener('click', (event) => {
+    if (event.target === howToOverlay) closeHowTo('backdrop');
+  });
+}
+
 const c = ensureGameCanvas();
 bootLog('canvas:resolved', { width: c.width, height: c.height });
 if (typeof fitCanvasToParent === 'function') {
@@ -557,6 +649,8 @@ if (ctx) {
   if ('msImageSmoothingEnabled' in ctx) ctx.msImageSmoothingEnabled = false;
 }
 const pauseOverlay = document.querySelector('.snake-pause-overlay');
+let howToReturnFocus = null;
+let resumeAfterHowTo = false;
 function setPauseOverlayActive(active) {
   if (!pauseOverlay) return;
   pauseOverlay.dataset.active = active ? 'true' : 'false';
@@ -593,6 +687,16 @@ let gameOverReported = false;
 const storedBest = safeStorageGetItem('snake:best');
 let bestScore = storedBest != null ? Number(storedBest) : 0;
 if (!Number.isFinite(bestScore)) bestScore = 0;
+const storedContrast = safeStorageGetItem('snake:contrast');
+let highContrastEnabled = storedContrast === '1';
+const HIGH_CONTRAST_COLORS = {
+  boardBase: '#020617',
+  boardAccent: '#1f2937',
+  snakeHead: '#fde047',
+  snakeBody: '#facc15',
+  fruit: '#f97316'
+};
+const LONG_SNAKE_LENGTH = 25;
 let dead = false;
 let deadHandled = false;
 let speedBoostActive = false;
@@ -1046,16 +1150,48 @@ function spawnSpriteEffect(type, gridX, gridY, options = {}) {
     offsetY: options.offsetY ?? 0.5,
     duration: options.duration ?? 400,
     scale: options.scale ?? 1,
+    color: options.color || null,
     start: performance.now()
   });
+}
+
+function drawBurstEffect(ctx, fx, progress) {
+  const alpha = 1 - Math.min(1, Math.max(0, progress));
+  const centerX = (fx.x + (fx.offsetX ?? 0.5)) * CELL;
+  const centerY = (fx.y + (fx.offsetY ?? 0.5)) * CELL;
+  const radius = CELL * (0.45 + (fx.scale || 1) * 0.35 * progress);
+  const spikes = 10;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = Math.max(1, Math.round(CELL * 0.08));
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = fx.color || '#facc15';
+  for (let i = 0; i < spikes; i++) {
+    const angle = (i / spikes) * Math.PI * 2;
+    const inner = radius * 0.3;
+    const outer = radius;
+    ctx.beginPath();
+    ctx.moveTo(centerX + Math.cos(angle) * inner, centerY + Math.sin(angle) * inner);
+    ctx.lineTo(centerX + Math.cos(angle) * outer, centerY + Math.sin(angle) * outer);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius * 0.45, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawSpriteEffects(ctx, time) {
   for (let i = spriteEffects.length - 1; i >= 0; i--) {
     const fx = spriteEffects[i];
-    const progress = (time - fx.start) / fx.duration;
-    if (progress >= 1) {
+    const progressRaw = (time - fx.start) / fx.duration;
+    if (progressRaw >= 1) {
       spriteEffects.splice(i, 1);
+      continue;
+    }
+    const progress = Math.max(0, progressRaw);
+    if (fx.type === 'burst') {
+      drawBurstEffect(ctx, fx, progress);
       continue;
     }
     const img = ensureSprite(fx.type);
@@ -1071,11 +1207,23 @@ function drawSpriteEffects(ctx, time) {
   }
 }
 
+function spawnAppleBurst(gridX, gridY) {
+  spawnSpriteEffect('burst', gridX, gridY, { duration: 420, scale: 1.3, color: fruitColor });
+}
+
 function triggerDeathEffect(head) {
   const clampedX = Math.min(Math.max(head.x, 0), N - 1);
   const clampedY = Math.min(Math.max(head.y, 0), N - 1);
   spawnSpriteEffect('explosion', clampedX, clampedY, { duration: 600, scale: 1.6 });
+  deathBlinkUntil = performance.now() + 1200;
 }
+function syncHighContrastClass() {
+  if (typeof document === 'undefined') return;
+  const body = document.body;
+  if (!body) return;
+  body.classList.toggle('snake-high-contrast', !!highContrastEnabled);
+}
+
 function applySkin() {
   const s = SNAKE_SKINS.find(t => t.id === snakeSkinId);
   const f = FRUIT_SKINS.find(t => t.id === fruitSkinId);
@@ -1098,8 +1246,15 @@ function applySkin() {
   FRUITS = FRUIT_ART.map(art => art.icon);
   gemSpriteIndex = 0;
   fruitColor = f.color || DEFAULT_COLORS.fruit;
+  if (highContrastEnabled) {
+    boardColors = [HIGH_CONTRAST_COLORS.boardBase, HIGH_CONTRAST_COLORS.boardAccent];
+    snakeColorHead = HIGH_CONTRAST_COLORS.snakeHead;
+    snakeBodyColor = HIGH_CONTRAST_COLORS.snakeBody;
+    fruitColor = HIGH_CONTRAST_COLORS.fruit;
+  }
   setBackgroundTheme(backgroundThemeId);
   saveSkinSelection();
+  syncHighContrastClass();
   invalidateGridTexture();
 }
 function populateSkinSelects() {
@@ -1314,7 +1469,10 @@ let activeReplay = null;
 let capturingReplay = true;
 let tickCounter = 0;
 let foodsEaten = 0;
+let applesEaten = 0;
 let lastReplayRecord = parseJSONSafe(safeStorageGetItem(REPLAY_STORAGE_KEY), null);
+let maxSnakeLength = snake.length;
+let deathBlinkUntil = 0;
 
 const debugPanel = document.getElementById('debugPanel');
 if (diagnosticsToggle) {
@@ -1430,22 +1588,53 @@ let food = null;
 let fruitSpawnTime = performance.now();
 let turnBuffer = [];
 const MAX_TURN_BUFFER = 2;
+let lastTurnTick = 0;
+
+function normalizeDirection(nd) {
+  if (!nd || typeof nd.x !== 'number' || typeof nd.y !== 'number') return null;
+  const x = Math.sign(nd.x);
+  const y = Math.sign(nd.y);
+  if ((x !== 0 && y !== 0) || (x === 0 && y === 0)) return null;
+  return { x, y };
+}
+
+function directionsEqual(a, b) {
+  return !!a && !!b && a.x === b.x && a.y === b.y;
+}
+
+function directionsOpposite(a, b) {
+  return !!a && !!b && a.x === -b.x && a.y === -b.y;
+}
 
 function enqueueTurn(nd, source = 'player') {
-  if (!nd) return;
-  const lastQueued = turnBuffer.length ? turnBuffer[turnBuffer.length - 1] : dir;
-  if (nd.x === -lastQueued.x && nd.y === -lastQueued.y) return;
-  if (turnBuffer.length < MAX_TURN_BUFFER) {
-    turnBuffer.push(nd);
-    if (source === 'player') recordReplayInput(nd);
-  }
+  const normalized = normalizeDirection(nd);
+  if (!normalized) return;
+  const lastEntry = turnBuffer.length ? turnBuffer[turnBuffer.length - 1] : null;
+  const referenceDir = lastEntry ? lastEntry.dir : dir;
+  if (directionsEqual(normalized, referenceDir)) return;
+  if (directionsOpposite(normalized, referenceDir)) return;
+  if (lastEntry && lastEntry.tick === tickCounter) return;
+  if (turnBuffer.length >= MAX_TURN_BUFFER) return;
+  const entryTick = lastEntry ? Math.max(lastEntry.tick + 1, tickCounter) : tickCounter;
+  turnBuffer.push({ dir: normalized, tick: entryTick });
+  if (source === 'player') recordReplayInput(normalized);
+}
+
+function updatePauseButtonUI() {
+  if (!pauseButtonEl) return;
+  const state = paused ? 'resume' : 'pause';
+  pauseButtonEl.dataset.state = state;
+  pauseButtonEl.textContent = paused ? 'Resume' : 'Pause';
+  pauseButtonEl.setAttribute('aria-pressed', paused ? 'true' : 'false');
 }
 
 function pauseGame(reason = 'manual') {
   if (paused) return;
+  if (dead || won) return;
   paused = true;
   bootLog('game:paused', { reason });
   setPauseOverlayActive(true);
+  updatePauseButtonUI();
 }
 
 function resumeGame(reason = 'manual') {
@@ -1453,6 +1642,7 @@ function resumeGame(reason = 'manual') {
   paused = false;
   bootLog('game:resumed', { reason });
   setPauseOverlayActive(false);
+  updatePauseButtonUI();
 }
 
 function togglePause(reason = 'toggle') {
@@ -1476,13 +1666,19 @@ function resetGame(reason = 'manual', options = {}) {
   deadHandled = false;
   paused = false;
   setPauseOverlayActive(false);
+  updatePauseButtonUI();
+  resumeAfterHowTo = false;
   moveAcc = 0;
   speedTier = 1;
   lastSpeedTierEmitted = 1;
   speedBoostActive = false;
   speedBoostUntil = 0;
   tickCounter = 0;
+  lastTurnTick = 0;
   foodsEaten = 0;
+  applesEaten = 0;
+  maxSnakeLength = snake.length;
+  deathBlinkUntil = 0;
   spriteEffects.length = 0;
   runMissionState = { wallsOffScore: 0, topSpeedMs: 0, poisonCount: 0 };
   lastTopSpeedSecondsShown = 0;
@@ -1547,7 +1743,9 @@ function reportGameOutcome(result) {
     wallsEnabled,
     wrapEnabled,
     poisonCount: runMissionState.poisonCount,
-    topSpeedMs: Math.round(runMissionState.topSpeedMs)
+    topSpeedMs: Math.round(runMissionState.topSpeedMs),
+    applesEaten,
+    maxLength: Math.max(maxSnakeLength, snake.length)
   };
   gameEvent('game_over', {
     slug: SLUG,
@@ -1563,7 +1761,10 @@ function reportGameOutcome(result) {
 
 resetGame('boot');
 
-document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'p') togglePause('keyboard'); });
+document.addEventListener('keydown', e => {
+  if (howToOverlay && howToOverlay.dataset.active === 'true') return;
+  if (e.key.toLowerCase() === 'p') togglePause('keyboard');
+});
 
 (function () {
   let start = null;
@@ -1774,10 +1975,16 @@ function updateSpeedBurst(now = performance.now()) {
 function applyPickupEffect(pickup, head) {
   const result = { grow: true, extraTailRemoval: 0 };
   foodsEaten++;
+  if (pickup.type === FoodType.Apple) applesEaten++;
   const points = Number(pickup.points) || 0;
   if (points !== 0) {
     score += points;
     if (points > 0) GG.addXP(points);
+    if (score > bestScore) {
+      bestScore = score;
+      safeStorageSetItem('snake:best', String(bestScore));
+      requestHudSync();
+    }
   }
   if (!wallsEnabled) {
     runMissionState.wallsOffScore = Math.max(runMissionState.wallsOffScore, score);
@@ -1818,8 +2025,12 @@ function applyPickupEffect(pickup, head) {
       break;
   }
   playSfx('power');
-  spawnSpriteEffect('spark', head.x, head.y, { duration: 500, scale: pickup.type === FoodType.Poison ? 0.9 : 1.25 });
+  if (pickup.type === FoodType.Apple) spawnAppleBurst(head.x, head.y);
+  else spawnSpriteEffect('spark', head.x, head.y, { duration: 500, scale: pickup.type === FoodType.Poison ? 0.9 : 1.25 });
   updateSpeedTierFromFoods();
+  if (pickup.type === FoodType.Apple && applesEaten === 10) GG.addAch(GAME_ID, 'Apple Collector');
+  const predictedLength = Math.max(1, snake.length + (result.grow ? 0 : -1) - (result.extraTailRemoval || 0));
+  const predictedMax = Math.max(maxSnakeLength, predictedLength);
   const meta = {
     points,
     foodType: pickup.type,
@@ -1827,7 +2038,10 @@ function applyPickupEffect(pickup, head) {
     speedTier,
     hazardCombo: hazardComboMeta,
     walls: wallsEnabled,
-    wrap: wrapEnabled
+    wrap: wrapEnabled,
+    applesEaten,
+    length: predictedLength,
+    maxLength: predictedMax
   };
   gameEvent('score', { slug: SLUG, value: score, meta });
   requestHudSync();
@@ -1838,8 +2052,11 @@ function applyPickupEffect(pickup, head) {
 function step() {
   pumpReplayInputs();
   if (turnBuffer.length) {
-    const next = turnBuffer.shift();
-    if (!(next.x === -lastDir.x && next.y === -lastDir.y)) dir = next;
+    const nextEntry = turnBuffer.shift();
+    if (nextEntry && nextEntry.dir && !directionsOpposite(nextEntry.dir, lastDir)) {
+      dir = { x: nextEntry.dir.x, y: nextEntry.dir.y };
+      lastTurnTick = nextEntry.tick;
+    }
   }
   lastSnake = snake.map(s => ({ ...s }));
   const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
@@ -1903,6 +2120,10 @@ function step() {
   let extra = effectResult.extraTailRemoval || 0;
   while (extra-- > 0 && snake.length > 1) {
     snake.pop();
+  }
+  if (snake.length > maxSnakeLength) {
+    maxSnakeLength = snake.length;
+    if (maxSnakeLength >= LONG_SNAKE_LENGTH) GG.addAch(GAME_ID, 'Serpent Stretch');
   }
   if (consumed) {
     registerComboHit(performance.now());
@@ -2030,6 +2251,7 @@ function draw() {
   // snake interpolation
   const t = Math.min((time - lastTickTime) / speedMs, 1);
   const flameActive = speedBoostActive && speedBoostUntil > time;
+  let headPixel = null;
   snake.forEach((s, idx) => {
     const prev = lastSnake[idx] || lastSnake[lastSnake.length - 1];
     const interpolatedX = (prev.x + (s.x - prev.x) * t) * CELL;
@@ -2071,6 +2293,7 @@ function draw() {
       ctx.fillStyle = snakeBodyColor;
       ctx.fillRect(x + inset, y + inset, CELL - inset * 2, CELL - inset * 2);
       ctx.restore();
+      headPixel = { x, y };
     } else {
       ctx.save();
       const fade = Math.max(0.35, 0.9 - (idx / Math.max(1, snake.length)) * 0.45);
@@ -2080,6 +2303,14 @@ function draw() {
       ctx.restore();
     }
   });
+  if (dead && deathBlinkUntil > time && headPixel) {
+    const blink = 0.35 + 0.4 * Math.abs(Math.sin(time / 80));
+    ctx.save();
+    ctx.globalAlpha = blink;
+    ctx.fillStyle = 'rgba(248,113,113,0.9)';
+    ctx.fillRect(headPixel.x, headPixel.y, CELL, CELL);
+    ctx.restore();
+  }
 
   // obstacles
   const obstacleSprite = ensureSprite('obstacle');
@@ -2194,6 +2425,14 @@ function saveScore(s) {
 }
 
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && howToOverlay && howToOverlay.dataset.active === 'true') {
+    e.preventDefault();
+    closeHowTo('escape');
+    return;
+  }
+  if (howToOverlay && howToOverlay.dataset.active === 'true') {
+    return;
+  }
   const k = e.key.toLowerCase();
   if (k === 'r' && dead) {
     resetGame('keyboard');
@@ -2206,6 +2445,11 @@ document.addEventListener('keydown', e => {
     'arrowright': { x: 1, y: 0 }, 'd': { x: 1, y: 0 }
   };
   if (map[k]) enqueueTurn(map[k]);
+});
+
+window.addEventListener('blur', () => pauseGame('window-blur'));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseGame('visibility');
 });
 
 engine = new GameEngine();
@@ -2227,7 +2471,7 @@ const snakeApi = {
   get snake() { return snake; },
   get food() { return food; },
   get score() { return score; },
-  get turnBuffer() { return turnBuffer; },
+  get turnBuffer() { return turnBuffer.map(entry => ({ ...entry.dir })); },
   get cellSize() { return CELL; },
   get boardOffset() { return { x: boardOffsetX, y: boardOffsetY }; },
   get seed() { return currentSeed; },
