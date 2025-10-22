@@ -2107,7 +2107,7 @@ import "./pauseOverlay.js";
     const safeDelta = Math.min(delta, MAX_SIM_DELTA);
     state.dt = safeDelta;
     state.debugData.dt = safeDelta;
-    state.acc = Math.min((state.acc || 0) + safeDelta, MAX_ACCUMULATED_DELTA);
+    state.acc = Math.min((state.acc || 0) + delta, MAX_ACCUMULATED_DELTA);
     let iterations = 0;
     while(state.acc >= STEP){
       update(STEP);
