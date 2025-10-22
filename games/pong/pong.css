@@ -53,6 +53,15 @@
   --pong-color-glow: rgba(43,108,255,0.12);
 }
 
+[data-contrast="high"] {
+  --pong-color-bg:#000000;
+  --pong-color-fg:#ffffff;
+  --pong-color-accent:#ffd24a;
+  --pong-color-muted:#f3f4f6;
+  --pong-color-grid:rgba(255,255,255,0.28);
+  --pong-color-glow:rgba(255,210,74,0.45);
+}
+
 * { box-sizing: border-box; }
 .pong-root{background:var(--pong-bg); color:var(--pong-fg); margin:0; min-height:100svh; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";}
 .pong-bg-canvas{position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; display:block; z-index:0;}
@@ -63,9 +72,11 @@
 .pong-spacer{flex:1}
 .pong-kbd{padding:.15rem .4rem; border:1px solid #324356; border-bottom-width:2px; border-radius:.35rem; background:#0e1622; font-size:.85rem}
 
-.pong-btn{cursor:pointer; border:1px solid #243043; background:#111a28; color:var(--pong-fg); border-radius:.6rem; padding:.5rem .8rem; font:inherit}
+.pong-btn{cursor:pointer; border:1px solid #243043; background:#111a28; color:var(--pong-fg); border-radius:.6rem; padding:.5rem .8rem; font:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:.35rem; white-space:nowrap}
 .pong-btn:hover{background:#172334}
 .pong-btn[aria-pressed="true"]{outline:2px solid var(--pong-accent); box-shadow:0 0 0 6px var(--pong-glow);}
+.pong-btn--link{background:transparent; border-color:var(--pong-accent); color:var(--pong-accent);}
+.pong-btn--link:hover{background:rgba(255,255,255,0.08)}
 
 .pong-canvas-wrap{display:grid; place-items:center; padding:10px; position:relative}
 .pong-canvas{width:100%; max-width:1100px; aspect-ratio:16/9; touch-action:none; background:var(--pong-bg); border-radius:16px; box-shadow: 0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.03);}
@@ -112,9 +123,11 @@
 .pong-select,.pong-input{background:#131a24; color:var(--pong-fg); border:1px solid #243043; border-radius:.5rem; padding:.5rem .6rem; font:inherit}
 .pong-row{display:flex; align-items:center; gap:.5rem; flex-wrap:wrap}
 
-.pong-modal{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.5); backdrop-filter: blur(4px);}
+.pong-modal{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.5); backdrop-filter: blur(4px); padding:1rem;}
 .pong-modal.show{display:grid}
 .pong-card{min-width:min(700px, 95vw); max-width:95vw; background:#0e1622; border:1px solid #243043; border-radius:12px; padding:1rem; box-shadow: 0 10px 40px rgba(0,0,0,.55);}
+
+.pong-howto-canvas{display:block; width:min(100%,320px); height:auto; border-radius:16px; border:1px solid rgba(255,255,255,0.12); background:linear-gradient(145deg, rgba(8,13,22,0.92), rgba(3,7,14,0.92)); margin:0 auto 1rem; box-shadow:inset 0 0 0 1px rgba(255,255,255,0.05);}
 
 .pong-diag{position:fixed; inset:auto 12px 12px auto; width:min(520px, 95vw); max-height:60vh; overflow:auto; background:#0e1622; border:1px solid #243043; border-radius:12px; padding:.75rem; display:none; white-space:pre-wrap}
 .pong-diag.show{display:block}
@@ -125,9 +138,25 @@
 .pong-debug__title{font-weight:700;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;margin:0 0 .25rem;color:var(--pong-muted);}
 .pong-debug__body{margin:0;font:inherit;white-space:pre-wrap;}
 
+.pong-toast-host{position:fixed; left:50%; bottom:24px; transform:translateX(-50%); display:flex; flex-direction:column; gap:12px; z-index:1400; pointer-events:none; width:min(360px,90vw);}
+.pong-toast{pointer-events:auto; background:rgba(10,16,26,0.95); border:1px solid rgba(255,255,255,0.18); color:var(--pong-fg); padding:0.65rem 0.85rem; border-radius:0.75rem; font-weight:600; font-size:0.95rem; box-shadow:0 18px 36px rgba(0,0,0,0.35); opacity:0; transform:translateY(12px); transition:opacity .2s ease, transform .2s ease; text-align:center;}
+.pong-toast.show{opacity:1; transform:translateY(0);}
+[data-contrast="high"] .pong-toast{background:rgba(0,0,0,0.92); border-color:rgba(255,210,74,0.4);}
+
 .touch-hint{display:none}
 @media (pointer: coarse) {
   .touch-hint{display:inline; color:var(--pong-muted); font-size:.9rem}
+}
+
+.pong-btn:focus-visible,
+.pong-overlay__btn:focus-visible,
+.pong-select:focus-visible,
+.pong-input:focus-visible,
+.pong-modal button:focus-visible,
+.pong-bar a:focus-visible{
+  outline:3px solid var(--pong-accent);
+  outline-offset:2px;
+  box-shadow:0 0 0 6px var(--pong-glow);
 }
 
 /* Optional CRT scanlines for theme-crt */

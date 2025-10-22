@@ -12,6 +12,18 @@ import { pushEvent } from "/games/common/diag-adapter.js";
 import { gameEvent } from '../../shared/telemetry.js';
 import * as logic from "./logic.js";
 
+const ASSET_BASE_URL = new URL('../../', import.meta.url);
+
+function resolveAsset(path) {
+  if (!path) return path;
+  try {
+    const normalized = path.startsWith('/') ? path.slice(1) : path;
+    return new URL(normalized, ASSET_BASE_URL).href;
+  } catch (_) {
+    return path;
+  }
+}
+
 const markFirstFrame = (() => {
   let done = false;
   return () => {
@@ -108,18 +120,6 @@ function getMaxAnisotropy(renderer) {
     }
   }
   return capabilities.maxAnisotropy || 0;
-}
-
-function clampTextureAnisotropy(texture) {
-  if (!texture || typeof texture !== 'object') return;
-  if (!rendererMaxAnisotropy) return;
-  if (typeof texture.anisotropy === 'number') {
-    const clamped = Math.min(Math.max(texture.anisotropy, 0), rendererMaxAnisotropy);
-    if (texture.anisotropy !== clamped) {
-      texture.anisotropy = clamped;
-      texture.needsUpdate = true;
-    }
-  }
 }
 
 function configureRenderer(renderer, THREE) {
@@ -227,10 +227,50 @@ const statusEl = document.getElementById('status');
 const coordsEl = document.getElementById('coords');
 const thinkingEl = document.getElementById('thinking');
 const difficultyEl = document.getElementById('difficulty');
-const victorySound = typeof Audio !== 'undefined'
-  ? new Audio('../../assets/audio/victory.wav')
-  : null;
-if (victorySound) victorySound.preload = 'auto';
+const VICTORY_AUDIO_SRC = resolveAsset('/assets/audio/victory.wav');
+const audioSupported = typeof Audio !== 'undefined';
+let audioReady = typeof window === 'undefined';
+let audioUnlockAttached = false;
+let victorySound = null;
+let victorySoundFailed = false;
+
+function ensureAudioUnlock() {
+  if (audioReady || audioUnlockAttached || typeof window === 'undefined') return;
+  audioUnlockAttached = true;
+  const unlock = () => {
+    audioReady = true;
+    prepareVictorySound();
+  };
+  window.addEventListener('pointerdown', unlock, { once: true, passive: true });
+  window.addEventListener('keydown', unlock, { once: true });
+}
+
+function prepareVictorySound() {
+  if (!audioReady || victorySound || victorySoundFailed || !audioSupported) return;
+  try {
+    victorySound = new Audio(VICTORY_AUDIO_SRC);
+    victorySound.preload = 'auto';
+  } catch (err) {
+    victorySoundFailed = true;
+    console.warn('[chess3d] failed to prepare victory audio', err);
+  }
+}
+
+function getVictorySound() {
+  if (!audioReady) {
+    ensureAudioUnlock();
+    return null;
+  }
+  if (!victorySound && !victorySoundFailed) {
+    prepareVictorySound();
+  }
+  return victorySound;
+}
+
+ensureAudioUnlock();
+if (audioReady) {
+  prepareVictorySound();
+}
 stage.style.position = 'relative';
 stage.appendChild(coordsEl);
 coordsEl.style.position = 'absolute';
@@ -820,10 +860,11 @@ function flipCamera() {
 const hudControls = mountHUD({
   onNew: () => {
     victoryPlayed = false;
-    if (victorySound) {
+    const audio = getVictorySound();
+    if (audio) {
       try {
-        victorySound.pause();
-        victorySound.currentTime = 0;
+        audio.pause();
+        audio.currentTime = 0;
       } catch (_) {}
     }
     gameOver = false;
@@ -1170,10 +1211,11 @@ function endGame(text){
     statusEl.textContent = text;
     if (!victoryPlayed && /white wins/i.test(text)) {
       victoryPlayed = true;
-      if (victorySound) {
+      const audio = getVictorySound();
+      if (audio) {
         try {
-          victorySound.currentTime = 0;
-          const playback = victorySound.play();
+          audio.currentTime = 0;
+          const playback = audio.play();
           if (playback?.catch) playback.catch(() => {});
         } catch (err) {
           warn('chess3d', '[Chess3D] failed to play victory sound', err);
@@ -1256,10 +1298,11 @@ import('./ui/hud.js').then(({ addGameButtons }) => {
       moveList?.refresh();
       moveList?.setIndex(logic.historySAN().length);
       victoryPlayed = false;
-      if (victorySound) {
+      const audio = getVictorySound();
+      if (audio) {
         try {
-          victorySound.pause();
-          victorySound.currentTime = 0;
+          audio.pause();
+          audio.currentTime = 0;
         } catch (_) {}
       }
     });

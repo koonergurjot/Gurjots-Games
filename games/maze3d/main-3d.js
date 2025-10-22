@@ -13,6 +13,18 @@ import {
   updateCompassHeading,
 } from './ui.js';
 
+const ASSET_BASE_URL = new URL('../../', import.meta.url);
+
+function resolveAsset(path) {
+  if (!path) return path;
+  try {
+    const normalized = path.startsWith('/') ? path.slice(1) : path;
+    return new URL(normalized, ASSET_BASE_URL).href;
+  } catch (_) {
+    return path;
+  }
+}
+
 const markFirstFrame = (() => {
   let done = false;
   return () => {
@@ -215,15 +227,18 @@ function mergeMaterialSettings(defaults, overrides = {}) {
 
 async function loadMaterialConfig() {
   try {
-    const res = await fetch('../../assets/maze3d/materials.json', { cache: 'no-store' });
-    if (!res?.ok) throw new Error(`bad status ${res?.status}`);
+    const res = await fetch(resolveAsset('/assets/maze3d/materials.json'), { cache: 'no-store' });
+    if (!res?.ok) throw new Error(`HTTP ${res?.status}`);
     const payload = await res.json();
     const floor = mergeMaterialSettings(MATERIAL_DEFAULTS.floor, payload?.floor || {});
     const wall = mergeMaterialSettings(MATERIAL_DEFAULTS.wall, payload?.wall || {});
     return { floor, wall };
   } catch (err) {
-    console.warn('maze3d: failed to load material config, using defaults', err);
-    return { ...MATERIAL_DEFAULTS };
+    console.warn('[maze3d] failed to load material config, using defaults', err);
+    return {
+      floor: { ...MATERIAL_DEFAULTS.floor },
+      wall: { ...MATERIAL_DEFAULTS.wall },
+    };
   }
 }
 
@@ -284,7 +299,7 @@ async function loadTextureWithFallback(url, fallbackOptions) {
       },
       undefined,
       () => {
-        console.warn('maze3d: missing texture, using procedural material', url);
+        console.warn('[maze3d] missing texture, using procedural material', url);
         resolve(createCheckerTexture(fallbackOptions));
       }
     );
@@ -307,7 +322,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio ?? 1, 2));
 document.body.appendChild(renderer.domElement);
 
-const floorTexture = await loadTextureWithFallback('../../assets/sprites/maze3d/floor.png', {
+const floorTexture = await loadTextureWithFallback(resolveAsset('/assets/sprites/maze3d/floor.png'), {
   baseColor: materialConfig.floor.baseColor,
   accentColor: materialConfig.floor.accentColor,
 });

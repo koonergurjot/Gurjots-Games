@@ -468,6 +468,8 @@ function setMode(newModeKey, reason='mode-change'){
   timeRemainingMs = currentMode.timeLimitMs ?? null;
   timeAttackExpired = false;
   hasEmitted4096 = false;
+  hasEmitted2048 = false;
+  hasEmitted1024 = false;
   applyModeSettings();
   if(changed){
     reset(false, reason);
@@ -479,12 +481,22 @@ const gameOverTitle=document.getElementById('gameOverTitle');
 const gameOverMessage=document.getElementById('gameOverMessage');
 const overlayRestartBtn=document.getElementById('overlayRestart');
 const overlayBackBtn=document.getElementById('overlayBack');
+const howToOverlay = document.getElementById('howToOverlay');
+const howToCloseBtn = document.getElementById('howToClose');
+const howToButton = document.getElementById('howToBtn');
 let gameOverShown=false;
+let howToPreviousFocus = null;
 
 const BASE_MAX_UNDO = FEATURES.oneStepUndo ? 1 : 3;
 let maxUndo = currentMode.allowUndo ? BASE_MAX_UNDO : 0;
 const LS_UNDO='g2048.undo', LS_BEST='g2048.best', LS_THEME='g2048.theme';
+const LS_RNG_MODE='g2048.rngMode';
+const LS_RNG_SEED='g2048.rngSeed';
+const LS_HOWTO='g2048.howtoSeen';
 const ANIM_TIME=120;
+const DEFAULT_RNG_SEED='arcade-2048';
+const PARTICLE_LIFETIME_MS=320;
+const MAX_SPAWN_PARTICLES=24;
 
 class DeterministicRng {
   constructor(seed, state){
@@ -528,6 +540,31 @@ class DeterministicRng {
   }
 }
 
+function normalizeSeed(value){
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if(trimmed){
+    const numeric = Number(trimmed);
+    if(Number.isFinite(numeric) && numeric !== 0){
+      return (Math.abs(Math.trunc(numeric)) >>> 0) || normalizeSeed(DEFAULT_RNG_SEED);
+    }
+  }
+  const source = trimmed || DEFAULT_RNG_SEED;
+  let hash = 2166136261;
+  for(let i=0;i<source.length;i++){
+    hash ^= source.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const result = hash >>> 0;
+  return result || normalizeSeed(String(Date.now() >>> 0));
+}
+
+function createRngForCurrentMode(){
+  if(rngMode === 'deterministic'){
+    return new DeterministicRng(normalizeSeed(rngSeedValue));
+  }
+  return new DeterministicRng(DeterministicRng.randomSeed());
+}
+
 class AnimationClock {
   constructor(baseDuration){
     this.baseDuration = baseDuration;
@@ -560,7 +597,21 @@ class AnimationClock {
 }
 
 const animationClock = new AnimationClock(ANIM_TIME);
-let rng = new DeterministicRng(DeterministicRng.randomSeed());
+
+let rngMode='random';
+let rngSeedValue=DEFAULT_RNG_SEED;
+try {
+  const storedMode = localStorage.getItem(LS_RNG_MODE);
+  if(storedMode === 'deterministic'){
+    rngMode = 'deterministic';
+  }
+  const storedSeed = localStorage.getItem(LS_RNG_SEED);
+  if(typeof storedSeed === 'string' && storedSeed.trim()){
+    rngSeedValue = storedSeed.trim();
+  }
+} catch {}
+
+let rng = createRngForCurrentMode();
 let pendingHistoryCommit = false;
 let undoSpendStack = [];
 
@@ -608,6 +659,27 @@ const FALLBACK_THEMES = {
       2048: '#fde047',   // Yellow-400 - 12.6:1 with dark text
       default: '#e5e7eb' // Gray-200 - 15.3:1 with dark text
     }
+  },
+  contrast: {
+    boardBg: '#000000',
+    empty: '#141422',
+    text: '#f9fafb',
+    tileTextDark: '#050505',
+    tileTextLight: '#ffffff',
+    tileColors: {
+      2: '#22d3ee',
+      4: '#38bdf8',
+      8: '#a855f7',
+      16: '#f97316',
+      32: '#ef4444',
+      64: '#facc15',
+      128: '#34d399',
+      256: '#f472b6',
+      512: '#f59e0b',
+      1024: '#22c55e',
+      2048: '#eab308',
+      default: '#ffffff'
+    }
   }
 };
 
@@ -624,8 +696,28 @@ function cloneThemeConfig(config) {
 
 const themes = {
   light: cloneThemeConfig(FALLBACK_THEMES.light),
-  dark: cloneThemeConfig(FALLBACK_THEMES.dark)
+  dark: cloneThemeConfig(FALLBACK_THEMES.dark),
+  contrast: cloneThemeConfig(FALLBACK_THEMES.contrast)
 };
+
+const THEME_SEQUENCE = ['dark', 'light', 'contrast'];
+const THEME_LABELS = {
+  dark: 'Dark',
+  light: 'Light',
+  contrast: 'High Contrast'
+};
+
+function getThemeLabel(theme){
+  return THEME_LABELS[theme] || THEME_LABELS.dark;
+}
+
+function getNextTheme(theme){
+  const index = THEME_SEQUENCE.indexOf(theme);
+  if(index === -1){
+    return THEME_SEQUENCE[0];
+  }
+  return THEME_SEQUENCE[(index + 1) % THEME_SEQUENCE.length];
+}
 
 const SCORE_PULSE_DURATION_MS = 220;
 
@@ -668,6 +760,11 @@ function syncThemeFromCSS(themeName, computedStyle) {
   return next;
 }
 
+let howToSeen=false;
+try {
+  howToSeen = localStorage.getItem(LS_HOWTO) === '1';
+} catch {}
+
 let currentTheme=localStorage.getItem(LS_THEME) || 'dark';
 
 let grid, score=0, over=false, won=false, hintDir=null;
@@ -684,7 +781,10 @@ let timeRemainingMs = currentMode.timeLimitMs ?? null;
 let timeAttackExpired = false;
 let highestTile = 0;
 let hasEmitted4096 = false;
+let hasEmitted2048 = false;
+let hasEmitted1024 = false;
 let undosUsed = 0;
+let moveCount = 0;
 let scoreBadge = null;
 let timerDisplay = null;
 let undoLabelEl = null;
@@ -747,6 +847,7 @@ function snapshotForDiagnostics(reason, extra = {}) {
     undosUsed,
     timeRemainingMs,
     ...extra,
+    moves: moveCount,
   };
 }
 
@@ -778,6 +879,7 @@ function recordScoreEvent(reason, extra = {}) {
         mode: currentModeKey,
         maxTile: highestTile,
         timeRemainingMs,
+        moveCount,
       },
     });
   }
@@ -788,6 +890,8 @@ function recordScoreEvent(reason, extra = {}) {
 let anim=null;
 let newTileAnim = null;   // Animation for new tiles scaling in
 let mergedAnim = new Map(); // Track merged tiles animation with decay timing
+const spawnParticles = [];
+const focusTrapHandlers = new WeakMap();
 
 // Performance optimization caches
 let renderCache = {
@@ -880,10 +984,29 @@ function updateCanvas(){
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Scale drawing to match CSS pixels after DPR adjustments
 }
 
+function updateThemeToggleUI(){
+  const themeToggle = document.getElementById('themeToggle');
+  if(!themeToggle){
+    return;
+  }
+  const currentLabel = getThemeLabel(currentTheme);
+  const nextTheme = getNextTheme(currentTheme);
+  themeToggle.textContent = `Theme: ${currentLabel}`;
+  themeToggle.setAttribute('aria-label', `Switch to ${getThemeLabel(nextTheme)} theme`);
+  themeToggle.setAttribute('title', `Switch to ${getThemeLabel(nextTheme)} theme`);
+}
+
 function applyTheme(){
   const root = document.documentElement;
   if(root?.dataset){
     root.dataset.theme = currentTheme;
+  }
+
+  if(!themes[currentTheme]){
+    currentTheme = 'dark';
+    try {
+      localStorage.setItem(LS_THEME, currentTheme);
+    } catch {}
   }
 
   const computed = (typeof window !== 'undefined' && typeof getComputedStyle === 'function')
@@ -905,16 +1028,7 @@ function applyTheme(){
   c.style.borderColor = borderColor;
   if(oppC) oppC.style.borderColor = borderColor;
 
-  // Update theme toggle aria-label dynamically
-  const themeToggle = document.getElementById('themeToggle');
-  if (themeToggle) {
-    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
-  }
-
-  // Update theme toggle button text
-  const themeBtn=document.getElementById('themeToggle');
-  if(themeBtn) themeBtn.textContent = currentTheme==='dark'?'Light':'Dark';
+  updateThemeToggleUI();
 
   // Update game over overlay ARIA attributes
   if(gameOverOverlay){
@@ -940,18 +1054,28 @@ function reset(keepUndo=false, reasonOverride){
   lastAnnouncedScore = 0;
   highestTile = 0;
   hasEmitted4096 = false;
+  hasEmitted2048 = false;
+  hasEmitted1024 = false;
   undosUsed = 0;
+  moveCount = 0;
   timeAttackExpired = false;
   timeRemainingMs = currentMode.timeLimitMs ?? null;
 
   refreshUndoCapacity();
-  rng = new DeterministicRng(DeterministicRng.randomSeed());
+  if(rngMode === 'deterministic' && !rngSeedValue){
+    rngSeedValue = DEFAULT_RNG_SEED;
+  }
+  rng = createRngForCurrentMode();
+  if(typeof updateRngUiState === 'function'){
+    updateRngUiState();
+  }
   pendingHistoryCommit = false;
   undoSpendStack = [];
 
   // Clean up animation state
   newTileAnim = null;
   mergedAnim.clear();
+  spawnParticles.length = 0;
 
   // Reset merge-streak system
   mergeStreak = 1;
@@ -963,7 +1087,7 @@ function reset(keepUndo=false, reasonOverride){
     grid,
     score,
     rngState: rng.serialize(),
-    meta: { mergeStreak, lastMoveHadMerge }
+    meta: { mergeStreak, lastMoveHadMerge, moveCount }
   });
   if(!keepUndo || !currentMode.allowUndo){
     undoLeft = maxUndo;
@@ -1025,6 +1149,20 @@ function selectSpawnValue(randomSource){
   return entries[entries.length - 1][0];
 }
 
+function emitTileMilestone(name){
+  gameEvent('score_event', {
+    slug: GAME_SLUG,
+    value: highestTile,
+    meta: {
+      name,
+      tileValue: highestTile,
+      score,
+      mode: currentModeKey,
+      moveCount,
+    },
+  });
+}
+
 function updateHighestTile(sourceGrid = grid){
   if(!Array.isArray(sourceGrid)){
     return;
@@ -1036,18 +1174,17 @@ function updateHighestTile(sourceGrid = grid){
   const newMax = Math.max(highestTile, ...flattened);
   if(newMax !== highestTile){
     highestTile = newMax;
+    if(highestTile >= 1024 && !hasEmitted1024){
+      hasEmitted1024 = true;
+      emitTileMilestone('tile_1024');
+    }
+    if(highestTile >= 2048 && !hasEmitted2048){
+      hasEmitted2048 = true;
+      emitTileMilestone('tile_2048');
+    }
     if(highestTile >= 4096 && !hasEmitted4096){
       hasEmitted4096 = true;
-      gameEvent('score_event', {
-        slug: GAME_SLUG,
-        value: highestTile,
-        meta: {
-          name: 'tile_4096',
-          tileValue: highestTile,
-          score,
-          mode: currentModeKey,
-        },
-      });
+      emitTileMilestone('tile_4096');
     }
   }
 }
@@ -1078,6 +1215,7 @@ function handleTimeAttackTimeout(){
       maxTile: highestTile,
       timeLimitMs: currentMode.timeLimitMs,
       timeRemainingMs: 0,
+      moveCount,
     },
   };
   gameEvent('game_over', payload);
@@ -1092,6 +1230,7 @@ function handleTimeAttackTimeout(){
       maxTile: highestTile,
       timeLimitMs: currentMode.timeLimitMs,
       timeRemainingMs: 0,
+      moveCount,
     },
   });
 }
@@ -1112,6 +1251,13 @@ function addTile(options = {}){
   const value = selectSpawnValue(randomSource);
   grid[y][x] = value;
   updateHighestTile(grid);
+
+  if(!reduceMotion){
+    spawnParticles.push({ x, y, age: 0 });
+    if(spawnParticles.length > MAX_SPAWN_PARTICLES){
+      spawnParticles.shift();
+    }
+  }
 
   if(skipAnimation || reduceMotion){
     newTileAnim = null;
@@ -1145,6 +1291,7 @@ function undoMove(){
   rng=DeterministicRng.from(state.rngState);
   mergeStreak = state.meta?.mergeStreak ?? 1;
   lastMoveHadMerge = state.meta?.lastMoveHadMerge ?? false;
+  moveCount = state.meta?.moveCount ?? moveCount;
   over=false; won=false; hintDir=null;
   pendingHistoryCommit=false;
   updateHighestTile(grid);
@@ -1183,6 +1330,7 @@ function redoMove(){
   rng=DeterministicRng.from(state.rngState);
   mergeStreak = state.meta?.mergeStreak ?? 1;
   lastMoveHadMerge = state.meta?.lastMoveHadMerge ?? false;
+  moveCount = state.meta?.moveCount ?? moveCount;
   over=false; won=false; hintDir=null;
   pendingHistoryCommit=false;
   updateHighestTile(grid);
@@ -1211,13 +1359,14 @@ function move(dir){
   historyManager.clearFuture();
   undoSpendStack = [];
   pendingHistoryCommit = true;
+  moveCount += 1;
 
   // Track merged tiles for animation
   mergedAnim.clear();
   if(!reduceMotion){
     animations.forEach(a => {
       if(after[a.toY][a.toX] !== a.value) { // This is a merge
-        mergedAnim.set(`${a.toX},${a.toY}`, { p: 0, scale: 1.1 });
+        mergedAnim.set(`${a.toX},${a.toY}`, { p: 0, scale: 1.1, glow: 1 });
       }
     });
   }
@@ -1268,7 +1417,7 @@ function move(dir){
       grid,
       score,
       rngState: rng.serialize(),
-      meta: { mergeStreak, lastMoveHadMerge }
+      meta: { mergeStreak, lastMoveHadMerge, moveCount }
     });
     pendingHistoryCommit = false;
     check();
@@ -1288,7 +1437,7 @@ function hideGameOverModal(){
     gameOverOverlay.setAttribute('aria-hidden','true');
 
     // Remove focus trap
-    removeModalFocusTrap();
+    removeModalFocusTrap(gameOverOverlay);
   }
   gameOverShown=false;
 
@@ -1310,6 +1459,52 @@ function hideGameOverModal(){
   // Return focus to the game canvas
   const gameCanvas = document.getElementById('board');
   gameCanvas?.focus();
+}
+
+function isHowToModalVisible(){
+  return !!howToOverlay && !howToOverlay.classList.contains('hidden');
+}
+
+function showHowToModal(auto=false){
+  if(!howToOverlay){
+    return;
+  }
+  if(isHowToModalVisible()){
+    return;
+  }
+  howToPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  howToOverlay.classList.remove('hidden');
+  howToOverlay.setAttribute('aria-hidden','false');
+  setupModalFocusTrap(howToOverlay);
+  const focusTarget = howToOverlay.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  if(focusTarget instanceof HTMLElement){
+    focusTarget.focus();
+  }else{
+    howToOverlay.focus();
+  }
+  if(auto){
+    announceToScreenReader('How to play instructions open. Use the Got it button to continue.');
+  }else{
+    announceToScreenReader('How to play instructions opened.');
+  }
+  try {
+    localStorage.setItem(LS_HOWTO, '1');
+  } catch {}
+  howToSeen = true;
+}
+
+function hideHowToModal(){
+  if(!howToOverlay || howToOverlay.classList.contains('hidden')){
+    return;
+  }
+  howToOverlay.classList.add('hidden');
+  howToOverlay.setAttribute('aria-hidden','true');
+  removeModalFocusTrap(howToOverlay);
+  const fallback = document.getElementById('board');
+  const returnTarget = (howToPreviousFocus && document.contains(howToPreviousFocus)) ? howToPreviousFocus : (howToButton || fallback);
+  if(returnTarget instanceof HTMLElement){
+    returnTarget.focus();
+  }
 }
 
 function showGameOverModal(title,message){
@@ -1355,6 +1550,7 @@ function check(){
         maxTile: highestTile,
         timeRemainingMs,
         timeLimitMs: currentMode.timeLimitMs,
+        moveCount,
       },
     });
     if (won) {
@@ -1368,6 +1564,7 @@ function check(){
           maxTile: highestTile,
           timeRemainingMs,
           timeLimitMs: currentMode.timeLimitMs,
+          moveCount,
         },
       });
     } else {
@@ -1382,6 +1579,7 @@ function check(){
           maxTile: highestTile,
           timeRemainingMs,
           timeLimitMs: currentMode.timeLimitMs,
+          moveCount,
         },
       });
     }
@@ -1396,11 +1594,21 @@ addEventListener('keydown', e=>{
     return;
   }
 
+  if(e.key === 'Escape' && isHowToModalVisible()){
+    e.preventDefault();
+    hideHowToModal();
+    return;
+  }
+
   // Only handle game keys when game canvas is focused or no form elements are focused
   const activeEl = document.activeElement;
   const isFormElement = activeEl && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(activeEl.tagName);
   const gameCanvas = document.getElementById('board');
   const isGameFocused = activeEl === gameCanvas || activeEl === document.body;
+
+  if(isHowToModalVisible()){
+    return;
+  }
 
   // Don't steal arrow keys from form controls
   if(isFormElement && !isGameFocused) {
@@ -1432,25 +1640,21 @@ addEventListener('keydown', e=>{
     return;
   }
 
-  if(e.key==='ArrowLeft') {
+  const directionMap = {
+    arrowleft: 0,
+    a: 0,
+    arrowup: 1,
+    w: 1,
+    arrowright: 2,
+    d: 2,
+    arrowdown: 3,
+    s: 3,
+  };
+  if(Object.prototype.hasOwnProperty.call(directionMap, keyLower)){
     e.preventDefault();
-    move(0);
+    move(directionMap[keyLower]);
     announceGameMove();
-  }
-  if(e.key==='ArrowUp') {
-    e.preventDefault();
-    move(1);
-    announceGameMove();
-  }
-  if(e.key==='ArrowRight') {
-    e.preventDefault();
-    move(2);
-    announceGameMove();
-  }
-  if(e.key==='ArrowDown') {
-    e.preventDefault();
-    move(3);
-    announceGameMove();
+    return;
   }
   if(e.key==='r'||e.key==='R') {
     reset();
@@ -1482,8 +1686,15 @@ addEventListener('keydown', e=>{
 });
 
 let touchStart=null;
-c.addEventListener('touchstart',e=>{touchStart=e.touches[0]});
+c.addEventListener('touchstart',e=>{
+  if(isHowToModalVisible()) return;
+  touchStart=e.touches[0];
+});
 c.addEventListener('touchend',e=>{
+  if(isHowToModalVisible()){
+    touchStart = null;
+    return;
+  }
   if(!touchStart) return; const t=e.changedTouches[0];
   const dx=t.clientX-touchStart.clientX, dy=t.clientY-touchStart.clientY;
   if(Math.abs(dx)+Math.abs(dy)>24){ if(Math.abs(dx)>Math.abs(dy)) move(dx>0?2:0); else move(dy>0?3:1); }
@@ -1576,13 +1787,39 @@ function draw(anim){
         textColor:(v<=4)?theme.tileTextDark:theme.tileTextLight,
         font:(v<100)?'28px Inter':'24px Inter',
         order:tileOrder++,
-        layer:Math.log2(v)
+        layer:Math.log2(v),
+        gridX:x,
+        gridY:y
       });
     }
   }
 
   for(const cell of emptyCells){
     drawTileBackground(ctx,cell.x,cell.y,S,TILE_RADIUS,theme.empty,strokeColor,0);
+  }
+
+  if(!reduceMotion && spawnParticles.length){
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for(const particle of spawnParticles){
+      const progress = Math.min(1, Math.max(0, particle.age / PARTICLE_LIFETIME_MS));
+      const alpha = Math.max(0, 0.35 * (1 - progress));
+      if(alpha <= 0){
+        continue;
+      }
+      const centerX = PAD + particle.x * (S + GAP) + S/2;
+      const centerY = 40 + particle.y * (S + GAP) + S/2;
+      const innerRadius = Math.max(4, S * 0.15);
+      const radius = innerRadius + progress * (S * 0.6);
+      const gradient = ctx.createRadialGradient(centerX, centerY, innerRadius, centerX, centerY, radius);
+      gradient.addColorStop(0, `rgba(255,255,255,${alpha.toFixed(3)})`);
+      gradient.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   tileDrawList.sort((a,b)=>a.layer===b.layer?a.order-b.order:a.layer-b.layer);
@@ -1601,6 +1838,26 @@ function draw(anim){
     ctx.fillStyle=tile.textColor;
     ctx.font=tile.font;
     ctx.fillText(tile.value,tile.x+S/2,tile.y+S/2+2);
+    if(!reduceMotion){
+      const mergeEffect = mergedAnim.get(`${tile.gridX},${tile.gridY}`);
+      if(mergeEffect && mergeEffect.glow > 0){
+        const glowAlpha = Math.min(0.45, 0.2 + mergeEffect.glow * 0.35);
+        const cx = tile.x + S/2;
+        const cy = tile.y + S/2;
+        const baseRadius = S/2 + 6;
+        const radius = baseRadius + mergeEffect.glow * 10;
+        const gradient = ctx.createRadialGradient(cx, cy, S*0.2, cx, cy, radius);
+        gradient.addColorStop(0, `rgba(255,255,255,${glowAlpha.toFixed(3)})`);
+        gradient.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
     if(needsScale){
       ctx.restore();
     }
@@ -1803,7 +2060,7 @@ gameLoop.update=dt=>{
           grid,
           score,
           rngState: rng.serialize(),
-          meta: { mergeStreak, lastMoveHadMerge }
+          meta: { mergeStreak, lastMoveHadMerge, moveCount }
         });
         pendingHistoryCommit = false;
         updateUndoDisplay();
@@ -1820,7 +2077,19 @@ gameLoop.update=dt=>{
       newTileAnim = null;
     }
   }
-  
+
+  if(!reduceMotion && spawnParticles.length){
+    for(let i=spawnParticles.length-1; i>=0; i--){
+      const particle = spawnParticles[i];
+      particle.age += dt*1000;
+      if(particle.age >= PARTICLE_LIFETIME_MS){
+        spawnParticles.splice(i,1);
+      } else {
+        needsRedraw = true;
+      }
+    }
+  }
+
   // Update merged tile pulse animations (decay from 1.1 to 1.0 over ~150ms)
   const MERGE_ANIM_TIME = ANIM_TIME * 1.25;
   const keysToDelete = [];
@@ -1832,6 +2101,7 @@ gameLoop.update=dt=>{
     } else {
       // Decay scale from 1.1 to 1.0
       animObj.scale = 1.1 - (animObj.p * 0.1);
+      animObj.glow = Math.max(0, 1 - animObj.p);
     }
   }
   
@@ -1870,7 +2140,7 @@ const handleReduceMotionChange = (eventMatches) => {
           grid,
           score,
           rngState: rng.serialize(),
-          meta: { mergeStreak, lastMoveHadMerge }
+          meta: { mergeStreak, lastMoveHadMerge, moveCount }
         });
         pendingHistoryCommit = false;
         updateUndoDisplay();
@@ -1878,6 +2148,7 @@ const handleReduceMotionChange = (eventMatches) => {
     }
     newTileAnim = null;
     mergedAnim.clear();
+    spawnParticles.length = 0;
     renderCache.skipFrames = 0;
     if(currentMode.timeLimitMs && !gameLoop.running){
       gameLoop.start();
@@ -1970,12 +2241,16 @@ diagHandle.scoreListeners = diagScoreListeners;
 updateModeDiagnostics();
 
 document.getElementById('hintBtn')?.addEventListener('click',()=>{ getHint(); });
-document.getElementById('themeToggle')?.addEventListener('click',()=>{
-  currentTheme=currentTheme==='dark'?'light':'dark';
-  localStorage.setItem(LS_THEME,currentTheme);
-  applyTheme();
-  draw();
-});
+const themeToggleButton = document.getElementById('themeToggle');
+if(themeToggleButton){
+  themeToggleButton.addEventListener('click', () => {
+    currentTheme = getNextTheme(currentTheme);
+    localStorage.setItem(LS_THEME,currentTheme);
+    applyTheme();
+    draw();
+    announceToScreenReader(`Switched to ${getThemeLabel(currentTheme)} theme.`);
+  });
+}
 
 // Add undo button functionality
 document.getElementById('undoBtn')?.addEventListener('click',()=>{
@@ -1994,6 +2269,76 @@ document.getElementById('redoBtn')?.addEventListener('click',()=>{
   const redone = redoMove();
   announceToScreenReader(redone ? 'Move redone.' : 'No moves to redo.');
 });
+
+if(howToButton){
+  howToButton.addEventListener('click', () => showHowToModal(false));
+}
+howToCloseBtn?.addEventListener('click', () => hideHowToModal());
+howToOverlay?.addEventListener('click', (event) => {
+  if(event.target === howToOverlay){
+    hideHowToModal();
+  }
+});
+
+const rngModeSelect = document.getElementById('rngModeSel');
+const rngSeedInputEl = document.getElementById('rngSeedInput');
+
+function updateRngUiState(){
+  if(rngModeSelect){
+    rngModeSelect.value = rngMode;
+  }
+  if(rngSeedInputEl){
+    rngSeedInputEl.value = rngSeedValue;
+    rngSeedInputEl.disabled = rngMode !== 'deterministic';
+  }
+}
+
+updateRngUiState();
+
+if(rngModeSelect){
+  rngModeSelect.addEventListener('change', () => {
+    const selected = rngModeSelect.value === 'deterministic' ? 'deterministic' : 'random';
+    if(selected === rngMode){
+      updateRngUiState();
+      return;
+    }
+    rngMode = selected;
+    try { localStorage.setItem(LS_RNG_MODE, rngMode); } catch {}
+    if(rngMode === 'deterministic' && !rngSeedValue){
+      rngSeedValue = DEFAULT_RNG_SEED;
+      try { localStorage.setItem(LS_RNG_SEED, rngSeedValue); } catch {}
+    }
+    updateRngUiState();
+    announceToScreenReader(`RNG mode set to ${rngMode === 'deterministic' ? 'deterministic' : 'random'}.`);
+    reset(false, rngMode === 'deterministic' ? 'rng-mode-deterministic' : 'rng-mode-random');
+  });
+}
+
+if(rngSeedInputEl){
+  const commitSeedChange = (reason) => {
+    const trimmed = rngSeedInputEl.value.trim();
+    const nextValue = trimmed || DEFAULT_RNG_SEED;
+    if(nextValue === rngSeedValue){
+      updateRngUiState();
+      return;
+    }
+    rngSeedValue = nextValue;
+    try { localStorage.setItem(LS_RNG_SEED, rngSeedValue); } catch {}
+    updateRngUiState();
+    if(rngMode === 'deterministic'){
+      announceToScreenReader(`Deterministic seed set to ${rngSeedValue}.`);
+      reset(false, reason);
+    }
+  };
+  rngSeedInputEl.addEventListener('change', () => commitSeedChange('rng-seed-change'));
+  rngSeedInputEl.addEventListener('blur', () => commitSeedChange('rng-seed-blur'));
+  rngSeedInputEl.addEventListener('keydown', (event) => {
+    if(event.key === 'Enter'){
+      event.preventDefault();
+      rngSeedInputEl.blur();
+    }
+  });
+}
 
 overlayRestartBtn?.addEventListener('click',()=>{
   if(initializationFailed){
@@ -2088,55 +2433,51 @@ if (gameCanvas) {
   });
 }
 
-// Focus trap management for modal
-function setupModalFocusTrap() {
-  const modal = gameOverOverlay;
-  const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-  const firstFocusable = focusableElements[0];
-  const lastFocusable = focusableElements[focusableElements.length - 1];
-  
-  function trapFocus(e) {
-    if (e.key === 'Tab') {
-      if (e.shiftKey) {
-        if (document.activeElement === firstFocusable) {
-          e.preventDefault();
-          lastFocusable?.focus();
-        }
-      } else {
-        if (document.activeElement === lastFocusable) {
-          e.preventDefault();
-          firstFocusable?.focus();
-        }
-      }
+// Focus trap management for modal dialogs
+function setupModalFocusTrap(target = gameOverOverlay) {
+  if(!target){
+    return;
+  }
+  removeModalFocusTrap(target);
+  const selector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  const trapFocus = (e) => {
+    if(e.key !== 'Tab'){
+      return;
     }
-  }
-  
-  // Store trap function to remove later
-  modal._focusTrap = trapFocus;
-  modal.addEventListener('keydown', trapFocus);
+    const focusable = Array.from(target.querySelectorAll(selector)).filter((el) => {
+      if(el.hasAttribute('disabled')) return false;
+      const tabindex = el.getAttribute('tabindex');
+      return tabindex !== '-1';
+    });
+    if(!focusable.length){
+      e.preventDefault();
+      target.focus();
+      return;
+    }
+    const firstFocusable = focusable[0];
+    const lastFocusable = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if(e.shiftKey){
+      if(active === firstFocusable || !target.contains(active)){
+        e.preventDefault();
+        (lastFocusable || target).focus();
+      }
+    } else if(active === lastFocusable){
+      e.preventDefault();
+      (firstFocusable || target).focus();
+    }
+  };
+  target.addEventListener('keydown', trapFocus);
+  focusTrapHandlers.set(target, trapFocus);
 }
 
-function removeModalFocusTrap() {
-  if (gameOverOverlay && gameOverOverlay._focusTrap) {
-    gameOverOverlay.removeEventListener('keydown', gameOverOverlay._focusTrap);
-    gameOverOverlay._focusTrap = null;
+function removeModalFocusTrap(target = gameOverOverlay) {
+  const handler = focusTrapHandlers.get(target);
+  if(!handler || !target){
+    return;
   }
-}
-
-// Theme toggle accessibility
-const themeToggle = document.getElementById('themeToggle');
-if (themeToggle) {
-  themeToggle.addEventListener('click', () => {
-    // Allow the existing toggle handler to update the theme first
-    setTimeout(() => {
-      // currentTheme has already been updated by the primary click handler
-      const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-      // Update both text and ARIA label to reflect the current and next themes
-      themeToggle.textContent = currentTheme === 'dark' ? 'Light' : 'Dark';
-      themeToggle.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
-      announceToScreenReader(`Switched to ${currentTheme} theme.`);
-    }, 100);
-  });
+  target.removeEventListener('keydown', handler);
+  focusTrapHandlers.delete(target);
 }
 
 function showInitializationErrorOverlay(){
@@ -2175,6 +2516,13 @@ function initializeGame(){
     window.DIAG?.ready?.();
     announceGameReady();
     announceToScreenReader('2048 game loaded. Press Tab to navigate controls or focus the game board to start playing.');
+    if(!howToSeen){
+      setTimeout(() => {
+        if(!howToSeen && !isHowToModalVisible()){
+          showHowToModal(true);
+        }
+      }, 250);
+    }
   }catch(error){
     try{
       pushEvent('game',{

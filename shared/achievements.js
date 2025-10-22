@@ -245,6 +245,25 @@ export const registry = [
     condition: (e) => e.slug === 'snake' && e.type === 'combo' && extractStat(e, 'count') >= 5,
   },
   {
+    id: 'snake_apples_10',
+    title: 'Apple Collector',
+    desc: 'Eat 10 apples in one Snake run',
+    icon: '🍏',
+    condition: (e) => e.slug === 'snake' && e.type === 'game_over' && extractStat(e, 'applesEaten') >= 10,
+  },
+  {
+    id: 'snake_length_25',
+    title: 'Serpent Stretch',
+    desc: 'Grow your snake to length 25 in Snake',
+    icon: '📏',
+    condition: (e) => {
+      if (e.slug !== 'snake') return false;
+      const maxLen = extractStat(e, 'maxLength');
+      if (!Number.isFinite(maxLen)) return false;
+      return maxLen >= 25;
+    },
+  },
+  {
     id: 'tetris_b2b_5',
     title: 'Back-to-Back Pro',
     desc: 'Chain five back-to-back clears in Tetris',
@@ -336,6 +355,20 @@ export const registry = [
     condition: (e) => e.slug === 'maze3d' && e.type === 'win' && (e?.meta?.mapUsed === false || e?.meta?.assist === 'none'),
   },
   {
+    id: '2048_tile_1024',
+    title: '1024 Apprentice',
+    desc: 'Build the 1024 tile in 2048',
+    icon: '🧱',
+    condition: (e) => e.slug === '2048' && Math.max(extractStat(e, 'maxTile'), extractStat(e, 'tileValue')) >= 1024,
+  },
+  {
+    id: '2048_tile_2048',
+    title: '2048 Champion',
+    desc: 'Reach the 2048 tile in 2048',
+    icon: '👑',
+    condition: (e) => e.slug === '2048' && Math.max(extractStat(e, 'maxTile'), extractStat(e, 'tileValue')) >= 2048,
+  },
+  {
     id: '2048_tile_4096',
     title: '4096 Architect',
     desc: 'Build the 4096 tile in 2048',
@@ -348,6 +381,13 @@ export const registry = [
     desc: 'Win a 2048 game without using undo',
     icon: '🚫',
     condition: (e) => e.slug === '2048' && e.type === 'win' && extractStat(e, 'undosUsed') === 0,
+  },
+  {
+    id: '2048_win_10_moves',
+    title: 'Lightning Round',
+    desc: 'Win a 2048 game in ten moves or fewer',
+    icon: '⚡',
+    condition: (e) => e.slug === '2048' && e.type === 'win' && extractStat(e, 'moveCount') > 0 && extractStat(e, 'moveCount') <= 10,
   },
   {
     id: 'chess_mate_in3',
