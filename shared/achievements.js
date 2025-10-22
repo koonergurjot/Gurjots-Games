@@ -245,6 +245,25 @@ export const registry = [
     condition: (e) => e.slug === 'snake' && e.type === 'combo' && extractStat(e, 'count') >= 5,
   },
   {
+    id: 'snake_apples_10',
+    title: 'Apple Collector',
+    desc: 'Eat 10 apples in one Snake run',
+    icon: '🍏',
+    condition: (e) => e.slug === 'snake' && e.type === 'game_over' && extractStat(e, 'applesEaten') >= 10,
+  },
+  {
+    id: 'snake_length_25',
+    title: 'Serpent Stretch',
+    desc: 'Grow your snake to length 25 in Snake',
+    icon: '📏',
+    condition: (e) => {
+      if (e.slug !== 'snake') return false;
+      const maxLen = extractStat(e, 'maxLength');
+      if (!Number.isFinite(maxLen)) return false;
+      return maxLen >= 25;
+    },
+  },
+  {
     id: 'tetris_b2b_5',
     title: 'Back-to-Back Pro',
     desc: 'Chain five back-to-back clears in Tetris',
