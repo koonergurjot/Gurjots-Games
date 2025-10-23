@@ -36,3 +36,14 @@ test('navigating to the current path does not push a new history entry', async (
 
   pushSpy.mockRestore();
 });
+
+test('hash-prefixed paths are normalized before resolving', async () => {
+  const handler = vi.fn();
+  const loader = vi.fn(async () => ({ default: handler }));
+  router.register('/foo', loader);
+
+  await router.resolve('#/foo');
+
+  expect(loader).toHaveBeenCalledTimes(1);
+  expect(handler).toHaveBeenCalledTimes(1);
+});

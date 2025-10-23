@@ -157,7 +157,8 @@ export class Router {
   parsePath(input) {
     let target = input || '/';
     if (!target.startsWith('/')) {
-      target = '/' + target.replace(/^#+/, '');
+      const trimmed = target.replace(/^#+/, '');
+      target = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
     }
     const url = new URL(target, location.origin);
     const fullPath = this.buildFullPath(url.pathname + url.search + url.hash);
