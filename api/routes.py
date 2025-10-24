@@ -1,9 +1,10 @@
 from __future__ import annotations
-
 import json
 import time
 from http import HTTPStatus
-from typing import Callable, Dict, Iterable, Tuple
+from collections import defaultdict, deque
+from threading import Lock
+from typing import Callable, DefaultDict, Deque, Dict, Iterable, Tuple
 from urllib.parse import parse_qs
 
 from config import get_settings
@@ -13,20 +14,33 @@ StartResponse = Callable[[str, list[Tuple[str, str]]], None]
 
 
 class RateLimiter:
-    def __init__(self, *, window_seconds: int, max_requests: int) -> None:
+    def __init__(
+        self,
+        *,
+        window_seconds: int,
+        max_requests: int,
+        clock: Callable[[], float] | None = None,
+    ) -> None:
         self.window = max(window_seconds, 1)
         self.max_requests = max(max_requests, 1)
-        self._hits: Dict[str, list[float]] = {}
+        self._clock = clock or time.time
+        self._hits: DefaultDict[str, Deque[float]] = defaultdict(deque)
+        self._lock = Lock()
 
     def check(self, key: str) -> bool:
-        now = time.time()
-        history = [stamp for stamp in self._hits.get(key, []) if now - stamp < self.window]
-        if len(history) >= self.max_requests:
-            self._hits[key] = history
-            return False
-        history.append(now)
-        self._hits[key] = history
-        return True
+        now = self._clock()
+        with self._lock:
+            history = self._hits[key]
+            while history and now - history[0] >= self.window:
+                history.popleft()
+            if len(history) >= self.max_requests:
+                return False
+            history.append(now)
+            return True
+
+    def reset(self) -> None:
+        with self._lock:
+            self._hits.clear()
 
 
 def _json_response(status: HTTPStatus, payload: Dict[str, object]) -> Tuple[str, list[Tuple[str, str]], bytes]:
@@ -38,6 +52,14 @@ def _json_response(status: HTTPStatus, payload: Dict[str, object]) -> Tuple[str,
     return f"{status.value} {status.phrase}", headers, body
 
 
+def _rate_limit_response(identifier: str, context: str) -> Tuple[str, list[Tuple[str, str]], bytes]:
+    message = (
+        "Rate limit exceeded: max "
+        f"{_rate_limiter.max_requests} requests per {_rate_limiter.window} seconds for {context}."
+    )
+    return _json_response(HTTPStatus.TOO_MANY_REQUESTS, {"error": message, "identifier": identifier})
+
+
 _settings = get_settings().get("leaderboard", {})
 _rate_limiter = RateLimiter(
     window_seconds=int(_settings.get("rateLimit", {}).get("windowSeconds", 60)),
@@ -47,7 +69,7 @@ _rate_limiter = RateLimiter(
 
 def reset_rate_limiter() -> None:
     """Reset rate limiter state (primarily for tests)."""
-    _rate_limiter._hits.clear()
+    _rate_limiter.reset()
 
 
 def application(environ: Dict[str, object], start_response: StartResponse) -> Iterable[bytes]:
@@ -63,19 +85,14 @@ def application(environ: Dict[str, object], start_response: StartResponse) -> It
         start_response(status, headers)
         return [body]
 
-    if not _rate_limiter.check(f"{client_ip}:{method}"):
-        status, headers, body = _json_response(
-            HTTPStatus.TOO_MANY_REQUESTS,
-            {"error": "Rate limit exceeded"},
-        )
-        start_response(status, headers)
-        return [body]
-
     try:
         if method == "GET":
-            status, headers, body = _handle_get(environ)
+            if not _rate_limiter.check(f"{client_ip}:{method}"):
+                status, headers, body = _rate_limit_response(client_ip, "leaderboard requests")
+            else:
+                status, headers, body = _handle_get(environ)
         elif method == "POST":
-            status, headers, body = _handle_post(environ)
+            status, headers, body = _handle_post(environ, client_ip)
         else:
             status, headers, body = _json_response(
                 HTTPStatus.METHOD_NOT_ALLOWED,
@@ -116,7 +133,7 @@ def _read_body(environ: Dict[str, object]) -> bytes:
     return body.read(length)
 
 
-def _handle_post(environ: Dict[str, object]) -> Tuple[str, list[Tuple[str, str]], bytes]:
+def _handle_post(environ: Dict[str, object], client_ip: str) -> Tuple[str, list[Tuple[str, str]], bytes]:
     raw_body = _read_body(environ)
     if not raw_body:
         raise ValueError("Request body is required")
@@ -139,6 +156,10 @@ def _handle_post(environ: Dict[str, object]) -> Tuple[str, list[Tuple[str, str]]
         raise ValueError("handle must be a string when provided")
     if share is not None and not isinstance(share, bool):
         raise ValueError("share must be a boolean when provided")
+
+    identifier = f"{client_ip}:{game_id}"
+    if not _rate_limiter.check(identifier):
+        return _rate_limit_response(identifier, f"submissions to {game_id}")
 
     entry = submit_score(game_id, score, handle=handle, shared=share)
 
