@@ -128,7 +128,14 @@ export class Router {
   }
 
   async renderRoute(route, params, context) {
-    const mod = await route.loader(params);
+    let mod;
+    try {
+      mod = await route.loader(params);
+    } catch (error) {
+      console.error('Failed to load route module', { error, route: route.pattern, params });
+      await this.renderNotFound(context.path, context, { commitHistory: false });
+      return;
+    }
     this.outlet.innerHTML = '';
     if (typeof mod.default === 'function') {
       mod.default(this.outlet, params, context);
@@ -136,11 +143,13 @@ export class Router {
     this.commitHistory(context.path, context.mode);
   }
 
-  async renderNotFound(path, context) {
+  async renderNotFound(path, context, options) {
     const mod = await import('./pages/not-found.js');
     this.outlet.innerHTML = '';
     mod.default(this.outlet);
-    this.commitHistory(path, context.mode);
+    if ((options == null ? void 0 : options.commitHistory) ?? true) {
+      this.commitHistory(path, context.mode);
+    }
   }
 
   commitHistory(path, mode) {

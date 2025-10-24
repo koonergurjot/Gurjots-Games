@@ -158,7 +158,15 @@ export class Router {
   }
 
   private async renderRoute(route: Route, params: Params, context: ResolveContext) {
-    const mod = await route.loader(params);
+    let mod;
+    try {
+      mod = await route.loader(params);
+    } catch (error) {
+      console.error('Failed to load route module', { error, route: route.pattern, params });
+      await this.renderNotFound(context.path, context, { commitHistory: false });
+      return;
+    }
+
     this.outlet.innerHTML = '';
     if (typeof mod.default === 'function') {
       mod.default(this.outlet, params, context);
@@ -166,11 +174,13 @@ export class Router {
     this.commitHistory(context.path, context.mode);
   }
 
-  private async renderNotFound(path: string, context: ResolveContext) {
+  private async renderNotFound(path: string, context: ResolveContext, options?: { commitHistory?: boolean }) {
     const mod = await import('../scripts/pages/not-found.js');
     this.outlet.innerHTML = '';
     mod.default(this.outlet);
-    this.commitHistory(path, context.mode);
+    if (options?.commitHistory ?? true) {
+      this.commitHistory(path, context.mode);
+    }
   }
 
   private commitHistory(path: string, mode: ResolveMode) {
