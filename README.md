@@ -102,7 +102,7 @@
 
 ```bash
 git clone https://github.com/koonergurjot/Gurjots-Games.git
-dcd Gurjots-Games
+cd Gurjots-Games
 npm install
 npx serve .
 ```
