@@ -1,6 +1,24 @@
 // sw.js — safe service worker with pass-through for games and scripts
 const CACHE_VERSION = 'v3_3';
 
+const DEFAULT_WARMUP_CHUNK_SIZE = 4;
+const DEFAULT_WARMUP_DELAY_MS = 0;
+const DEFAULT_WARMUP_MAX_ASSETS = 200;
+const WARMUP_MAX_CHUNK_SIZE = 10;
+
+const warmupQueue = {
+  pending: [],
+  seen: new Set(),
+  running: false,
+  promise: null,
+  options: {
+    chunkSize: DEFAULT_WARMUP_CHUNK_SIZE,
+    delayMs: DEFAULT_WARMUP_DELAY_MS,
+  },
+};
+
+let installWarmupAssets = [];
+
 const CORE_SHELL_ASSETS = [
   '/',
   '/index.html',
@@ -67,6 +85,7 @@ function normalizeList(value) {
 function classifyAsset(url, hint) {
   if (hint === 'audio' || /\.(mp3|ogg|wav|m4a)(\?.*)?$/i.test(url)) return 'audio';
   if (hint === 'image' || /\.(png|jpg|jpeg|gif|webp|svg)(\?.*)?$/i.test(url)) return 'image';
+  if (hint === 'video' || /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(url)) return 'video';
   return null;
 }
 
@@ -98,16 +117,99 @@ async function stashAssets(assets = []) {
   }));
 }
 
+function wait(delayMs) {
+  if (!delayMs) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, delayMs)));
+}
+
+function clampChunkSize(value) {
+  if (!Number.isFinite(value)) return DEFAULT_WARMUP_CHUNK_SIZE;
+  return Math.min(WARMUP_MAX_CHUNK_SIZE, Math.max(1, Math.floor(value)));
+}
+
+function clampDelay(value) {
+  if (!Number.isFinite(value) || value < 0) return DEFAULT_WARMUP_DELAY_MS;
+  return Math.floor(value);
+}
+
+function clampMaxAssets(value) {
+  if (!Number.isFinite(value) || value <= 0) return DEFAULT_WARMUP_MAX_ASSETS;
+  return Math.min(DEFAULT_WARMUP_MAX_ASSETS, Math.floor(value));
+}
+
+async function processWarmupQueue() {
+  while (warmupQueue.pending.length) {
+    const chunkSize = clampChunkSize(warmupQueue.options.chunkSize);
+    const chunk = warmupQueue.pending.splice(0, chunkSize);
+    if (!chunk.length) {
+      break;
+    }
+    try {
+      await stashAssets(chunk);
+    } catch (error) {
+      console.warn('[sw] failed to warmup assets', error);
+    }
+    if (warmupQueue.pending.length) {
+      await wait(clampDelay(warmupQueue.options.delayMs));
+    }
+  }
+}
+
+function enqueueWarmupAssets(assets = [], options = {}) {
+  const normalized = Array.isArray(assets)
+    ? assets.map(normalizeAsset).map(toAbsoluteUrl).filter(Boolean)
+    : [];
+
+  if (!normalized.length) {
+    return warmupQueue.promise || Promise.resolve();
+  }
+
+  const maxAssets = clampMaxAssets(options.maxAssets);
+  const chunkSize = options.chunkSize;
+  const delayMs = options.delayMs;
+
+  if (Number.isFinite(chunkSize) && chunkSize > 0) {
+    warmupQueue.options.chunkSize = clampChunkSize(chunkSize);
+  }
+  if (Number.isFinite(delayMs) && delayMs >= 0) {
+    warmupQueue.options.delayMs = clampDelay(delayMs);
+  }
+
+  for (const asset of normalized.slice(0, maxAssets)) {
+    if (warmupQueue.seen.has(asset)) {
+      continue;
+    }
+    warmupQueue.seen.add(asset);
+    warmupQueue.pending.push(asset);
+  }
+
+  if (!warmupQueue.running && warmupQueue.pending.length) {
+    warmupQueue.running = true;
+    warmupQueue.promise = processWarmupQueue().finally(() => {
+      warmupQueue.running = false;
+      warmupQueue.promise = null;
+    });
+  }
+
+  return warmupQueue.promise || Promise.resolve();
+}
+
 self.addEventListener('install', (event) => {
   const manifestAssets = Array.isArray(self.__PRECACHE_MANIFEST)
     ? self.__PRECACHE_MANIFEST.map(normalizeAsset).filter(Boolean)
     : [];
   event.waitUntil((async () => {
     const precacheTargets = [...CORE_SHELL_ASSETS, ...manifestAssets];
+    installWarmupAssets = [];
     try {
       const catalogAssets = await loadCatalogAssets();
-      if (catalogAssets.length) {
-        precacheTargets.push(...catalogAssets);
+      const essentials = catalogAssets?.essentials || [];
+      const warmup = catalogAssets?.warmup || [];
+      if (essentials.length) {
+        precacheTargets.push(...essentials);
+      }
+      if (warmup.length) {
+        installWarmupAssets = Array.from(new Set(warmup.map(toAbsoluteUrl).filter(Boolean)));
       }
     } catch (error) {
       console.warn('[sw] failed to load catalog assets', error);
@@ -118,19 +220,46 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil((async () => {
+  const activationTasks = (async () => {
     const keys = await caches.keys();
     await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
-  })());
+  })();
+
+  const warmupPromise = installWarmupAssets.length
+    ? enqueueWarmupAssets(installWarmupAssets).catch((error) => {
+        console.warn('[sw] failed queued warmup', error);
+      })
+    : null;
+  installWarmupAssets = [];
+
+  if (warmupPromise) {
+    event.waitUntil(Promise.all([activationTasks, warmupPromise]));
+  } else {
+    event.waitUntil(activationTasks);
+  }
   self.clients.claim();
 });
 
 self.addEventListener('message', (event) => {
   const data = event.data;
-  if (!data || data.type !== 'PRECACHE') return;
-  const assets = Array.isArray(data.assets) ? data.assets.map(normalizeAsset).filter(Boolean) : [];
-  if (!assets.length) return;
-  event.waitUntil(stashAssets(assets));
+  if (!data || !data.type) return;
+  if (data.type === 'PRECACHE') {
+    const assets = Array.isArray(data.assets) ? data.assets.map(normalizeAsset).filter(Boolean) : [];
+    if (!assets.length) return;
+    event.waitUntil(stashAssets(assets));
+    return;
+  }
+
+  if (data.type === 'BACKGROUND_WARMUP') {
+    const assets = Array.isArray(data.assets) ? data.assets : [];
+    if (!assets.length) return;
+    const options = {
+      chunkSize: data.chunkSize,
+      delayMs: data.delayMs,
+      maxAssets: data.maxAssets,
+    };
+    event.waitUntil(enqueueWarmupAssets(assets, options));
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -222,29 +351,19 @@ async function parseOfflineCatalog() {
 async function loadCatalogAssets() {
   const catalog = await loadCatalog();
   if (!Array.isArray(catalog) || !catalog.length) {
-    return [];
+    return { essentials: [], warmup: [] };
   }
 
-  const assets = [];
+  const essentials = [];
+  const warmup = [];
   const seen = new Set();
 
-  const addAsset = (url) => {
+  const trackAsset = (url, hint, forceBucket) => {
     const absolute = toAbsoluteUrl(url);
     if (!absolute) {
       return;
     }
-    if (seen.has(absolute)) {
-      return;
-    }
-    seen.add(absolute);
-    assets.push(absolute);
-  };
 
-  const addTypedAsset = (url, hint) => {
-    const absolute = toAbsoluteUrl(url);
-    if (!absolute) {
-      return;
-    }
     const type = classifyAsset(absolute, hint);
     const key = type ? `${type}|${absolute}` : absolute;
     if (seen.has(key) || seen.has(absolute)) {
@@ -252,31 +371,48 @@ async function loadCatalogAssets() {
     }
     seen.add(key);
     seen.add(absolute);
-    assets.push(absolute);
+
+    const bucket = forceBucket || (type === 'audio' || type === 'video' ? 'warmup' : 'essential');
+    if (bucket === 'warmup') {
+      warmup.push(absolute);
+    } else {
+      essentials.push(absolute);
+    }
   };
 
   for (const game of catalog) {
     if (game && typeof game.playUrl === 'string') {
-      addAsset(game.playUrl);
+      trackAsset(game.playUrl, null, 'essential');
     }
 
-    const meta = game?.assets || game?.firstFrame || game?.firstFrameAssets;
-    if (!meta) continue;
-
-    const sprites = normalizeList(meta.sprites || meta.images);
-    const audio = normalizeList(meta.audio || meta.sounds);
-    const misc = normalizeList(meta.assets);
-
-    for (const sprite of sprites) {
-      addTypedAsset(sprite, 'image');
+    const firstFrames = normalizeList(game?.firstFrame);
+    for (const frame of firstFrames) {
+      trackAsset(frame, 'image', 'essential');
     }
-    for (const sound of audio) {
-      addTypedAsset(sound, 'audio');
-    }
-    for (const asset of misc) {
-      addTypedAsset(asset);
+
+    const metaSources = [game?.assets, game?.firstFrameAssets];
+    for (const meta of metaSources) {
+      if (!meta) continue;
+
+      const sprites = normalizeList(meta.sprites || meta.images);
+      const audio = normalizeList(meta.audio || meta.sounds);
+      const videos = normalizeList(meta.video || meta.videos);
+      const misc = normalizeList(meta.assets);
+
+      for (const sprite of sprites) {
+        trackAsset(sprite, 'image', 'essential');
+      }
+      for (const sound of audio) {
+        trackAsset(sound, 'audio', 'warmup');
+      }
+      for (const video of videos) {
+        trackAsset(video, 'video', 'warmup');
+      }
+      for (const asset of misc) {
+        trackAsset(asset);
+      }
     }
   }
 
-  return assets;
+  return { essentials, warmup };
 }
