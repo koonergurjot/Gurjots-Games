@@ -1,16 +1,25 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import io
 import json
+import multiprocessing
+import os
 import tempfile
 import unittest
+from pathlib import Path
 from typing import Dict
 from wsgiref.util import setup_testing_defaults
 
 from api.routes import application, reset_rate_limiter
 from server import leaderboard
+
+
+def _submit_concurrent_score(storage_path: str, score: int) -> None:
+    os.environ["LEADERBOARD_STORAGE_PATH"] = storage_path
+    from server import leaderboard as lb
+
+    lb.configure_storage(storage_path)
+    lb.submit_score("concurrent", score, handle=f"player-{score}")
 
 
 class LeaderboardAPITestCase(unittest.TestCase):
@@ -84,6 +93,25 @@ class LeaderboardAPITestCase(unittest.TestCase):
             self.assertTrue(status.startswith("200"))
         status, _, body = self._invoke(environ)
         self.assertTrue(status.startswith("429"), body)
+
+    def test_concurrent_writes_preserve_scores(self):
+        ctx = multiprocessing.get_context("spawn")
+        storage_path = str(Path(self.tempdir.name) / "leaderboard.json")
+        processes = []
+        expected_scores = list(range(8))
+        for score in expected_scores:
+            proc = ctx.Process(target=_submit_concurrent_score, args=(storage_path, score))
+            proc.start()
+            processes.append(proc)
+
+        for proc in processes:
+            proc.join(timeout=10)
+            self.assertFalse(proc.is_alive(), "Worker process did not terminate")
+            self.assertEqual(proc.exitcode, 0)
+
+        scores = leaderboard.get_top_scores("concurrent", limit=len(expected_scores))
+        returned_scores = sorted(entry["score"] for entry in scores)
+        self.assertEqual(returned_scores, expected_scores)
 
 
 if __name__ == "__main__":  # pragma: no cover
