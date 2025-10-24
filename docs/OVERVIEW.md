@@ -37,7 +37,7 @@ Treat `games.json` as the source of truth and re-run the sync script when entrie
 `games.json` acts as a single registry that powers both build-time tooling and runtime experiences:
 
 - **Runtime rendering.** The shell fetches the registry on demand through [`shared/game-catalog.js`](../shared/game-catalog.js), normalizes each record, and exposes helpers such as `getGameById` so every surface (home grid, category filters, detail pages) can render from the same hydrated data set.
-- **Offline and health tooling.** Running `npm run sync:games` executes [`tools/sync-game-catalog.mjs`](../tools/sync-game-catalog.mjs), which validates the registry and emits `data/games-offline.js` so workers and tests can fall back to a baked copy if the network is unavailable.
+- **Offline and health tooling.** Running `npm run sync:games` executes [`tools/sync-game-catalog.mjs`](../tools/sync-game-catalog.mjs), which validates the registry and emits `data/games-offline.js` so workers and tests can fall back to a baked copy if the network is unavailable. The script does **not** touch `public/games.json`; legacy mirrors must be maintained by their respective deployment jobs if they are still required.
 - **SEO and discovery.** The sitemap generator (`npm run sitemap`) loads the same registry to enumerate canonical play URLs and produce `sitemap.xml`, keeping search engines in sync with the catalog without bespoke curation.
 
 Because these tasks read the same source, any new game automatically flows to listings, offline caches, SEO artifacts, and other automation as soon as the registry is updated.
@@ -55,7 +55,7 @@ To add a new entry:
    - `released` – release date in `YYYY-MM-DD`
    - `playUrl` – path to the game's root
 3. Ensure the JSON remains valid and each object is comma-separated.
-4. Run `npm run sync:games` to refresh auxiliary artifacts (offline cache, etc.).
+4. Run `npm run sync:games` to regenerate `data/games-offline.js`.
 5. Run `npm run health` to verify the metadata.
 
 ## Quests and XP
