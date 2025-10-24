@@ -50,7 +50,8 @@ To add a new entry:
    - `title` – display name
    - `short` – brief description
    - `tags` – array of categories
-   - `difficulty` – `easy`, `medium`, or `hard`
+  - `difficulty` – `easy`, `normal`, or `hard`
+    - This value must align with `ALLOWED_DIFFICULTIES` defined in [`scripts/state/user-state.js`](../scripts/state/user-state.js) to ensure preferences stay in sync.
    - `released` – release date in `YYYY-MM-DD`
    - `playUrl` – path to the game's root
 3. Ensure the JSON remains valid and each object is comma-separated.
