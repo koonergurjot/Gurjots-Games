@@ -1,3 +1,5 @@
+import { createFindFirstReachable } from '/shared/find-first-reachable.js';
+
 (function(){
   const DEFAULT_ALLOW = 'autoplay; fullscreen; gamepad; xr-spatial-tracking';
   const DEFAULT_SANDBOX = 'allow-scripts allow-same-origin allow-modals allow-forms allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-downloads';
@@ -51,29 +53,27 @@
     return typeof path === 'string' && /\.html?(?:$|[?#])/i.test(path);
   }
 
-  async function probe(url){
+  async function probe(url, { signal } = {}){
     if (!url) return false;
     if (typeof fetch !== 'function') return true;
     try {
-      const head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+      const head = await fetch(url, { method: 'HEAD', cache: 'no-store', signal });
       if (head?.ok || head?.status === 304) return true;
       if (head && (head.status === 405 || head.status === 501)) {
-        const res = await fetch(url, { method: 'GET', cache: 'no-store' });
+        const res = await fetch(url, { method: 'GET', cache: 'no-store', signal });
         return !!(res?.ok);
       }
     } catch (err) {
+      if (err?.name === 'AbortError') throw err;
       return false;
     }
     return false;
   }
 
-  async function findFirstReachable(candidates){
-    for (const candidate of candidates){
-      const ok = await probe(candidate);
-      if (ok) return candidate;
-    }
-    return null;
-  }
+  const findFirstReachable = createFindFirstReachable({
+    probe,
+    concurrency: 4
+  });
 
   async function resolveGameInfo(slug){
     const info = {
@@ -143,7 +143,7 @@
     const shouldPreferModule = info.preferredMode === 'module' || info.preferredMode === 'script';
     const shouldPreferIframe = info.preferredMode === 'iframe';
     if (!shouldPreferIframe && (shouldPreferModule || (!hasPreferredMode && moduleCandidates.length))){
-      const moduleEntry = await findFirstReachable(moduleCandidates);
+      const moduleEntry = await findFirstReachable(slug, 'module', moduleCandidates);
       if (moduleEntry){
         return { mode: 'module', entry: moduleEntry, info: { ...info, title } };
       }
@@ -158,7 +158,7 @@
       toAbsolute(`${base}/play.html`)
     ].filter(Boolean));
 
-    const iframeEntry = await findFirstReachable(iframeCandidates);
+    const iframeEntry = await findFirstReachable(slug, 'iframe', iframeCandidates);
     return {
       mode: 'iframe',
       entry: iframeEntry || iframeCandidates[0] || toAbsolute(`${base}/index.html`),
