@@ -11,6 +11,7 @@ let outlet;
 let router;
 
 beforeEach(() => {
+  vi.clearAllMocks();
   outlet = document.createElement('div');
   router = new Router(outlet);
 });
@@ -46,4 +47,24 @@ test('hash-prefixed paths are normalized before resolving', async () => {
 
   expect(loader).toHaveBeenCalledTimes(1);
   expect(handler).toHaveBeenCalledTimes(1);
+});
+
+test('when a loader rejects the router renders not found without pushing history', async () => {
+  const notFoundModule = await import('../scripts/pages/not-found.js');
+  const loaderError = new Error('boom');
+  const loader = vi.fn(async () => {
+    throw loaderError;
+  });
+
+  router.register('/error', loader);
+
+  const pushSpy = vi.spyOn(history, 'pushState');
+
+  await expect(router.navigate('/error')).resolves.toBeUndefined();
+
+  expect(loader).toHaveBeenCalledTimes(1);
+  expect(notFoundModule.default).toHaveBeenCalledTimes(1);
+  expect(pushSpy).not.toHaveBeenCalled();
+
+  pushSpy.mockRestore();
 });
