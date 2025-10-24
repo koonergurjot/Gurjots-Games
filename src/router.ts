@@ -7,6 +7,7 @@ export interface ResolveContext {
   visited: Set<string>;
   url: URL;
   path: string;
+  navigationId: number;
 }
 
 export type Guard = (params: Params, context: ResolveContext) => Promise<boolean | string> | boolean | string;
@@ -21,6 +22,8 @@ interface Route {
 export class Router {
   private routes: Route[] = [];
   private outlet: HTMLElement;
+  private navigationSequence = 0;
+  private activeNavigationId = 0;
 
   constructor(outlet: HTMLElement) {
     this.outlet = outlet;
@@ -98,11 +101,15 @@ export class Router {
 
   async resolve(path: string, context?: Partial<ResolveContext>) {
     const { url, fullPath } = this.parsePath(path);
+    const navigationId = ++this.navigationSequence;
+    this.activeNavigationId = navigationId;
+
     const resolveContext: ResolveContext = {
       mode: context?.mode ?? 'pop',
       visited: context?.visited ?? new Set<string>(),
       url,
       path: fullPath,
+      navigationId,
     };
 
     if (resolveContext.visited.has(fullPath)) {
@@ -163,6 +170,9 @@ export class Router {
       mod = await route.loader(params);
     } catch (error) {
       console.error('Failed to load route module', { error, route: route.pattern, params });
+      if (context.navigationId !== this.activeNavigationId) {
+        return;
+      }
       await this.renderNotFound(context.path, context, { commitHistory: false });
       return;
     }
