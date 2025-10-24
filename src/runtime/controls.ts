@@ -135,7 +135,9 @@ export class Controls {
   private fireByCode(code: string): void {
     for (let p = 0; p < this.maps.length; p++) {
       this.ensureHandlerMap(p);
-      for (const action in this.maps[p]) {
+      const map = this.maps[p];
+      if (!map) continue;
+      for (const action in map) {
         if (this.match(action, code, p)) this.fire(action, p);
       }
     }

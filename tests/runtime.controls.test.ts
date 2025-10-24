@@ -21,6 +21,16 @@ test('adding mappings for a second player does not crash on keydown', () => {
   c.dispose();
 });
 
+test('non-contiguous player mappings skip missing entries safely', () => {
+  const c = new Controls();
+  c.setMapping('jump', 'KeyJ', 2);
+  const handler = vi.fn();
+  c.on('jump', handler, 2);
+  expect(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyJ' }))).not.toThrow();
+  expect(handler).toHaveBeenCalledTimes(1);
+  c.dispose();
+});
+
 test('dispose removes listeners', () => {
   const addSpy = vi.spyOn(window, 'addEventListener');
   const removeSpy = vi.spyOn(window, 'removeEventListener');
