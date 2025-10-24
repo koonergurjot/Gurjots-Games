@@ -34,12 +34,14 @@ test('non-contiguous player mappings skip missing entries safely', () => {
 test('dispose removes listeners', () => {
   const addSpy = vi.spyOn(window, 'addEventListener');
   const removeSpy = vi.spyOn(window, 'removeEventListener');
-  const c = new Controls({ touch: false });
+  const c = new Controls();
+  document.body.appendChild(c.element!);
   const downHandler = addSpy.mock.calls.find(c => c[0] === 'keydown')[1];
   const upHandler = addSpy.mock.calls.find(c => c[0] === 'keyup')[1];
   c.dispose();
   expect(removeSpy).toHaveBeenCalledWith('keydown', downHandler, undefined);
   expect(removeSpy).toHaveBeenCalledWith('keyup', upHandler, undefined);
+  expect(document.body.contains(c.element)).toBe(false);
   addSpy.mockRestore();
   removeSpy.mockRestore();
 });
