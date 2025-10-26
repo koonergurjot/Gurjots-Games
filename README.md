@@ -133,6 +133,12 @@ Visit [localhost:3000](http://localhost:3000) to play!
 ## 📖 Documentation & Help
 
 - [Getting Started Guide](#-get-started)
+- [Beginner Tutorials](docs/beginner-tutorials.md)
+- [Gurjot Launcher Guide](docs/launcher.md)
+- [Product Roadmap](docs/roadmap.md)
+- [Creator Program](docs/creator-program.md)
+- [Achievement Tracker](docs/achievements.md)
+- [Submit a Game](docs/submit-game.md)
 - [Game Loader Diagnostics](games/common/diagnostics/README.md)
 - [Contributing Guide](CONTRIBUTING.md)
 - [FAQ](#-faq)
