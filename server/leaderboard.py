@@ -52,11 +52,24 @@ def _storage_file_lock() -> Iterator[None]:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     handle = lock_path.open("a+b")
     try:
+        _ensure_lock_file_initialized(handle)
         _acquire_lock(handle)
         yield
     finally:
         _release_lock(handle)
         handle.close()
+
+
+def _ensure_lock_file_initialized(handle) -> None:
+    handle.seek(0, os.SEEK_END)
+    if handle.tell() == 0:
+        handle.write(b"\0")
+        handle.flush()
+        try:
+            os.fsync(handle.fileno())
+        except OSError:
+            pass
+    handle.seek(0)
 
 
 def _acquire_lock(handle) -> None:
