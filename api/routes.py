@@ -133,20 +133,41 @@ def _read_body(environ: Dict[str, object]) -> bytes:
     return body.read(length)
 
 
+def _check_rate_limit(
+    client_ip: str,
+    identifier_suffix: str,
+    context: str,
+) -> Tuple[bool, str]:
+    identifier = f"{client_ip}:{identifier_suffix}"
+    return _rate_limiter.check(identifier), identifier
+
+
 def _handle_post(environ: Dict[str, object], client_ip: str) -> Tuple[str, list[Tuple[str, str]], bytes]:
     raw_body = _read_body(environ)
     if not raw_body:
+        allowed, identifier = _check_rate_limit(client_ip, "missing-body", "leaderboard submissions")
+        if not allowed:
+            return _rate_limit_response(identifier, "leaderboard submissions")
         raise ValueError("Request body is required")
 
     try:
         payload = json.loads(raw_body)
     except json.JSONDecodeError:
+        allowed, identifier = _check_rate_limit(client_ip, "invalid-json", "leaderboard submissions")
+        if not allowed:
+            return _rate_limit_response(identifier, "leaderboard submissions")
         raise ValueError("Request body must be valid JSON") from None
 
     game_id = payload.get("game")
     score = payload.get("score")
     handle = payload.get("handle")
     share = payload.get("share")
+
+    identifier_suffix = game_id if isinstance(game_id, str) and game_id.strip() else "invalid-game"
+    context = f"submissions to {game_id}" if isinstance(game_id, str) and game_id.strip() else "leaderboard submissions"
+    allowed, identifier = _check_rate_limit(client_ip, identifier_suffix, context)
+    if not allowed:
+        return _rate_limit_response(identifier, context)
 
     if not isinstance(game_id, str) or not game_id.strip():
         raise ValueError("game must be a non-empty string")
@@ -156,10 +177,6 @@ def _handle_post(environ: Dict[str, object], client_ip: str) -> Tuple[str, list[
         raise ValueError("handle must be a string when provided")
     if share is not None and not isinstance(share, bool):
         raise ValueError("share must be a boolean when provided")
-
-    identifier = f"{client_ip}:{game_id}"
-    if not _rate_limiter.check(identifier):
-        return _rate_limit_response(identifier, f"submissions to {game_id}")
 
     entry = submit_score(game_id, score, handle=handle, shared=share)
 
