@@ -704,10 +704,19 @@
         }
       }
 
-      function collectAssetUrls(html, baseUrl) {
+      function collectAssetUrls(source, baseUrl) {
         try {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, "text/html");
+          let doc = null;
+          if (source && typeof source.querySelectorAll === "function") {
+            doc = source;
+          } else if (typeof source === "string") {
+            const parser = new DOMParser();
+            doc = parser.parseFromString(source, "text/html");
+          }
+          if (!doc) {
+            throw new Error("no document available");
+          }
+
           const elements = doc.querySelectorAll("script[src], link[href], img[src], img[srcset], audio[src], video[src], source[src], source[srcset], track[src]");
           const urls = new Set();
 
@@ -798,40 +807,62 @@
           return;
         }
 
-        const baseUrl = new URL(wrapperUrl, location.href);
-        setHealthPill("health: scanning…", "pending");
+        let baseUrl;
+        try {
+          baseUrl = new URL(wrapperUrl, location.href);
+        } catch (err) {
+          setHealthPill("health: n/a", "warn");
+          write("preflight skipped: " + (err && err.message ? err.message : err));
+          return;
+        }
 
-        fetch(baseUrl.href)
-          .then((resp) => {
-            if (!resp.ok) {
-              throw new Error(`status ${resp.status}`);
-            }
-            return resp.text();
-          })
-          .then((html) => {
-            const assets = collectAssetUrls(html, baseUrl);
-            if (!assets.length) {
-              setHealthPill("health: 0/0 OK", "bad");
-              write("preflight: no assets discovered");
-              return;
-            }
+        if (baseUrl.origin !== location.origin) {
+          setHealthPill("health: n/a", "warn");
+          write("preflight skipped: cross-origin wrapper");
+          return;
+        }
 
-            let okCount = 0;
-            let completed = 0;
-            const failures = [];
+        const runPreflight = () => {
+          let doc;
+          try {
+            doc = frame.contentDocument;
+          } catch (err) {
+            setHealthPill("health: n/a", "warn");
+            write("preflight skipped: " + (err && err.message ? err.message : err));
+            return;
+          }
 
-            const updatePill = (final = false) => {
-              const text = `health: ${okCount}/${assets.length} OK`;
-              const state = final
-                ? (() => {
-                    const ratio = okCount / assets.length;
-                    if (ratio >= 0.9) return "good";
-                    if (ratio >= 0.6) return "warn";
-                    return "bad";
-                  })()
-                : "pending";
-              setHealthPill(text, state);
-            };
+          if (!doc) {
+            setHealthPill("health: n/a", "warn");
+            write("preflight skipped: iframe document unavailable");
+            return;
+          }
+
+          setHealthPill("health: scanning…", "pending");
+
+          const assets = collectAssetUrls(doc, baseUrl);
+          if (!assets.length) {
+            setHealthPill("health: 0/0 OK", "bad");
+            write("preflight: no assets discovered");
+            return;
+          }
+
+          let okCount = 0;
+          let completed = 0;
+          const failures = [];
+
+          const updatePill = (final = false) => {
+            const text = `health: ${okCount}/${assets.length} OK`;
+            const state = final
+              ? (() => {
+                  const ratio = okCount / assets.length;
+                  if (ratio >= 0.9) return "good";
+                  if (ratio >= 0.6) return "warn";
+                  return "bad";
+                })()
+              : "pending";
+            setHealthPill(text, state);
+          };
 
             updatePill(false);
 
@@ -853,11 +884,21 @@
                 failures.slice(0, 3).forEach((url) => write(`preflight fail: ${url}`));
               }
             });
-          })
-          .catch((err) => {
-            setHealthPill("health: wrapper fetch failed", "bad");
-            write("preflight skipped: " + (err && err.message ? err.message : err));
-          });
+        };
+
+        const docReady = () => {
+          return frame.contentDocument && frame.contentDocument.readyState === "complete";
+        };
+
+        if (docReady()) {
+          runPreflight();
+        } else {
+          const handleLoad = () => {
+            frame.removeEventListener("load", handleLoad);
+            runPreflight();
+          };
+          frame.addEventListener("load", handleLoad);
+        }
       }
 
       // Wire buttons
