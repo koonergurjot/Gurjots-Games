@@ -99,22 +99,35 @@ function toAbsoluteUrl(url) {
 }
 
 async function stashAssets(assets = []) {
-  if (!assets.length) return;
+  const successes = [];
+  const failures = [];
+  if (!assets.length) {
+    return { successes, failures };
+  }
   const cache = await caches.open(CACHE_NAME);
   const unique = Array.from(new Set(assets.filter(Boolean)));
   await Promise.all(unique.map(async (asset) => {
     const request = new Request(asset, { credentials: 'omit' });
     const existing = await cache.match(request);
-    if (existing) return;
+    if (existing) {
+      successes.push(asset);
+      return;
+    }
     try {
       const response = await fetch(asset, { credentials: 'omit' });
       if (response && response.ok) {
         await cache.put(request, response.clone());
+        successes.push(asset);
+      } else {
+        failures.push(asset);
+        console.warn('[sw] failed to precache asset', asset, response?.status);
       }
     } catch (error) {
+      failures.push(asset);
       console.warn('[sw] failed to precache asset', asset, error);
     }
   }));
+  return { successes, failures };
 }
 
 function wait(delayMs) {
@@ -145,9 +158,17 @@ async function processWarmupQueue() {
       break;
     }
     try {
-      await stashAssets(chunk);
+      const { failures } = await stashAssets(chunk);
+      if (failures?.length) {
+        for (const failed of failures) {
+          warmupQueue.seen.delete(failed);
+        }
+      }
     } catch (error) {
       console.warn('[sw] failed to warmup assets', error);
+      for (const asset of chunk) {
+        warmupQueue.seen.delete(asset);
+      }
     }
     if (warmupQueue.pending.length) {
       await wait(clampDelay(warmupQueue.options.delayMs));
