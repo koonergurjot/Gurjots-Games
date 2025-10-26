@@ -13,6 +13,59 @@ const globalScope = typeof window !== 'undefined'
   ? window
   : (typeof globalThis !== 'undefined' ? globalThis : undefined);
 
+const getLeaderboardPromise = (() => {
+  let memoised = null;
+  return () => {
+    if (memoised) return memoised;
+    if (typeof window === 'undefined') return null;
+    const candidate = window.LB;
+    if (!candidate) return null;
+    memoised = typeof candidate.then === 'function' ? candidate : Promise.resolve(candidate);
+    return memoised;
+  };
+})();
+
+let leaderboardFailureToastTimer = null;
+
+function notifyLeaderboardFailure(error){
+  if (error) {
+    try {
+      console.warn('[breakout] leaderboard submission failed', error);
+    } catch (_) {
+      /* noop */
+    }
+  }
+  if (leaderboardFailureToastTimer) {
+    return;
+  }
+  try {
+    showToast('Score saved locally. Reconnect to submit online.', { duration: 4200 });
+  } catch (_) {
+    /* noop */
+  }
+  leaderboardFailureToastTimer = setTimeout(() => {
+    leaderboardFailureToastTimer = null;
+  }, 4500);
+}
+
+async function submitLeaderboardScore(score){
+  const promise = getLeaderboardPromise();
+  if (!promise) {
+    notifyLeaderboardFailure();
+    return;
+  }
+  try {
+    const client = await promise;
+    if (client && typeof client.submitScore === 'function') {
+      await client.submitScore(GAME_ID, score);
+    } else {
+      notifyLeaderboardFailure();
+    }
+  } catch (error) {
+    notifyLeaderboardFailure(error);
+  }
+}
+
 if(typeof CanvasRenderingContext2D!=='undefined' && typeof CanvasRenderingContext2D.prototype.drawImage!=='function'){
   CanvasRenderingContext2D.prototype.drawImage=function drawImageStub(){ return undefined; };
 }
@@ -1724,7 +1777,10 @@ function step(dt){
     powerups.length=0;
     if(lives<=0){
       if(typeof GG?.addAch==='function')GG.addAch(GAME_ID,'Game Over');
-      if(!submitted&&window.LB){LB.submitScore(GAME_ID,score);submitted=true;}
+      if(!submitted){
+        submitted=true;
+        submitLeaderboardScore(score);
+      }
       if(!endTime)endTime=performance.now();
       if(!telemetryGameOverSent){
         telemetryGameOverSent=true;

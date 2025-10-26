@@ -2,7 +2,7 @@ import { GameEngine } from '../../shared/gameEngine.js';
 import { preloadFirstFrameAssets } from '../../shared/game-asset-preloader.js';
 import { play as playSfx } from '../../shared/juice/audio.js';
 import getThemeTokens from '../../shared/skins/index.js';
-import '../../shared/ui/hud.js';
+import { showToast } from '../../shared/ui/hud.js';
 import { pushEvent } from '/games/common/diag-adapter.js';
 import '../common/diagnostics/adapter.js';
 import { gameEvent } from '../../shared/telemetry.js';
@@ -496,26 +496,53 @@ const DAILY_SEED = new Date().toISOString().slice(0, 10);
 const DAILY_MODE = params.get('daily') === '1';
 const toggle = document.getElementById('dailyToggle');
 toggle.checked = DAILY_MODE;
-function renderScores(){
+async function renderScores(){
   const box = document.getElementById('dailyScores');
   if(!box) return;
   if(!DAILY_MODE){
     box.style.display = 'none';
     box.innerHTML = '';
+    delete box.dataset.source;
     return;
   }
-  const lb = window.LB;
-  if(!lb || typeof lb.getTopScores !== 'function'){
+  const promise = getLeaderboardPromise();
+  if(!promise){
     box.style.display = 'none';
     box.innerHTML = '';
+    delete box.dataset.source;
     return;
   }
   box.style.display = '';
-  const scores = lb.getTopScores('snake', DAILY_SEED, 5) || [];
-  box.innerHTML = scores.map(s=>`<li>${s.score}</li>`).join('');
+  let client;
+  try {
+    client = await promise;
+  } catch (error) {
+    notifyLeaderboardFailure(error);
+    box.innerHTML = '';
+    box.dataset.source = 'cache';
+    return;
+  }
+  if(!client || typeof client.getTopScores !== 'function'){
+    box.innerHTML = '';
+    delete box.dataset.source;
+    return;
+  }
+  try {
+    const result = await client.getTopScores(GAME_ID, DAILY_SEED, 5);
+    const scores = Array.isArray(result?.entries) ? result.entries : Array.isArray(result) ? result : [];
+    box.innerHTML = scores.map(s => `<li>${s.score}</li>`).join('');
+    box.dataset.source = result && result.fromCache ? 'cache' : 'remote';
+  } catch (error) {
+    notifyLeaderboardFailure(error);
+    const fallback = typeof client.getCachedScores === 'function'
+      ? client.getCachedScores(GAME_ID, DAILY_SEED, 5)
+      : [];
+    box.innerHTML = fallback.map(s => `<li>${s.score}</li>`).join('');
+    box.dataset.source = 'cache';
+  }
 }
-window.renderScores = renderScores;
-renderScores();
+window.renderScores = function(){ renderScores().catch(() => {}); };
+renderScores().catch(() => {});
 toggle.onchange = ()=>{ params.set('daily', toggle.checked ? '1':'0'); location.search = params.toString(); };
 renderMissions();
 renderComboPanel();
@@ -703,6 +730,58 @@ let speedBoostActive = false;
 let speedBoostUntil = 0;
 const GAME_ID = 'snake';
 GG.incPlays();
+
+const getLeaderboardPromise = (() => {
+  let memoised = null;
+  return () => {
+    if (memoised) return memoised;
+    if (typeof window === 'undefined') return null;
+    const candidate = window.LB;
+    if (!candidate) return null;
+    memoised = typeof candidate.then === 'function' ? candidate : Promise.resolve(candidate);
+    return memoised;
+  };
+})();
+
+let lastLeaderboardWarning = 0;
+
+function notifyLeaderboardFailure(contextError){
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  if (contextError) {
+    try {
+      console.warn('[snake] leaderboard submission failed', contextError);
+    } catch (_) {
+      /* noop */
+    }
+  }
+  if (now - lastLeaderboardWarning < 5000) {
+    return;
+  }
+  lastLeaderboardWarning = now;
+  try {
+    showToast('Score saved locally. Reconnect to submit online.', { duration: 4200 });
+  } catch (_) {
+    /* noop */
+  }
+}
+
+async function submitLeaderboardScore(score, seed){
+  const promise = getLeaderboardPromise();
+  if (!promise) {
+    notifyLeaderboardFailure();
+    return;
+  }
+  try {
+    const client = await promise;
+    if (client && typeof client.submitScore === 'function') {
+      await client.submitScore(GAME_ID, score, seed);
+    } else {
+      notifyLeaderboardFailure();
+    }
+  } catch (error) {
+    notifyLeaderboardFailure(error);
+  }
+}
 const tokens = getThemeTokens('snake');
 const CSS_PALETTE = (() => {
   if (typeof window === 'undefined' || !window.getComputedStyle) return {};
@@ -2414,10 +2493,8 @@ function saveScore(s) {
   saveProgress();
   populateSkinSelects();
   renderMissions();
-  if (window.LB) {
-    LB.submitScore(GAME_ID, s, DAILY_MODE ? DAILY_SEED : null);
-    try { renderScores(); } catch { }
-  }
+  submitLeaderboardScore(s, DAILY_MODE ? DAILY_SEED : null);
+  renderScores().catch(() => {});
   if (s >= 20) GG.addAch(GAME_ID, 'Fruit Feast');
 }
 
