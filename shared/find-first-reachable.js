@@ -30,6 +30,7 @@ export function createFindFirstReachable({ probe, concurrency = DEFAULT_CONCURRE
       let nextIndex = 0;
       let active = 0;
       let settled = false;
+      const statuses = new Array(list.length);
 
       const maybeResolveNull = () => {
         if (!settled && active === 0 && nextIndex >= list.length){
@@ -45,26 +46,42 @@ export function createFindFirstReachable({ probe, concurrency = DEFAULT_CONCURRE
         controllers.clear();
       };
 
+      const maybeResolveSuccess = () => {
+        if (settled) return;
+        const firstSuccessIndex = statuses.findIndex(status => status === 'success');
+        if (firstSuccessIndex === -1) return;
+        const allEarlierResolved = statuses
+          .slice(0, firstSuccessIndex)
+          .every(status => status && status !== 'pending');
+        if (!allEarlierResolved) return;
+
+        settled = true;
+        abortAll();
+        resolve(list[firstSuccessIndex]);
+      };
+
       const launchNext = () => {
         if (settled) return;
         while (!settled && active < maxConcurrent && nextIndex < list.length){
-          const candidate = list[nextIndex++];
+          const index = nextIndex++;
+          const candidate = list[index];
           const controller = typeof AbortController === 'function' ? new AbortController() : null;
           if (controller) controllers.add(controller);
           active++;
+          statuses[index] = 'pending';
 
           Promise.resolve(probe(candidate, { signal: controller?.signal, slug, kind }))
             .then(ok => {
               if (controller) controllers.delete(controller);
               active--;
               if (settled) return;
+              statuses[index] = ok ? 'success' : 'failed';
               if (ok){
-                settled = true;
-                abortAll();
-                resolve(candidate);
+                maybeResolveSuccess();
                 return;
               }
               launchNext();
+              maybeResolveSuccess();
               maybeResolveNull();
             })
             .catch(err => {
@@ -72,10 +89,14 @@ export function createFindFirstReachable({ probe, concurrency = DEFAULT_CONCURRE
               active--;
               if (settled) return;
               if (err?.name === 'AbortError'){
+                statuses[index] = 'aborted';
+                maybeResolveSuccess();
                 maybeResolveNull();
                 return;
               }
+              statuses[index] = 'failed';
               launchNext();
+              maybeResolveSuccess();
               maybeResolveNull();
             });
         }
