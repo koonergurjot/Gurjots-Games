@@ -44,7 +44,7 @@ describe('games playable entry validation', () => {
 });
 
 describe('findFirstReachable helper', () => {
-  it('resolves as soon as a reachable candidate responds and cancels slower probes', async () => {
+  it('returns the lowest-index reachable candidate even if slower than later probes', async () => {
     const started = [];
     const aborted = [];
     const resolvers = new Map();
@@ -65,7 +65,11 @@ describe('findFirstReachable helper', () => {
     };
 
     const findFirstReachable = createFindFirstReachable({ probe, concurrency: 2 });
-    const pending = findFirstReachable('speedy-slug', 'module', ['slow', 'fast', 'later']);
+    let resolvedEntry;
+    const pending = findFirstReachable('speedy-slug', 'module', ['slow', 'fast', 'later']).then(result => {
+      resolvedEntry = result;
+      return result;
+    });
 
     await Promise.resolve();
 
@@ -73,10 +77,58 @@ describe('findFirstReachable helper', () => {
 
     resolvers.get('fast')?.(true);
 
-    const entry = await pending;
-    expect(entry).toBe('fast');
-    expect(aborted).toContain('slow');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(resolvedEntry).toBeUndefined();
     expect(started).not.toContain('later');
+
+    resolvers.get('slow')?.(true);
+
+    const entry = await pending;
+    expect(entry).toBe('slow');
+    expect(resolvedEntry).toBe('slow');
+    expect(aborted).toEqual([]);
+  });
+
+  it('cancels slower probes once the preferred reachable candidate is confirmed', async () => {
+    const started = [];
+    const aborted = [];
+    const resolvers = new Map();
+
+    const probe = (candidate, { signal }) => {
+      started.push(candidate);
+      return new Promise((resolve, reject) => {
+        resolvers.set(candidate, resolve);
+        if (signal){
+          signal.addEventListener('abort', () => {
+            aborted.push(candidate);
+            const abortError = new Error('Aborted');
+            abortError.name = 'AbortError';
+            reject(abortError);
+          }, { once: true });
+        }
+      });
+    };
+
+    const findFirstReachable = createFindFirstReachable({ probe, concurrency: 2 });
+    const pending = findFirstReachable('fallback-slug', 'module', ['first', 'second', 'third']);
+
+    await Promise.resolve();
+
+    expect(started).toEqual(['first', 'second']);
+
+    resolvers.get('first')?.(false);
+
+    await Promise.resolve();
+
+    expect(started).toEqual(['first', 'second', 'third']);
+
+    resolvers.get('second')?.(true);
+
+    const entry = await pending;
+    expect(entry).toBe('second');
+    expect(aborted).toContain('third');
   });
 
   it('memoizes successful results per slug and type', async () => {
