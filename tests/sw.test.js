@@ -135,5 +135,27 @@ describe('service worker cache management', () => {
     expect(secondBatch[0]).toContain('/assets/c.png');
   });
 
+  it('bypasses cache handling for API fetch requests', async () => {
+    await import('../sw.js?cache-bust=' + Date.now());
+
+    const fetchMock = global.fetch;
+    fetchMock.mockReset();
+    const apiResponse = new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    fetchMock.mockResolvedValue(apiResponse);
+
+    const openSpy = vi.spyOn(caches, 'open');
+
+    const request = new Request(`${self.location.origin}/api/status`, { method: 'GET' });
+    const response = await self.trigger('fetch', request);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(request);
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(response).toBe(apiResponse);
+  });
+
   // NOTE: Add broader smoke fixtures if we expand offline routing coverage.
 });

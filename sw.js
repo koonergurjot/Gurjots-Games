@@ -273,6 +273,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith((async () => {
+      try {
+        return await fetch(req);
+      } catch (error) {
+        console.error('[sw] API request failed', error);
+        throw error;
+      }
+    })());
+    return;
+  }
+
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     try {
