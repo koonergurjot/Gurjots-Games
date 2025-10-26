@@ -186,6 +186,9 @@ export class Router {
 
   private async renderNotFound(path: string, context: ResolveContext, options?: { commitHistory?: boolean }) {
     const mod = await import('../scripts/pages/not-found.js');
+    if (context.navigationId !== this.activeNavigationId) {
+      return;
+    }
     this.outlet.innerHTML = '';
     mod.default(this.outlet);
     if (options?.commitHistory ?? true) {
