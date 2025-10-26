@@ -887,7 +887,12 @@
         };
 
         const docReady = () => {
-          return frame.contentDocument && frame.contentDocument.readyState === "complete";
+          try {
+            return frame.contentDocument && frame.contentDocument.readyState === "complete";
+          } catch (err) {
+            write("preflight deferred: " + (err && err.message ? err.message : err));
+            return false;
+          }
         };
 
         if (docReady()) {
