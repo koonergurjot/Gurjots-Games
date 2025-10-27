@@ -189,6 +189,9 @@
       if (fetchImpl) {
         try {
           const params = new URLSearchParams({ game });
+          if (seed !== undefined && seed !== null && String(seed).trim() !== '') {
+            params.set('seed', String(seed));
+          }
           if (max) params.set('limit', String(max));
           const response = await fetchImpl(`${API_ENDPOINT}?${params.toString()}`, {
             method: 'GET',
@@ -203,7 +206,15 @@
             throw new LeaderboardError(message, { status: response.status });
           }
           const body = await parseJsonSafe(response);
-          const entries = replaceCache(game, seed, body && Array.isArray(body.scores) ? body.scores : [], Math.max(max, cacheLimit));
+          const scores = Array.isArray(body?.scores) ? body.scores : [];
+          const filteredScores = (seed !== undefined && seed !== null && String(seed).trim() !== '')
+            ? scores.filter(entry => {
+              const entrySeed = entry?.seed ?? entry?.metadata?.seed;
+              if (entrySeed === undefined || entrySeed === null) return false;
+              return String(entrySeed) === String(seed);
+            })
+            : scores;
+          const entries = replaceCache(game, seed, filteredScores, Math.max(max, cacheLimit));
           return {
             entries: entries.slice(0, max || entries.length),
             fromCache: false,
