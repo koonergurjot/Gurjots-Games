@@ -322,8 +322,8 @@ export function createSceneManager(options = {}) {
       const handler = current.inputHandlers.get(action);
       if (typeof handler === 'function') {
         try {
-          handler.call(current.instance, ctx, info);
-          handled = true;
+          const result = handler.call(current.instance, ctx, info);
+          if (result !== false) handled = true;
         } catch (err) {
           console.error(`[scene:${id}] input handler "${action}" failed`, err);
         }
