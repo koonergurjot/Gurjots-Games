@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="pixel-platformer-title pixel-platformer-desc">
-  <title id="pixel-platformer-title">Pixel Platformer thumbnail</title>
+  <title id="pixel-platformer-title">Pixel Platformer: Sandbox thumbnail</title>
   <desc id="pixel-platformer-desc">A pixel character mid-jump between floating blocks above a tiled ground, with forest layers behind.</desc>
   <defs>
     <linearGradient id="pixel-platformer-bg" x1="0" x2="0" y1="0" y2="1">

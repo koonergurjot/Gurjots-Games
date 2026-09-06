@@ -164,7 +164,7 @@ function createFallbackParallax() {
     return;
   }
 
-  drawBootPlaceholder(canvas, ctx, 'Loading Pixel Platformer…');
+  drawBootPlaceholder(canvas, ctx, 'Loading Pixel Platformer: Sandbox…');
 
   ctx.imageSmoothingEnabled = false;
 

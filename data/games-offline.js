@@ -15,7 +15,20 @@ export const games = [
     "difficulty": "easy",
     "released": "2025-08-20",
     "playUrl": "/games/pong/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/pong/thumb.svg",
     "thumbnail": "/games/pong/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/paddle.png",
+        "/assets/sprites/ball.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/paddle.png",
@@ -440,13 +453,25 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/asteroids/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/asteroids/thumb.svg",
     "thumbnail": "/games/asteroids/thumb.svg",
-    "firstFrame": {
+    "assets": {
       "sprites": [
         "/assets/sprites/ship.png"
       ],
       "audio": [
         "/assets/audio/hit.wav",
+        "/assets/audio/explode.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    },
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/ship.png"
+      ],
+      "audio": [
+        "/assets/audio/laser.wav",
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
       ]
@@ -488,7 +513,18 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/maze3d/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/maze3d/thumb.svg",
     "thumbnail": "/games/maze3d/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/maze3d/wall.png",
+        "/assets/sprites/maze3d/floor.png"
+      ],
+      "audio": [
+        "/assets/audio/powerup.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/maze3d/wall.png",
@@ -536,7 +572,18 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/platformer/thumb.svg",
     "thumbnail": "/games/platformer/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/coin.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -584,7 +631,19 @@ export const games = [
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/runner/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/runner/thumb.svg",
     "thumbnail": "/games/runner/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/coin.png"
+      ],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/click.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/coin.png"
@@ -633,12 +692,24 @@ export const games = [
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/shooter/thumb.svg",
     "thumbnail": "/games/shooter/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/ship.png"
+      ],
+      "audio": [
+        "/assets/audio/explode.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    },
     "firstFrame": {
       "sprites": [
         "/assets/sprites/ship.png"
       ],
       "audio": [
+        "/assets/audio/laser.wav",
         "/assets/audio/explode.wav",
         "/assets/audio/powerup.wav"
       ]
@@ -663,6 +734,170 @@ export const games = [
         "Move into open space as the first wave approaches.",
         "Fire continuously while weaving around enemy shots.",
         "Survive as long as possible to post a high score."
+      ]
+    }
+  },
+  {
+    "id": "alien-shooter",
+    "slug": "alien-shooter",
+    "title": "Alien Shooter: Arena",
+    "description": "Hold an open arena against escalating waves of alien craft, with a pulse bomb for when they close in.",
+    "short": "Survive escalating waves of alien craft in an open arena.",
+    "controls": "WASD or the arrow keys to move. Aim with the mouse and hold click or Space to fire. E launches a pulse bomb. Esc pauses.",
+    "tags": [
+      "arcade",
+      "2D"
+    ],
+    "engineType": "canvas-2d",
+    "difficulty": "hard",
+    "released": "2025-10-20",
+    "playUrl": "/games/alien-shooter/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/alien-shooter/thumb.svg",
+    "thumbnail": "/games/alien-shooter/thumb.svg",
+    "assets": {
+      "sprites": []
+    },
+    "firstFrame": {
+      "sprites": []
+    },
+    "featureFlags": [
+      "Keyboard",
+      "Mouse",
+      "Touch",
+      "Diagnostics"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 240
+    },
+    "help": {
+      "objective": "Clear each wave of alien craft without losing all of your health, and push your score as deep into the wave count as you can.",
+      "controls": "WASD or the arrow keys to move. Aim with the mouse and hold click or Space to fire. E launches a pulse bomb. Esc pauses.",
+      "tips": [
+        "Keep moving -- standing still lets scouts and strikers converge on you from several edges at once.",
+        "Save the pulse bomb for when enemies close in from more than one side rather than firing it on cooldown.",
+        "Strikers and gunners behave differently: read the colour before you commit to a dodge."
+      ],
+      "steps": [
+        "Move with WASD and aim with the mouse to line up your first shots.",
+        "Clear every craft in the wave to advance to the next one.",
+        "Use the pulse bomb to break out when you get surrounded."
+      ]
+    }
+  },
+  {
+    "id": "city-runner",
+    "slug": "city-runner",
+    "title": "City Runner: Rush",
+    "description": "An endless rooftop sprint through a parallax city skyline, with one button between you and the obstacles.",
+    "short": "An endless one-button sprint through a parallax city.",
+    "controls": "Space, W or the up arrow to jump. Tap or click anywhere on touch devices.",
+    "tags": [
+      "arcade",
+      "2D"
+    ],
+    "engineType": "canvas-2d",
+    "difficulty": "easy",
+    "released": "2025-10-20",
+    "playUrl": "/games/city-runner/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/city-runner/thumb.svg",
+    "thumbnail": "/games/city-runner/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/player/platformer_run.png",
+        "/assets/backgrounds/parallax/city_layer1.png",
+        "/assets/backgrounds/parallax/city_layer2.png"
+      ]
+    },
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/player/platformer_run.png",
+        "/assets/backgrounds/parallax/city_layer1.png",
+        "/assets/backgrounds/parallax/city_layer2.png"
+      ]
+    },
+    "featureFlags": [
+      "Keyboard",
+      "Touch",
+      "Diagnostics"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 200
+    },
+    "help": {
+      "objective": "Run as far as you can without hitting an obstacle -- your score climbs with the distance you cover.",
+      "controls": "Space, W or the up arrow to jump. Tap or click anywhere on touch devices.",
+      "tips": [
+        "Jump late rather than early: the obstacles are shorter than they look and an early hop lands you straight into one.",
+        "The run speeds up the further you get, so leave yourself more reaction room as your score climbs.",
+        "Drop the sprite detail toggle to Low if the frame rate dips on an older device."
+      ],
+      "steps": [
+        "Press Space, W or the up arrow to start running and to jump.",
+        "Clear each obstacle as it scrolls in from the right.",
+        "Keep the run alive as the pace increases to build your score."
+      ]
+    }
+  },
+  {
+    "id": "pixel-platformer",
+    "slug": "pixel-platformer",
+    "title": "Pixel Platformer: Sandbox",
+    "description": "A chunky pixel-art sandbox of floating blocks and forest parallax, built for practising precise jumps.",
+    "short": "A pixel-art sandbox built for practising precise jumps.",
+    "controls": "Arrow keys or A and D to run. Space, W or the up arrow to jump.",
+    "tags": [
+      "platformer",
+      "2D"
+    ],
+    "engineType": "canvas-2d",
+    "difficulty": "easy",
+    "released": "2025-10-20",
+    "playUrl": "/games/pixel-platformer/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/pixel-platformer/thumb.svg",
+    "thumbnail": "/games/pixel-platformer/thumb.svg",
+    "assets": {
+      "sprites": [
+        "/assets/sprites/player/platformer_idle.png",
+        "/assets/sprites/player/platformer_run.png",
+        "/assets/sprites/player/platformer_jump.png",
+        "/assets/backgrounds/parallax/forest_layer1.png",
+        "/assets/backgrounds/parallax/forest_layer2.png"
+      ]
+    },
+    "firstFrame": {
+      "sprites": [
+        "/assets/sprites/player/platformer_idle.png",
+        "/assets/sprites/player/platformer_run.png",
+        "/assets/sprites/player/platformer_jump.png",
+        "/assets/backgrounds/parallax/forest_layer1.png",
+        "/assets/backgrounds/parallax/forest_layer2.png"
+      ]
+    },
+    "featureFlags": [
+      "Keyboard",
+      "Diagnostics"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 200
+    },
+    "help": {
+      "objective": "Explore the level and get comfortable with the jump arc -- this is a sandbox to practise movement in, not a race.",
+      "controls": "Arrow keys or A and D to run. Space, W or the up arrow to jump.",
+      "tips": [
+        "The jump height is fixed, so line up your run-up rather than trying to jump harder.",
+        "Let go of the direction key at the apex to drop cleanly onto a narrow block.",
+        "The camera trails you slightly -- look ahead of the character, not at it."
+      ],
+      "steps": [
+        "Run left and right with the arrow keys or A and D.",
+        "Jump with Space, W or the up arrow to reach the floating blocks.",
+        "Chain jumps across the blocks to cross the level."
       ]
     }
   }

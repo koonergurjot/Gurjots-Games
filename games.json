@@ -739,7 +739,7 @@
   {
     "id": "alien-shooter",
     "slug": "alien-shooter",
-    "title": "Alien Shooter",
+    "title": "Alien Shooter: Arena",
     "description": "Hold an open arena against escalating waves of alien craft, with a pulse bomb for when they close in.",
     "short": "Survive escalating waves of alien craft in an open arena.",
     "controls": "WASD or the arrow keys to move. Aim with the mouse and hold click or Space to fire. E launches a pulse bomb. Esc pauses.",
@@ -788,7 +788,7 @@
   {
     "id": "city-runner",
     "slug": "city-runner",
-    "title": "City Runner",
+    "title": "City Runner: Rush",
     "description": "An endless rooftop sprint through a parallax city skyline, with one button between you and the obstacles.",
     "short": "An endless one-button sprint through a parallax city.",
     "controls": "Space, W or the up arrow to jump. Tap or click anywhere on touch devices.",
@@ -844,7 +844,7 @@
   {
     "id": "pixel-platformer",
     "slug": "pixel-platformer",
-    "title": "Pixel Platformer",
+    "title": "Pixel Platformer: Sandbox",
     "description": "A chunky pixel-art sandbox of floating blocks and forest parallax, built for practising precise jumps.",
     "short": "A pixel-art sandbox built for practising precise jumps.",
     "controls": "Arrow keys or A and D to run. Space, W or the up arrow to jump.",

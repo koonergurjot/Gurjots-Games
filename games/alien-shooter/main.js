@@ -1133,7 +1133,7 @@ function boot() {
   game.init().catch((error) => {
     console.error('[alien-shooter] Failed to start', error);
     send('GAME_ERROR', { reason: 'init-failed', message: error?.message });
-    showErrorOverlay('We could not start Alien Shooter.');
+    showErrorOverlay('We could not start Alien Shooter: Arena.');
   });
 }
 
