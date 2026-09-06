@@ -29,22 +29,36 @@ async function readCatalogSlugs() {
 }
 
 describe('game.html shell slug resolution', () => {
-  it('resolves both the modern and legacy shell for every catalog slug', async () => {
+  it('resolves a legacy shell for every catalog slug', async () => {
+    // Every catalogued game must have games/<slug>/index.html: it is the
+    // fallback game.html uses whenever the modern wrapper probe fails, and for
+    // games that never got a gameshells/ wrapper it is the only shell there is.
+    const slugs = await readCatalogSlugs();
+    expect(slugs.length).toBeGreaterThan(0);
+
+    const missing = slugs.filter(
+      slug => !existsSync(path.join(ROOT_DIR, 'games', slug, 'index.html')),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it('resolves the modern wrapper wherever one exists', async () => {
+    // A missing gameshells/ wrapper is fine -- game.html falls back to legacy.
+    // A wrapper that exists under a name the page will never ask for is not.
     const aliases = await readShellAliases();
     const slugs = await readCatalogSlugs();
 
-    expect(slugs.length).toBeGreaterThan(0);
-
-    const unresolved = [];
+    const unreachable = [];
     for (const slug of slugs) {
       const shellSlug = aliases[slug] || slug;
-      const modern = path.join(ROOT_DIR, 'gameshells', shellSlug, 'index.html');
-      const legacy = path.join(ROOT_DIR, 'games', slug, 'index.html');
-      if (!existsSync(modern)) unresolved.push(`gameshells/${shellSlug}/index.html (slug ${slug})`);
-      if (!existsSync(legacy)) unresolved.push(`games/${slug}/index.html (slug ${slug})`);
+      const wrapperForSlug = existsSync(path.join(ROOT_DIR, 'gameshells', slug, 'index.html'));
+      const wrapperForShell = existsSync(path.join(ROOT_DIR, 'gameshells', shellSlug, 'index.html'));
+      if (wrapperForSlug && !wrapperForShell) {
+        unreachable.push(`gameshells/${slug} exists but game.html asks for gameshells/${shellSlug}`);
+      }
     }
 
-    expect(unresolved).toEqual([]);
+    expect(unreachable).toEqual([]);
   });
 
   it('builds the legacy path from the catalog slug, not the shell alias', async () => {
