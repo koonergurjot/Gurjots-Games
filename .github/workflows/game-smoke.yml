@@ -1,0 +1,38 @@
+name: Game Smoke Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  boot:
+    name: Boot every game
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Game Doctor's headless check boots games from file://, which breaks the
+      # absolute /assets/ paths they use and hides real failures. This serves the
+      # repo over HTTP, the way the site actually runs.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Boot every catalogued game
+        run: node tools/dev/boot-check.mjs
