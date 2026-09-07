@@ -446,6 +446,11 @@ const watchedCanvases = new WeakSet();
 
 const fitCanvas = (canvas) => {
   if (!canvas || watchedCanvases.has(canvas)) return;
+  // Games that size their own canvas opt out with data-gg-no-fit. The generic
+  // aspect-preserving fit below measures the parent, so on a page whose layout
+  // squeezes the play area it will shrink the board to a thumbnail and then
+  // redo it on every DOM mutation, overriding the game every time.
+  if (canvas.dataset?.ggNoFit !== undefined) return;
   watchedCanvases.add(canvas);
   const resize = () => {
     try {

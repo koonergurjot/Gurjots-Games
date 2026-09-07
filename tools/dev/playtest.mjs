@@ -13,6 +13,7 @@ import { chromium } from 'playwright';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { startServer } from './boot-check.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -37,19 +38,23 @@ const INPUTS = {
   'pixel-platformer': ['ArrowRight', ' ', 'ArrowRight', 'ArrowLeft', ' '],
 };
 
-async function sampleCanvas(page) {
-  return page.evaluate(() => {
-    const canvas = document.querySelector('canvas');
-    if (!canvas) return null;
+// Hash a screenshot of each on-screen canvas. Reading pixels through
+// getImageData only works for 2D contexts and picks a single canvas; a page
+// here may carry a diagnostics overlay larger than the board, plus a WebGL
+// renderer that getImageData cannot read at all. Screenshotting each element
+// sidesteps both problems, so "did anything move" is answered per canvas.
+async function sampleCanvases(page) {
+  const handles = await page.$$('canvas');
+  const out = [];
+  for (const handle of handles) {
     try {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return 'webgl';
-      const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      let h = 0;
-      for (let i = 0; i < d.length; i += 4 * 31) h = (h * 31 + d[i] + d[i + 1] * 3 + d[i + 2] * 7) | 0;
-      return String(h);
-    } catch { return 'webgl'; }
-  });
+      const box = await handle.boundingBox();
+      if (!box || box.width < 40 || box.height < 40) continue;
+      const shot = await handle.screenshot({ timeout: 4000 });
+      out.push(createHash('sha1').update(shot).digest('hex').slice(0, 16));
+    } catch { /* canvas went away or is offscreen */ }
+  }
+  return out;
 }
 
 async function snapshotStorage(page) {
@@ -74,35 +79,51 @@ export async function playtest(browser, port, slug) {
 
   try {
     await page.goto(`http://${HOST}:${port}/games/${slug}/index.html`, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(900);
     const before = await snapshotStorage(page);
+
+    // Sample from the moment the game is up rather than after the input burst.
+    // Some games auto-start and reach a game-over screen in about two seconds,
+    // so a harness that waits before looking sees only the frozen end state and
+    // wrongly calls a working game dead.
+    rec.frames.push(await sampleCanvases(page));
 
     // Universal "get me into the game" sequence: click the canvas, then the
     // keys every start screen in this repo listens for.
     await page.mouse.click(500, 350).catch(() => {});
     for (const key of ['Enter', ' ']) {
       await page.keyboard.press(key === ' ' ? 'Space' : key).catch(() => {});
-      await page.waitForTimeout(350);
+      await page.waitForTimeout(250);
+      rec.frames.push(await sampleCanvases(page));
     }
 
-    rec.frames.push(await sampleCanvas(page));
     const keys = INPUTS[slug] || [' '];
     for (const key of keys) {
       await page.keyboard.press(key === ' ' ? 'Space' : key).catch(() => {});
-      await page.waitForTimeout(220);
-      rec.frames.push(await sampleCanvas(page));
+      await page.waitForTimeout(200);
+      rec.frames.push(await sampleCanvases(page));
     }
     // Let it run untouched: a live game keeps animating with no input.
     for (let i = 0; i < 4; i++) {
-      await page.waitForTimeout(400);
-      rec.frames.push(await sampleCanvas(page));
+      await page.waitForTimeout(350);
+      rec.frames.push(await sampleCanvases(page));
     }
 
     rec.hud = await page.evaluate(() => {
       const text = document.body?.innerText || '';
+      // A blocking panel still on screen at the end of the session tells us the
+      // player never got past it -- or died and was left there.
+      const blocking = [...document.querySelectorAll('div,section,dialog')].find(el => {
+        const r = el.getBoundingClientRect();
+        if (r.width < 200 || r.height < 120) return false;
+        const cs = getComputedStyle(el);
+        if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) < 0.2) return false;
+        return /run complete|game over|press start|click start|paused|tap to play/i.test(el.innerText || '');
+      });
       return {
         hasScore: /score|points|pts/i.test(text),
         hasLevel: /level|wave|stage|round/i.test(text),
+        blocked: blocking ? (blocking.innerText || '').replace(/\s+/g, ' ').slice(0, 90) : null,
         sample: text.replace(/\s+/g, ' ').slice(0, 240),
       };
     });
@@ -117,11 +138,16 @@ export async function playtest(browser, port, slug) {
     /VALIDATE_STATUS/i, /SwiftShader/i, /software WebGL/i, /GroupMarkerNotSet/i];
   rec.errors = [...new Set(rec.errors.filter(e => !ENVIRONMENTAL.some(re => re.test(e))))];
 
-  const real = rec.frames.filter(f => f && f !== 'webgl');
-  rec.webgl = rec.frames.some(f => f === 'webgl');
-  rec.distinctFrames = new Set(real).size;
-  // A 2D game that never changes a pixel across ~4s of input is not playing.
-  rec.animates = rec.webgl || rec.distinctFrames > 2;
+  // Count distinct renderings per canvas slot, then take the liveliest canvas:
+  // if any surface on the page kept changing, the game is running.
+  const slots = Math.max(0, ...rec.frames.map(f => f.length));
+  let best = 0;
+  for (let i = 0; i < slots; i++) {
+    best = Math.max(best, new Set(rec.frames.map(f => f[i]).filter(Boolean)).size);
+  }
+  rec.distinctFrames = best;
+  // A game that never changes a pixel across ~4s of input is not playing.
+  rec.animates = best > 2;
   rec.ok = !rec.fatal && rec.errors.length === 0 && rec.animates;
 
   await context.close().catch(() => {});
@@ -138,7 +164,8 @@ async function main() {
   for (const slug of slugs) {
     const rec = await playtest(browser, port, slug);
     results.push(rec);
-    console.log(`${rec.ok ? 'PLAYS' : 'STUCK'}  ${slug.padEnd(18)} frames=${rec.distinctFrames}${rec.webgl ? ' (webgl)' : ''} score=${rec.hud?.hasScore ? 'y' : 'n'} level=${rec.hud?.hasLevel ? 'y' : 'n'} storage=${rec.newStorage.length}`);
+    console.log(`${rec.ok ? 'PLAYS' : 'STUCK'}  ${slug.padEnd(18)} frames=${rec.distinctFrames} score=${rec.hud?.hasScore ? 'y' : 'n'} level=${rec.hud?.hasLevel ? 'y' : 'n'} storage=${rec.newStorage.length}`);
+    if (rec.hud?.blocked) console.log(`         ends on a panel: "${rec.hud.blocked}"`);
     if (rec.fatal) console.log(`         fatal: ${rec.fatal}`);
     for (const e of rec.errors.slice(0, 3)) console.log(`         ${e}`);
     if (!rec.animates) console.log(`         HUD: ${rec.hud?.sample || '(empty)'}`);
