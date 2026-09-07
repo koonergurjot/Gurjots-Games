@@ -2455,7 +2455,12 @@ import "./pauseOverlay.js";
       keyButton
     );
 
-    const canvasEl = h("canvas",{class:"pong-canvas", id:"game", width:String(W), height:String(H), role:"img", "aria-label":"Pong gameplay"});
+    // data-gg-no-fit: onResize() sets a transform mapping this 1280x720 logical
+    // space onto the canvas, and assigning canvas.width resets that transform to
+    // identity. The shell's generic fit did exactly that, so the game then drew
+    // in raw pixels -- the net and the ball landed at x=640 of an 882px canvas
+    // instead of on the centre line.
+    const canvasEl = h("canvas",{class:"pong-canvas", id:"game", width:String(W), height:String(H), "data-gg-no-fit":"", role:"img", "aria-label":"Pong gameplay"});
 
     const overlayRoot = h("div",{class:"pong-overlay", id:"pong-overlay", "aria-live":"polite", "aria-hidden":"true"});
     const overlayTitleMessage = h("p",{class:"pong-overlay__text", id:"pong-overlay-title"},"");

@@ -10,7 +10,18 @@ Object.assign(overlay.style,{position:'absolute',inset:'0',pointerEvents:'none',
 document.body.appendChild(overlay);
 
 const canvas = document.createElement('canvas');
-Object.assign(canvas.style,{position:'absolute',inset:'0',pointerEvents:'none'});
+// This is an effects layer over the whole page, so it must stay see-through.
+// Pages style `canvas` broadly -- background, border, shadow -- and without
+// these it inherited an opaque board fill and hid the game behind it.
+Object.assign(canvas.style,{
+  position:'absolute',
+  inset:'0',
+  pointerEvents:'none',
+  background:'transparent',
+  border:'0',
+  borderRadius:'0',
+  boxShadow:'none',
+});
 overlay.appendChild(canvas);
 
 const ps = new ParticleSystem({canvas});
