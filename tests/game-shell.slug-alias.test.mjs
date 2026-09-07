@@ -29,6 +29,11 @@ async function readCatalogSlugs() {
 }
 
 describe('game.html shell slug resolution', () => {
+  it('normalizes direct links so uppercase slugs still launch', async () => {
+    const source = await readFile(path.join(ROOT_DIR, 'game.html'), 'utf8');
+    expect(source).toContain('trim().toLowerCase()');
+  });
+
   it('resolves a legacy shell for every catalog slug', async () => {
     // Every catalogued game must have games/<slug>/index.html: it is the
     // fallback game.html uses whenever the modern wrapper probe fails, and for
