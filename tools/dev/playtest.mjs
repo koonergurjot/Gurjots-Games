@@ -43,6 +43,13 @@ const INPUTS = {
 // here may carry a diagnostics overlay larger than the board, plus a WebGL
 // renderer that getImageData cannot read at all. Screenshotting each element
 // sidesteps both problems, so "did anything move" is answered per canvas.
+// Games the player steers by holding a key rather than tapping one.
+const HOLD_KEYS = {
+  maze3d: 'KeyW',
+  platformer: 'ArrowRight',
+  'pixel-platformer': 'ArrowRight',
+};
+
 async function sampleCanvases(page) {
   const handles = await page.$$('canvas');
   const out = [];
@@ -70,8 +77,25 @@ async function snapshotStorage(page) {
   });
 }
 
+// A WebGL canvas often screenshots identically under headless software
+// rendering even while the scene moves, so canvas pixels alone can call a
+// working 3D game dead. The HUD is the other half of the signal: a game that is
+// actually running updates a timer, a score or a wave counter.
+async function sampleHud(page) {
+  return page.evaluate(() => {
+    const text = document.body?.innerText || '';
+    const m = text.match(/(?:time|score|distance|wave|level|pts)[^\n]{0,40}/gi);
+    return m ? m.join('|').slice(0, 200) : '';
+  }).catch(() => '');
+}
+
+async function sample(page, rec) {
+  rec.frames.push(await sampleCanvases(page));
+  rec.hudSamples.push(await sampleHud(page));
+}
+
 export async function playtest(browser, port, slug) {
-  const rec = { slug, errors: [], frames: [], newStorage: [], hud: null };
+  const rec = { slug, errors: [], frames: [], hudSamples: [], newStorage: [], hud: null };
   const context = await browser.newContext({ viewport: { width: 1000, height: 700 } });
   const page = await context.newPage();
   page.on('pageerror', e => rec.errors.push(String(e?.message ?? e).slice(0, 200)));
@@ -86,7 +110,7 @@ export async function playtest(browser, port, slug) {
     // Some games auto-start and reach a game-over screen in about two seconds,
     // so a harness that waits before looking sees only the frozen end state and
     // wrongly calls a working game dead.
-    rec.frames.push(await sampleCanvases(page));
+    await sample(page, rec);
 
     // Universal "get me into the game" sequence: click the canvas, then the
     // keys every start screen in this repo listens for.
@@ -94,19 +118,26 @@ export async function playtest(browser, port, slug) {
     for (const key of ['Enter', ' ']) {
       await page.keyboard.press(key === ' ' ? 'Space' : key).catch(() => {});
       await page.waitForTimeout(250);
-      rec.frames.push(await sampleCanvases(page));
+      await sample(page, rec);
     }
+
+    // Games with continuous movement barely change between two taps: the player
+    // holds a direction. Hold one down for the input burst so these read fairly.
+    const hold = HOLD_KEYS[slug];
+    if (hold) await page.keyboard.down(hold).catch(() => {});
 
     const keys = INPUTS[slug] || [' '];
     for (const key of keys) {
       await page.keyboard.press(key === ' ' ? 'Space' : key).catch(() => {});
       await page.waitForTimeout(200);
-      rec.frames.push(await sampleCanvases(page));
+      await sample(page, rec);
     }
+    if (hold) await page.keyboard.up(hold).catch(() => {});
+
     // Let it run untouched: a live game keeps animating with no input.
     for (let i = 0; i < 4; i++) {
       await page.waitForTimeout(350);
-      rec.frames.push(await sampleCanvases(page));
+      await sample(page, rec);
     }
 
     rec.hud = await page.evaluate(() => {
@@ -146,8 +177,10 @@ export async function playtest(browser, port, slug) {
     best = Math.max(best, new Set(rec.frames.map(f => f[i]).filter(Boolean)).size);
   }
   rec.distinctFrames = best;
-  // A game that never changes a pixel across ~4s of input is not playing.
-  rec.animates = best > 2;
+  rec.distinctHud = new Set(rec.hudSamples.filter(Boolean)).size;
+  // A game that changes neither a pixel nor a HUD readout across the session is
+  // not playing.
+  rec.animates = best > 2 || rec.distinctHud > 2;
   rec.ok = !rec.fatal && rec.errors.length === 0 && rec.animates;
 
   await context.close().catch(() => {});
@@ -164,7 +197,7 @@ async function main() {
   for (const slug of slugs) {
     const rec = await playtest(browser, port, slug);
     results.push(rec);
-    console.log(`${rec.ok ? 'PLAYS' : 'STUCK'}  ${slug.padEnd(18)} frames=${rec.distinctFrames} score=${rec.hud?.hasScore ? 'y' : 'n'} level=${rec.hud?.hasLevel ? 'y' : 'n'} storage=${rec.newStorage.length}`);
+    console.log(`${rec.ok ? 'PLAYS' : 'STUCK'}  ${slug.padEnd(18)} frames=${rec.distinctFrames} hud=${rec.distinctHud} score=${rec.hud?.hasScore ? 'y' : 'n'} level=${rec.hud?.hasLevel ? 'y' : 'n'} storage=${rec.newStorage.length}`);
     if (rec.hud?.blocked) console.log(`         ends on a panel: "${rec.hud.blocked}"`);
     if (rec.fatal) console.log(`         fatal: ${rec.fatal}`);
     for (const e of rec.errors.slice(0, 3)) console.log(`         ${e}`);

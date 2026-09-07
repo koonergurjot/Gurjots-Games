@@ -1003,6 +1003,14 @@ document.addEventListener('keydown', (e) => {
   const tagName = activeElement?.tagName;
   const typing = activeElement?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA';
   if (!typing) {
+    // Starting was click-only, so a keyboard player landed on "Click Start to
+    // play" with no key that did anything. Enter/Space is what every other game
+    // here starts on, and while running they stay free for pause/resume.
+    if ((e.code === 'Enter' || e.code === 'Space') && !running && !e.repeat) {
+      e.preventDefault();
+      start();
+      return;
+    }
     if (e.code === 'KeyP') togglePause();
     if (e.code === 'KeyR') restart();
     if (e.code === 'KeyM' && !e.repeat) toggleMap();

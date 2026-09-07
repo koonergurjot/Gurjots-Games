@@ -90,6 +90,10 @@
       flex-direction: column;
       align-items: center;
       gap: 16px;
+      /* Definite width: the board asks for min(100%, 480px), so a shrink-wrapped
+         parent left that percentage with nothing to resolve against. */
+      width: min(480px, 100%);
+      flex: 0 1 480px;
     }
     .chess-theme-toggle {
       display: inline-flex;
@@ -139,6 +143,12 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
+      /* The effects layer sits on top of the board, so it must not inherit the
+         opaque backdrop, border and shadow from the rule above -- that painted
+         over the pieces entirely. */
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
     }
     .chess-clock {
       display: flex;
@@ -497,8 +507,8 @@
               </div>
             </div>
             <div class="chess-board-stack">
-              <canvas id="board" aria-label="Chess board"></canvas>
-              <canvas id="fx" aria-hidden="true"></canvas>
+              <canvas id="board" data-gg-no-fit aria-label="Chess board"></canvas>
+              <canvas id="fx" data-gg-no-fit aria-hidden="true"></canvas>
             </div>
             <button type="button" id="chess-theme-toggle" class="chess-theme-toggle" aria-pressed="false">
               Use high-contrast theme

@@ -678,7 +678,11 @@ class RunnerGame {
     this.pendingDailySeed = '';
     this.seed = this.seedBase;
     this.rng = createSeededRng(this.seedBase);
-    this.autoStartOnBoot = metaAutoStart !== undefined ? !!metaAutoStart : !seedInfo.locked;
+    // Default to the title screen. Auto-starting dropped the player into a
+    // moving run before they had touched the keyboard -- a boot-to-death in
+    // about two seconds -- and skipped the difficulty and seed pickers that
+    // the title scene exists to offer. A host can still opt in via meta.
+    this.autoStartOnBoot = metaAutoStart !== undefined ? !!metaAutoStart : false;
 
     this.background = { clouds: [], buildings: [], foreground: [] };
     this.parallaxLayers = [];
