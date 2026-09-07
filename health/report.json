@@ -1,10 +1,20 @@
 {
-  "generatedAt": "2025-10-07T21:13:46.273Z",
+  "generatedAt": "2026-09-07T11:55:26.629Z",
   "summary": {
-    "total": 12,
-    "passing": 12,
+    "total": 15,
+    "passing": 15,
     "failing": 0,
-    "withWarnings": 0
+    "withWarnings": 0,
+    "issueCounts": {
+      "total": 0,
+      "bySeverity": {
+        "blocker": 0,
+        "major": 0,
+        "minor": 0,
+        "info": 0
+      },
+      "byCategory": {}
+    }
   },
   "manifest": {
     "version": 1,
@@ -29,7 +39,12 @@
           "assets/audio/hit.wav",
           "assets/audio/powerup.wav",
           "assets/audio/click.wav"
-        ]
+        ],
+        "references": {
+          "total": 20,
+          "unique": 17,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/pong/thumb.svg",
@@ -38,6 +53,29 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "IFRAME_LOADED",
+                "slug": "pong"
+              }
+            },
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -63,6 +101,10 @@
               {
                 "relativeToShell": "career.js",
                 "relativeToRoot": "games/pong/career.js"
+              },
+              {
+                "relativeToShell": "config.js",
+                "relativeToRoot": "games/pong/config.js"
               },
               {
                 "relativeToShell": "main.js",
@@ -98,7 +140,12 @@
           "assets/audio/hit.wav",
           "assets/audio/powerup.wav",
           "assets/audio/click.wav"
-        ]
+        ],
+        "references": {
+          "total": 25,
+          "unique": 18,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/snake/thumb.svg",
@@ -107,6 +154,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -139,7 +202,12 @@
           "assets/audio/hit.wav",
           "assets/audio/powerup.wav",
           "assets/audio/click.wav"
-        ]
+        ],
+        "references": {
+          "total": 8,
+          "unique": 8,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/tetris/thumb.svg",
@@ -148,6 +216,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -204,7 +288,12 @@
           "assets/audio/hit.wav",
           "assets/audio/powerup.wav",
           "assets/audio/click.wav"
-        ]
+        ],
+        "references": {
+          "total": 13,
+          "unique": 11,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/breakout/thumb.svg",
@@ -213,6 +302,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -232,12 +337,35 @@
             "resolved": "games/breakout/powerups.js"
           },
           {
+            "requirement": "powerups.json",
+            "found": true,
+            "resolved": "games/breakout/powerups.json"
+          },
+          {
             "requirement": "adapter.js",
             "found": true,
             "resolved": "games/breakout/adapter.js"
           }
         ],
-        "globs": []
+        "globs": [
+          {
+            "pattern": "levels/*.json",
+            "matches": [
+              {
+                "relativeToShell": "levels/foundry-belt.json",
+                "relativeToRoot": "games/breakout/levels/foundry-belt.json"
+              },
+              {
+                "relativeToShell": "levels/launch-deck.json",
+                "relativeToRoot": "games/breakout/levels/launch-deck.json"
+              },
+              {
+                "relativeToShell": "levels/reactor-ring.json",
+                "relativeToRoot": "games/breakout/levels/reactor-ring.json"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -256,7 +384,12 @@
         ],
         "audio": [
           "assets/audio/click.wav"
-        ]
+        ],
+        "references": {
+          "total": 18,
+          "unique": 17,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/chess/thumb.svg",
@@ -265,6 +398,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -323,7 +472,12 @@
         ],
         "audio": [
           "assets/audio/click.wav"
-        ]
+        ],
+        "references": {
+          "total": 6,
+          "unique": 5,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/chess3d/thumb.svg",
@@ -332,6 +486,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -366,10 +536,6 @@
             "pattern": "textures/*.js",
             "matches": [
               {
-                "relativeToShell": "textures/env.js",
-                "relativeToRoot": "games/chess3d/textures/env.js"
-              },
-              {
                 "relativeToShell": "textures/marble.js",
                 "relativeToRoot": "games/chess3d/textures/marble.js"
               },
@@ -397,6 +563,14 @@
               {
                 "relativeToShell": "ui/evalBar.js",
                 "relativeToRoot": "games/chess3d/ui/evalBar.js"
+              },
+              {
+                "relativeToShell": "ui/evalMood.js",
+                "relativeToRoot": "games/chess3d/ui/evalMood.js"
+              },
+              {
+                "relativeToShell": "ui/fallbackBoard.js",
+                "relativeToRoot": "games/chess3d/ui/fallbackBoard.js"
               },
               {
                 "relativeToShell": "ui/highlight.js",
@@ -462,6 +636,10 @@
             "pattern": "lib/*.js",
             "matches": [
               {
+                "relativeToShell": "lib/BufferGeometryUtils.js",
+                "relativeToRoot": "games/chess3d/lib/BufferGeometryUtils.js"
+              },
+              {
                 "relativeToShell": "lib/OrbitControls.js",
                 "relativeToRoot": "games/chess3d/lib/OrbitControls.js"
               },
@@ -489,7 +667,12 @@
         ],
         "audio": [
           "assets/audio/click.wav"
-        ]
+        ],
+        "references": {
+          "total": 1,
+          "unique": 1,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/2048/thumb.svg",
@@ -498,6 +681,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -552,7 +751,12 @@
           "assets/audio/hit.wav",
           "assets/audio/explode.wav",
           "assets/audio/powerup.wav"
-        ]
+        ],
+        "references": {
+          "total": 7,
+          "unique": 5,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/asteroids/thumb.svg",
@@ -561,6 +765,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -609,7 +829,12 @@
         ],
         "audio": [
           "assets/audio/powerup.wav"
-        ]
+        ],
+        "references": {
+          "total": 4,
+          "unique": 3,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/maze3d/thumb.svg",
@@ -618,6 +843,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -666,7 +907,12 @@
         "audio": [
           "assets/audio/hit.wav",
           "assets/audio/powerup.wav"
-        ]
+        ],
+        "references": {
+          "total": 6,
+          "unique": 6,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/platformer/thumb.svg",
@@ -675,6 +921,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -738,7 +1000,12 @@
           "assets/audio/hit.wav",
           "assets/audio/powerup.wav",
           "assets/audio/click.wav"
-        ]
+        ],
+        "references": {
+          "total": 12,
+          "unique": 10,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/runner/thumb.svg",
@@ -747,6 +1014,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -800,7 +1083,12 @@
         "audio": [
           "assets/audio/explode.wav",
           "assets/audio/powerup.wav"
-        ]
+        ],
+        "references": {
+          "total": 12,
+          "unique": 12,
+          "missing": 0
+        }
       },
       "thumbnail": {
         "found": "games/shooter/thumb.svg",
@@ -809,6 +1097,22 @@
       "status": {
         "errors": false,
         "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       },
       "requirements": {
         "paths": [
@@ -834,6 +1138,145 @@
           }
         ],
         "globs": []
+      }
+    },
+    {
+      "index": 12,
+      "title": "Alien Shooter: Arena",
+      "slug": "alien-shooter",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/alien-shooter/index.html"
+      },
+      "assets": {
+        "sprites": [],
+        "audio": [],
+        "references": {
+          "total": 1,
+          "unique": 1,
+          "missing": 0
+        }
+      },
+      "thumbnail": {
+        "found": "games/alien-shooter/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "index": 13,
+      "title": "City Runner: Rush",
+      "slug": "city-runner",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/city-runner/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/player/platformer_run.png",
+          "assets/backgrounds/parallax/city_layer1.png",
+          "assets/backgrounds/parallax/city_layer2.png"
+        ],
+        "audio": [],
+        "references": {
+          "total": 5,
+          "unique": 5,
+          "missing": 0
+        }
+      },
+      "thumbnail": {
+        "found": "games/city-runner/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "index": 14,
+      "title": "Pixel Platformer: Sandbox",
+      "slug": "pixel-platformer",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/pixel-platformer/index.html"
+      },
+      "assets": {
+        "sprites": [
+          "assets/sprites/player/platformer_idle.png",
+          "assets/sprites/player/platformer_run.png",
+          "assets/sprites/player/platformer_jump.png",
+          "assets/backgrounds/parallax/forest_layer1.png",
+          "assets/backgrounds/parallax/forest_layer2.png"
+        ],
+        "audio": [],
+        "references": {
+          "total": 7,
+          "unique": 7,
+          "missing": 0
+        }
+      },
+      "thumbnail": {
+        "found": "games/pixel-platformer/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       }
     }
   ]
