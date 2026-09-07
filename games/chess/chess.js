@@ -179,7 +179,6 @@ function configureDifficultySelect(){
 }
 configureDifficultySelect();
 initUi();
-updateRatingDisplay(localLadderRating);
 if(depthEl){
   depthEl.addEventListener('change',()=>{
     const selected=depthEl.value;
@@ -222,6 +221,10 @@ const netMoveQueue=[];
 let postedReady=false;
 let victorySoundPlayed=false;
 let localLadderRating=loadLadderRating();
+// Paint the rating only once localLadderRating exists: this ran above the
+// declaration and threw a temporal-dead-zone ReferenceError, which aborted
+// the whole boot and left the shell stuck on "Chess failed to start".
+updateRatingDisplay(localLadderRating);
 let hasLoggedElo1400=hasMilestone('elo1400');
 let activeMatch=null;
 let nonPuzzlePlyCount=0;

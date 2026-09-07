@@ -544,8 +544,21 @@ async function renderScores(){
 window.renderScores = function(){ renderScores().catch(() => {}); };
 renderScores().catch(() => {});
 toggle.onchange = ()=>{ params.set('daily', toggle.checked ? '1':'0'); location.search = params.toString(); };
-renderMissions();
-renderComboPanel();
+// Several HUD painters read const/let bindings declared much further down this
+// module (MISSIONS, paused, ...). Function declarations hoist but those bindings
+// do not, so calling a painter up here threw "Cannot access 'X' before
+// initialization" -- which aborted module evaluation outright and left the shell
+// stuck on "Taking longer than expected". Queue the first paint instead and run
+// it once the whole module body has evaluated.
+const deferredFirstPaint = [];
+function paintAfterInit(fn) { deferredFirstPaint.push(fn); }
+queueMicrotask(() => {
+  for (const fn of deferredFirstPaint) {
+    try { fn(); } catch (err) { console.error('[snake] first paint failed', err); }
+  }
+});
+paintAfterInit(renderMissions);
+paintAfterInit(renderComboPanel);
 const sizeSel = document.getElementById('sizeSel');
 const wallsToggle = document.getElementById('wallsToggle');
 const wrapToggle = document.getElementById('wrapToggle');
@@ -584,25 +597,29 @@ if (pauseButtonEl) {
     if (paused) resumeGame('ui');
     else pauseGame('ui');
   });
-  updatePauseButtonUI();
+  paintAfterInit(updatePauseButtonUI);
 }
 
 if (restartButton) {
   restartButton.addEventListener('click', () => resetGame('ui'));
 }
 
-if (contrastToggle) {
-  contrastToggle.checked = highContrastEnabled;
-  contrastToggle.addEventListener('change', () => {
-    highContrastEnabled = !!contrastToggle.checked;
-    safeStorageSetItem('snake:contrast', highContrastEnabled ? '1' : '0');
-    applySkin();
-    buildBoard(food);
-    requestHudSync();
-  });
-} else {
-  syncHighContrastClass();
-}
+// highContrastEnabled is declared further down this module, so reading it here
+// threw and aborted the rest of the boot.
+paintAfterInit(() => {
+  if (contrastToggle) {
+    contrastToggle.checked = highContrastEnabled;
+    contrastToggle.addEventListener('change', () => {
+      highContrastEnabled = !!contrastToggle.checked;
+      safeStorageSetItem('snake:contrast', highContrastEnabled ? '1' : '0');
+      applySkin();
+      buildBoard(food);
+      requestHudSync();
+    });
+  } else {
+    syncHighContrastClass();
+  }
+});
 
 function openHowTo() {
   if (!howToOverlay) return;
@@ -996,7 +1013,8 @@ function saveProgress() {
 }
 progress.plays++;
 saveProgress();
-renderMissions();
+// renderMissions reads runMissionState, declared below.
+paintAfterInit(renderMissions);
 const selectedData = parseJSONSafe(safeStorageGetItem(SKIN_KEY), {}) || {};
 const selected = (selectedData && typeof selectedData === 'object') ? selectedData : {};
 let snakeSkinId = typeof selected.snake === 'string' ? selected.snake : 'default';
@@ -1836,7 +1854,8 @@ function reportGameOutcome(result) {
   });
 }
 
-resetGame('boot');
+// resetGame reads moveAcc and lastTickTime, declared below.
+paintAfterInit(() => resetGame('boot'));
 
 document.addEventListener('keydown', e => {
   if (howToOverlay && howToOverlay.dataset.active === 'true') return;
