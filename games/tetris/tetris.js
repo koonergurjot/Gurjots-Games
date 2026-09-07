@@ -170,7 +170,12 @@ if(c){
     root.setProperty('--tetris-hud-safe-bottom',`${safeBottom}px`);
     const topOffset=Math.max(rect.top+16,CANVAS_PADDING);
     root.setProperty('--tetris-hud-top',`${Math.round(topOffset)}px`);
-    const orientation=height>width?'portrait':'landscape';
+    // Orientation of the viewport, not of the well. A Tetris well is always
+    // taller than it is wide, so measuring the canvas made this permanently
+    // 'portrait' -- the split layouts never engaged and the panels stacked on
+    // top of the well, hiding the rows where pieces spawn.
+    const viewport=measureViewport();
+    const orientation=viewport.height>viewport.width?'portrait':'landscape';
     const horizontalSpace=Math.max(0,window.innerWidth-width);
     const spaceLeft=Math.max(0,rect.left);
     const spaceRight=Math.max(0,window.innerWidth-rect.right);

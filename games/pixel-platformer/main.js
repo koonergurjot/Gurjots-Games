@@ -459,27 +459,39 @@ function createFallbackParallax() {
     const layers = parallax.layers || [];
     for (const layer of layers) {
       const image = layer._image;
-      if (!image) continue;
+      if (!image || !image.width || !image.height) continue;
       const depth = layer.depth ?? 0;
       const repeatX = layer.repeatX !== false;
+
+      // Fit each layer to the view height rather than blitting it at native
+      // size. The forest layers are 512x512 while the logical view is a couple
+      // of hundred pixels tall, so drawn 1:1 a single tree filled the screen and
+      // tiled across it.
+      const scale = viewHeight / image.height;
+      const tileWidth = Math.max(1, Math.round(image.width * scale));
+      const tileHeight = Math.round(viewHeight);
+
       const parallaxX = Math.round(camera.x * depth);
-      const offsetX = ((parallaxX % image.width) + image.width) % image.width;
+      const offsetX = ((parallaxX % tileWidth) + tileWidth) % tileWidth;
       const offsetY = Math.round(camera.y * depth);
-      const baseY = Math.round(layer.offsetY || 0);
+      const baseY = Math.round((layer.offsetY || 0) * scale);
+      const drawY = Math.round(baseY - offsetY);
 
-      let startX = -offsetX;
-      if (startX > 0 && repeatX) {
-        startX -= image.width;
-      }
+      // These layers are opaque full-frame art, so at full strength they read as
+      // the foreground and the platforms disappear into them. Fade with depth:
+      // the further the layer, the more it recedes into the sky colour.
+      ctx.save();
+      ctx.globalAlpha = layer.alpha ?? Math.min(0.85, 0.3 + depth);
 
-      for (let x = startX; x < viewWidth; x += image.width) {
-        const drawX = repeatX ? Math.round(x) : Math.round(-offsetX);
-        const drawY = Math.round(baseY - offsetY);
-        ctx.drawImage(image, drawX, drawY);
-        if (!repeatX) {
-          break;
+      if (repeatX) {
+        for (let x = -offsetX; x < viewWidth; x += tileWidth) {
+          ctx.drawImage(image, Math.round(x), drawY, tileWidth, tileHeight);
         }
+      } else {
+        ctx.drawImage(image, Math.round(-offsetX), drawY, tileWidth, tileHeight);
       }
+
+      ctx.restore();
     }
   }
 

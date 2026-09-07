@@ -95,3 +95,21 @@ body.game-shell .hud .toast {
 .tetris-lobby-link a:focus-visible {
   text-decoration: underline;
 }
+
+/* Pin the panel column beside the well rather than over it. syncHudLayout()
+   measures the canvas and publishes its edges as custom properties, so use them
+   directly -- grid alignment alone still let the panels overlap the playfield,
+   and the top rows it covered are exactly where pieces spawn. */
+:root[data-tetris-hud-layout='split-right'] .tetris-hud {
+  position: fixed;
+  top: var(--tetris-hud-top, 16px);
+  left: calc(var(--tetris-hud-right, 50%) + 20px);
+  width: min(260px, max(0px, var(--tetris-hud-safe-right, 0px) - 40px));
+}
+
+:root[data-tetris-hud-layout='split-left'] .tetris-hud {
+  position: fixed;
+  top: var(--tetris-hud-top, 16px);
+  right: calc(100vw - var(--tetris-hud-left, 50%) + 20px);
+  width: min(260px, max(0px, var(--tetris-hud-safe-left, 0px) - 40px));
+}
