@@ -133,6 +133,15 @@ function configureRenderer(renderer, THREE) {
   }
 }
 
+// The 2D fallback is a perfectly playable board, but only the WebGL render loop
+// ever posted GAME_READY. A visitor without WebGL therefore got a working game
+// underneath a shell that insisted it was still loading, forever.
+function postReadyOnce(){
+  if (postedReady) return;
+  postedReady = true;
+  try { window.parent?.postMessage({ type:'GAME_READY', slug:'chess3d' }, '*'); } catch (_) {}
+}
+
 function activateFallback(options = {}) {
   if (fallbackActive) {
     if (options.rulesBridge && fallbackController?.setRulesApi) {
@@ -181,6 +190,11 @@ function activateFallback(options = {}) {
       fallbackController.updateSnapshot(snapshot);
     }
   }
+  // The shell's boot overlay is dismissed by markFirstFrame(), which only the
+  // WebGL render loop called. Without this the 2D fallback sat under a
+  // "Taking longer than expected" overlay indefinitely.
+  markFirstFrame();
+  postReadyOnce();
 }
 
 (function installShellAutoPause(){
@@ -1109,10 +1123,7 @@ async function boot(){
       return;
     }
     controls?.update?.();
-    if(!postedReady){
-      postedReady=true;
-      try { window.parent?.postMessage({ type:'GAME_READY', slug:'chess3d' }, '*'); } catch {}
-    }
+    postReadyOnce();
     updatePieces(performance.now());
     try {
       renderer.render(scene, camera);
@@ -1260,9 +1271,18 @@ import('./ui/clocks.js').then(({ mountClocks }) => {
   });
 });
 
-import('./ui/movelist.js').then(({ mountMoveList }) => {
-  moveList = mountMoveList(document.getElementById('hud'), { onJump: jumpToPly });
-});
+// mountMoveList reads logic.historySAN() as it mounts, so it has to wait for
+// boot() to finish awaiting logic.init(). The dynamic import resolves far sooner
+// than boot does, so firing it immediately raced the engine and threw
+// "Cannot read properties of undefined (reading 'history')", which aborted the
+// boot and left the shell stuck.
+Promise.all([bootPromise, import('./ui/movelist.js')])
+  .then(([, { mountMoveList }]) => {
+    moveList = mountMoveList(document.getElementById('hud'), { onJump: jumpToPly });
+  })
+  .catch((error) => {
+    warn('chess3d', '[Chess3D] move list failed to mount', error);
+  });
 
 import('./ui/hud.js').then(({ addGameButtons }) => {
   addGameButtons({

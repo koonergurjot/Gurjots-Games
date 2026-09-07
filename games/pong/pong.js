@@ -1383,7 +1383,7 @@ import "./pauseOverlay.js";
     } else if (winner === 'p2') {
       gameEvent('lose', { slug: SLUG, meta: { mode: details.mode, tier: details.tier } });
     }
-    scenes.push(() => createGameOverScene(details)).catch(err => console.error('[pong] gameover scene failed', err));
+    showGameOverOverlay(details);
   }
 
   function ensureToastHost(){
@@ -1482,6 +1482,83 @@ import "./pauseOverlay.js";
         fill.style.setProperty('--fill', String(value));
         fill.setAttribute('aria-valuenow', String(Math.round(value * 100)));
       }
+    }
+  }
+
+  // Pong's overlay panels, their CSS (.pong-overlay[data-scene=...]) and all six
+  // buttons were written, but the two functions meant to drive them were not:
+  // `scenes` (a scene manager) and `dispatchAction` were referenced throughout
+  // and defined nowhere. Boot threw on scenes.clear() before it could post
+  // GAME_READY, the frame loop logged a caught error every frame, and every
+  // overlay button threw on click. Drive the panels from pong's own state.
+  function setOverlayScene(scene){
+    const overlay = state.overlay;
+    if(!overlay || !overlay.root) return;
+    overlay.current = scene || null;
+    if(scene){
+      overlay.root.dataset.scene = scene;
+      overlay.root.classList.add("show");
+      overlay.root.setAttribute("aria-hidden", "false");
+    } else {
+      delete overlay.root.dataset.scene;
+      overlay.root.classList.remove("show");
+      overlay.root.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function showGameOverOverlay(details){
+    const panel = state.overlay?.gameover;
+    if(!panel) return;
+    const winner = details?.winner || null;
+    const twoPlayer = details?.players === "2P";
+    if(panel.heading){
+      panel.heading.textContent = !winner ? "Draw"
+        : winner === "p1" ? (twoPlayer ? "Player 1 wins" : "You win!")
+        : (twoPlayer ? "Player 2 wins" : "CPU wins");
+    }
+    if(panel.detail){
+      const variantCfg = getVariantConfig();
+      panel.detail.textContent = variantCfg?.label ? `${variantCfg.label} match complete.` : "Match complete.";
+    }
+    if(panel.score){
+      panel.score.textContent = `${details?.left ?? 0} \u2013 ${details?.right ?? 0}`;
+    }
+    setOverlayScene("gameover");
+  }
+
+  function dispatchAction(action, payload){
+    const detail = payload || {};
+    switch(action){
+      case "start":
+      case "restart": {
+        reset();
+        state.over = false;
+        state.running = true;
+        setPaused(false, "manual");
+        setOverlayScene(null);
+        return true;
+      }
+      case "pause": {
+        if(state.over || state.paused) return false;
+        // setPaused already raises the shared pause overlay, so no panel here.
+        setPaused(true, detail.reason === "shell" ? "shell" : "manual");
+        return true;
+      }
+      case "resume": {
+        if(!state.paused) return false;
+        setPaused(false, "manual");
+        setOverlayScene(null);
+        return true;
+      }
+      case "menu": {
+        state.running = false;
+        setPaused(false, "manual");
+        updateTitleOverlay();
+        setOverlayScene("title");
+        return true;
+      }
+      default:
+        return false;
     }
   }
 
@@ -2277,7 +2354,6 @@ import "./pauseOverlay.js";
     renderBackground(t);
 
     updateParallax(Math.min(delta, MAX_SIM_DELTA));
-    try { scenes.update(delta); } catch (err) { console.error('[pong] scene update failed', err); }
 
     if(!state.running){
       state.dt = 0;
@@ -3000,13 +3076,8 @@ import "./pauseOverlay.js";
     };
   }
 
-  async function startGame(){
-    try {
-      await scenes.clear();
-      await scenes.push(createGameScene);
-    } catch (err) {
-      console.error('[pong] startGame failed', err);
-    }
+  function startGame(){
+    return dispatchAction('start', { source: 'api' });
   }
 
   function pauseGame(){
@@ -3015,11 +3086,8 @@ import "./pauseOverlay.js";
   }
 
   function resumeGame(){
-    const top = scenes.currentId;
-    if (top === 'pause' || top === 'gameover') {
-      dispatchAction('resume', { source: 'api' });
-    }
-    setPaused(false, "manual");
+    if(state.paused) dispatchAction('resume', { source: 'api' });
+    else setPaused(false, "manual");
   }
 
   if(globalScope){
@@ -3181,9 +3249,8 @@ import "./pauseOverlay.js";
       state.shellPaused=false;
       state.last=performance.now();
       requestAnimationFrame(frame);
-      scenes.clear()
-        .then(() => scenes.push(createTitleScene))
-        .catch(err => console.error('[pong] scene init failed', err));
+      updateTitleOverlay();
+      setOverlayScene("title");
       post("GAME_READY");
     }catch(err){
       console.error("[pong] boot error", err);

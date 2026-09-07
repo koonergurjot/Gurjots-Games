@@ -498,6 +498,7 @@
     state.fab?.setAttribute("aria-expanded", "true");
     syncExternalButtonState();
     state.isOpen = true;
+    flushPanels();
     document.body.classList.add("gg-diag-scroll-locked");
     requestAnimationFrame(() => {
       const first = firstFocusable();
@@ -527,6 +528,46 @@
     if (state.isOpen) close(); else open();
   }
 
+  // Every panel used to be rebuilt synchronously on each log entry. Each render
+  // clears its list and re-appends every entry, so the cost of one log call grows
+  // with the number of entries already captured -- quadratic overall. A game that
+  // logs steadily (asteroids emits a probe per wave) locked the main thread solid
+  // a few seconds in, freezing the tab.
+  //
+  // The panels only ever show the latest snapshot, so keep just that and repaint
+  // at most once per frame -- and not at all while the overlay is closed, since
+  // nothing can see it. open() flushes so it is current when it appears.
+  let pendingSnapshot = null;
+  let pendingPerf = false;
+  let renderHandle = 0;
+
+  function flushPanels(){
+    renderHandle = 0;
+    const snapshot = pendingSnapshot;
+    const needsPerf = pendingPerf;
+    pendingSnapshot = null;
+    pendingPerf = false;
+    if (!snapshot) return;
+    updateMetaCounts(snapshot.summary);
+    renderSummaryPanel(snapshot.summary);
+    renderErrorsPanel(snapshot);
+    renderProbesPanel(snapshot.probes || []);
+    renderNetworkPanel(snapshot.network || []);
+    renderAssetsPanel(snapshot.assets || []);
+    renderEnvironmentPanel(snapshot.environment || null);
+    if (needsPerf) renderPerfPanel();
+  }
+
+  function schedulePanelRender(snapshot, category){
+    pendingSnapshot = snapshot;
+    if (category !== "perf") pendingPerf = true;
+    if (!state.isOpen) return;
+    if (renderHandle) return;
+    renderHandle = (typeof requestAnimationFrame === "function")
+      ? requestAnimationFrame(flushPanels)
+      : setTimeout(flushPanels, 16);
+  }
+
   function log(entry){
     if (!entry) return;
     ensureUI();
@@ -537,16 +578,7 @@
       handlePerfEntry(normalized);
     }
     appendConsoleEntry(normalized);
-    updateMetaCounts(snapshot.summary);
-    renderSummaryPanel(snapshot.summary);
-    renderErrorsPanel(snapshot);
-    renderProbesPanel(snapshot.probes || []);
-    renderNetworkPanel(snapshot.network || []);
-    renderAssetsPanel(snapshot.assets || []);
-    renderEnvironmentPanel(snapshot.environment || null);
-    if (category !== "perf") {
-      renderPerfPanel();
-    }
+    schedulePanelRender(snapshot, category);
   }
 
   function exportJSON(){

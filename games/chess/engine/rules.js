@@ -52,18 +52,34 @@ export function turn() {
   return game.turn();
 }
 
+// The bundled chess.min.js is chess.js v1, which renamed in_check/in_checkmate/
+// in_stalemate to isCheck/isCheckmate/isStalemate. This module still called the
+// v0 names, so every check, checkmate and stalemate test threw
+// "game.in_check is not a function" in both chess and chess3d. Accept either
+// spelling so the engine keeps working whichever build is vendored.
+function callEither(newName, oldName, fallback) {
+  if (!game) return fallback;
+  const fn = typeof game[newName] === "function" ? game[newName]
+           : typeof game[oldName] === "function" ? game[oldName]
+           : null;
+  return fn ? fn.call(game) : fallback;
+}
+
 export function inCheck() {
-  return game.in_check();
+  return callEither("isCheck", "in_check", false);
 }
 
 export function inCheckmate() {
-  return game.in_checkmate();
+  return callEither("isCheckmate", "in_checkmate", false);
 }
 
 export function inStalemate() {
-  return game.in_stalemate();
+  return callEither("isStalemate", "in_stalemate", false);
 }
 
 export function historySAN() {
+  // Callers can reach this before init() has resolved; report an empty history
+  // rather than throwing on an undefined game and taking the boot down with it.
+  if (!game) return [];
   return game.history();
 }

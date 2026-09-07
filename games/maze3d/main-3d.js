@@ -884,6 +884,29 @@ let sensitivityContainer = sensitivitySlider?.parentElement || null;
 let seedModeSelect = document.getElementById('seedMode');
 let noMapToggle = document.getElementById('noMapToggle');
 
+// Declared up here because ensureOverlayElements() reads it while it runs,
+// below. It used to be declared after that call, so the read hit the temporal
+// dead zone; the resulting ReferenceError was caught by the 3D bootstrap's
+// try/catch and silently downgraded every visitor to the 2D fallback.
+const ALGORITHM_OPTIONS = new Set(['auto', 'prim', 'backtracker']);
+let algorithmPreference = loadPreference('maze3d:algorithm', 'auto');
+if (!ALGORITHM_OPTIONS.has(algorithmPreference)) {
+  algorithmPreference = 'auto';
+}
+const ASSIST_MODES = new Set(['off', 'heatmap']);
+let assistMode = ASSIST_MODES.has(loadPreference('maze3d:assistMode', 'off'))
+  ? loadPreference('maze3d:assistMode', 'off')
+  : 'off';
+let assistEnabled = assistMode !== 'off';
+const SUPPORTED_PROFILES = new Set(['keyboard', 'stick', 'tilt']);
+let inputProfile = loadPreference('maze3d:inputProfile', isTouchDevice ? 'stick' : 'keyboard');
+if (!SUPPORTED_PROFILES.has(inputProfile)) {
+  inputProfile = isTouchDevice ? 'stick' : 'keyboard';
+}
+if (!isTouchDevice) {
+  inputProfile = 'keyboard';
+}
+
 ({
   overlay,
   message,
@@ -964,27 +987,9 @@ let wallMesh = null;
 const stickState = { active: false, pointerId: null, radius: 60, centerX: 0, centerY: 0 };
 let mapUsedDuringRun = false;
 
-const ASSIST_MODES = new Set(['off', 'heatmap']);
-let assistMode = ASSIST_MODES.has(loadPreference('maze3d:assistMode', 'off'))
-  ? loadPreference('maze3d:assistMode', 'off')
-  : 'off';
-let assistEnabled = assistMode !== 'off';
 assistGroup.visible = assistEnabled;
 
-const ALGORITHM_OPTIONS = new Set(['auto', 'prim', 'backtracker']);
-let algorithmPreference = loadPreference('maze3d:algorithm', 'auto');
-if (!ALGORITHM_OPTIONS.has(algorithmPreference)) {
-  algorithmPreference = 'auto';
-}
 
-const SUPPORTED_PROFILES = new Set(['keyboard', 'stick', 'tilt']);
-let inputProfile = loadPreference('maze3d:inputProfile', isTouchDevice ? 'stick' : 'keyboard');
-if (!SUPPORTED_PROFILES.has(inputProfile)) {
-  inputProfile = isTouchDevice ? 'stick' : 'keyboard';
-}
-if (!isTouchDevice) {
-  inputProfile = 'keyboard';
-}
 
 let tiltBaseline = null;
 let tiltActive = false;

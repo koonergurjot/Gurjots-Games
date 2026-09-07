@@ -9,6 +9,7 @@ import {
   setVolume as setAudioVolume,
   getVolume as getAudioVolume,
 } from '../../shared/juice/audio.js';
+import { createSceneManager } from '../../src/engine/scenes.js';
 import { tiles, TILE, isSolid } from './tiles.js';
 import { loadLevelByIndex } from './level-loader.js';
 
@@ -2081,7 +2082,9 @@ export async function boot() {
 
   const keys = new Set();
 
-  function resetState() {
+  // Callers pass { autoStart }, but the parameter was never declared, so every
+  // call threw "autoStart is not defined" and the game never started its loop.
+  function resetState({ autoStart = false } = {}) {
     if (currentLevel) {
       coins = currentLevel.coins.map((coin) => ({ ...coin, collected: false }));
       goal = currentLevel.goal ? { ...currentLevel.goal } : goal;
