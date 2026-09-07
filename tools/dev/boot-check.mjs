@@ -86,6 +86,22 @@ export async function bootGame(browser, port, slug, { screenshotDir } = {}) {
     record.fatal = String(err?.message ?? err).slice(0, 300);
   }
 
+  // Headless CI has no GPU, so Chromium falls back to a software WebGL
+  // rasteriser whose GLSL compiler rejects shaders a real driver accepts. Games
+  // that use three.js report those as console errors and then fall back to their
+  // 2D renderer, which is correct behaviour -- not something to fail a run over.
+  const ENVIRONMENTAL = [
+    /THREE\.WebGLProgram/i,
+    /Shader Error/i,
+    /shader is not compiled/i,
+    /VALIDATE_STATUS/i,
+    /SwiftShader/i,
+    /Automatic fallback to software WebGL/i,
+    /GroupMarkerNotSet/i,
+  ];
+  record.environmental = record.errors.filter(e => ENVIRONMENTAL.some(re => re.test(e)));
+  record.errors = record.errors.filter(e => !ENVIRONMENTAL.some(re => re.test(e)));
+
   record.errors = [...new Set(record.errors)];
   record.failedRequests = [...new Set(record.failedRequests)];
   record.signals = [...new Set(record.signals)];
@@ -113,6 +129,9 @@ async function main() {
     if (record.fatal) console.log(`        fatal: ${record.fatal}`);
     if (record.stuckOverlay) console.log('        stuck on the shell boot overlay');
     for (const err of record.errors.slice(0, 4)) console.log(`        ${err}`);
+    if (record.ok === false && record.environmental?.length) {
+      console.log(`        (plus ${record.environmental.length} environmental WebGL message(s), ignored)`);
+    }
     for (const req of record.failedRequests.slice(0, 4)) console.log(`        ${req}`);
   }
   await browser.close();
