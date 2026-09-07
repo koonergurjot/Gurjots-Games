@@ -81,6 +81,17 @@ describe('recordLastPlayed', () => {
     const result = JSON.parse(localStorage.getItem('lastPlayed'));
     expect(result).toEqual(['x']);
   });
+
+  it('ignores blank ids and never throws when storage is unavailable', () => {
+    recordLastPlayed('   ');
+    expect(localStorage.getItem('lastPlayed')).toBeNull();
+
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage unavailable');
+    });
+    expect(() => recordLastPlayed('pong')).not.toThrow();
+    setItem.mockRestore();
+  });
 });
 
 describe('landing newest sort', () => {

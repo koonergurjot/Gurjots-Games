@@ -247,7 +247,10 @@ async function boot(){
     catalog = await fetchCatalogJSON({cache:'no-cache'});
   }catch(e){ return renderError("Could not load games.json", e); }
   var list = Array.isArray(catalog) ? catalog : (catalog.games || []);
-  var info = list.find(function(g){ return (g.slug||g.id) === slug; });
+  var requestedSlug = String(slug).toLowerCase();
+  var info = list.find(function(g){
+    return String(g.slug || g.id || '').toLowerCase() === requestedSlug;
+  });
   if(!info){ return render404("Unknown game: "+slug); }
   state.gameInfo = info;
   renderShell(info);
@@ -256,7 +259,22 @@ async function boot(){
 
 function render404(msg){
   var root = $('#app');
-  root.innerHTML = '\n    <div class="container">\n      <div class="card">\n        <h2>Game not found</h2>\n        <p>'+msg+'</p>\n        <p><a class="btn" href="./">← Back to Home</a></p>\n      </div>\n    </div>';
+  if (!root) return;
+  root.innerHTML = '';
+  var container = el('div', 'container');
+  var card = el('div', 'card');
+  var heading = el('h2');
+  heading.textContent = 'Game not found';
+  var message = el('p');
+  message.textContent = String(msg || 'The requested game is unavailable.');
+  var action = el('p');
+  var backLink = el('a', 'btn');
+  backLink.href = './';
+  backLink.textContent = '← Back to Home';
+  action.appendChild(backLink);
+  card.append(heading, message, action);
+  container.appendChild(card);
+  root.appendChild(container);
 }
 
 function renderShell(info){

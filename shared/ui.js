@@ -104,14 +104,18 @@ export function injectHelpButton(opts) {
 }
 
 export function recordLastPlayed(slug) {
+  const gameSlug = typeof slug === 'string' ? slug.trim() : '';
+  if (!gameSlug) return;
+
   try {
     const raw = localStorage.getItem('lastPlayed');
     const parsed = JSON.parse(raw);
     const arr = Array.isArray(parsed) ? parsed : [];
-    const next = [slug, ...arr.filter(s => s !== slug)].slice(0, 10);
+    const next = [gameSlug, ...arr.filter(s => s !== gameSlug)].slice(0, 10);
     localStorage.setItem('lastPlayed', JSON.stringify(next));
   } catch {
-    localStorage.setItem('lastPlayed', JSON.stringify([slug]));
+    // Storage can be unavailable (for example, in a private browsing session)
+    // or full. Recent-play tracking must never prevent a game from starting.
   }
 }
 

@@ -531,7 +531,7 @@
   <script>
     (function () {
       const qs = new URLSearchParams(location.search);
-      const catalogSlug = (qs.get("slug") || "").trim();
+      const catalogSlug = (qs.get("slug") || "").trim().toLowerCase();
 
       // A game's modern wrapper can live under a different directory name than
       // its catalog slug. Keep the two identities apart rather than rewriting
