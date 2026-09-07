@@ -16,6 +16,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const HOST = '127.0.0.1';
 const SETTLE_MS = Number(process.env.BOOT_CHECK_SETTLE_MS || 3000);
 const TIMEOUT_MS = Number(process.env.BOOT_CHECK_TIMEOUT_MS || 25000);
 const MIME = { '.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.json':'application/json',
@@ -29,14 +30,21 @@ export async function startServer() {
       let p = decodeURIComponent(req.url.split('?')[0]);
       if (p.endsWith('/')) p += 'index.html';
       const file = path.join(ROOT, p);
-      if (!file.startsWith(ROOT) || !existsSync(file) || statSync(file).isDirectory()) {
+      // path.join normalises away '..', so a request for '/../SiblingRepo/x'
+      // resolves outside ROOT while still sharing its string prefix. Compare
+      // path segments instead.
+      const relative = path.relative(ROOT, file);
+      const insideRoot = relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+      if (!insideRoot || !existsSync(file) || statSync(file).isDirectory()) {
         res.writeHead(404); return res.end('not found');
       }
       res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
       res.end(await readFile(file));
     } catch (err) { res.writeHead(500); res.end(String(err)); }
   });
-  await new Promise(resolve => server.listen(0, resolve));
+  // Loopback only: this serves the whole repository, and binding the
+  // unspecified address would expose it to anything that can reach the host.
+  await new Promise(resolve => server.listen(0, HOST, resolve));
   return { server, port: server.address().port };
 }
 
@@ -48,7 +56,7 @@ export async function bootGame(browser, port, slug, { screenshotDir } = {}) {
   page.on('pageerror', err => record.errors.push(String(err?.message ?? err).slice(0, 300)));
   page.on('console', msg => { if (msg.type() === 'error') record.errors.push(`console: ${msg.text().slice(0, 300)}`); });
   page.on('response', res => {
-    if (res.status() >= 400) record.failedRequests.push(`${res.status()} ${res.url().replace(`http://localhost:${port}`, '')}`);
+    if (res.status() >= 400) record.failedRequests.push(`${res.status()} ${res.url().replace(`http://${HOST}:${port}`, '')}`);
   });
   await page.addInitScript(() => {
     window.__bootSignals = [];
@@ -60,7 +68,7 @@ export async function bootGame(browser, port, slug, { screenshotDir } = {}) {
   try {
     await Promise.race([
       (async () => {
-        await page.goto(`http://localhost:${port}/games/${slug}/index.html`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.goto(`http://${HOST}:${port}/games/${slug}/index.html`, { waitUntil: 'domcontentloaded', timeout: 15000 });
         await page.waitForTimeout(SETTLE_MS);
         record.signals = await page.evaluate(() => window.__bootSignals || []);
         record.canvas = await page.evaluate(() => {
@@ -107,6 +115,7 @@ export async function bootGame(browser, port, slug, { screenshotDir } = {}) {
   record.signals = [...new Set(record.signals)];
   record.ok = !record.fatal
     && record.errors.length === 0
+    && record.failedRequests.length === 0
     && !record.stuckOverlay
     && !record.signals.includes('GAME_ERROR');
 
