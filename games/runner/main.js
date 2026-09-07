@@ -1520,7 +1520,11 @@ class RunnerGame {
     const sanitized = rawObstacles.map(ob => {
       const width = clamp(numberOr(ob.w, 36), 18, 120);
       const height = clamp(numberOr(ob.h, 32), 20, 180);
-      const distance = Math.max(0, numberOr(ob.x, 0));
+      // Accept either an authored x or an already-prepared distance: restarts
+      // feed this.currentLevel (already sanitized, so it carries distance and
+      // no x) straight back through here. Reading only x collapsed every
+      // obstacle to distance 0, spawning them on top of the player.
+      const distance = Math.max(0, numberOr(ob.x, numberOr(ob.distance, 0)));
       const rawY = numberOr(ob.y, NaN);
       const top = rawY > 0 ? clamp(rawY, 0, ground - height) : ground - height;
       const type = typeof ob.type === 'string' ? ob.type : 'block';

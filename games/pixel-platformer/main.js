@@ -1,5 +1,6 @@
 import { send } from '../common/diag-adapter.js';
 import { drawBootPlaceholder, showErrorOverlay } from '../common/boot-utils.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
 const ASSET_TIMEOUT_MS = 4000;
 const TILE_SIZE = 16;
@@ -225,6 +226,7 @@ function createFallbackParallax() {
   updateAnimation(0, 0);
   render();
   send('GAME_READY');
+  gameEvent('play', { slug: 'pixel-platformer' });
   requestAnimationFrame(loop);
 
   upgradeAssets();
@@ -257,12 +259,25 @@ function createFallbackParallax() {
     });
   }
 
+  // This is a sandbox with no score or goal, so how far the player has explored
+  // is the only honest progress signal. Bank it in whole tiles at intervals.
+  const EXPLORE_MILESTONE_TILES = 20;
+  let furthestTile = 0;
+
+  function reportExploration() {
+    const tile = Math.max(0, Math.floor(player.x / TILE_SIZE));
+    if (tile < furthestTile + EXPLORE_MILESTONE_TILES) return;
+    furthestTile = tile;
+    gameEvent('level_up', { slug: 'pixel-platformer', value: Math.floor(tile / EXPLORE_MILESTONE_TILES) });
+  }
+
   function loop(now) {
     const elapsed = Math.min(32, now - lastTime);
     lastTime = now;
 
     update(elapsed / 16.6667, elapsed);
     render();
+    reportExploration();
 
     input.jumpPressed = false;
     requestAnimationFrame(loop);

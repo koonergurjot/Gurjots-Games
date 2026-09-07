@@ -1,6 +1,7 @@
 import { VfxController } from './vfx.js';
 import { send } from '../common/diag-adapter.js';
 import { drawBootPlaceholder, showErrorOverlay } from '../common/boot-utils.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
 const FX_CONFIG_URL = '/assets/alien-shooter/fx.json';
 const FX_TIMEOUT_MS = 4000;
@@ -507,6 +508,11 @@ class AlienShooterGame {
   }
 
   resetRun(initial = false) {
+    // A run ending is worth reporting before the next one starts: progression
+    // pays out on the score, and this game had no telemetry at all.
+    if (!initial) {
+      gameEvent('game_over', { slug: 'alien-shooter', value: Math.round(this.score) });
+    }
     this.enemies = [];
     this.enemyBullets = [];
     this.bullets = [];
@@ -522,6 +528,7 @@ class AlienShooterGame {
     this.pendingReset = 0;
     this.runActive = true;
     this.announce(initial ? 'Pilot online. Hold the perimeter.' : 'Systems rebooted – stay sharp.');
+    gameEvent('play', { slug: 'alien-shooter' });
     this.advanceWave();
     this.hudDirty = true;
   }
@@ -547,6 +554,9 @@ class AlienShooterGame {
   }
 
   advanceWave() {
+    if (this.waveIndex >= 0) {
+      gameEvent('level_up', { slug: 'alien-shooter', value: this.waveIndex + 1 });
+    }
     this.waveIndex += 1;
     const base = WAVE_PLAN[this.waveIndex % WAVE_PLAN.length];
     this.loop = Math.floor(this.waveIndex / WAVE_PLAN.length);

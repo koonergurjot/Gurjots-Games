@@ -675,11 +675,24 @@ if (howToOverlay) {
 
 const c = ensureGameCanvas();
 bootLog('canvas:resolved', { width: c.width, height: c.height });
+// The board shares the page with the mission and combo panels, so it cannot
+// have the whole viewport height or it pushes them off screen. data-basew and
+// data-baseh on the canvas keep the aspect ratio stable: without them each fit
+// measures the size the previous fit produced and the board grows every pass.
+function fitBoard() {
+  if (typeof fitCanvasToParent !== 'function') return;
+  fitCanvasToParent(c, {
+    canvas: c,
+    maxWidth: 900,
+    maxHeight: Math.max(320, Math.min(900, Math.round(window.innerHeight * 0.68))),
+    padding: 24,
+  });
+}
 if (typeof fitCanvasToParent === 'function') {
-  fitCanvasToParent(c, 900, 900, 24);
+  fitBoard();
   bootLog('canvas:fitted', { width: c.width, height: c.height });
   addEventListener('resize', () => {
-    fitCanvasToParent(c, 900, 900, 24);
+    fitBoard();
     bootLog('canvas:resized', { width: c.width, height: c.height });
   });
 } else {

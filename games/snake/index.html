@@ -49,7 +49,9 @@
       margin: 0 auto;
       position: relative;
     }
-    canvas {
+    /* Scoped to the board: a bare `canvas` rule also painted the effects overlay
+       an opaque colour, and it covers the whole viewport. */
+    #game {
       display: block;
       background: var(--snake-board-base);
       border: 1px solid var(--border);
@@ -102,11 +104,12 @@
         -webkit-backdrop-filter: blur(18px) saturate(1.1);
       }
     }
+    /* The dashboard sits below the board rather than on top of it. As a fixed
+       overlay it covered the whole viewport -- it holds six panels, not a thin
+       status bar -- so the board was never visible behind it. */
     .hud {
-      position: fixed;
-      top: 12px;
-      left: 50%;
-      transform: translateX(-50%);
+      position: static;
+      margin: 12px auto;
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 12px;
@@ -471,13 +474,23 @@
   <main class="game-shell__main">
     <div class="game-shell__surface">
       <div class="wrap">
-        <canvas id="game" width="640" height="480" role="img" aria-label="Snake game board"></canvas>
+        <canvas id="game" width="640" height="480" data-basew="640" data-baseh="480" data-gg-no-fit role="img" aria-label="Snake game board"></canvas>
         <div class="snake-pause-overlay" role="status" aria-live="polite" aria-hidden="true">
           <div class="snake-pause-overlay__title">Paused</div>
           <div class="snake-pause-overlay__subtitle">Press P or click resume to continue</div>
         </div>
         <!-- Hidden score element exists to satisfy shell score watchers -->
         <div id="score" hidden></div>
+      </div>
+      <!-- snake.js fills this with the run controls, missions and combo panels,
+           so it belongs in the page flow under the board. As a body-level
+           sibling of <main> it shared a grid cell with the board and covered it. -->
+      <div class="hud" role="group" aria-label="Snake controls">
+        <label><input type="checkbox" id="wrapToggle" /> Wrap walls</label>
+        <label><input type="checkbox" id="warpToggle" /> Warp speed</label>
+        <button id="restartBtn">Restart</button>
+        <button id="autoBtn" aria-pressed="false">Autoplay</button>
+        <label>Theme <select id="themeSelect"></select></label>
       </div>
     </div>
   </main>
@@ -496,13 +509,6 @@
         <button type="button" class="hud-button" data-action="close">Let's play</button>
       </div>
     </div>
-  </div>
-  <div class="hud" role="group" aria-label="Snake controls">
-    <label><input type="checkbox" id="wrapToggle" /> Wrap walls</label>
-    <label><input type="checkbox" id="warpToggle" /> Warp speed</label>
-    <button id="restartBtn">Restart</button>
-    <button id="autoBtn" aria-pressed="false">Autoplay</button>
-    <label>Theme <select id="themeSelect"></select></label>
   </div>
 
   <script src="../../js/resizeCanvas.global.js"></script>

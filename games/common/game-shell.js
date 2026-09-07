@@ -507,6 +507,16 @@ const installControlsOverlay = () => {
   host.appendChild(overlay);
 };
 
+// Progression is arcade-wide, so the readout belongs to the shell every game
+// already loads rather than to each game. Imported lazily: a game must still
+// boot and play if progression fails to load.
+const installProgressionHud = () => {
+  if (document.querySelector('.gg-prog')) return;
+  import('../../shared/progression-hud.js')
+    .then((mod) => mod.mountProgressionHud?.())
+    .catch((err) => console.warn('[game-shell] progression HUD unavailable', err));
+};
+
 const installVisibilityHelper = () => {
   if (window.GGShellVisibility) return;
   window.GGShellVisibility = {
@@ -572,6 +582,7 @@ if (typeof document !== 'undefined') {
     ensureScoreObservers();
     installVisibilityHelper();
     installMissions();
+    installProgressionHud();
     preloadFirstFrameAssets();
   });
 }

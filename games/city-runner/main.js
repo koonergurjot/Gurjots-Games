@@ -1,5 +1,6 @@
 import { send } from '../common/diag-adapter.js';
 import { drawBootPlaceholder, showErrorOverlay } from '../common/boot-utils.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
 const ASSET_TIMEOUT_MS = 4000;
 
@@ -144,6 +145,9 @@ function fetchJson(url) {
     onGround: true,
     hurtTimer: 0,
   };
+
+  const SCORE_MILESTONE_DISTANCE = 1000;
+  let lastMilestone = 0;
 
   const obstacles = [];
   let parallax = null;
@@ -441,6 +445,7 @@ function fetchJson(url) {
   }
 
   function resetGame() {
+    lastMilestone = 0;
     state.elapsed = 0;
     state.distance = 0;
     state.spawnTimer = randInRange(OBSTACLE_INTERVAL);
@@ -549,6 +554,13 @@ function fetchJson(url) {
 
     const baseScore = Math.floor(state.distance / 10);
     state.score = player.hurtTimer > 0 ? Math.max(0, baseScore - 60) : baseScore;
+    // This runner has no death, so a score is only ever banked at milestones --
+    // otherwise nothing about a long run would ever reach progression.
+    const milestone = Math.floor(state.distance / SCORE_MILESTONE_DISTANCE);
+    if (milestone > lastMilestone) {
+      lastMilestone = milestone;
+      gameEvent('level_up', { slug: 'city-runner', value: milestone });
+    }
     scoreEl.textContent = state.score.toString();
 
     parallax.update(dt, state.speed * 0.6);
@@ -634,6 +646,7 @@ function fetchJson(url) {
     setLod(state.lod);
     resetGame();
     state.running = true;
+    gameEvent('play', { slug: 'city-runner' });
     lastTime = performance.now();
     draw(0);
     send('GAME_READY');

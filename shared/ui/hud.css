@@ -1,5 +1,15 @@
-/* shared/ui/hud.css */
-.hud {
+/* shared/ui/hud.css
+ *
+ * Defaults only. This stylesheet is injected by hud.js at import time, which
+ * puts it after each game's own inline <style>, so a plain `.hud` rule here beat
+ * every game that styles its own HUD -- snake, runner and city-runner centre
+ * theirs with left:50% and translateX(-50%), and inheriting left:0 from here
+ * dragged the whole panel half a screen off the left edge.
+ *
+ * :where() gives these declarations zero specificity, so any rule a game writes
+ * wins while games that style nothing still get a sane full-viewport overlay.
+ */
+:where(.hud) {
   position: fixed;
   top: 0;
   left: 0;
