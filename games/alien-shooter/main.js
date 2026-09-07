@@ -354,6 +354,11 @@ class AlienShooterGame {
 
     requestAnimationFrame(this.boundLoop);
 
+    // The game is playable with the inline effects immediately.  Report that
+    // state before fetching the optional effects configuration so embedders do
+    // not mistake a slow or unavailable asset request for a failed boot.
+    send('GAME_READY');
+
     try {
       const loadedFx = await withTimeout(VfxController.create(FX_CONFIG_URL), FX_TIMEOUT_MS);
       if (loadedFx) {

@@ -58,5 +58,20 @@
     "id": "shooter",
     "status": "ok",
     "reason": ""
+  },
+  {
+    "id": "alien-shooter",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "city-runner",
+    "status": "ok",
+    "reason": ""
+  },
+  {
+    "id": "pixel-platformer",
+    "status": "ok",
+    "reason": ""
   }
 ]
