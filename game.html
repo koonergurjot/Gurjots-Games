@@ -531,7 +531,15 @@
   <script>
     (function () {
       const qs = new URLSearchParams(location.search);
-      let slug = (qs.get("slug") || "").trim();
+      const catalogSlug = (qs.get("slug") || "").trim();
+
+      // A game's modern wrapper can live under a different directory name than
+      // its catalog slug. Keep the two identities apart rather than rewriting
+      // one variable: gameshells/ paths and the trusted-origin allowlist are
+      // keyed by the shell name, while the legacy games/ path, the title and
+      // the diagnostics payload are keyed by the catalog slug.
+      const SHELL_SLUG_ALIASES = { "2048": "g2048" };
+      const shellSlug = SHELL_SLUG_ALIASES[catalogSlug] || catalogSlug;
       const title = qs.get("title") || "";
       const gameTitleEl = document.getElementById("gameTitle");
       const frame = document.getElementById("game-frame");
@@ -570,7 +578,7 @@
 
       const diagHandler = () => {
         const payload = [
-          `slug=${slug}`, `title=${gameTitleEl.textContent}`, `signal=${pillSignal.textContent.replace("signal: ","")}`,
+          `slug=${catalogSlug}`, `title=${gameTitleEl.textContent}`, `signal=${pillSignal.textContent.replace("signal: ","")}`,
           `time=${secs()}`, `userAgent=${navigator.userAgent}`, `href=${location.href}`,
           `logs:`, ...Array.from(logbox.querySelectorAll("div")).map(d => "- " + d.textContent)
         ].join("\n");
@@ -668,13 +676,11 @@
         }
       }
 
-      // Normalize 2048 → g2048 (keeps existing links working)
-      if (slug === "2048") slug = "g2048";
-
-      const trustedSameOrigin = Boolean(slug && TRUSTED_SAME_ORIGIN_SLUGS.has(slug));
+      // The allowlist is keyed by gameshells/ directory name.
+      const trustedSameOrigin = Boolean(shellSlug && TRUSTED_SAME_ORIGIN_SLUGS.has(shellSlug));
 
       // Fallback title
-      gameTitleEl.textContent = title || (slug ? slug.replace(/[-_]/g, " ") : "Unknown Game");
+      gameTitleEl.textContent = title || (catalogSlug ? catalogSlug.replace(/[-_]/g, " ") : "Unknown Game");
 
       // Helper: log
       const t0 = performance.now();
@@ -802,7 +808,7 @@
         assetPreflightStarted = true;
 
         if (!pillHealth) return;
-        if (!slug || !wrapperUrl) {
+        if (!catalogSlug || !wrapperUrl) {
           setHealthPill("health: n/a", "warn");
           return;
         }
@@ -917,7 +923,7 @@
         }
       });
       // Load the game iframe
-      pillSlug.textContent = "slug: " + (slug || "—");
+      pillSlug.textContent = "slug: " + (catalogSlug || "—");
 
       function setFrameSrc(src, note, options = {}) {
         const { legacy = false, trustedSameOrigin: allowSameOrigin = false } = options;
@@ -933,11 +939,11 @@
         startAssetPreflight(src);
       }
 
-      if (!slug) {
+      if (!catalogSlug) {
         setFrameSrc("./404.html", "missing slug", { legacy: true });
       } else {
-        const modernSrc = `./gameshells/${slug}/index.html`;
-        const legacySrc = `./games/${slug}/index.html`;
+        const modernSrc = `./gameshells/${shellSlug}/index.html`;
+        const legacySrc = `./games/${catalogSlug}/index.html`;
 
         write(`checking modern wrapper → ${modernSrc}`);
 

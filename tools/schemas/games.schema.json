@@ -127,7 +127,8 @@
         "properties": {
           "sprites": {
             "type": "array",
-            "minItems": 1,
+            "description": "Sprite files this game fetches, used for first-frame preloading and service worker precaching. May be empty: a game that renders entirely procedurally ships no sprites.",
+            "minItems": 0,
             "items": {
               "type": "string",
               "pattern": "^/assets/.+"
@@ -150,7 +151,8 @@
         "properties": {
           "sprites": {
             "type": "array",
-            "minItems": 1,
+            "description": "Sprite files this game fetches, used for first-frame preloading and service worker precaching. May be empty: a game that renders entirely procedurally ships no sprites.",
+            "minItems": 0,
             "items": {
               "type": "string",
               "pattern": "^/assets/.+"

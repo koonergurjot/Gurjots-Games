@@ -112,7 +112,7 @@ function fetchJson(url) {
     return;
   }
 
-  drawBootPlaceholder(canvas, ctx, 'Loading City Runner…');
+  drawBootPlaceholder(canvas, ctx, 'Loading City Runner: Rush…');
 
   const WIDTH = 960;
   const HEIGHT = 320;
@@ -670,7 +670,7 @@ function fetchJson(url) {
   init().catch((error) => {
     console.error('[city-runner] Failed to start', error);
     send('GAME_ERROR', { reason: 'init-failed', message: error?.message });
-    showErrorOverlay('We could not start City Runner.');
+    showErrorOverlay('We could not start City Runner: Rush.');
   });
 
   window.addEventListener('visibilitychange', () => {

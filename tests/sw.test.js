@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import makeServiceWorkerEnv from 'service-worker-mock';
+import { assignGlobals } from './helpers/global-env.mjs';
 
 const SW_SCOPE = 'tests';
 const CACHE_NAME = `gg-v3_3-${SW_SCOPE}`;
 
 describe('service worker cache management', () => {
   beforeEach(() => {
-    Object.assign(global, makeServiceWorkerEnv());
+    // Defined rather than assigned: globalThis.navigator is getter-only on Node 22,
+    // so Object.assign(global, env) throws there.
+    assignGlobals(makeServiceWorkerEnv());
     self.registration = { scope: SW_SCOPE };
     self.clients = {
       claim: () => Promise.resolve(),

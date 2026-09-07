@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>City Runner</title>
+    <title>City Runner: Rush</title>
     <link rel="preload" href="/assets/backgrounds/parallax/city_layer1.png" as="image" />
     <link rel="preload" href="/assets/backgrounds/parallax/city_layer2.png" as="image" />
     <link rel="preload" href="/assets/sprites/player/platformer_run.png" as="image" />
@@ -99,5 +99,40 @@
       <canvas id="game" width="960" height="320" aria-label="City runner game"></canvas>
     </div>
     <script type="module" src="./main.js"></script>
+  <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
+  <script>
+  (function(){
+    if (window.__gg_autoSignalInstalled) return; window.__gg_autoSignalInstalled = true;
+    // Set as soon as this shim sends a signal, or when the game sends its own.
+    // postMessage to the parent is never echoed back to this window, so the
+    // message listener below cannot observe our own sends -- without this the
+    // fallback would emit GAME_READY after a GAME_ERROR and the parent shell,
+    // which acts on the last signal it receives, would hide the error overlay
+    // and report a failed boot as healthy.
+    var signalled = false;
+    function send(type, payload){
+      if (type === "GAME_READY" || type === "GAME_ERROR") signalled = true;
+      try {
+        if (window.parent) window.parent.postMessage(Object.assign({ type }, payload || {}), "*");
+      } catch(e){ /* noop */ }
+    }
+    // Bubble uncaught errors to shell
+    window.addEventListener("error", function(e){
+      send("GAME_ERROR", { error: (e.message || String(e.error || e)).slice(0, 500) });
+    });
+    window.addEventListener("unhandledrejection", function(e){
+      var reason = e && e.reason ? (e.reason.message || String(e.reason)) : "unhandled rejection";
+      send("GAME_ERROR", { error: String(reason).slice(0, 500) });
+    });
+    // If the game hasn't sent a signal by load, emit READY as a fallback
+    window.addEventListener("message", function(ev){
+      if (!ev || !ev.data) return;
+      if (ev.data.type === "GAME_READY" || ev.data.type === "GAME_ERROR") signalled = true;
+    });
+    function emitReadyOnce(){ if (!signalled) { send("GAME_READY"); signalled = true; } }
+    if (document.readyState === "complete") { setTimeout(emitReadyOnce, 0); }
+    else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
+  })();
+  </script>
   </body>
 </html>

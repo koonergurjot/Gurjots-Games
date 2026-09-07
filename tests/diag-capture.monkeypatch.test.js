@@ -1,25 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assignGlobals, restoreGlobals, snapshotGlobals } from './helpers/global-env.mjs';
 
-const nativeNavigator = global.navigator;
-const nativeDocument = global.document;
-const nativePerformance = global.performance;
-const nativeAddEventListener = global.addEventListener;
-const nativeDispatchEvent = global.dispatchEvent;
+// globalThis.navigator is a getter-only accessor on Node 22, so these stubs are
+// installed with defineProperty and put back from their original descriptors.
+const STUBBED_GLOBALS = ['navigator', 'document', 'performance', 'addEventListener', 'dispatchEvent'];
 
 describe('diag-capture opt-out flag', () => {
   let listeners;
+  let restoreEnv;
 
   beforeEach(() => {
     vi.resetModules();
 
+    restoreEnv = snapshotGlobals(STUBBED_GLOBALS);
+
     listeners = new Map();
 
-    global.addEventListener = vi.fn((type, handler) => {
+    const addEventListener = vi.fn((type, handler) => {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(handler);
     });
 
-    global.dispatchEvent = (event) => {
+    const dispatchEvent = (event) => {
       const handlers = listeners.get(event?.type) || [];
       for (const handler of handlers) {
         handler(event);
@@ -34,14 +36,14 @@ describe('diag-capture opt-out flag', () => {
       waiting: null,
     };
 
-    global.performance = {
+    const performance = {
       now: () => 0,
       getEntriesByType: () => [],
       timing: {},
       memory: null,
     };
 
-    global.navigator = {
+    const navigator = {
       userAgent: 'test-agent',
       language: 'en-US',
       platform: 'test-platform',
@@ -55,40 +57,14 @@ describe('diag-capture opt-out flag', () => {
       },
     };
 
-    global.document = { visibilityState: 'visible' };
+    const document = { visibilityState: 'visible' };
+
+    assignGlobals({ addEventListener, dispatchEvent, performance, navigator, document });
     global.__GG_DIAG_QUEUE = [];
   });
 
   afterEach(() => {
-    if (nativePerformance === undefined) {
-      delete global.performance;
-    } else {
-      global.performance = nativePerformance;
-    }
-
-    if (nativeNavigator === undefined) {
-      delete global.navigator;
-    } else {
-      global.navigator = nativeNavigator;
-    }
-
-    if (nativeDocument === undefined) {
-      delete global.document;
-    } else {
-      global.document = nativeDocument;
-    }
-
-    if (nativeAddEventListener === undefined) {
-      delete global.addEventListener;
-    } else {
-      global.addEventListener = nativeAddEventListener;
-    }
-
-    if (nativeDispatchEvent === undefined) {
-      delete global.dispatchEvent;
-    } else {
-      global.dispatchEvent = nativeDispatchEvent;
-    }
+    restoreGlobals(restoreEnv);
 
     delete global.__GG_DIAG_QUEUE;
     delete global.__GG_DIAG;
