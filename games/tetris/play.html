@@ -2,107 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tetris</title>
-  <link rel="stylesheet" href="../common/game-shell.css" />
-  <style>
-    :root {
-      --tetris-piece-i-fill: #38bdf8;
-      --tetris-piece-i-stroke: #0ea5e9;
-      --tetris-piece-o-fill: #facc15;
-      --tetris-piece-o-stroke: #d97706;
-      --tetris-piece-t-fill: #a855f7;
-      --tetris-piece-t-stroke: #7c3aed;
-      --tetris-piece-s-fill: #22c55e;
-      --tetris-piece-s-stroke: #16a34a;
-      --tetris-piece-z-fill: #ef4444;
-      --tetris-piece-z-stroke: #b91c1c;
-      --tetris-piece-j-fill: #3b82f6;
-      --tetris-piece-j-stroke: #1d4ed8;
-      --tetris-piece-l-fill: #f97316;
-      --tetris-piece-l-stroke: #ea580c;
-    }
-
-    canvas {
-      background: #0f1320;
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-      display: block;
-      width: 100%;
-      height: auto;
-      max-width: none;
-      max-height: none;
-      margin: 0 auto;
-    }
-
-    body.game-shell .hud {
-      --hud-max-width: var(--tetris-hud-max-width, 720px);
-      --hud-top: var(--tetris-hud-top, 16px);
-      --hud-anchor-x: var(--tetris-hud-toast-x, var(--tetris-hud-center, 50%));
-      --hud-anchor-translate: var(--tetris-hud-toast-translate, -50%);
-      --hud-toast-max: var(--tetris-hud-toast-max, var(--hud-max-width));
-      display: grid;
-      grid-auto-flow: var(--tetris-hud-flow, row);
-      grid-template-columns: var(--tetris-hud-columns, 1fr);
-      justify-items: center;
-      align-content: flex-start;
-    }
-
-    body.game-shell .hud .toast {
-      left: var(--hud-anchor-x);
-      top: var(--hud-top);
-      max-width: min(100%, var(--hud-toast-max));
-      width: min(100%, var(--hud-toast-max));
-      transform: translate3d(var(--hud-anchor-translate), 0, 0);
-      text-align: center;
-      animation: tetris-toast-fade-in 0.2s;
-    }
-
-    :root[data-tetris-hud-layout='split-left'] body.game-shell .hud {
-      justify-items: start;
-    }
-
-    :root[data-tetris-hud-layout='split-right'] body.game-shell .hud {
-      justify-items: end;
-    }
-
-    :root[data-tetris-hud-layout='split-left'] body.game-shell .hud .toast {
-      text-align: left;
-    }
-
-    :root[data-tetris-hud-layout='split-right'] body.game-shell .hud .toast {
-      text-align: right;
-    }
-
-    @keyframes tetris-toast-fade-in {
-      from {
-        opacity: 0;
-        transform: translate3d(var(--hud-anchor-translate), -10px, 0);
-      }
-
-      to {
-        opacity: 1;
-        transform: translate3d(var(--hud-anchor-translate), 0, 0);
-      }
-    }
-  </style>
+  <!-- The game moved to index.html so /games/tetris/ opens straight into play.
+       This alias keeps older links (and saved replay URLs) working. -->
+  <link rel="canonical" href="./index.html" />
+  <script>
+    location.replace('./index.html' + location.search + location.hash);
+  </script>
+  <meta http-equiv="refresh" content="0; url=./index.html" />
 </head>
-<body class="game-shell">
-  <main class="game-shell__main">
-    <div class="game-shell__surface" data-game-viewport>
-      <canvas id="t" width="300" height="600" data-basew="300" data-baseh="600" role="img" aria-label="Tetris well"></canvas>
-    </div>
-  </main>
-  <div id="score" hidden></div>
-
-  <script src="../../js/resizeCanvas.global.js"></script>
-  <script src="../../js/gameUtil.js"></script>
-  <script src="../../js/sfx.js"></script>
-  <script src="./engine.js"></script>
-  <script src="./replay.js"></script>
-  <script type="module" src="../../shared/ui/hud.js"></script>
-  <script type="module" src="./tetris.js"></script>
-  <script type="module" src="../common/game-shell.js" data-game="tetris"></script>
+<body>
+  <p>Redirecting to <a href="./index.html">Tetris</a>&hellip;</p>
 </body>
 </html>
