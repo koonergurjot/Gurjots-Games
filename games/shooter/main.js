@@ -920,6 +920,13 @@ export function boot() {
       },
     });
     if (type?.boss) {
+      // The Gatekeeper is what the five waves lead up to; report it so bringing
+      // one down is recognised rather than passing as one more kill.
+      gameEvent('boss_down', {
+        slug: SLUG,
+        value: (currentBossStage?.index ?? 0) + 1,
+        meta: { enemyType: enemy.typeId },
+      });
       bossActive = null;
       const completion = bossRush.completeStage();
       if (!completion.completed) {

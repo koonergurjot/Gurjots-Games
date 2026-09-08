@@ -42,6 +42,20 @@ export const COMBO_CONFIG = {
   minCount: 6,
 };
 
+// Rally heat. The premise of this game is "win the rally, not the point", but a
+// long rally paid nothing beyond an achievement at 10 and 25. Heat builds with
+// every exchange and decays when a point ends, so a rally you have invested in
+// is worth protecting: the trail brightens, the court glows, and the side that
+// finally wins the point banks an overdrive serve.
+export const HEAT_CONFIG = {
+  // Rally length at which heat reaches full.
+  fullAt: 14,
+  // Rally length that banks an overdrive serve for whoever wins the point.
+  overdriveAt: 8,
+  // Extra launch speed multiplier on an overdrive serve.
+  overdriveSpeed: 1.28,
+};
+
 export const LADDER_TIERS = [
   { id: 'Easy', label: 'Easy', reactionMs: 280, predictionNoise: 80, maxSpeed: 480 },
   { id: 'Medium', label: 'Medium', reactionMs: 200, predictionNoise: 54, maxSpeed: 560 },

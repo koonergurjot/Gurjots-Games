@@ -49,6 +49,15 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
       depthWrite: false,
       depthTest: false,
     });
+    // Captures read as a warmer, stronger disc, so a target that wins material
+    // is distinguishable from a quiet square at a glance.
+    const matCapture = new THREE.MeshBasicMaterial({
+      color: 0xff7a2f,
+      transparent: true,
+      opacity: 0.62,
+      depthWrite: false,
+      depthTest: false,
+    });
     const posFrom = boardHelpers.squareToPosition(from);
     const sel = new THREE.Mesh(geom, matFrom);
     sel.rotation.x = -Math.PI / 2;
@@ -57,7 +66,7 @@ function _mountInput({ THREE, scene, camera, renderer, controls, boardHelpers, r
     markers.push(sel);
     moves.forEach((m) => {
       const pos = boardHelpers.squareToPosition(m.to);
-      const mesh = new THREE.Mesh(geom, matTo);
+      const mesh = new THREE.Mesh(geom, m.captured ? matCapture : matTo);
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.set(pos.x, pos.y + 0.01, pos.z);
       scene.add(mesh);

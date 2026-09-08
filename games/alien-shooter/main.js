@@ -555,11 +555,18 @@ class AlienShooterGame {
 
   advanceWave() {
     if (this.waveIndex >= 0) {
-      gameEvent('level_up', { slug: 'alien-shooter', value: this.waveIndex + 1 });
+      gameEvent('level_up', { slug: 'alien-shooter', level: this.waveIndex + 1, value: this.waveIndex + 1 });
     }
     this.waveIndex += 1;
     const base = WAVE_PLAN[this.waveIndex % WAVE_PLAN.length];
+    const previousLoop = this.loop;
     this.loop = Math.floor(this.waveIndex / WAVE_PLAN.length);
+    // Getting all the way around the wave plan is the arena's real milestone --
+    // the point where it starts again, harder.
+    if (this.loop > previousLoop) {
+      gameEvent('loop_complete', { slug: 'alien-shooter', level: this.loop, value: this.loop });
+      this.announce(`Loop ${this.loop} complete — the arena resets, harder.`);
+    }
     const difficulty = 1 + this.loop * LOOP_DIFFICULTY_SCALE;
     this.wave = {
       config: base,

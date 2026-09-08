@@ -200,6 +200,13 @@ function createFallbackParallax() {
   const worldWidth = levelRows[0].length * TILE_SIZE;
   const worldHeight = levelRows.length * TILE_SIZE;
 
+  // A sandbox still deserves a summit. The highest row carrying a platform is
+  // the one thing here worth reaching, so find it once and recognise standing
+  // on it -- otherwise every platform is interchangeable and nothing is a goal.
+  const highestPlatformRow = levelRows.findIndex((row) => /[^.]/.test(row));
+  const highestPlatformY = highestPlatformRow >= 0 ? highestPlatformRow * TILE_SIZE : 0;
+  let reachedHighGround = false;
+
   const player = {
     x: 96,
     y: 64,
@@ -347,6 +354,10 @@ function createFallbackParallax() {
           player.y = bottomTile * TILE_SIZE - player.height;
           player.vy = 0;
           player.onGround = true;
+          if (!reachedHighGround && player.y <= highestPlatformY + TILE_SIZE) {
+            reachedHighGround = true;
+            gameEvent('high_ground', { slug: 'pixel-platformer', value: 1 });
+          }
           return;
         }
       }

@@ -510,6 +510,15 @@ const installControlsOverlay = () => {
 // Progression is arcade-wide, so the readout belongs to the shell every game
 // already loads rather than to each game. Imported lazily: a game must still
 // boot and play if progression fails to load.
+// The premise and objectives belong to the shell too: every game gets them, and
+// a game that fails to load them must still be playable.
+const installObjectives = () => {
+  if (document.querySelector('.gg-brief-chip')) return;
+  import('../../shared/objectives-card.js')
+    .then((mod) => mod.mountObjectives?.(slug))
+    .catch((err) => console.warn('[game-shell] objectives unavailable', err));
+};
+
 const installProgressionHud = () => {
   if (document.querySelector('.gg-prog')) return;
   import('../../shared/progression-hud.js')
@@ -615,6 +624,7 @@ if (typeof document !== 'undefined') {
     installVisibilityHelper();
     installMissions();
     installProgressionHud();
+    installObjectives();
     watchForOwnBackLink();
     preloadFirstFrameAssets();
   });

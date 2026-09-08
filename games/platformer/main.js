@@ -2574,6 +2574,13 @@ export async function boot() {
         localPlayer.collected += 1;
         emitScore('collect', { coinId: coin.id });
         emitState('collect', { coinId: coin.id });
+        // Each coin is a piece of the gate key, so report them individually
+        // rather than only as a total at the end of the level.
+        gameEvent('coin_collected', {
+          slug: 'platformer',
+          value: localPlayer.collected,
+          meta: { total: coins.length },
+        });
         if (net.isConnected()) {
           net.sendCollect({ id: coin.id });
         }

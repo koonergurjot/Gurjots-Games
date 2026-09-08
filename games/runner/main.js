@@ -611,6 +611,9 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+// Seconds of multiplier progress granted by a perfectly timed jump or slide.
+const PERFECT_MULTIPLIER_BONUS_SECONDS = 3;
+
 function numberOr(value, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -2387,11 +2390,18 @@ class RunnerGame {
     }
     if (verticalGap <= 18) {
       this.analytics.nearMisses += 1;
+      // Near misses and perfect timing were counted and displayed but paid
+      // nothing, so the safest possible line scored exactly as well as a brave
+      // one. Both now bank score, and a perfect shaves time off the next
+      // multiplier step -- taking risks is how you climb.
+      this.addCoinScore(Math.max(1, Math.round(this.coinMultiplier * 0.5)));
       if (verticalGap <= 8) {
         const perfectBar = obs.type === 'bar' && (p.sliding || p.height === p.slideHeight);
         const perfectJump = obs.type !== 'bar' && !p.grounded;
         if (perfectBar || perfectJump) {
           this.analytics.perfects += 1;
+          this.addCoinScore(this.coinMultiplier);
+          this.timeSinceLastHit += PERFECT_MULTIPLIER_BONUS_SECONDS;
         }
       }
     }
