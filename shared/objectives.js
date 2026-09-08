@@ -124,22 +124,17 @@ export const BRIEFINGS = {
       { id: 'run_career', kind: 'career', event: 'game_over', goal: 20, label: 'Complete 20 runs' },
     ],
   },
+  // Arena used to be its own catalog entry (alien-shooter). It is now a mode
+  // reached from a link inside this game rather than a separate card, so its
+  // premise and one representative objective (as_loop) live here alongside
+  // Campaign's. Both modes report through the 'shooter' slug.
   shooter: {
     title: 'Alien Shooter',
-    premise: 'Five waves stand between you and the Gatekeeper. Nothing behind you is holding the line.',
+    premise: 'Five waves stand between you and the Gatekeeper in Campaign. Or skip the ending entirely and hold a closed Arena that loops forever, harder each time around.',
     objectives: [
-      { id: 'sh_wave', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Reach wave 3' },
+      { id: 'sh_wave', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Reach wave 3 in Campaign' },
       { id: 'sh_boss', kind: 'run_event', event: 'boss_down', goal: 1, label: 'Bring down the Gatekeeper' },
-      { id: 'sh_score', kind: 'run_score', goal: 2500, label: 'Score 2,500 in one run' },
-    ],
-  },
-  'alien-shooter': {
-    title: 'Alien Shooter: Arena',
-    premise: 'A closed arena that loops forever, harder each time around. See how deep the loop goes.',
-    objectives: [
-      { id: 'as_wave', kind: 'run_event_max', event: 'level_up', goal: 4, label: 'Clear 4 waves in one life' },
-      { id: 'as_loop', kind: 'run_event', event: 'loop_complete', goal: 1, label: 'Complete a full loop' },
-      { id: 'as_score', kind: 'run_score', goal: 4000, label: 'Score 4,000 in one run' },
+      { id: 'as_loop', kind: 'run_event', event: 'loop_complete', goal: 1, label: 'Complete a full loop in Arena' },
     ],
   },
   'city-runner': {

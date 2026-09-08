@@ -32,8 +32,9 @@ const INPUTS = {
   maze3d: ['w', 'a', 'w', 'd', 'w'],
   platformer: ['ArrowRight', ' ', 'ArrowRight', 'ArrowLeft', ' '],
   runner: [' ', ' ', 'ArrowDown', ' '],
+  // Campaign mode (index.html). Arena mode lives at arena.html, reached via an
+  // in-game link, and is not part of the games.json-driven sweep this runs.
   shooter: ['ArrowLeft', ' ', 'ArrowRight', ' ', ' '],
-  'alien-shooter': ['a', ' ', 'd', ' ', ' '],
   'city-runner': [' ', ' ', 'ArrowDown', ' '],
   'pixel-platformer': ['ArrowRight', ' ', 'ArrowRight', 'ArrowLeft', ' '],
 };

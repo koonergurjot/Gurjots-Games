@@ -1,12 +1,14 @@
 # Game Doctor Report
 
-Generated: 2026-09-07T11:55:26.629Z
+Generated: 2026-09-08T05:12:22.431Z
 
-- Total games: 15
-- Passing: 15
-- Failing: 0
+- Total games: 14
+- Passing: 13
+- Failing: 1
 - With warnings: 0
-- Issues found: 0
+- Issues found: 1
+- Issues by severity: 🚨 Blockers: 1
+- Issues by category: headless-runtime: 1
 - Manifest version: 1
 - Manifest source: tools/reporters/game-doctor-manifest.json
 
@@ -40,15 +42,20 @@ Generated: 2026-09-07T11:55:26.629Z
 ## Tetris
 
 - Slug: tetris
-- Status: ✅ Healthy
+- Status: ❌ Needs attention
 - Shell: games/tetris/index.html
-- Headless boot: ✅ GAME_READY received
+- Headless boot: ❌ Timed out after 8000ms
 - Thumbnail: games/tetris/thumb.svg
 - Sprites checked: 4
 - Audio checked: 3
-- Asset references scanned: 8
+- Asset references scanned: 11
 - Manifest paths: all required paths found
-- Issues: none
+- **Severity:** 🚨 Blockers: 1
+- Issues:
+  - ❌ Blocker [headless-runtime]: Headless boot timed out
+    - slug: "tetris"
+    - shell: "games/tetris/index.html"
+    - waitedMs: 8000
 
 ## Breakout
 
@@ -166,18 +173,8 @@ Generated: 2026-09-07T11:55:26.629Z
 - Thumbnail: games/shooter/thumb.svg
 - Sprites checked: 1
 - Audio checked: 2
-- Asset references scanned: 12
+- Asset references scanned: 13
 - Manifest paths: all required paths found
-- Issues: none
-
-## Alien Shooter: Arena
-
-- Slug: alien-shooter
-- Status: ✅ Healthy
-- Shell: games/alien-shooter/index.html
-- Headless boot: ✅ GAME_READY received
-- Thumbnail: games/alien-shooter/thumb.svg
-- Asset references scanned: 1
 - Issues: none
 
 ## City Runner: Rush

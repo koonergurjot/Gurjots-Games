@@ -357,7 +357,7 @@ const SCORE_SELECTORS = {
   pong: ['#score-p1'],
   breakout: ['#score'],
   snake: ['#score', '#scoreValue'],
-  shooter: ['#score'],
+  shooter: ['#score', '#hud-score'],
   tetris: ['#score'],
   runner: ['#score'],
   g2048: ['#currentScore'],

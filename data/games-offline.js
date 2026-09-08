@@ -682,17 +682,18 @@ export const games = [
     "id": "shooter",
     "slug": "shooter",
     "title": "Alien Shooter",
-    "description": "Blast waves of invaders and survive.",
-    "short": "Blast waves of invaders and survive.",
+    "description": "Hold off waves of invaders in a tight Campaign toward a boss fight, or dodge into the endless, looping Arena mode.",
+    "short": "Blast waves of invaders. Campaign to a boss, or endless Arena.",
     "controls": "WASD or Arrow keys move, Space/Enter shoot. Keep moving to avoid hits.",
     "tags": [
-      "2D"
+      "2D",
+      "arcade"
     ],
     "engineType": "canvas-2d",
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "thumbnailPath": "/games/shooter/thumb.svg",
     "thumbnail": "/games/shooter/thumb.svg",
     "assets": {
@@ -715,74 +716,30 @@ export const games = [
       ]
     },
     "featureFlags": [
+      "Diagnostics",
+      "Keyboard",
+      "Mouse",
       "Offline",
-      "Keyboard"
+      "Touch"
     ],
     "minDevice": {
       "width": 360,
       "height": 240
     },
     "help": {
-      "objective": "Hold off waves of aliens by dodging fire and blasting every intruder.",
+      "objective": "Campaign: clear waves toward the Gatekeeper boss. Arena (from the in-game link): survive an endless, looping arena and see how many loops you can complete.",
       "controls": "WASD or Arrow keys move, Space/Enter shoot. Keep moving to avoid hits.",
       "tips": [
         "Strafe horizontally to herd enemies into your bullet stream.",
         "Watch your firing cadence—the blaster has a short cooldown.",
-        "Keep distance from enemy clusters to buy time for dodges."
+        "Keep distance from enemy clusters to buy time for dodges.",
+        "Arena mode: keep moving -- standing still lets scouts and strikers converge on you from several edges at once.",
+        "Arena mode: save the pulse bomb for when enemies close in from more than one side."
       ],
       "steps": [
         "Move into open space as the first wave approaches.",
         "Fire continuously while weaving around enemy shots.",
         "Survive as long as possible to post a high score."
-      ]
-    }
-  },
-  {
-    "id": "alien-shooter",
-    "slug": "alien-shooter",
-    "title": "Alien Shooter: Arena",
-    "description": "Hold an open arena against escalating waves of alien craft, with a pulse bomb for when they close in.",
-    "short": "Survive escalating waves of alien craft in an open arena.",
-    "controls": "WASD or the arrow keys to move. Aim with the mouse and hold click or Space to fire. E launches a pulse bomb. Esc pauses.",
-    "tags": [
-      "arcade",
-      "2D"
-    ],
-    "engineType": "canvas-2d",
-    "difficulty": "hard",
-    "released": "2025-10-20",
-    "playUrl": "/games/alien-shooter/",
-    "version": "1.0.0",
-    "thumbnailPath": "/games/alien-shooter/thumb.svg",
-    "thumbnail": "/games/alien-shooter/thumb.svg",
-    "assets": {
-      "sprites": []
-    },
-    "firstFrame": {
-      "sprites": []
-    },
-    "featureFlags": [
-      "Keyboard",
-      "Mouse",
-      "Touch",
-      "Diagnostics"
-    ],
-    "minDevice": {
-      "width": 360,
-      "height": 240
-    },
-    "help": {
-      "objective": "Clear each wave of alien craft without losing all of your health, and push your score as deep into the wave count as you can.",
-      "controls": "WASD or the arrow keys to move. Aim with the mouse and hold click or Space to fire. E launches a pulse bomb. Esc pauses.",
-      "tips": [
-        "Keep moving -- standing still lets scouts and strikers converge on you from several edges at once.",
-        "Save the pulse bomb for when enemies close in from more than one side rather than firing it on cooldown.",
-        "Strikers and gunners behave differently: read the colour before you commit to a dodge."
-      ],
-      "steps": [
-        "Move with WASD and aim with the mouse to line up your first shots.",
-        "Clear every craft in the wave to advance to the next one.",
-        "Use the pulse bomb to break out when you get surrounded."
       ]
     }
   },

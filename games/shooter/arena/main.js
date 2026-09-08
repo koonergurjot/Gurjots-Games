@@ -1,7 +1,10 @@
 import { VfxController } from './vfx.js';
-import { send } from '../common/diag-adapter.js';
-import { drawBootPlaceholder, showErrorOverlay } from '../common/boot-utils.js';
-import { gameEvent } from '../../shared/telemetry.js';
+// This file now lives one directory deeper (games/shooter/arena/ instead of
+// games/alien-shooter/), since Arena became a mode of Shooter rather than its
+// own catalog entry -- every relative import gained one more '../'.
+import { send } from '../../common/diag-adapter.js';
+import { drawBootPlaceholder, showErrorOverlay } from '../../common/boot-utils.js';
+import { gameEvent } from '../../../shared/telemetry.js';
 
 const FX_CONFIG_URL = '/assets/alien-shooter/fx.json';
 const FX_TIMEOUT_MS = 4000;
@@ -366,7 +369,7 @@ class AlienShooterGame {
         this.fx = loadedFx;
       }
     } catch (error) {
-      console.warn('[alien-shooter] Falling back to inline FX config', error);
+      console.warn('[shooter:arena] Falling back to inline FX config', error);
     }
   }
 
@@ -511,7 +514,7 @@ class AlienShooterGame {
     // A run ending is worth reporting before the next one starts: progression
     // pays out on the score, and this game had no telemetry at all.
     if (!initial) {
-      gameEvent('game_over', { slug: 'alien-shooter', value: Math.round(this.score) });
+      gameEvent('game_over', { slug: 'shooter', value: Math.round(this.score), meta: { mode: 'arena' } });
     }
     this.enemies = [];
     this.enemyBullets = [];
@@ -528,7 +531,7 @@ class AlienShooterGame {
     this.pendingReset = 0;
     this.runActive = true;
     this.announce(initial ? 'Pilot online. Hold the perimeter.' : 'Systems rebooted – stay sharp.');
-    gameEvent('play', { slug: 'alien-shooter' });
+    gameEvent('play', { slug: 'shooter', meta: { mode: 'arena' } });
     this.advanceWave();
     this.hudDirty = true;
   }
@@ -555,7 +558,7 @@ class AlienShooterGame {
 
   advanceWave() {
     if (this.waveIndex >= 0) {
-      gameEvent('level_up', { slug: 'alien-shooter', level: this.waveIndex + 1, value: this.waveIndex + 1 });
+      gameEvent('level_up', { slug: 'shooter', level: this.waveIndex + 1, value: this.waveIndex + 1, meta: { mode: 'arena' } });
     }
     this.waveIndex += 1;
     const base = WAVE_PLAN[this.waveIndex % WAVE_PLAN.length];
@@ -564,7 +567,7 @@ class AlienShooterGame {
     // Getting all the way around the wave plan is the arena's real milestone --
     // the point where it starts again, harder.
     if (this.loop > previousLoop) {
-      gameEvent('loop_complete', { slug: 'alien-shooter', level: this.loop, value: this.loop });
+      gameEvent('loop_complete', { slug: 'shooter', level: this.loop, value: this.loop, meta: { mode: 'arena' } });
       this.announce(`Loop ${this.loop} complete — the arena resets, harder.`);
     }
     const difficulty = 1 + this.loop * LOOP_DIFFICULTY_SCALE;
@@ -1143,7 +1146,7 @@ function boot() {
   const canvas = document.getElementById('game');
   const ctx = canvas && typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
   if (!canvas || !ctx) {
-    console.error('[alien-shooter] Missing canvas or 2D context');
+    console.error('[shooter:arena] Missing canvas or 2D context');
     send('GAME_ERROR', { reason: 'no-canvas' });
     showErrorOverlay('Canvas rendering is not supported on this device.');
     return;
@@ -1153,9 +1156,9 @@ function boot() {
 
   const game = new AlienShooterGame(canvas, ctx);
   game.init().catch((error) => {
-    console.error('[alien-shooter] Failed to start', error);
+    console.error('[shooter:arena] Failed to start', error);
     send('GAME_ERROR', { reason: 'init-failed', message: error?.message });
-    showErrorOverlay('We could not start Alien Shooter: Arena.');
+    showErrorOverlay('We could not start Shooter: Arena mode.');
   });
 }
 

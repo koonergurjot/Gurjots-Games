@@ -5,7 +5,7 @@
     "title": "Pong Classic",
     "description": "A snappy canvas remake of the arcade legend.",
     "short": "A snappy canvas remake of the arcade legend.",
-    "controls": "Player 1: W/S to move. Player 2 (local) uses ↑/↓. Press Space to pause or resume.",
+    "controls": "Player 1: W/S to move. Player 2 (local) uses \u2191/\u2193. Press Space to pause or resume.",
     "tags": [
       "classic",
       "2D"
@@ -53,7 +53,7 @@
     },
     "help": {
       "objective": "Win rallies until you reach 11 points before your opponent.",
-      "controls": "Player 1: W/S to move. Player 2 (local) uses ↑/↓. Press Space to pause or resume.",
+      "controls": "Player 1: W/S to move. Player 2 (local) uses \u2191/\u2193. Press Space to pause or resume.",
       "tips": [
         "Angle the paddle to change the ball's direction and catch opponents off guard.",
         "Stay near the center between shots so you can react to either corner.",
@@ -118,7 +118,7 @@
       "tips": [
         "Plan turns a few squares ahead to keep open lanes for future moves.",
         "Sweep the perimeter to straighten the snake before going for tight snacks.",
-        "Avoid reversing direction directly—turn in an arc to stay safe."
+        "Avoid reversing direction directly\u2014turn in an arc to stay safe."
       ],
       "steps": [
         "Press an arrow key to start moving.",
@@ -133,7 +133,7 @@
     "title": "Tetris",
     "description": "Classic falling blocks. Clear lines, level up.",
     "short": "Classic falling blocks. Clear lines, level up.",
-    "controls": "←/→ move, ↑ rotate, ↓ soft drop, Space hard drop, P pause.",
+    "controls": "\u2190/\u2192 move, \u2191 rotate, \u2193 soft drop, Space hard drop, P pause.",
     "tags": [
       "classic",
       "2D"
@@ -181,7 +181,7 @@
     },
     "help": {
       "objective": "Clear horizontal lines by stacking falling tetrominoes without topping out.",
-      "controls": "←/→ move, ↑ rotate, ↓ soft drop, Space hard drop, P pause.",
+      "controls": "\u2190/\u2192 move, \u2191 rotate, \u2193 soft drop, Space hard drop, P pause.",
       "tips": [
         "Leave a clean lane on one side so I pieces can score Tetrises.",
         "Soft drop to adjust a piece before committing to a hard drop.",
@@ -200,7 +200,7 @@
     "title": "Breakout",
     "description": "Smash bricks, power-ups, chase the score.",
     "short": "Smash bricks, power-ups, chase the score.",
-    "controls": "Move the paddle with the mouse or ←/→ keys. Click/tap to launch. P pauses, R restarts after a loss.",
+    "controls": "Move the paddle with the mouse or \u2190/\u2192 keys. Click/tap to launch. P pauses, R restarts after a loss.",
     "tags": [
       "classic",
       "2D"
@@ -247,7 +247,7 @@
     },
     "help": {
       "objective": "Break every brick on the stage while protecting your remaining lives.",
-      "controls": "Move the paddle with the mouse or ←/→ keys. Click/tap to launch. P pauses, R restarts after a loss.",
+      "controls": "Move the paddle with the mouse or \u2190/\u2192 keys. Click/tap to launch. P pauses, R restarts after a loss.",
       "tips": [
         "Catch falling power-ups to widen the paddle or add extra balls.",
         "Hit the ball off-center to steer shots into hard-to-reach bricks.",
@@ -310,7 +310,7 @@
       "tips": [
         "Control the center early so your pieces have maximum reach.",
         "Castle before your king comes under pressure.",
-        "Look for tactics after every move—forks, pins, and discovered attacks."
+        "Look for tactics after every move\u2014forks, pins, and discovered attacks."
       ],
       "steps": [
         "Choose a difficulty or puzzle, then make the first move.",
@@ -443,7 +443,7 @@
     "title": "Asteroids",
     "description": "Pilot your ship and blast space rocks.",
     "short": "Pilot your ship and blast space rocks.",
-    "controls": "A/D or ←/→ rotate, W or ↑ thrust, Space/Enter fire, Shift/K hyperspace, P pause, R restart.",
+    "controls": "A/D or \u2190/\u2192 rotate, W or \u2191 thrust, Space/Enter fire, Shift/K hyperspace, P pause, R restart.",
     "tags": [
       "classic",
       "2D"
@@ -485,7 +485,7 @@
     },
     "help": {
       "objective": "Pilot your ship through space, blasting asteroids and enemies to survive each wave.",
-      "controls": "A/D or ←/→ rotate, W or ↑ thrust, Space/Enter fire, Shift/K hyperspace, P pause, R restart.",
+      "controls": "A/D or \u2190/\u2192 rotate, W or \u2191 thrust, Space/Enter fire, Shift/K hyperspace, P pause, R restart.",
       "tips": [
         "Fire in bursts so you can maneuver while shots travel.",
         "Use hyperspace when surrounded, but beware of random exits.",
@@ -563,7 +563,7 @@
     "title": "Pixel Platformer",
     "description": "Run and jump across platforms to reach the goal.",
     "short": "Run and jump across platforms to reach the goal.",
-    "controls": "←/→ move, Space or ↑ jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
+    "controls": "\u2190/\u2192 move, Space or \u2191 jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
     "tags": [
       "2D"
     ],
@@ -603,9 +603,9 @@
     },
     "help": {
       "objective": "Run, jump, and collect coins across the stage while staying ahead of hazards.",
-      "controls": "←/→ move, Space or ↑ jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
+      "controls": "\u2190/\u2192 move, Space or \u2191 jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
       "tips": [
-        "Collect every coin you see—the goal only opens once the set is complete.",
+        "Collect every coin you see\u2014the goal only opens once the set is complete.",
         "Time jumps off moving platforms and slopes to keep momentum going.",
         "Start co-op from the HUD if you want a partner to help sweep the map."
       ],
@@ -622,7 +622,7 @@
     "title": "City Runner",
     "description": "Dash through the city and avoid obstacles.",
     "short": "Dash through the city and avoid obstacles.",
-    "controls": "Space or ↑ jumps, ↓ slides. On mobile, tap right to jump and left to slide.",
+    "controls": "Space or \u2191 jumps, \u2193 slides. On mobile, tap right to jump and left to slide.",
     "tags": [
       "2D"
     ],
@@ -664,7 +664,7 @@
     },
     "help": {
       "objective": "Sprint through the city streets, dodging obstacles to keep your run alive.",
-      "controls": "Space or ↑ jumps, ↓ slides. On mobile, tap right to jump and left to slide.",
+      "controls": "Space or \u2191 jumps, \u2193 slides. On mobile, tap right to jump and left to slide.",
       "tips": [
         "Stay near the middle lane so you can quickly jump or slide as obstacles appear.",
         "Slide under low signs instead of jumping to recover faster afterward.",
@@ -681,17 +681,18 @@
     "id": "shooter",
     "slug": "shooter",
     "title": "Alien Shooter",
-    "description": "Blast waves of invaders and survive.",
-    "short": "Blast waves of invaders and survive.",
+    "description": "Hold off waves of invaders in a tight Campaign toward a boss fight, or dodge into the endless, looping Arena mode.",
+    "short": "Blast waves of invaders. Campaign to a boss, or endless Arena.",
     "controls": "WASD or Arrow keys move, Space/Enter shoot. Keep moving to avoid hits.",
     "tags": [
-      "2D"
+      "2D",
+      "arcade"
     ],
     "engineType": "canvas-2d",
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "thumbnailPath": "/games/shooter/thumb.svg",
     "thumbnail": "/games/shooter/thumb.svg",
     "assets": {
@@ -714,74 +715,30 @@
       ]
     },
     "featureFlags": [
+      "Diagnostics",
+      "Keyboard",
+      "Mouse",
       "Offline",
-      "Keyboard"
+      "Touch"
     ],
     "minDevice": {
       "width": 360,
       "height": 240
     },
     "help": {
-      "objective": "Hold off waves of aliens by dodging fire and blasting every intruder.",
+      "objective": "Campaign: clear waves toward the Gatekeeper boss. Arena (from the in-game link): survive an endless, looping arena and see how many loops you can complete.",
       "controls": "WASD or Arrow keys move, Space/Enter shoot. Keep moving to avoid hits.",
       "tips": [
         "Strafe horizontally to herd enemies into your bullet stream.",
-        "Watch your firing cadence—the blaster has a short cooldown.",
-        "Keep distance from enemy clusters to buy time for dodges."
+        "Watch your firing cadence\u2014the blaster has a short cooldown.",
+        "Keep distance from enemy clusters to buy time for dodges.",
+        "Arena mode: keep moving -- standing still lets scouts and strikers converge on you from several edges at once.",
+        "Arena mode: save the pulse bomb for when enemies close in from more than one side."
       ],
       "steps": [
         "Move into open space as the first wave approaches.",
         "Fire continuously while weaving around enemy shots.",
         "Survive as long as possible to post a high score."
-      ]
-    }
-  },
-  {
-    "id": "alien-shooter",
-    "slug": "alien-shooter",
-    "title": "Alien Shooter: Arena",
-    "description": "Hold an open arena against escalating waves of alien craft, with a pulse bomb for when they close in.",
-    "short": "Survive escalating waves of alien craft in an open arena.",
-    "controls": "WASD or the arrow keys to move. Aim with the mouse and hold click or Space to fire. E launches a pulse bomb. Esc pauses.",
-    "tags": [
-      "arcade",
-      "2D"
-    ],
-    "engineType": "canvas-2d",
-    "difficulty": "hard",
-    "released": "2025-10-20",
-    "playUrl": "/games/alien-shooter/",
-    "version": "1.0.0",
-    "thumbnailPath": "/games/alien-shooter/thumb.svg",
-    "thumbnail": "/games/alien-shooter/thumb.svg",
-    "assets": {
-      "sprites": []
-    },
-    "firstFrame": {
-      "sprites": []
-    },
-    "featureFlags": [
-      "Keyboard",
-      "Mouse",
-      "Touch",
-      "Diagnostics"
-    ],
-    "minDevice": {
-      "width": 360,
-      "height": 240
-    },
-    "help": {
-      "objective": "Clear each wave of alien craft without losing all of your health, and push your score as deep into the wave count as you can.",
-      "controls": "WASD or the arrow keys to move. Aim with the mouse and hold click or Space to fire. E launches a pulse bomb. Esc pauses.",
-      "tips": [
-        "Keep moving -- standing still lets scouts and strikers converge on you from several edges at once.",
-        "Save the pulse bomb for when enemies close in from more than one side rather than firing it on cooldown.",
-        "Strikers and gunners behave differently: read the colour before you commit to a dodge."
-      ],
-      "steps": [
-        "Move with WASD and aim with the mouse to line up your first shots.",
-        "Clear every craft in the wave to advance to the next one.",
-        "Use the pulse bomb to break out when you get surrounded."
       ]
     }
   },

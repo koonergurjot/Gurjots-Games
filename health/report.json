@@ -1,19 +1,21 @@
 {
-  "generatedAt": "2026-09-07T11:55:26.629Z",
+  "generatedAt": "2026-09-08T05:12:22.431Z",
   "summary": {
-    "total": 15,
-    "passing": 15,
-    "failing": 0,
+    "total": 14,
+    "passing": 13,
+    "failing": 1,
     "withWarnings": 0,
     "issueCounts": {
-      "total": 0,
+      "total": 1,
       "bySeverity": {
-        "blocker": 0,
+        "blocker": 1,
         "major": 0,
         "minor": 0,
         "info": 0
       },
-      "byCategory": {}
+      "byCategory": {
+        "headless-runtime": 1
+      }
     }
   },
   "manifest": {
@@ -186,8 +188,20 @@
       "index": 2,
       "title": "Tetris",
       "slug": "tetris",
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "message": "Headless boot timed out",
+          "context": {
+            "slug": "tetris",
+            "shell": "games/tetris/index.html",
+            "waitedMs": 8000
+          },
+          "severity": "error",
+          "severityLevel": "blocker",
+          "category": "headless-runtime"
+        }
+      ],
       "shell": {
         "found": "games/tetris/index.html"
       },
@@ -204,7 +218,7 @@
           "assets/audio/click.wav"
         ],
         "references": {
-          "total": 8,
+          "total": 11,
           "unique": 8,
           "missing": 0
         }
@@ -214,23 +228,13 @@
         "placeholder": false
       },
       "status": {
-        "errors": false,
+        "errors": true,
         "warnings": false
       },
       "runtime": {
         "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
+          "status": "timeout",
+          "waitedMs": 8000
         }
       },
       "requirements": {
@@ -1085,8 +1089,8 @@
           "assets/audio/powerup.wav"
         ],
         "references": {
-          "total": 12,
-          "unique": 12,
+          "total": 13,
+          "unique": 13,
           "missing": 0
         }
       },
@@ -1142,49 +1146,6 @@
     },
     {
       "index": 12,
-      "title": "Alien Shooter: Arena",
-      "slug": "alien-shooter",
-      "ok": true,
-      "issues": [],
-      "shell": {
-        "found": "games/alien-shooter/index.html"
-      },
-      "assets": {
-        "sprites": [],
-        "audio": [],
-        "references": {
-          "total": 1,
-          "unique": 1,
-          "missing": 0
-        }
-      },
-      "thumbnail": {
-        "found": "games/alien-shooter/thumb.svg",
-        "placeholder": false
-      },
-      "status": {
-        "errors": false,
-        "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "index": 13,
       "title": "City Runner: Rush",
       "slug": "city-runner",
       "ok": true,
@@ -1231,7 +1192,7 @@
       }
     },
     {
-      "index": 14,
+      "index": 13,
       "title": "Pixel Platformer: Sandbox",
       "slug": "pixel-platformer",
       "ok": true,
