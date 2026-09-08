@@ -104,6 +104,7 @@ function fetchJson(url) {
   const canvas = document.getElementById('game');
   const ctx = canvas && typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
   const scoreEl = document.getElementById('score');
+  const cleanEl = document.getElementById('cleanStreak');
   const lodToggle = document.getElementById('lodToggle');
 
   if (!canvas || !ctx || !scoreEl || !lodToggle) {
@@ -148,6 +149,18 @@ function fetchJson(url) {
 
   const SCORE_MILESTONE_DISTANCE = 1000;
   let lastMilestone = 0;
+
+  // Clean running. A hit used to cost nothing lasting -- the score dipped for
+  // three tenths of a second and recovered -- so there was no reason to avoid an
+  // obstacle and the run had no tension. Distance since the last hit now builds
+  // a streak that pays at every kilometre, and a hit stumbles you and resets it.
+  const CLEAN_STREAK_DISTANCE = 1000;
+  const STUMBLE_SPEED = 0.55;
+  const STUMBLE_RECOVERY = 0.45;
+  let cleanDistance = 0;
+  let cleanStreaks = 0;
+  let streakBonus = 0;
+  let speedPenalty = 1;
 
   const obstacles = [];
   let parallax = null;
@@ -468,6 +481,10 @@ function fetchJson(url) {
 
   function resetGame() {
     lastMilestone = 0;
+    cleanDistance = 0;
+    cleanStreaks = 0;
+    streakBonus = 0;
+    speedPenalty = 1;
     state.elapsed = 0;
     state.distance = 0;
     state.spawnTimer = randInRange(OBSTACLE_INTERVAL);
@@ -534,7 +551,7 @@ function fetchJson(url) {
 
   function update(dt) {
     state.elapsed += dt;
-    state.distance += state.speed * dt;
+    state.distance += state.speed * speedPenalty * dt;
     state.spawnTimer -= dt;
 
     if (state.queuedJump && player.onGround) {
@@ -565,25 +582,44 @@ function fetchJson(url) {
         obstacles.splice(i, 1);
         continue;
       }
-      if (checkCollision(player, obstacle)) {
-        player.hurtTimer = 0.3;
+      if (checkCollision(player, obstacle) && player.hurtTimer <= 0) {
+        player.hurtTimer = 0.6;
+        // Clipping something costs the streak and the momentum built with it.
+        cleanDistance = 0;
+        speedPenalty = STUMBLE_SPEED;
       }
     }
 
     if (player.hurtTimer > 0) {
       player.hurtTimer = Math.max(0, player.hurtTimer - dt);
     }
+    // Ease back up to full pace rather than snapping, so a stumble is felt.
+    if (speedPenalty < 1) speedPenalty = Math.min(1, speedPenalty + STUMBLE_RECOVERY * dt);
 
-    const baseScore = Math.floor(state.distance / 10);
+    cleanDistance += state.speed * speedPenalty * dt;
+    if (cleanDistance >= CLEAN_STREAK_DISTANCE) {
+      cleanDistance -= CLEAN_STREAK_DISTANCE;
+      cleanStreaks += 1;
+      streakBonus += 250 * cleanStreaks;
+      gameEvent('clean_streak', { slug: 'city-runner', level: cleanStreaks, value: cleanStreaks });
+    }
+
+    const baseScore = Math.floor(state.distance / 10) + streakBonus;
     state.score = player.hurtTimer > 0 ? Math.max(0, baseScore - 60) : baseScore;
     // This runner has no death, so a score is only ever banked at milestones --
     // otherwise nothing about a long run would ever reach progression.
     const milestone = Math.floor(state.distance / SCORE_MILESTONE_DISTANCE);
     if (milestone > lastMilestone) {
       lastMilestone = milestone;
-      gameEvent('level_up', { slug: 'city-runner', value: milestone });
+      gameEvent('level_up', { slug: 'city-runner', level: milestone, value: milestone });
     }
     scoreEl.textContent = state.score.toString();
+    if (cleanEl) {
+      // What the player is protecting, and how close the next payout is.
+      cleanEl.textContent = cleanStreaks > 0
+        ? `${Math.floor(cleanDistance)} m · ×${cleanStreaks}`
+        : `${Math.floor(cleanDistance)} m`;
+    }
 
     parallax.update(dt, state.speed * 0.6);
   }

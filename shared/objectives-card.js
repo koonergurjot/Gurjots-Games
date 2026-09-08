@@ -217,7 +217,15 @@ export function mountObjectives(slug) {
 
   button.addEventListener('click', close);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !backdrop.hidden) close(); });
+  // Enter and Space are how every game here starts, so a player who reads the
+  // briefing and reaches for them should get into the game rather than be
+  // stonewalled into hunting for the button.
+  const DISMISS_KEYS = new Set(['Escape', 'Enter', ' ', 'Spacebar']);
+  document.addEventListener('keydown', (e) => {
+    if (backdrop.hidden || !DISMISS_KEYS.has(e.key)) return;
+    e.preventDefault();
+    close();
+  });
   chip.addEventListener('click', open);
 
   window.addEventListener(OBJECTIVE_EVENT, (event) => {

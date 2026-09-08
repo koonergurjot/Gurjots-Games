@@ -43,6 +43,12 @@ const INPUTS = {
 // here may carry a diagnostics overlay larger than the board, plus a WebGL
 // renderer that getImageData cannot read at all. Screenshotting each element
 // sidesteps both problems, so "did anything move" is answered per canvas.
+// Turn-based games are played with the mouse, and one click only selects. These
+// get a sequence of clicks across the board so a move can actually be made --
+// chess3d falls back to a DOM board under headless software rendering, where
+// key presses do nothing at all.
+const TURN_BASED = new Set(['chess', 'chess3d']);
+
 // Games the player steers by holding a key rather than tapping one.
 const HOLD_KEYS = {
   maze3d: 'KeyW',
@@ -125,6 +131,20 @@ export async function playtest(browser, port, slug) {
     // holds a direction. Hold one down for the input burst so these read fairly.
     const hold = HOLD_KEYS[slug];
     if (hold) await page.keyboard.down(hold).catch(() => {});
+
+    if (TURN_BASED.has(slug)) {
+      const board = await page.$('canvas, .fallback-board');
+      const box = board && await board.boundingBox();
+      if (box) {
+        // Walk a few squares: select, then try a target a couple of ranks away.
+        const cell = box.width / 8;
+        for (const [file, rank] of [[4, 1], [4, 3], [1, 0], [2, 2]]) {
+          await page.mouse.click(box.x + (file + 0.5) * cell, box.y + (7 - rank + 0.5) * (box.height / 8)).catch(() => {});
+          await page.waitForTimeout(400);
+          await sample(page, rec);
+        }
+      }
+    }
 
     const keys = INPUTS[slug] || [' '];
     for (const key of keys) {

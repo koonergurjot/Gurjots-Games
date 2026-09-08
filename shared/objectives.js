@@ -110,8 +110,9 @@ export const BRIEFINGS = {
     premise: 'Every coin in the level is a piece of the gate key. Collect them all and the way out opens.',
     objectives: [
       { id: 'plat_coins', kind: 'run_event', event: 'coin_collected', goal: 2, label: 'Collect every coin in a level' },
-      { id: 'plat_clear', kind: 'run_event', event: 'level_up', goal: 1, label: 'Reach the goal' },
-      { id: 'plat_career', kind: 'career', event: 'level_up', goal: 5, label: 'Clear 5 levels in all' },
+      // The platformer reports a completed level as a win, not a level_up.
+      { id: 'plat_clear', kind: 'run_event', event: 'win', goal: 1, label: 'Reach the goal' },
+      { id: 'plat_career', kind: 'career', event: 'win', goal: 5, label: 'Clear 5 levels in all' },
     ],
   },
   runner: {
