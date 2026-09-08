@@ -1,5 +1,6 @@
 import { emitEvent as emitAchievementEvent } from './achievements.js';
 import { recordGameEvent } from './progression.js';
+import { recordGameEvent as recordObjectiveEvent } from './objectives.js';
 import { pushEvent } from '../games/common/diag-adapter.js';
 
 function toObject(data) {
@@ -34,6 +35,16 @@ export function gameEvent(type, data = {}) {
   } catch (err) {
     if (typeof console !== 'undefined') {
       console.warn('[telemetry] progression update failed', err);
+    }
+  }
+
+  try {
+    if (typeof recordObjectiveEvent === 'function') {
+      recordObjectiveEvent(payload);
+    }
+  } catch (err) {
+    if (typeof console !== 'undefined') {
+      console.warn('[telemetry] objective update failed', err);
     }
   }
 
