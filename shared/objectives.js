@@ -81,7 +81,9 @@ export const BRIEFINGS = {
     premise: 'Every merge doubles. The board only ever gets tighter, so plan the tile after next.',
     objectives: [
       { id: '2048_512', kind: 'run_score', goal: 5000, label: 'Score 5,000 in one run' },
-      { id: '2048_tile', kind: 'run_event', event: 'level_up', goal: 1, label: 'Build a 1024 tile' },
+      // score_event carries the highest tile reached, so the tile itself is the
+      // number to measure rather than a count of milestone events.
+      { id: '2048_tile', kind: 'run_event_max', event: 'score_event', goal: 1024, label: 'Build a 1024 tile' },
       { id: '2048_career', kind: 'career', event: 'game_over', goal: 15, label: 'Finish 15 boards' },
     ],
   },
@@ -280,7 +282,12 @@ export function recordGameEvent(event = {}) {
   if (type === 'play' || runSlug !== slug) resetRun(slug);
 
   const keys = [type];
-  if (typeof event.name === 'string' && event.name) keys.push(`${type}:${event.name}`);
+  // Games put the discriminator in different places: chess sends it top level,
+  // 2048 tucks it into meta.
+  const name = typeof event.name === 'string' && event.name
+    ? event.name
+    : (typeof event.meta?.name === 'string' ? event.meta.name : '');
+  if (name) keys.push(`${type}:${name}`);
   for (const key of keys) {
     runEvents[key] = (runEvents[key] || 0) + 1;
     runEventMax[key] = Math.max(runEventMax[key] || 0, eventMagnitude(event));

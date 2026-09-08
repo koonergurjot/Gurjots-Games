@@ -18,6 +18,11 @@ export function getLegalMoves(square) {
   return game.moves({ square, verbose: true }).map(m => {
     const move = { from: m.from, to: m.to };
     if (m.promotion) move.promotion = m.promotion;
+    // Carry what the move takes. Both chess3d renderers already knew how to
+    // mark a capture differently from a quiet move, but this dropped the flag,
+    // so every target rendered the same and that code never ran.
+    if (m.captured) move.captured = m.captured.toUpperCase();
+    if (m.flags) move.flags = m.flags;
     return move;
   });
 }
