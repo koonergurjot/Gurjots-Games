@@ -931,6 +931,32 @@ function emitLineClearEffects(rows){
   }
 }
 
+// Camera shake. A four-line clear and a single scored very differently but felt
+// identical, so the payoff for stacking was invisible.
+let shakeAmount = 0;
+let shakeTime = 0;
+
+function addShake(amount, duration = 0.28){
+  if(shouldReduceMotion) return;
+  shakeAmount = Math.max(shakeAmount, amount);
+  shakeTime = Math.max(shakeTime, duration);
+}
+
+function updateShake(dt){
+  if(shakeTime <= 0){ shakeAmount = 0; return; }
+  shakeTime = Math.max(0, shakeTime - dt);
+  if(shakeTime === 0) shakeAmount = 0;
+}
+
+function applyShake(){
+  if(!ctx || shakeAmount <= 0 || shakeTime <= 0) return false;
+  const decay = shakeTime / 0.28;
+  const magnitude = shakeAmount * Math.min(1, decay);
+  ctx.save();
+  ctx.translate((Math.random() * 2 - 1) * magnitude, (Math.random() * 2 - 1) * magnitude);
+  return true;
+}
+
 function updateEffects(dt){
   if(!effects.length) return;
   const remaining=[];
@@ -1812,6 +1838,16 @@ function queueLineClear(rows){
   const sorted=[...rows].sort((a,b)=>a-b);
   clearPipeline.push({ rows:sorted, stage:0, timer:CLEAR_STAGE_SPLIT[0] });
   refreshClearingRows();
+  // One line nudges; four shoves. Back-to-back adds a little on top.
+  const weight = sorted.length >= 4 ? 9 : sorted.length >= 3 ? 5 : sorted.length >= 2 ? 3 : 1.5;
+  addShake(weight + (backToBack ? 2 : 0), sorted.length >= 4 ? 0.36 : 0.24);
+  const cell = getCellSize();
+  for(const row of sorted){
+    spawnEffect('spark', (COLS / 2) * cell, (row + 0.5) * cell, {
+      duration: 0.4,
+      scale: Math.min(2.4, 0.9 + sorted.length * 0.45),
+    });
+  }
 }
 
 function clearLines(){
@@ -2436,8 +2472,11 @@ function loop(ts){
   updateParallax(dt);
   updateEffects(dt);
   updateClearState(dt);
+  updateShake(dt);
   ctx.clearRect(0,0,c.width,c.height);
+  const shaken = applyShake();
   draw();
+  if(shaken) ctx.restore();
   if(bc && mode==='play'){
     const payload={
       grid:cloneGrid(grid),

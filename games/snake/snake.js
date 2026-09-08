@@ -584,6 +584,7 @@ if (wallsToggle) {
     wallsEnabled = !!wallsToggle.checked;
     if (!wallsEnabled) {
       obstacles = [];
+  lastObstacleScore = 0;
       buildBoard(food);
     }
     saveOptionState({ wrap: wrapEnabled, walls: wallsEnabled });
@@ -1059,6 +1060,7 @@ let snakeColorHead = DEFAULT_COLORS.snakeHead;
 let snakeBodyColor = DEFAULT_COLORS.snakeBody;
 let fruitColor = DEFAULT_COLORS.fruit;
 let obstacles = [];
+let lastObstacleScore = 0;
 let runMissionState = { wallsOffScore: 0, topSpeedMs: 0, poisonCount: 0 };
 let poisonStreak = 0;
 let poisonFlashUntil = 0;
@@ -1771,6 +1773,7 @@ function resetGame(reason = 'manual', options = {}) {
   won = false;
   winHandled = false;
   obstacles = [];
+  lastObstacleScore = 0;
   dead = false;
   deadHandled = false;
   paused = false;
@@ -2004,12 +2007,53 @@ function spawnFood() {
   return fruit;
 }
 
+// A barrier the player has to route around, not a coin flip. The row is only
+// placed where it cannot appear on top of the snake or bury the food, and it
+// always carries a gap wide enough to steer through.
+const OBSTACLE_GAP = 3;
+const OBSTACLE_SAFE_ROWS = 2;
+
 function addObstacleRow() {
   if (!wallsEnabled) return;
-  const y = Math.floor(rand() * N);
-  for (let x = 4; x < N - 4; x++) obstacles.push({ x, y });
+  const head = snake[0];
+  const occupied = new Set(snake.map(part => part.y));
+  const candidates = [];
+  for (let y = 1; y < N - 1; y++) {
+    // Never on the snake, never in the rows it is about to move through, and
+    // never on the food -- all three are deaths the player cannot avoid.
+    if (occupied.has(y)) continue;
+    if (Math.abs(y - head.y) < OBSTACLE_SAFE_ROWS) continue;
+    if (food && food.y === y) continue;
+    if (obstacles.some(o => o.y === y)) continue;
+    candidates.push(y);
+  }
+  if (!candidates.length) return;
+
+  const y = candidates[Math.floor(rand() * candidates.length)];
+  const left = 4;
+  const right = N - 4;
+  const span = right - left;
+  if (span <= OBSTACLE_GAP) return;
+  const gapStart = left + Math.floor(rand() * (span - OBSTACLE_GAP));
+  for (let x = left; x < right; x++) {
+    if (x >= gapStart && x < gapStart + OBSTACLE_GAP) continue;
+    obstacles.push({ x, y });
+  }
   buildBoard(food);
   updateDebugPanel();
+}
+
+// Walls arrive on a score threshold, checked once per move. This used to live in
+// the draw path, which runs every frame: while the score sat on a multiple of
+// ten it spawned a fresh row per frame until the cap, so barriers appeared in a
+// burst instead of one at a time.
+function maybeAddObstacleRow() {
+  if (!wallsEnabled || score <= 0) return;
+  const threshold = Math.floor(score / 10) * 10;
+  if (threshold <= lastObstacleScore) return;
+  lastObstacleScore = threshold;
+  if (obstacles.length >= Math.floor(score / 10) * (N / 2)) return;
+  addObstacleRow();
 }
 
 let lastTickTime = performance.now();
@@ -2095,6 +2139,7 @@ function applyPickupEffect(pickup, head) {
       requestHudSync();
     }
   }
+  maybeAddObstacleRow();
   if (!wallsEnabled) {
     runMissionState.wallsOffScore = Math.max(runMissionState.wallsOffScore, score);
     if (runMissionState.wallsOffScore > progress.missions.wallsOffScore) {
@@ -2458,8 +2503,6 @@ function draw() {
   const hudTextX = Math.round(offsetX + 16);
   const hudTextY = Math.round(offsetY + 28);
   ctx.fillText(`Score: ${score} (Best: ${bestScore}) • Speed T${speedTier} • ${wallStatus} • ${wrapStatus}`, hudTextX, hudTextY);
-
-  if (wallsEnabled && score > 0 && score % 10 === 0 && obstacles.length < Math.floor(score / 10) * (N / 2)) addObstacleRow();
 
   if (paused) {
     if (!pauseOverlay) {

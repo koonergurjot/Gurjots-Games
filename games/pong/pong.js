@@ -8,6 +8,7 @@ import {
   STAMINA_CONFIG,
   SPIN_CONFIG,
   COMBO_CONFIG,
+  HEAT_CONFIG,
   LADDER_TIERS,
   TELEMETRY_SLUG,
 } from "./config.js";
@@ -1298,16 +1299,35 @@ import "./pauseOverlay.js";
     refreshMatchControls();
   }
 
+  // Rally heat: 0 at a fresh serve, 1 once the rally is long. Everything that
+  // reads the rally -- the trail, the court glow, the serve -- reads this.
+  function rallyHeat(){
+    const full = HEAT_CONFIG.fullAt || 14;
+    return clamp((state.rallyCount || 0) / full, 0, 1);
+  }
+
   function spawnBall(dir=1, speed=360){
     const a = rand(-0.35, 0.35);
-    const v = speed;
-    state.balls.push({x:W/2, y:H/2, r:9, dx:Math.cos(a)*v*dir, dy:Math.sin(a)*v, spin:0, lastHit:null});
+    // A rally worth winning pays for the next serve: whoever took the point on a
+    // long exchange launches faster, so momentum carries across the point.
+    const overdrive = state.overdriveServe;
+    state.overdriveServe = false;
+    const v = overdrive ? speed * (HEAT_CONFIG.overdriveSpeed || 1.28) : speed;
+    if(overdrive){
+      toast("Overdrive serve!", { id: "pong-overdrive" });
+      spawnEffect("spark", W/2, H/2, { duration: 0.45, scale: 1.6 });
+    }
+    state.balls.push({x:W/2, y:H/2, r:9, dx:Math.cos(a)*v*dir, dy:Math.sin(a)*v, spin:0, lastHit:null, overdrive});
   }
 
   function award(pointTo){
     state.score[pointTo]++;
     const playerScore = state.score[pointTo];
     const opponentScore = state.score[pointTo === "p1" ? "p2" : "p1"];
+    // Bank the reward before the rally counter is cleared.
+    if((state.rallyCount || 0) >= (HEAT_CONFIG.overdriveAt || 8)){
+      state.overdriveServe = true;
+    }
     state.rallyCount = 0;
     state.lastComboEvent = 0;
     state.comboDisplay = 0;
@@ -2243,6 +2263,22 @@ import "./pauseOverlay.js";
     return state.trailLayer;
   }
 
+  function mixHexColor(from, to, amount){
+    const parse = (hex) => {
+      const clean = String(hex).trim().replace(/^#/, "");
+      const full = clean.length === 3 ? clean.split("").map(c => c + c).join("") : clean;
+      const n = Number.parseInt(full, 16);
+      return Number.isFinite(n) && full.length === 6
+        ? [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+        : null;
+    };
+    const a = parse(from), b = parse(to);
+    if(!a || !b) return from;
+    const t = clamp(amount, 0, 1);
+    const c = a.map((v, i) => Math.round(v + (b[i] - v) * t));
+    return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+  }
+
   function drawTrailLayer(dt){
     if(!state.trailEnabled || state.reduceMotion){
       if(state.trailLayer?.ctx){
@@ -2261,14 +2297,18 @@ import "./pauseOverlay.js";
     ctx.restore();
 
     const accent = getCSS("--pong-accent") || "#69e1ff";
+    const heat = rallyHeat();
+    // The trail widens and warms as the rally goes on, so how invested you are
+    // in the current point is legible without reading the counter.
+    const hotAccent = heat > 0.05 ? mixHexColor(accent, "#ff8a3d", heat) : accent;
     for(const ball of state.balls){
-      const radius = ball.r * 2.5;
+      const radius = ball.r * (2.5 + heat * 2.2);
       const gradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, radius);
-      gradient.addColorStop(0, accent);
+      gradient.addColorStop(0, hotAccent);
       gradient.addColorStop(1, "rgba(0,0,0,0)");
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      ctx.globalAlpha = 0.75;
+      ctx.globalAlpha = 0.75 + heat * 0.2;
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, radius, 0, Math.PI*2);

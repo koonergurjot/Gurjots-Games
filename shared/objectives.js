@@ -7,10 +7,12 @@
 // reporting what happened rather than by wiring up objective logic.
 //
 // Objective kinds:
-//   run_score   reach a score in a single run
-//   run_event   fire a named event N times in a single run
-//   run_level   reach a level / wave / stage in a single run
-//   career      accumulate N across every run, forever
+//   run_score       reach a score in a single run
+//   run_event       fire a named event N times in a single run
+//   run_event_max   reach N on a value the event carries (level, wave, rally
+//                   length) -- games report "level 4", not four separate
+//                   events, so counting them would measure the wrong thing
+//   career          accumulate N across every run, forever
 
 const STORAGE_KEY = 'gg:objectives';
 export const OBJECTIVE_EVENT = 'gg:objective';
@@ -20,7 +22,7 @@ export const BRIEFINGS = {
     title: 'Pong Classic',
     premise: 'A service match against a machine that never blinks. Win the rally, not the point.',
     objectives: [
-      { id: 'pong_rally', kind: 'run_event', event: 'combo', goal: 12, label: 'Keep a 12-hit rally alive' },
+      { id: 'pong_rally', kind: 'run_event_max', event: 'combo', goal: 12, label: 'Keep a 12-hit rally alive' },
       { id: 'pong_win', kind: 'run_event', event: 'win', goal: 1, label: 'Win a match' },
       { id: 'pong_career', kind: 'career', event: 'win', goal: 10, label: 'Win 10 matches in all' },
     ],
@@ -30,7 +32,7 @@ export const BRIEFINGS = {
     premise: 'You are the last thing moving in a shut-down arcade cabinet. Grow long enough and the machine boots you to the next tier.',
     objectives: [
       { id: 'snake_50', kind: 'run_score', goal: 50, label: 'Score 50 in one run' },
-      { id: 'snake_tier', kind: 'run_event', event: 'level_up', goal: 3, label: 'Reach speed tier 3' },
+      { id: 'snake_tier', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Reach speed tier 3' },
       { id: 'snake_career', kind: 'career', event: 'game_over', goal: 25, label: 'Complete 25 runs' },
     ],
   },
@@ -38,7 +40,7 @@ export const BRIEFINGS = {
     title: 'Tetris',
     premise: 'The well never stops filling. Every line you clear buys a few more seconds of order.',
     objectives: [
-      { id: 'tetris_line', kind: 'run_event', event: 'level_up', goal: 2, label: 'Reach level 3' },
+      { id: 'tetris_line', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Reach level 3' },
       { id: 'tetris_score', kind: 'run_score', goal: 5000, label: 'Score 5,000 in one run' },
       { id: 'tetris_career', kind: 'career', event: 'level_up', goal: 20, label: 'Clear 20 levels in all' },
     ],
@@ -49,7 +51,7 @@ export const BRIEFINGS = {
     objectives: [
       { id: 'breakout_clear', kind: 'run_event', event: 'level_up', goal: 1, label: 'Clear a full wall' },
       { id: 'breakout_score', kind: 'run_score', goal: 2000, label: 'Score 2,000 in one run' },
-      { id: 'breakout_deep', kind: 'run_event', event: 'level_up', goal: 3, label: 'Reach chamber 4' },
+      { id: 'breakout_deep', kind: 'run_event_max', event: 'level_up', goal: 4, label: 'Reach chamber 4' },
     ],
   },
   chess: {
@@ -83,7 +85,7 @@ export const BRIEFINGS = {
     title: 'Asteroids',
     premise: 'A mining lane has gone to rubble and something is guarding it. Clear the waves, take the supply drops, reach the gatekeeper.',
     objectives: [
-      { id: 'ast_wave', kind: 'run_event', event: 'level_up', goal: 3, label: 'Survive to wave 4' },
+      { id: 'ast_wave', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Clear three waves' },
       { id: 'ast_boss', kind: 'run_event', event: 'boss_down', goal: 1, label: 'Destroy a gatekeeper' },
       { id: 'ast_score', kind: 'run_score', goal: 3000, label: 'Score 3,000 in one run' },
     ],
@@ -110,7 +112,7 @@ export const BRIEFINGS = {
     title: 'City Runner',
     premise: 'The street scrolls whether you are ready or not. Every near miss is worth more than a safe jump.',
     objectives: [
-      { id: 'run_1k', kind: 'run_event', event: 'level_up', goal: 1, label: 'Travel 1,000 metres' },
+      { id: 'run_1k', kind: 'run_event_max', event: 'level_up', goal: 1, label: 'Travel 1,000 metres' },
       { id: 'run_score', kind: 'run_score', goal: 500, label: 'Score 500 in one run' },
       { id: 'run_career', kind: 'career', event: 'game_over', goal: 20, label: 'Complete 20 runs' },
     ],
@@ -119,7 +121,7 @@ export const BRIEFINGS = {
     title: 'Alien Shooter',
     premise: 'Five waves stand between you and the Gatekeeper. Nothing behind you is holding the line.',
     objectives: [
-      { id: 'sh_wave', kind: 'run_event', event: 'level_up', goal: 2, label: 'Reach wave 3' },
+      { id: 'sh_wave', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Reach wave 3' },
       { id: 'sh_boss', kind: 'run_event', event: 'boss_down', goal: 1, label: 'Bring down the Gatekeeper' },
       { id: 'sh_score', kind: 'run_score', goal: 2500, label: 'Score 2,500 in one run' },
     ],
@@ -128,7 +130,7 @@ export const BRIEFINGS = {
     title: 'Alien Shooter: Arena',
     premise: 'A closed arena that loops forever, harder each time around. See how deep the loop goes.',
     objectives: [
-      { id: 'as_wave', kind: 'run_event', event: 'level_up', goal: 4, label: 'Clear 4 waves in one life' },
+      { id: 'as_wave', kind: 'run_event_max', event: 'level_up', goal: 4, label: 'Clear 4 waves in one life' },
       { id: 'as_loop', kind: 'run_event', event: 'loop_complete', goal: 1, label: 'Complete a full loop' },
       { id: 'as_score', kind: 'run_score', goal: 4000, label: 'Score 4,000 in one run' },
     ],
@@ -137,8 +139,8 @@ export const BRIEFINGS = {
     title: 'City Runner: Rush',
     premise: 'A night city on rails. There is no finish line, only the distance you are willing to hold your nerve for.',
     objectives: [
-      { id: 'cr_1k', kind: 'run_event', event: 'level_up', goal: 1, label: 'Reach the 1km marker' },
-      { id: 'cr_5k', kind: 'run_event', event: 'level_up', goal: 5, label: 'Reach the 5km marker' },
+      { id: 'cr_1k', kind: 'run_event_max', event: 'level_up', goal: 1, label: 'Reach the 1km marker' },
+      { id: 'cr_5k', kind: 'run_event_max', event: 'level_up', goal: 5, label: 'Reach the 5km marker' },
       { id: 'cr_clean', kind: 'run_event', event: 'clean_streak', goal: 1, label: 'Clear 1km without a hit' },
     ],
   },
@@ -146,7 +148,7 @@ export const BRIEFINGS = {
     title: 'Pixel Platformer: Sandbox',
     premise: 'No timer, no enemies, no fail state. A forest built for learning exactly how far this character can jump.',
     objectives: [
-      { id: 'pp_explore', kind: 'run_event', event: 'level_up', goal: 3, label: 'Explore 60 tiles east' },
+      { id: 'pp_explore', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Explore 60 tiles east' },
       { id: 'pp_high', kind: 'run_event', event: 'high_ground', goal: 1, label: 'Stand on the highest platform' },
       { id: 'pp_career', kind: 'career', event: 'level_up', goal: 15, label: 'Explore 300 tiles in all' },
     ],
@@ -202,12 +204,23 @@ function getCareer(slug) {
 // reload is a new run by definition.
 let runSlug = null;
 let runEvents = {};
+let runEventMax = {};
 let runScore = 0;
 
 function resetRun(slug) {
   runSlug = slug;
   runEvents = {};
+  runEventMax = {};
   runScore = 0;
+}
+
+/** The number an event is reporting: a level, a wave, a rally length. */
+function eventMagnitude(event) {
+  for (const key of ['level', 'count', 'value']) {
+    const n = Number(event[key]);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
 }
 
 function emit(detail) {
@@ -240,6 +253,7 @@ export function getProgress(rawSlug) {
     let have = 0;
     if (objective.kind === 'career') have = career[objective.event] || 0;
     else if (objective.kind === 'run_score') have = live ? runScore : 0;
+    else if (objective.kind === 'run_event_max') have = live ? (runEventMax[objective.event] || 0) : 0;
     else have = live ? (runEvents[objective.event] || 0) : 0;
     return {
       ...objective,
@@ -261,6 +275,7 @@ export function recordGameEvent(event = {}) {
   if (type === 'play' || runSlug !== slug) resetRun(slug);
 
   runEvents[type] = (runEvents[type] || 0) + 1;
+  runEventMax[type] = Math.max(runEventMax[type] || 0, eventMagnitude(event));
   const value = Number(event.value);
   if (Number.isFinite(value)) runScore = Math.max(runScore, value);
 
