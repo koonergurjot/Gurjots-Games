@@ -50,7 +50,23 @@ const INPUTS = {
 // get a sequence of clicks across the board so a move can actually be made --
 // chess3d falls back to a DOM board under headless software rendering, where
 // key presses do nothing at all.
-const TURN_BASED = new Set(['chess', 'chess3d']);
+const TURN_BASED = new Set(['chess', 'chess3d', 'solitaire']);
+
+// Turn-based games default to an 8x8 board grid (see below). Solitaire's board
+// is a fixed 900x760 layout of piles rather than a grid, so it gets its own
+// sequence of clicks expressed as fractions of the canvas box: draw from the
+// stock a few times, then try to send the drawn card up to a foundation.
+const CLICK_SEQUENCES = {
+  solitaire: [
+    [70 / 900, 90 / 760], // stock
+    [70 / 900, 90 / 760], // stock
+    [190 / 900, 90 / 760], // waste: select the drawn card
+    [455 / 900, 90 / 760], // foundation slot: attempt the move
+    [70 / 900, 90 / 760], // stock
+    [190 / 900, 90 / 760], // waste: select again
+    [580 / 900, 90 / 760], // a different foundation slot
+  ],
+};
 
 // Games the player steers by holding a key rather than tapping one.
 const HOLD_KEYS = {
@@ -138,12 +154,21 @@ export async function playtest(browser, port, slug) {
       const board = await page.$('canvas, .fallback-board');
       const box = board && await board.boundingBox();
       if (box) {
-        // Walk a few squares: select, then try a target a couple of ranks away.
-        const cell = box.width / 8;
-        for (const [file, rank] of [[4, 1], [4, 3], [1, 0], [2, 2]]) {
-          await page.mouse.click(box.x + (file + 0.5) * cell, box.y + (7 - rank + 0.5) * (box.height / 8)).catch(() => {});
-          await page.waitForTimeout(400);
-          await sample(page, rec);
+        const seq = CLICK_SEQUENCES[slug];
+        if (seq) {
+          for (const [fx, fy] of seq) {
+            await page.mouse.click(box.x + fx * box.width, box.y + fy * box.height).catch(() => {});
+            await page.waitForTimeout(300);
+            await sample(page, rec);
+          }
+        } else {
+          // Walk a few squares: select, then try a target a couple of ranks away.
+          const cell = box.width / 8;
+          for (const [file, rank] of [[4, 1], [4, 3], [1, 0], [2, 2]]) {
+            await page.mouse.click(box.x + (file + 0.5) * cell, box.y + (7 - rank + 0.5) * (box.height / 8)).catch(() => {});
+            await page.waitForTimeout(400);
+            await sample(page, rec);
+          }
         }
       }
     }

@@ -37,6 +37,7 @@ const PAGES = {
   shooter: 'games/shooter/index.html',
   'shooter (arena mode)': 'games/shooter/arena.html',
   snake: 'games/snake/index.html',
+  solitaire: 'games/solitaire/index.html',
   'tetris (replay lobby)': 'games/tetris/lobby.html',
 };
 const GAMES = Object.keys(PAGES);

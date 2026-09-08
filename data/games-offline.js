@@ -768,6 +768,68 @@ export const games = [
         "Survive as long as possible to post a high score."
       ]
     }
+  },
+  {
+    "id": "solitaire",
+    "slug": "solitaire",
+    "title": "Solitaire",
+    "description": "Classic Klondike solitaire. Clear the tableau onto four foundations, one suit at a time.",
+    "short": "Classic Klondike. Clear the tableau onto the foundations.",
+    "controls": "Click a face-up card to pick it up, then click a destination pile. Click the stock to draw. N starts a new deal.",
+    "tags": [
+      "classic",
+      "card",
+      "puzzle"
+    ],
+    "engineType": "canvas-2d",
+    "difficulty": "easy",
+    "released": "2026-09-08",
+    "playUrl": "/games/solitaire/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/solitaire/thumb.svg",
+    "thumbnail": "/games/solitaire/thumb.svg",
+    "assets": {
+      "sprites": [],
+      "audio": [
+        "/assets/audio/click.wav",
+        "/assets/audio/coin.wav",
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    },
+    "firstFrame": {
+      "sprites": [],
+      "audio": [
+        "/assets/audio/click.wav",
+        "/assets/audio/coin.wav",
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Mouse",
+      "Touch",
+      "SFX"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 240
+    },
+    "help": {
+      "objective": "Move every card onto its suit foundation, from Ace to King, to clear the tableau.",
+      "controls": "Click a face-up card to pick it up, then click a destination pile. Click the stock to draw. N starts a new deal.",
+      "tips": [
+        "Uncover face-down tableau cards as early as possible -- they hide the moves you need.",
+        "Build tableau runs in alternating colours, descending by rank, to free up columns.",
+        "Only send a card to the foundation early if it doesn't block a tableau move you'll need soon."
+      ],
+      "steps": [
+        "Draw from the stock when no tableau move is available.",
+        "Move cards between tableau columns and up to the foundations as they become legal.",
+        "Clear all 52 cards onto the four foundations to win."
+      ]
+    }
   }
 ];
 export default games;

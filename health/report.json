@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-08T05:41:13.870Z",
+  "generatedAt": "2026-09-08T08:15:26.603Z",
   "summary": {
-    "total": 12,
-    "passing": 11,
+    "total": 13,
+    "passing": 12,
     "failing": 1,
     "withWarnings": 0,
     "issueCounts": {
@@ -1150,6 +1150,49 @@
           }
         ],
         "globs": []
+      }
+    },
+    {
+      "index": 12,
+      "title": "Solitaire",
+      "slug": "solitaire",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/solitaire/index.html"
+      },
+      "assets": {
+        "sprites": [],
+        "audio": [
+          "assets/audio/click.wav",
+          "assets/audio/coin.wav",
+          "assets/audio/hit.wav",
+          "assets/audio/powerup.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "games/solitaire/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
       }
     }
   ]

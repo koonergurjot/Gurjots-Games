@@ -145,6 +145,15 @@ export const BRIEFINGS = {
       { id: 'as_loop', kind: 'run_event', event: 'loop_complete', goal: 1, label: 'Complete a full loop in Arena' },
     ],
   },
+  solitaire: {
+    title: 'Solitaire',
+    premise: 'Fifty-two cards, seven columns, one deal. Nothing stands between you and a clear table but the order they fell in.',
+    objectives: [
+      { id: 'sol_foundation', kind: 'run_event_max', event: 'score_event', name: 'foundation_card', goal: 26, label: 'Build the foundations to 26 cards in one run' },
+      { id: 'sol_win', kind: 'run_event', event: 'win', goal: 1, label: 'Clear the tableau and win a deal' },
+      { id: 'sol_career', kind: 'career', event: 'win', goal: 10, label: 'Win 10 deals in all' },
+    ],
+  },
 };
 
 // game.html and the shells disagree on one name: the catalog slug is 2048 while

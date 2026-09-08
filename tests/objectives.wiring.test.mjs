@@ -26,6 +26,7 @@ const ENTRY_POINTS = {
   platformer: ['games/platformer/main.js', 'games/platformer/practice/main.js'],
   runner: ['games/runner/main.js', 'games/runner/night/main.js'],
   shooter: ['games/shooter/main.js', 'games/shooter/arena/main.js'],
+  solitaire: ['games/solitaire/main.js'],
 };
 
 function emittedEvents(files) {

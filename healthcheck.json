@@ -58,5 +58,10 @@
     "id": "shooter",
     "status": "ok",
     "reason": ""
+  },
+  {
+    "id": "solitaire",
+    "status": "ok",
+    "reason": ""
   }
 ]

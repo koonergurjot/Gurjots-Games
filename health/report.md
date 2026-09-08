@@ -1,9 +1,9 @@
 # Game Doctor Report
 
-Generated: 2026-09-08T05:41:13.870Z
+Generated: 2026-09-08T08:15:26.603Z
 
-- Total games: 12
-- Passing: 11
+- Total games: 13
+- Passing: 12
 - Failing: 1
 - With warnings: 0
 - Issues found: 1
@@ -175,5 +175,15 @@ Generated: 2026-09-08T05:41:13.870Z
 - Audio checked: 2
 - Asset references scanned: 13
 - Manifest paths: all required paths found
+- Issues: none
+
+## Solitaire
+
+- Slug: solitaire
+- Status: ✅ Healthy
+- Shell: games/solitaire/index.html
+- Headless boot: ✅ GAME_READY received
+- Thumbnail: games/solitaire/thumb.svg
+- Audio checked: 4
 - Issues: none
 
