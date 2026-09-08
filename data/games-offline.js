@@ -562,22 +562,28 @@ export const games = [
     "id": "platformer",
     "slug": "platformer",
     "title": "Pixel Platformer",
-    "description": "Run and jump across platforms to reach the goal.",
-    "short": "Run and jump across platforms to reach the goal.",
+    "description": "Run, jump and collect coins across the stage to reach the goal, or practise your jump arc first in the no-fail-state sandbox Practice mode.",
+    "short": "Run and jump to the goal. Or warm up first in Practice mode.",
     "controls": "←/→ move, Space or ↑ jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
     "tags": [
-      "2D"
+      "2D",
+      "platformer"
     ],
     "engineType": "canvas-2d",
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "thumbnailPath": "/games/platformer/thumb.svg",
     "thumbnail": "/games/platformer/thumb.svg",
     "assets": {
       "sprites": [
-        "/assets/sprites/coin.png"
+        "/assets/backgrounds/parallax/forest_layer1.png",
+        "/assets/backgrounds/parallax/forest_layer2.png",
+        "/assets/sprites/coin.png",
+        "/assets/sprites/player/platformer_idle.png",
+        "/assets/sprites/player/platformer_jump.png",
+        "/assets/sprites/player/platformer_run.png"
       ],
       "audio": [
         "/assets/audio/hit.wav",
@@ -586,7 +592,12 @@ export const games = [
     },
     "firstFrame": {
       "sprites": [
-        "/assets/sprites/coin.png"
+        "/assets/backgrounds/parallax/forest_layer1.png",
+        "/assets/backgrounds/parallax/forest_layer2.png",
+        "/assets/sprites/coin.png",
+        "/assets/sprites/player/platformer_idle.png",
+        "/assets/sprites/player/platformer_jump.png",
+        "/assets/sprites/player/platformer_run.png"
       ],
       "audio": [
         "/assets/audio/hit.wav",
@@ -594,21 +605,25 @@ export const games = [
       ]
     },
     "featureFlags": [
-      "Offline",
       "Co-op",
-      "Gamepad"
+      "Diagnostics",
+      "Gamepad",
+      "Keyboard",
+      "Offline"
     ],
     "minDevice": {
       "width": 360,
       "height": 240
     },
     "help": {
-      "objective": "Run, jump, and collect coins across the stage while staying ahead of hazards.",
+      "objective": "Run, jump, and collect every coin to open the goal. Practice mode (from the in-game link): no timer, no enemies, no fail state -- a sandbox built for getting comfortable with the jump arc.",
       "controls": "←/→ move, Space or ↑ jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
       "tips": [
         "Collect every coin you see—the goal only opens once the set is complete.",
         "Time jumps off moving platforms and slopes to keep momentum going.",
-        "Start co-op from the HUD if you want a partner to help sweep the map."
+        "Start co-op from the HUD if you want a partner to help sweep the map.",
+        "Practice mode: the jump height is fixed, so line up your run-up rather than trying to jump harder.",
+        "Practice mode: let go of the direction key at the apex to drop cleanly onto a narrow block."
       ],
       "steps": [
         "Press Start or tap to drop into the level.",
@@ -751,65 +766,6 @@ export const games = [
         "Move into open space as the first wave approaches.",
         "Fire continuously while weaving around enemy shots.",
         "Survive as long as possible to post a high score."
-      ]
-    }
-  },
-  {
-    "id": "pixel-platformer",
-    "slug": "pixel-platformer",
-    "title": "Pixel Platformer: Sandbox",
-    "description": "A chunky pixel-art sandbox of floating blocks and forest parallax, built for practising precise jumps.",
-    "short": "A pixel-art sandbox built for practising precise jumps.",
-    "controls": "Arrow keys or A and D to run. Space, W or the up arrow to jump.",
-    "tags": [
-      "platformer",
-      "2D"
-    ],
-    "engineType": "canvas-2d",
-    "difficulty": "easy",
-    "released": "2025-10-20",
-    "playUrl": "/games/pixel-platformer/",
-    "version": "1.0.0",
-    "thumbnailPath": "/games/pixel-platformer/thumb.svg",
-    "thumbnail": "/games/pixel-platformer/thumb.svg",
-    "assets": {
-      "sprites": [
-        "/assets/sprites/player/platformer_idle.png",
-        "/assets/sprites/player/platformer_run.png",
-        "/assets/sprites/player/platformer_jump.png",
-        "/assets/backgrounds/parallax/forest_layer1.png",
-        "/assets/backgrounds/parallax/forest_layer2.png"
-      ]
-    },
-    "firstFrame": {
-      "sprites": [
-        "/assets/sprites/player/platformer_idle.png",
-        "/assets/sprites/player/platformer_run.png",
-        "/assets/sprites/player/platformer_jump.png",
-        "/assets/backgrounds/parallax/forest_layer1.png",
-        "/assets/backgrounds/parallax/forest_layer2.png"
-      ]
-    },
-    "featureFlags": [
-      "Keyboard",
-      "Diagnostics"
-    ],
-    "minDevice": {
-      "width": 360,
-      "height": 200
-    },
-    "help": {
-      "objective": "Explore the level and get comfortable with the jump arc -- this is a sandbox to practise movement in, not a race.",
-      "controls": "Arrow keys or A and D to run. Space, W or the up arrow to jump.",
-      "tips": [
-        "The jump height is fixed, so line up your run-up rather than trying to jump harder.",
-        "Let go of the direction key at the apex to drop cleanly onto a narrow block.",
-        "The camera trails you slightly -- look ahead of the character, not at it."
-      ],
-      "steps": [
-        "Run left and right with the arrow keys or A and D.",
-        "Jump with Space, W or the up arrow to reach the floating blocks.",
-        "Chain jumps across the blocks to cross the level."
       ]
     }
   }

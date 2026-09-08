@@ -58,10 +58,5 @@
     "id": "shooter",
     "status": "ok",
     "reason": ""
-  },
-  {
-    "id": "pixel-platformer",
-    "status": "ok",
-    "reason": ""
   }
 ]

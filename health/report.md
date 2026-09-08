@@ -1,9 +1,9 @@
 # Game Doctor Report
 
-Generated: 2026-09-08T05:33:53.779Z
+Generated: 2026-09-08T05:41:13.870Z
 
-- Total games: 13
-- Passing: 12
+- Total games: 12
+- Passing: 11
 - Failing: 1
 - With warnings: 0
 - Issues found: 1
@@ -144,9 +144,9 @@ Generated: 2026-09-08T05:33:53.779Z
 - Shell: games/platformer/index.html
 - Headless boot: ✅ GAME_READY received
 - Thumbnail: games/platformer/thumb.svg
-- Sprites checked: 1
+- Sprites checked: 6
 - Audio checked: 2
-- Asset references scanned: 6
+- Asset references scanned: 13
 - Manifest paths: all required paths found
 - Manifest globs: all patterns matched files
 - Issues: none
@@ -175,16 +175,5 @@ Generated: 2026-09-08T05:33:53.779Z
 - Audio checked: 2
 - Asset references scanned: 13
 - Manifest paths: all required paths found
-- Issues: none
-
-## Pixel Platformer: Sandbox
-
-- Slug: pixel-platformer
-- Status: ✅ Healthy
-- Shell: games/pixel-platformer/index.html
-- Headless boot: ✅ GAME_READY received
-- Thumbnail: games/pixel-platformer/thumb.svg
-- Sprites checked: 5
-- Asset references scanned: 7
 - Issues: none
 

@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-08T05:33:53.779Z",
+  "generatedAt": "2026-09-08T05:41:13.870Z",
   "summary": {
-    "total": 13,
-    "passing": 12,
+    "total": 12,
+    "passing": 11,
     "failing": 1,
     "withWarnings": 0,
     "issueCounts": {
@@ -906,15 +906,20 @@
       },
       "assets": {
         "sprites": [
-          "assets/sprites/coin.png"
+          "assets/backgrounds/parallax/forest_layer1.png",
+          "assets/backgrounds/parallax/forest_layer2.png",
+          "assets/sprites/coin.png",
+          "assets/sprites/player/platformer_idle.png",
+          "assets/sprites/player/platformer_jump.png",
+          "assets/sprites/player/platformer_run.png"
         ],
         "audio": [
           "assets/audio/hit.wav",
           "assets/audio/powerup.wav"
         ],
         "references": {
-          "total": 6,
-          "unique": 6,
+          "total": 13,
+          "unique": 10,
           "missing": 0
         }
       },
@@ -1145,55 +1150,6 @@
           }
         ],
         "globs": []
-      }
-    },
-    {
-      "index": 12,
-      "title": "Pixel Platformer: Sandbox",
-      "slug": "pixel-platformer",
-      "ok": true,
-      "issues": [],
-      "shell": {
-        "found": "games/pixel-platformer/index.html"
-      },
-      "assets": {
-        "sprites": [
-          "assets/sprites/player/platformer_idle.png",
-          "assets/sprites/player/platformer_run.png",
-          "assets/sprites/player/platformer_jump.png",
-          "assets/backgrounds/parallax/forest_layer1.png",
-          "assets/backgrounds/parallax/forest_layer2.png"
-        ],
-        "audio": [],
-        "references": {
-          "total": 7,
-          "unique": 7,
-          "missing": 0
-        }
-      },
-      "thumbnail": {
-        "found": "games/pixel-platformer/thumb.svg",
-        "placeholder": false
-      },
-      "status": {
-        "errors": false,
-        "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
       }
     }
   ]

@@ -30,6 +30,8 @@ const INPUTS = {
   2048: ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'],
   asteroids: ['ArrowUp', 'ArrowLeft', ' ', 'ArrowRight', ' '],
   maze3d: ['w', 'a', 'w', 'd', 'w'],
+  // Campaign mode (index.html). Practice mode lives at practice.html, reached
+  // via an in-game link, and is not part of the games.json-driven sweep this runs.
   platformer: ['ArrowRight', ' ', 'ArrowRight', 'ArrowLeft', ' '],
   // Campaign mode (index.html). Night Rush lives at night.html, reached via an
   // in-game link, and is not part of the games.json-driven sweep this runs.
@@ -37,7 +39,6 @@ const INPUTS = {
   // Campaign mode (index.html). Arena mode lives at arena.html, reached via an
   // in-game link, and is not part of the games.json-driven sweep this runs.
   shooter: ['ArrowLeft', ' ', 'ArrowRight', ' ', ' '],
-  'pixel-platformer': ['ArrowRight', ' ', 'ArrowRight', 'ArrowLeft', ' '],
 };
 
 // Hash a screenshot of each on-screen canvas. Reading pixels through
@@ -55,7 +56,6 @@ const TURN_BASED = new Set(['chess', 'chess3d']);
 const HOLD_KEYS = {
   maze3d: 'KeyW',
   platformer: 'ArrowRight',
-  'pixel-platformer': 'ArrowRight',
 };
 
 async function sampleCanvases(page) {

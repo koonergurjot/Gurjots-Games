@@ -1,6 +1,10 @@
-import { send } from '../common/diag-adapter.js';
-import { drawBootPlaceholder, showErrorOverlay } from '../common/boot-utils.js';
-import { gameEvent } from '../../shared/telemetry.js';
+// This file now lives one directory deeper (games/platformer/practice/
+// instead of games/pixel-platformer/), since the sandbox became a mode of
+// Platformer rather than its own catalog entry -- every relative import
+// gained one more '../'.
+import { send } from '../../common/diag-adapter.js';
+import { drawBootPlaceholder, showErrorOverlay } from '../../common/boot-utils.js';
+import { gameEvent } from '../../../shared/telemetry.js';
 
 const ASSET_TIMEOUT_MS = 4000;
 const TILE_SIZE = 16;
@@ -159,13 +163,13 @@ function createFallbackParallax() {
   const ctx = canvas && typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
 
   if (!canvas || !ctx) {
-    console.error('[pixel-platformer] Missing canvas or 2D context');
+    console.error('[platformer:practice] Missing canvas or 2D context');
     send('GAME_ERROR', { reason: 'no-canvas' });
     showErrorOverlay('Canvas rendering is not supported on this device.');
     return;
   }
 
-  drawBootPlaceholder(canvas, ctx, 'Loading Pixel Platformer: Sandbox…');
+  drawBootPlaceholder(canvas, ctx, 'Loading Practice mode…');
 
   ctx.imageSmoothingEnabled = false;
 
@@ -233,7 +237,7 @@ function createFallbackParallax() {
   updateAnimation(0, 0);
   render();
   send('GAME_READY');
-  gameEvent('play', { slug: 'pixel-platformer' });
+  gameEvent('play', { slug: 'platformer', meta: { mode: 'practice' } });
   requestAnimationFrame(loop);
 
   upgradeAssets();
@@ -275,7 +279,7 @@ function createFallbackParallax() {
     const tile = Math.max(0, Math.floor(player.x / TILE_SIZE));
     if (tile < furthestTile + EXPLORE_MILESTONE_TILES) return;
     furthestTile = tile;
-    gameEvent('level_up', { slug: 'pixel-platformer', value: Math.floor(tile / EXPLORE_MILESTONE_TILES) });
+    gameEvent('level_up', { slug: 'platformer', value: Math.floor(tile / EXPLORE_MILESTONE_TILES), meta: { mode: 'practice' } });
   }
 
   function loop(now) {
@@ -356,7 +360,7 @@ function createFallbackParallax() {
           player.onGround = true;
           if (!reachedHighGround && player.y <= highestPlatformY + TILE_SIZE) {
             reachedHighGround = true;
-            gameEvent('high_ground', { slug: 'pixel-platformer', value: 1 });
+            gameEvent('high_ground', { slug: 'platformer', value: 1, meta: { mode: 'practice' } });
           }
           return;
         }
@@ -567,7 +571,7 @@ function createFallbackParallax() {
         }
       })
       .catch((error) => {
-        console.warn('[pixel-platformer] Using fallback atlas', error);
+        console.warn('[platformer:practice] Using fallback atlas', error);
       });
 
     withTimeout(loadJSON('/assets/pixel-platformer/parallax.json'), ASSET_TIMEOUT_MS)
@@ -577,7 +581,7 @@ function createFallbackParallax() {
         }
       })
       .catch((error) => {
-        console.warn('[pixel-platformer] Using fallback parallax', error);
+        console.warn('[platformer:practice] Using fallback parallax', error);
       });
   }
 
@@ -642,7 +646,7 @@ function createFallbackParallax() {
         resolve(img);
       };
       const timer = setTimeout(() => {
-        console.warn('[pixel-platformer] Image load timed out', src);
+        console.warn('[platformer:practice] Image load timed out', src);
         finalize(createPlaceholderImage(32, 32, (ctx, w, h) => {
           ctx.fillStyle = '#1f2937';
           ctx.fillRect(0, 0, w, h);
@@ -658,7 +662,7 @@ function createFallbackParallax() {
       };
       image.onerror = () => {
         clearTimeout(timer);
-        console.warn('[pixel-platformer] Failed to load image', src);
+        console.warn('[platformer:practice] Failed to load image', src);
         finalize(createPlaceholderImage(32, 32, (ctx, w, h) => {
           ctx.fillStyle = '#0f172a';
           ctx.fillRect(0, 0, w, h);

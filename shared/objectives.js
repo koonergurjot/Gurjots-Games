@@ -105,14 +105,18 @@ export const BRIEFINGS = {
       { id: 'maze_career', kind: 'career', event: 'win', goal: 5, label: 'Escape 5 mazes in all' },
     ],
   },
+  // Practice used to be its own catalog entry (pixel-platformer). It is now a
+  // mode reached from a link inside this game, and both modes report through
+  // the 'platformer' slug. pp_high represents Practice's no-fail-state
+  // sandbox; the other two are Campaign's coin-and-goal loop.
   platformer: {
     title: 'Retro Platformer',
-    premise: 'Every coin in the level is a piece of the gate key. Collect them all and the way out opens.',
+    premise: 'Every coin in the level is a piece of the gate key. Collect them all and the way out opens. Or warm up first in Practice mode: no timer, no enemies, no fail state, just a forest built for learning exactly how far this character can jump.',
     objectives: [
       { id: 'plat_coins', kind: 'run_event', event: 'coin_collected', goal: 2, label: 'Collect every coin in a level' },
       // The platformer reports a completed level as a win, not a level_up.
       { id: 'plat_clear', kind: 'run_event', event: 'win', goal: 1, label: 'Reach the goal' },
-      { id: 'plat_career', kind: 'career', event: 'win', goal: 5, label: 'Clear 5 levels in all' },
+      { id: 'pp_high', kind: 'run_event', event: 'high_ground', goal: 1, label: 'Stand on the highest platform in Practice' },
     ],
   },
   // Night Rush used to be its own catalog entry (city-runner). It is now a
@@ -139,15 +143,6 @@ export const BRIEFINGS = {
       { id: 'sh_wave', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Reach wave 3 in Campaign' },
       { id: 'sh_boss', kind: 'run_event', event: 'boss_down', goal: 1, label: 'Bring down the Gatekeeper' },
       { id: 'as_loop', kind: 'run_event', event: 'loop_complete', goal: 1, label: 'Complete a full loop in Arena' },
-    ],
-  },
-  'pixel-platformer': {
-    title: 'Pixel Platformer: Sandbox',
-    premise: 'No timer, no enemies, no fail state. A forest built for learning exactly how far this character can jump.',
-    objectives: [
-      { id: 'pp_explore', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Explore 60 tiles east' },
-      { id: 'pp_high', kind: 'run_event', event: 'high_ground', goal: 1, label: 'Stand on the highest platform' },
-      { id: 'pp_career', kind: 'career', event: 'level_up', goal: 15, label: 'Explore 300 tiles in all' },
     ],
   },
 };

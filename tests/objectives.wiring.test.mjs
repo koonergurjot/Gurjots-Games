@@ -23,10 +23,9 @@ const ENTRY_POINTS = {
   2048: ['games/2048/g2048.js'],
   asteroids: ['games/asteroids/main.js'],
   maze3d: ['games/maze3d/main-3d.js'],
-  platformer: ['games/platformer/main.js'],
+  platformer: ['games/platformer/main.js', 'games/platformer/practice/main.js'],
   runner: ['games/runner/main.js', 'games/runner/night/main.js'],
   shooter: ['games/shooter/main.js', 'games/shooter/arena/main.js'],
-  'pixel-platformer': ['games/pixel-platformer/main.js'],
 };
 
 function emittedEvents(files) {
