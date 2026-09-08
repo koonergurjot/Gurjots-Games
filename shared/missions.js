@@ -335,6 +335,11 @@ function applyGameEvent(event) {
 }
 
 function handleMessageEvent(messageEvent) {
+  // SECURITY: Validate message origin
+  if (messageEvent.origin !== window.location.origin && messageEvent.origin !== '*') {
+    console.warn('[missions] Ignoring message from untrusted origin:', messageEvent.origin);
+    return;
+  }
   const data = messageEvent?.data;
   if (!data || typeof data !== 'object') return;
   if (data.type !== 'GAME_EVENT') return;

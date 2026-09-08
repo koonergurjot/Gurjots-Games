@@ -264,6 +264,11 @@ import { resolveGamePaths } from './game-paths.js';
 
   // Listen for game events (from inside iframe)
   window.addEventListener('message', (ev)=>{
+    // SECURITY: Validate message origin - only accept from same origin or iframe
+    if (ev.origin !== window.location.origin && ev.origin !== '*') {
+      console.warn('[game-ui] Ignoring message from untrusted origin:', ev.origin);
+      return;
+    }
     const d = ev.data || {};
     if (d.type==='GAME_READY'){
       setReady();

@@ -78,6 +78,11 @@ const MESSAGE_TYPES = new Set([
 ]);
 
 function handleMessage(event) {
+  // SECURITY: Validate message origin
+  if (event.origin !== window.location.origin && event.origin !== '*') {
+    console.warn('[tetris-launcher] Ignoring message from untrusted origin:', event.origin);
+    return;
+  }
   const data = event && typeof event.data === 'object' ? event.data : null;
   if (!data) return;
   if (data.slug && data.slug !== SLUG) return;
