@@ -31,11 +31,12 @@ const INPUTS = {
   asteroids: ['ArrowUp', 'ArrowLeft', ' ', 'ArrowRight', ' '],
   maze3d: ['w', 'a', 'w', 'd', 'w'],
   platformer: ['ArrowRight', ' ', 'ArrowRight', 'ArrowLeft', ' '],
+  // Campaign mode (index.html). Night Rush lives at night.html, reached via an
+  // in-game link, and is not part of the games.json-driven sweep this runs.
   runner: [' ', ' ', 'ArrowDown', ' '],
   // Campaign mode (index.html). Arena mode lives at arena.html, reached via an
   // in-game link, and is not part of the games.json-driven sweep this runs.
   shooter: ['ArrowLeft', ' ', 'ArrowRight', ' ', ' '],
-  'city-runner': [' ', ' ', 'ArrowDown', ' '],
   'pixel-platformer': ['ArrowRight', ' ', 'ArrowRight', 'ArrowLeft', ' '],
 };
 

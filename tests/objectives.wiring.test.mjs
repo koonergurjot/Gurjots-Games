@@ -24,9 +24,8 @@ const ENTRY_POINTS = {
   asteroids: ['games/asteroids/main.js'],
   maze3d: ['games/maze3d/main-3d.js'],
   platformer: ['games/platformer/main.js'],
-  runner: ['games/runner/main.js'],
+  runner: ['games/runner/main.js', 'games/runner/night/main.js'],
   shooter: ['games/shooter/main.js', 'games/shooter/arena/main.js'],
-  'city-runner': ['games/city-runner/main.js'],
   'pixel-platformer': ['games/pixel-platformer/main.js'],
 };
 

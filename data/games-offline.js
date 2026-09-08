@@ -621,22 +621,26 @@ export const games = [
     "id": "runner",
     "slug": "runner",
     "title": "City Runner",
-    "description": "Dash through the city and avoid obstacles.",
-    "short": "Dash through the city and avoid obstacles.",
+    "description": "Sprint through the city dodging obstacles in Campaign, or drop into the endless one-button Night Rush mode and see how far your nerve holds.",
+    "short": "Dash through the city. Campaign with a full HUD, or endless Night Rush.",
     "controls": "Space or ↑ jumps, ↓ slides. On mobile, tap right to jump and left to slide.",
     "tags": [
-      "2D"
+      "2D",
+      "arcade"
     ],
     "engineType": "canvas-2d",
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/runner/",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "thumbnailPath": "/games/runner/thumb.svg",
     "thumbnail": "/games/runner/thumb.svg",
     "assets": {
       "sprites": [
-        "/assets/sprites/coin.png"
+        "/assets/backgrounds/parallax/city_layer1.png",
+        "/assets/backgrounds/parallax/city_layer2.png",
+        "/assets/sprites/coin.png",
+        "/assets/sprites/player/platformer_run.png"
       ],
       "audio": [
         "/assets/audio/hit.wav",
@@ -646,7 +650,10 @@ export const games = [
     },
     "firstFrame": {
       "sprites": [
-        "/assets/sprites/coin.png"
+        "/assets/backgrounds/parallax/city_layer1.png",
+        "/assets/backgrounds/parallax/city_layer2.png",
+        "/assets/sprites/coin.png",
+        "/assets/sprites/player/platformer_run.png"
       ],
       "audio": [
         "/assets/audio/hit.wav",
@@ -655,21 +662,25 @@ export const games = [
       ]
     },
     "featureFlags": [
+      "Diagnostics",
+      "Keyboard",
+      "Leaderboards",
       "Offline",
-      "Touch",
-      "Leaderboards"
+      "Touch"
     ],
     "minDevice": {
       "width": 360,
       "height": 240
     },
     "help": {
-      "objective": "Sprint through the city streets, dodging obstacles to keep your run alive.",
+      "objective": "Campaign: dodge obstacles as the city scrolls by, with a full mission and combo HUD. Night Rush (from the in-game link): an endless one-button sprint -- run as far as you can and build a clean streak between hits.",
       "controls": "Space or ↑ jumps, ↓ slides. On mobile, tap right to jump and left to slide.",
       "tips": [
         "Stay near the middle lane so you can quickly jump or slide as obstacles appear.",
         "Slide under low signs instead of jumping to recover faster afterward.",
-        "Watch the pattern of upcoming hazards to keep your rhythm as speed increases."
+        "Watch the pattern of upcoming hazards to keep your rhythm as speed increases.",
+        "Night Rush: jump late rather than early -- the obstacles are shorter than they look.",
+        "Night Rush: a hit costs your clean streak and slows you down, so a near-perfect run is worth more than a fast reckless one."
       ],
       "steps": [
         "Tap or press jump to hop the first barrier and start the run.",
@@ -740,62 +751,6 @@ export const games = [
         "Move into open space as the first wave approaches.",
         "Fire continuously while weaving around enemy shots.",
         "Survive as long as possible to post a high score."
-      ]
-    }
-  },
-  {
-    "id": "city-runner",
-    "slug": "city-runner",
-    "title": "City Runner: Rush",
-    "description": "An endless rooftop sprint through a parallax city skyline, with one button between you and the obstacles.",
-    "short": "An endless one-button sprint through a parallax city.",
-    "controls": "Space, W or the up arrow to jump. Tap or click anywhere on touch devices.",
-    "tags": [
-      "arcade",
-      "2D"
-    ],
-    "engineType": "canvas-2d",
-    "difficulty": "easy",
-    "released": "2025-10-20",
-    "playUrl": "/games/city-runner/",
-    "version": "1.0.0",
-    "thumbnailPath": "/games/city-runner/thumb.svg",
-    "thumbnail": "/games/city-runner/thumb.svg",
-    "assets": {
-      "sprites": [
-        "/assets/sprites/player/platformer_run.png",
-        "/assets/backgrounds/parallax/city_layer1.png",
-        "/assets/backgrounds/parallax/city_layer2.png"
-      ]
-    },
-    "firstFrame": {
-      "sprites": [
-        "/assets/sprites/player/platformer_run.png",
-        "/assets/backgrounds/parallax/city_layer1.png",
-        "/assets/backgrounds/parallax/city_layer2.png"
-      ]
-    },
-    "featureFlags": [
-      "Keyboard",
-      "Touch",
-      "Diagnostics"
-    ],
-    "minDevice": {
-      "width": 360,
-      "height": 200
-    },
-    "help": {
-      "objective": "Run as far as you can without hitting an obstacle -- your score climbs with the distance you cover.",
-      "controls": "Space, W or the up arrow to jump. Tap or click anywhere on touch devices.",
-      "tips": [
-        "Jump late rather than early: the obstacles are shorter than they look and an early hop lands you straight into one.",
-        "The run speeds up the further you get, so leave yourself more reaction room as your score climbs.",
-        "Drop the sprite detail toggle to Low if the frame rate dips on an older device."
-      ],
-      "steps": [
-        "Press Space, W or the up arrow to start running and to jump.",
-        "Clear each obstacle as it scrolls in from the right.",
-        "Keep the run alive as the pace increases to build your score."
       ]
     }
   },

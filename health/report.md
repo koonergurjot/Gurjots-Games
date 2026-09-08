@@ -1,9 +1,9 @@
 # Game Doctor Report
 
-Generated: 2026-09-08T05:12:22.431Z
+Generated: 2026-09-08T05:33:53.779Z
 
-- Total games: 14
-- Passing: 13
+- Total games: 13
+- Passing: 12
 - Failing: 1
 - With warnings: 0
 - Issues found: 1
@@ -158,9 +158,9 @@ Generated: 2026-09-08T05:12:22.431Z
 - Shell: games/runner/index.html
 - Headless boot: ✅ GAME_READY received
 - Thumbnail: games/runner/thumb.svg
-- Sprites checked: 1
+- Sprites checked: 4
 - Audio checked: 3
-- Asset references scanned: 12
+- Asset references scanned: 17
 - Manifest paths: all required paths found
 - Issues: none
 
@@ -175,17 +175,6 @@ Generated: 2026-09-08T05:12:22.431Z
 - Audio checked: 2
 - Asset references scanned: 13
 - Manifest paths: all required paths found
-- Issues: none
-
-## City Runner: Rush
-
-- Slug: city-runner
-- Status: ✅ Healthy
-- Shell: games/city-runner/index.html
-- Headless boot: ✅ GAME_READY received
-- Thumbnail: games/city-runner/thumb.svg
-- Sprites checked: 3
-- Asset references scanned: 5
 - Issues: none
 
 ## Pixel Platformer: Sandbox

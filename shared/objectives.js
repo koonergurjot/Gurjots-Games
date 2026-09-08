@@ -115,13 +115,17 @@ export const BRIEFINGS = {
       { id: 'plat_career', kind: 'career', event: 'win', goal: 5, label: 'Clear 5 levels in all' },
     ],
   },
+  // Night Rush used to be its own catalog entry (city-runner). It is now a
+  // mode reached from a link inside this game, and both modes report through
+  // the 'runner' slug. cr_clean represents Night Rush; the other two apply to
+  // whichever mode is played, since both report level_up on distance.
   runner: {
     title: 'City Runner',
-    premise: 'The street scrolls whether you are ready or not. Every near miss is worth more than a safe jump.',
+    premise: 'The street scrolls whether you are ready or not in Campaign. Every near miss is worth more than a safe jump. Or drop into Night Rush, where there is no finish line -- only the distance you are willing to hold your nerve for.',
     objectives: [
       { id: 'run_1k', kind: 'run_event_max', event: 'level_up', goal: 1, label: 'Travel 1,000 metres' },
-      { id: 'run_score', kind: 'run_score', goal: 500, label: 'Score 500 in one run' },
-      { id: 'run_career', kind: 'career', event: 'game_over', goal: 20, label: 'Complete 20 runs' },
+      { id: 'cr_clean', kind: 'run_event', event: 'clean_streak', goal: 1, label: 'Clear 1km without a hit in Night Rush' },
+      { id: 'run_career', kind: 'career', event: 'game_over', goal: 20, label: 'Complete 20 Campaign runs' },
     ],
   },
   // Arena used to be its own catalog entry (alien-shooter). It is now a mode
@@ -135,15 +139,6 @@ export const BRIEFINGS = {
       { id: 'sh_wave', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Reach wave 3 in Campaign' },
       { id: 'sh_boss', kind: 'run_event', event: 'boss_down', goal: 1, label: 'Bring down the Gatekeeper' },
       { id: 'as_loop', kind: 'run_event', event: 'loop_complete', goal: 1, label: 'Complete a full loop in Arena' },
-    ],
-  },
-  'city-runner': {
-    title: 'City Runner: Rush',
-    premise: 'A night city on rails. There is no finish line, only the distance you are willing to hold your nerve for.',
-    objectives: [
-      { id: 'cr_1k', kind: 'run_event_max', event: 'level_up', goal: 1, label: 'Reach the 1km marker' },
-      { id: 'cr_5k', kind: 'run_event_max', event: 'level_up', goal: 5, label: 'Reach the 5km marker' },
-      { id: 'cr_clean', kind: 'run_event', event: 'clean_streak', goal: 1, label: 'Clear 1km without a hit' },
     ],
   },
   'pixel-platformer': {
