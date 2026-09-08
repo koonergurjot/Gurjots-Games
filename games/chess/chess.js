@@ -106,17 +106,35 @@ const c=requireCanvas('board'), ctx=require2dContext(c);
 const fx=requireCanvas('fx'), fxCtx=require2dContext(fx);
 const COLS=8, ROWS=8;
 const DEFAULT_BOARD_CSS_SIZE=480;
-const rect=c.getBoundingClientRect();
-const cssSize=Math.max(1, Math.min(DEFAULT_BOARD_CSS_SIZE, rect.width||DEFAULT_BOARD_CSS_SIZE));
-const dpr=window.devicePixelRatio||1;
-c.style.width=`${cssSize}px`; c.style.height=`${cssSize}px`;
-fx.style.width=`${cssSize}px`; fx.style.height=`${cssSize}px`;
-const pixelSize=Math.round(cssSize*dpr);
-c.width=pixelSize; c.height=pixelSize;
-fx.width=pixelSize; fx.height=pixelSize;
-ctx.setTransform(dpr,0,0,dpr,0,0);
-fxCtx.setTransform(dpr,0,0,dpr,0,0);
-const S=cssSize/COLS;
+// The board is square and sized from the space the layout gives it. Both
+// canvases must agree: fx overlays board exactly, so a mismatch misplaces every
+// highlight. Re-measuring on resize keeps hit-testing aligned with what is
+// drawn -- sizing once at load froze the square size at whatever width existed
+// before the layout settled.
+// assets/chess2d/board.svg is a 608x608 image whose 8x8 grid is inset by 48 and
+// spans 512 (64 per square) to leave room for the coordinate labels. Pieces and
+// clicks were mapped onto the whole canvas instead, so every piece sat off its
+// square and clicks near the edges picked the wrong one.
+const BOARD_IMAGE_SIZE=608, BOARD_GRID_INSET=48, BOARD_GRID_SPAN=512;
+let cssSize=0, S=0, ORIGIN=0;
+function sizeBoard(){
+  const measured=c.parentElement?.getBoundingClientRect().width || c.getBoundingClientRect().width;
+  const next=Math.max(160, Math.min(DEFAULT_BOARD_CSS_SIZE, measured||DEFAULT_BOARD_CSS_SIZE));
+  if(Math.abs(next-cssSize)<0.5) return false;
+  cssSize=next;
+  ORIGIN=cssSize*(BOARD_GRID_INSET/BOARD_IMAGE_SIZE);
+  S=cssSize*(BOARD_GRID_SPAN/BOARD_IMAGE_SIZE)/COLS;
+  const dpr=window.devicePixelRatio||1;
+  c.style.width=`${cssSize}px`; c.style.height=`${cssSize}px`;
+  fx.style.width=`${cssSize}px`; fx.style.height=`${cssSize}px`;
+  const pixelSize=Math.round(cssSize*dpr);
+  c.width=pixelSize; c.height=pixelSize;
+  fx.width=pixelSize; fx.height=pixelSize;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  fxCtx.setTransform(dpr,0,0,dpr,0,0);
+  return true;
+}
+sizeBoard();
 statusEl=requireElementById('status');
 const depthEl=/** @type {HTMLSelectElement} */ (requireElementById('difficulty'));
 const timeControlSelect=/** @type {HTMLSelectElement} */ (requireElementById('time-control'));
@@ -1666,7 +1684,13 @@ function enqueueNetMove(moveStr){
   if(anim) netMoveQueue.push(moveStr);
   else processNetMove(moveStr);
 }
-function highlightSquare(x,y,color){ drawGlow(fxCtx, x*S+S/2, y*S+S/2, S*0.6, color); }
+function highlightSquare(x,y,color){ drawGlow(fxCtx, ORIGIN+x*S+S/2, ORIGIN+y*S+S/2, S*0.6, color); }
+// Re-fit the board when the layout changes so the squares the player clicks
+// stay the squares that were drawn.
+window.addEventListener('resize', () => { if(sizeBoard()) draw(); });
+if(typeof ResizeObserver === 'function' && c.parentElement){
+  new ResizeObserver(() => { if(sizeBoard()) draw(); }).observe(c.parentElement);
+}
 function draw(){
   if(!postedReady){
     postedReady=true;
@@ -1706,11 +1730,11 @@ function draw(){
     const color=colorOf(p)==='w'?'w':'b';
     const type=toUpper(p).toLowerCase();
     const img=pieceImgs[color+type];
-    if(img && img.complete) ctx.drawImage(img,x*S,y*S,S,S);
+    if(img && img.complete) ctx.drawImage(img,ORIGIN+x*S,ORIGIN+y*S,S,S);
   }
   if(anim && anim.progress<1){
-    const x=anim.from.x*S+(anim.to.x-anim.from.x)*S*anim.progress;
-    const y=anim.from.y*S+(anim.to.y-anim.from.y)*S*anim.progress;
+    const x=ORIGIN+anim.from.x*S+(anim.to.x-anim.from.x)*S*anim.progress;
+    const y=ORIGIN+anim.from.y*S+(anim.to.y-anim.from.y)*S*anim.progress;
     const color=colorOf(anim.piece)==='w'?'w':'b';
     const type=toUpper(anim.piece).toLowerCase();
     const img=pieceImgs[color+type];
@@ -2045,7 +2069,8 @@ function aiMove(){
 c.addEventListener('click', (e)=>{
   if(over || anim) return;
   const r=c.getBoundingClientRect();
-  const x=((e.clientX-r.left)/S)|0, y=((e.clientY-r.top)/S)|0;
+  const x=Math.floor((e.clientX-r.left-ORIGIN)/S), y=Math.floor((e.clientY-r.top-ORIGIN)/S);
+  if(x<0||y<0||x>=COLS||y>=ROWS) return;
   if(!sel){
     const p=pieceAt(x,y); if(!p||p===EMPTY||colorOf(p)!==turn) return;
     if(onlineMode && colorOf(p)!==localColor) return;
@@ -2075,7 +2100,7 @@ c.addEventListener('click', (e)=>{
   }
 });
 // Right-click to set premove
-c.addEventListener('contextmenu',(e)=>{ e.preventDefault(); if(puzzleIndex>=0||anim) return; const r=c.getBoundingClientRect(); const x=((e.clientX-r.left)/S)|0, y=((e.clientY-r.top)/S)|0; if(!sel){ const p=pieceAt(x,y); if(!p||p===EMPTY||colorOf(p)!==turn) return; if(onlineMode && colorOf(p)!==localColor) return; sel={x,y}; moves=genMoves(x,y); draw(); } else { if(onlineMode){ const selPiece=pieceAt(sel.x,sel.y); if(!selPiece||colorOf(selPiece)!==localColor){ sel=null; moves=[]; draw(); return; } } const m=moves.find(mm=>mm.x===x&&mm.y===y); if(m){ premove={from:{x:sel.x,y:sel.y}, to:{x:m.x,y:m.y}}; sel=null; moves=[]; status('Premove set'); draw(); } else { sel=null; moves=[]; draw(); } } });
+c.addEventListener('contextmenu',(e)=>{ e.preventDefault(); if(puzzleIndex>=0||anim) return; const r=c.getBoundingClientRect(); const x=Math.floor((e.clientX-r.left-ORIGIN)/S), y=Math.floor((e.clientY-r.top-ORIGIN)/S); if(x<0||y<0||x>=COLS||y>=ROWS) return; if(!sel){ const p=pieceAt(x,y); if(!p||p===EMPTY||colorOf(p)!==turn) return; if(onlineMode && colorOf(p)!==localColor) return; sel={x,y}; moves=genMoves(x,y); draw(); } else { if(onlineMode){ const selPiece=pieceAt(sel.x,sel.y); if(!selPiece||colorOf(selPiece)!==localColor){ sel=null; moves=[]; draw(); return; } } const m=moves.find(mm=>mm.x===x&&mm.y===y); if(m){ premove={from:{x:sel.x,y:sel.y}, to:{x:m.x,y:m.y}}; sel=null; moves=[]; status('Premove set'); draw(); } else { sel=null; moves=[]; draw(); } } });
 function checkmate(side){
   // if in check and no legal moves
   if(!inCheck(side)) return false;

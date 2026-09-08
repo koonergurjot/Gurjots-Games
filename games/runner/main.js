@@ -678,7 +678,11 @@ class RunnerGame {
     this.pendingDailySeed = '';
     this.seed = this.seedBase;
     this.rng = createSeededRng(this.seedBase);
-    this.autoStartOnBoot = metaAutoStart !== undefined ? !!metaAutoStart : !seedInfo.locked;
+    // Default to the title screen. Auto-starting dropped the player into a
+    // moving run before they had touched the keyboard -- a boot-to-death in
+    // about two seconds -- and skipped the difficulty and seed pickers that
+    // the title scene exists to offer. A host can still opt in via meta.
+    this.autoStartOnBoot = metaAutoStart !== undefined ? !!metaAutoStart : false;
 
     this.background = { clouds: [], buildings: [], foreground: [] };
     this.parallaxLayers = [];
@@ -1516,7 +1520,11 @@ class RunnerGame {
     const sanitized = rawObstacles.map(ob => {
       const width = clamp(numberOr(ob.w, 36), 18, 120);
       const height = clamp(numberOr(ob.h, 32), 20, 180);
-      const distance = Math.max(0, numberOr(ob.x, 0));
+      // Accept either an authored x or an already-prepared distance: restarts
+      // feed this.currentLevel (already sanitized, so it carries distance and
+      // no x) straight back through here. Reading only x collapsed every
+      // obstacle to distance 0, spawning them on top of the player.
+      const distance = Math.max(0, numberOr(ob.x, numberOr(ob.distance, 0)));
       const rawY = numberOr(ob.y, NaN);
       const top = rawY > 0 ? clamp(rawY, 0, ground - height) : ground - height;
       const type = typeof ob.type === 'string' ? ob.type : 'block';

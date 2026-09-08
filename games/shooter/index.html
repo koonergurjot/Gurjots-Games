@@ -38,6 +38,10 @@
       border: 1px solid #27314b;
       border-radius: 10px;
       padding: 8px 10px;
+      /* Must follow the shorthand above, which would otherwise reset it. The
+         shell pins a fixed Back button in this corner, and it sat on top of the
+         first stat in the row and hid its label. */
+      padding-left: 122px;
       font-size: 14px;
       max-width: calc(100vw - 24px);
       box-sizing: border-box;

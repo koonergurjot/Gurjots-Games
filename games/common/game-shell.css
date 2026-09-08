@@ -15,6 +15,13 @@ body.game-shell {
   font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   display: grid;
   place-items: center;
+  /* Centring an item larger than its container pushes the leading edge outside
+     the viewport, where scrolling can never reach it -- a tall page like chess
+     lost its board off the top, and a wide one loses its left column. "safe"
+     falls back to start alignment in exactly that case; browsers that do not
+     understand it drop these lines and keep the centring above. */
+  align-items: safe center;
+  justify-items: safe center;
 }
 
 canvas {
@@ -40,6 +47,8 @@ body.game-shell::after {
   flex: 1;
   display: grid;
   place-items: center;
+  align-items: safe center;
+  justify-items: safe center;
   padding: clamp(16px, 4vw, 64px);
   position: relative;
   z-index: 1;

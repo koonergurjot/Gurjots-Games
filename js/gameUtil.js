@@ -66,6 +66,14 @@
     return payload;
   }
 
+  // Games still call GG.addXP directly. shared/progression.js owns the same
+  // record, so tell it something changed or its readout silently falls behind.
+  function notifyStatsWritten() {
+    try {
+      window.dispatchEvent(new CustomEvent('gg:stats-written'));
+    } catch {}
+  }
+
   function readStat() {
     const context = getProfileStorageContext();
     try {
@@ -91,12 +99,14 @@
     const stats = readStat();
     stats.xp += amount | 0;
     persistStats(stats);
+    notifyStatsWritten();
   }
 
   function incPlays() {
     const stats = readStat();
     stats.plays += 1;
     persistStats(stats);
+    notifyStatsWritten();
   }
 
   function setMeta(id, text) {

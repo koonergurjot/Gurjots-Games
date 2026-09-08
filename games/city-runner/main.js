@@ -1,5 +1,6 @@
 import { send } from '../common/diag-adapter.js';
 import { drawBootPlaceholder, showErrorOverlay } from '../common/boot-utils.js';
+import { gameEvent } from '../../shared/telemetry.js';
 
 const ASSET_TIMEOUT_MS = 4000;
 
@@ -144,6 +145,9 @@ function fetchJson(url) {
     onGround: true,
     hurtTimer: 0,
   };
+
+  const SCORE_MILESTONE_DISTANCE = 1000;
+  let lastMilestone = 0;
 
   const obstacles = [];
   let parallax = null;
@@ -321,11 +325,19 @@ function fetchJson(url) {
         if (definition?.src || definition?.source) {
           const src = definition.src || definition.source;
           const promise = loadImage(src).then((image) => {
+            // A source may be a horizontal strip of animation frames rather
+            // than one picture. Fall back to a single frame spanning the image.
+            const frames = Math.max(1, Math.floor(definition.frames ?? 1));
+            const frameWidth = definition.frameSize?.[0] ?? Math.floor(image.width / frames);
+            const frameHeight = definition.frameSize?.[1] ?? image.height;
             sprites[name][lod] = {
               ...definition,
               image,
-              width: definition.size?.[0] ?? image.width,
-              height: definition.size?.[1] ?? image.height,
+              frames,
+              frameWidth,
+              frameHeight,
+              width: definition.size?.[0] ?? frameWidth,
+              height: definition.size?.[1] ?? frameHeight,
             };
           });
           loadPromises.push(promise);
@@ -361,7 +373,10 @@ function fetchJson(url) {
       drawFallbackRect(x, y, spriteMetrics.player.width, spriteMetrics.player.height, '#f97316');
       return;
     }
-    drawSprite(sprite, x, y);
+    // Cycle the run frames while grounded; a jump holds a single pose.
+    const fps = sprite.fps ?? 0;
+    const frame = player.onGround && fps > 0 ? state.elapsed * fps : 0;
+    drawSprite(sprite, x, y, undefined, undefined, frame);
   }
 
   function drawObstacle(obstacle) {
@@ -370,10 +385,10 @@ function fetchJson(url) {
       drawFallbackRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height, '#94a3b8');
       return;
     }
-    drawSprite(sprite, obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+    drawSprite(sprite, obstacle.x, obstacle.y, obstacle.width, obstacle.height, obstacle.frame ?? 0);
   }
 
-  function drawSprite(sprite, x, y, overrideWidth, overrideHeight) {
+  function drawSprite(sprite, x, y, overrideWidth, overrideHeight, frame = 0) {
     const anchor = sprite.anchor || [0.5, 1];
     const width = overrideWidth ?? sprite.width;
     const height = overrideHeight ?? sprite.height;
@@ -384,7 +399,18 @@ function fetchJson(url) {
       const drawHeight = height * scale;
       const drawX = x - drawWidth * anchor[0];
       const drawY = y - drawHeight * anchor[1];
-      ctx.drawImage(sprite.image, drawX, drawY, drawWidth, drawHeight);
+      const frames = sprite.frames ?? 1;
+      if (frames > 1) {
+        // The five-argument drawImage stretches the whole sheet into the
+        // destination rect, which drew all eight run frames side by side as a
+        // row of tiny figures. Blit the one cell we want.
+        const fw = sprite.frameWidth ?? sprite.image.width / frames;
+        const fh = sprite.frameHeight ?? sprite.image.height;
+        const index = ((Math.floor(frame) % frames) + frames) % frames;
+        ctx.drawImage(sprite.image, index * fw, 0, fw, fh, drawX, drawY, drawWidth, drawHeight);
+      } else {
+        ctx.drawImage(sprite.image, drawX, drawY, drawWidth, drawHeight);
+      }
       return;
     }
 
@@ -441,6 +467,7 @@ function fetchJson(url) {
   }
 
   function resetGame() {
+    lastMilestone = 0;
     state.elapsed = 0;
     state.distance = 0;
     state.spawnTimer = randInRange(OBSTACLE_INTERVAL);
@@ -549,6 +576,13 @@ function fetchJson(url) {
 
     const baseScore = Math.floor(state.distance / 10);
     state.score = player.hurtTimer > 0 ? Math.max(0, baseScore - 60) : baseScore;
+    // This runner has no death, so a score is only ever banked at milestones --
+    // otherwise nothing about a long run would ever reach progression.
+    const milestone = Math.floor(state.distance / SCORE_MILESTONE_DISTANCE);
+    if (milestone > lastMilestone) {
+      lastMilestone = milestone;
+      gameEvent('level_up', { slug: 'city-runner', value: milestone });
+    }
     scoreEl.textContent = state.score.toString();
 
     parallax.update(dt, state.speed * 0.6);
@@ -634,6 +668,7 @@ function fetchJson(url) {
     setLod(state.lod);
     resetGame();
     state.running = true;
+    gameEvent('play', { slug: 'city-runner' });
     lastTime = performance.now();
     draw(0);
     send('GAME_READY');

@@ -446,6 +446,11 @@ const watchedCanvases = new WeakSet();
 
 const fitCanvas = (canvas) => {
   if (!canvas || watchedCanvases.has(canvas)) return;
+  // Games that size their own canvas opt out with data-gg-no-fit. The generic
+  // aspect-preserving fit below measures the parent, so on a page whose layout
+  // squeezes the play area it will shrink the board to a thumbnail and then
+  // redo it on every DOM mutation, overriding the game every time.
+  if (canvas.dataset?.ggNoFit !== undefined) return;
   watchedCanvases.add(canvas);
   const resize = () => {
     try {
@@ -500,6 +505,48 @@ const installControlsOverlay = () => {
     </details>
   `;
   host.appendChild(overlay);
+};
+
+// Progression is arcade-wide, so the readout belongs to the shell every game
+// already loads rather than to each game. Imported lazily: a game must still
+// boot and play if progression fails to load.
+const installProgressionHud = () => {
+  if (document.querySelector('.gg-prog')) return;
+  import('../../shared/progression-hud.js')
+    .then((mod) => mod.mountProgressionHud?.())
+    .catch((err) => console.warn('[game-shell] progression HUD unavailable', err));
+};
+
+// Several games draw their own "back to hub" link, and some build it in JS
+// after this module runs, so the guard around the shell's own button cannot see
+// them. Where the game already offers the way out, drop the shell's duplicate
+// rather than stacking two overlapping buttons in the same corner.
+const dedupeBackLinks = () => {
+  const host = document.querySelector('.game-shell__back');
+  if (!host) return true;
+  const shellLink = host.querySelector('[data-shell-back-link]');
+  const hubTarget = shellLink?.href;
+  if (!hubTarget) return true;
+  const duplicate = [...document.querySelectorAll('a[href]')].some((anchor) => {
+    if (anchor === shellLink || host.contains(anchor)) return false;
+    return anchor.href === hubTarget;
+  });
+  if (duplicate) {
+    host.remove();
+    return true;
+  }
+  return false;
+};
+
+const watchForOwnBackLink = () => {
+  if (dedupeBackLinks()) return;
+  window.addEventListener('load', dedupeBackLinks, { once: true });
+  // Games that assemble their UI asynchronously add theirs after load.
+  const observer = new MutationObserver(() => {
+    if (dedupeBackLinks()) observer.disconnect();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), 8000);
 };
 
 const installVisibilityHelper = () => {
@@ -567,6 +614,8 @@ if (typeof document !== 'undefined') {
     ensureScoreObservers();
     installVisibilityHelper();
     installMissions();
+    installProgressionHud();
+    watchForOwnBackLink();
     preloadFirstFrameAssets();
   });
 }

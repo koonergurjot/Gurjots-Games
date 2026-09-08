@@ -126,7 +126,10 @@
       display: flex;
       flex-direction: column;
       max-width: 100vw;
-      overflow: hidden;
+      /* Was overflow:hidden, which clipped whatever did not fit. Now that the
+         board claims its own height, the controls below it scroll instead. */
+      overflow-x: hidden;
+      overflow-y: auto;
     }
     
     /* Header */
@@ -262,13 +265,15 @@
     
     /* Main game area */
     .game-main {
-      flex: 1;
+      flex: 1 0 auto;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 1rem;
-      min-height: 0;
+      /* The board is the point of the page: never let the surrounding chrome
+         squeeze it out. Anything that no longer fits scrolls. */
+      min-height: min(60vh, 30rem);
     }
     
     .game-canvas {
@@ -453,6 +458,7 @@
       .game-main {
         padding: 2rem;
       }
+
       
       .game-footer {
         padding: 1.5rem;
@@ -654,7 +660,7 @@
     
     <!-- Main game area -->
     <main class="game-main" role="main">
-      <canvas id="board" width="360" height="420" class="game-canvas" role="img" aria-label="2048 game board - Use arrow keys to move tiles" tabindex="0"></canvas>
+      <canvas id="board" width="360" height="420" class="game-canvas" data-gg-no-fit role="img" aria-label="2048 game board - Use arrow keys to move tiles" tabindex="0"></canvas>
       <canvas id="oppBoard" width="360" height="420" style="display: none;"></canvas>
       <div id="status" style="display: none;"></div>
     </main>

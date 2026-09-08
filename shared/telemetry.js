@@ -1,4 +1,5 @@
 import { emitEvent as emitAchievementEvent } from './achievements.js';
+import { recordGameEvent } from './progression.js';
 import { pushEvent } from '../games/common/diag-adapter.js';
 
 function toObject(data) {
@@ -20,6 +21,19 @@ export function gameEvent(type, data = {}) {
   } catch (err) {
     if (typeof console !== 'undefined') {
       console.warn('[telemetry] achievements emit failed', err);
+    }
+  }
+
+  // Progression rides on the events games already emit, so a game earns XP,
+  // levels and unlocks by reporting what happened rather than wiring up
+  // progression itself.
+  try {
+    if (typeof recordGameEvent === 'function') {
+      recordGameEvent(payload);
+    }
+  } catch (err) {
+    if (typeof console !== 'undefined') {
+      console.warn('[telemetry] progression update failed', err);
     }
   }
 

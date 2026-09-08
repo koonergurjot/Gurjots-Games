@@ -2279,6 +2279,18 @@ howToOverlay?.addEventListener('click', (event) => {
     hideHowToModal();
   }
 });
+// The modal opens itself on a first visit and traps focus, so a player who
+// reacts by simply pressing an arrow key gets no response at all. Treat a move
+// key as "got it" and let the move through instead of swallowing it.
+howToOverlay?.addEventListener('keydown', (event) => {
+  const dismissKeys = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d','W','A','S','D','Escape'];
+  if(!dismissKeys.includes(event.key)) return;
+  hideHowToModal();
+  if(event.key === 'Escape') return;
+  // Re-dispatch so this keypress plays the move the player intended.
+  document.getElementById('board')?.focus();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: event.key, bubbles: true }));
+});
 
 const rngModeSelect = document.getElementById('rngModeSel');
 const rngSeedInputEl = document.getElementById('rngSeedInput');

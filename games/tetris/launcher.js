@@ -9,7 +9,8 @@ function postReady(detail = {}) {
 }
 
 function buildPlayUrl(options = {}) {
-  const target = new URL('./play.html', window.location.href);
+  // The game lives at index.html; this lobby only assembles its query string.
+  const target = new URL('./index.html', window.location.href);
   const params = target.searchParams;
 
   if (options && typeof options === 'object') {

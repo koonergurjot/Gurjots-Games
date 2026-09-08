@@ -14,7 +14,12 @@ body.gg-diag-scroll-locked {
   color-scheme: dark;
 }
 
-.diag-overlay .gg-diag-modal {
+/* Only the open panel takes clicks. This was unconditional, so the closed
+   modal -- transparent, but still laid out 720px wide and centred over the
+   viewport -- swallowed every mouse click aimed at the game behind it. The
+   backdrop's own pointer-events:none could not stop it: a descendant that sets
+   pointer-events:auto receives events regardless of its ancestors. */
+.diag-overlay .gg-diag-backdrop[data-open="true"] .gg-diag-modal {
   pointer-events: auto;
 }
 
@@ -55,6 +60,9 @@ body.gg-diag-scroll-locked {
 .gg-diag-backdrop {
   position: fixed;
   inset: 0;
+  /* Belt and braces with the rule above: a closed panel is out of the layout
+     entirely, so nothing inside it can intercept input. */
+  visibility: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -68,6 +76,7 @@ body.gg-diag-scroll-locked {
 }
 
 .gg-diag-backdrop[data-open="true"] {
+  visibility: visible;
   opacity: 1;
   pointer-events: auto;
 }

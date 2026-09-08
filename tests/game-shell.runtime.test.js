@@ -2,14 +2,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const importShell = async (options = {}) => {
-  const { slug = 'pong', preload = '', moduleScript = false } = options;
+  const { slug = 'pong', preload = '', moduleScript = false, canvasAttrs = '' } = options;
   vi.resetModules();
   document.head.innerHTML = '';
   document.body.className = 'game-shell';
   document.body.innerHTML = `
     <main class="game-shell__main">
       <div class="game-shell__surface">
-        <canvas id="game"></canvas>
+        <canvas id="game" ${canvasAttrs}></canvas>
         <div id="hud"><span id="score" data-game-score>0</span></div>
       </div>
     </main>
@@ -86,6 +86,17 @@ describe('game-shell runtime integration', () => {
     dispose();
     window.dispatchEvent(new CustomEvent('ggshell:pause'));
     expect(pause).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves canvases marked data-gg-no-fit for the game to size', async () => {
+    await importShell({ canvasAttrs: 'data-gg-no-fit' });
+    // Games with their own responsive sizing opt out: the shell's generic fit
+    // measures the parent, so on a cramped layout it shrinks the board and
+    // redoes it on every DOM mutation, overriding the game each time.
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-gg-controls-overlay]')).toBeTruthy();
+    });
+    expect(window.fitCanvasToParent).not.toHaveBeenCalled();
   });
 
   it('derives configuration when loaded as a module script', async () => {
