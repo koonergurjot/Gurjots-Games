@@ -562,22 +562,28 @@ export const games = [
     "id": "platformer",
     "slug": "platformer",
     "title": "Pixel Platformer",
-    "description": "Run and jump across platforms to reach the goal.",
-    "short": "Run and jump across platforms to reach the goal.",
+    "description": "Run, jump and collect coins across the stage to reach the goal, or practise your jump arc first in the no-fail-state sandbox Practice mode.",
+    "short": "Run and jump to the goal. Or warm up first in Practice mode.",
     "controls": "←/→ move, Space or ↑ jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
     "tags": [
-      "2D"
+      "2D",
+      "platformer"
     ],
     "engineType": "canvas-2d",
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/platformer/",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "thumbnailPath": "/games/platformer/thumb.svg",
     "thumbnail": "/games/platformer/thumb.svg",
     "assets": {
       "sprites": [
-        "/assets/sprites/coin.png"
+        "/assets/backgrounds/parallax/forest_layer1.png",
+        "/assets/backgrounds/parallax/forest_layer2.png",
+        "/assets/sprites/coin.png",
+        "/assets/sprites/player/platformer_idle.png",
+        "/assets/sprites/player/platformer_jump.png",
+        "/assets/sprites/player/platformer_run.png"
       ],
       "audio": [
         "/assets/audio/hit.wav",
@@ -586,7 +592,12 @@ export const games = [
     },
     "firstFrame": {
       "sprites": [
-        "/assets/sprites/coin.png"
+        "/assets/backgrounds/parallax/forest_layer1.png",
+        "/assets/backgrounds/parallax/forest_layer2.png",
+        "/assets/sprites/coin.png",
+        "/assets/sprites/player/platformer_idle.png",
+        "/assets/sprites/player/platformer_jump.png",
+        "/assets/sprites/player/platformer_run.png"
       ],
       "audio": [
         "/assets/audio/hit.wav",
@@ -594,21 +605,25 @@ export const games = [
       ]
     },
     "featureFlags": [
-      "Offline",
       "Co-op",
-      "Gamepad"
+      "Diagnostics",
+      "Gamepad",
+      "Keyboard",
+      "Offline"
     ],
     "minDevice": {
       "width": 360,
       "height": 240
     },
     "help": {
-      "objective": "Run, jump, and collect coins across the stage while staying ahead of hazards.",
+      "objective": "Run, jump, and collect every coin to open the goal. Practice mode (from the in-game link): no timer, no enemies, no fail state -- a sandbox built for getting comfortable with the jump arc.",
       "controls": "←/→ move, Space or ↑ jump, P pause, R restart. Gamepad and co-op options live in the HUD.",
       "tips": [
         "Collect every coin you see—the goal only opens once the set is complete.",
         "Time jumps off moving platforms and slopes to keep momentum going.",
-        "Start co-op from the HUD if you want a partner to help sweep the map."
+        "Start co-op from the HUD if you want a partner to help sweep the map.",
+        "Practice mode: the jump height is fixed, so line up your run-up rather than trying to jump harder.",
+        "Practice mode: let go of the direction key at the apex to drop cleanly onto a narrow block."
       ],
       "steps": [
         "Press Start or tap to drop into the level.",
@@ -621,22 +636,26 @@ export const games = [
     "id": "runner",
     "slug": "runner",
     "title": "City Runner",
-    "description": "Dash through the city and avoid obstacles.",
-    "short": "Dash through the city and avoid obstacles.",
+    "description": "Sprint through the city dodging obstacles in Campaign, or drop into the endless one-button Night Rush mode and see how far your nerve holds.",
+    "short": "Dash through the city. Campaign with a full HUD, or endless Night Rush.",
     "controls": "Space or ↑ jumps, ↓ slides. On mobile, tap right to jump and left to slide.",
     "tags": [
-      "2D"
+      "2D",
+      "arcade"
     ],
     "engineType": "canvas-2d",
     "difficulty": "medium",
     "released": "2025-08-27",
     "playUrl": "/games/runner/",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "thumbnailPath": "/games/runner/thumb.svg",
     "thumbnail": "/games/runner/thumb.svg",
     "assets": {
       "sprites": [
-        "/assets/sprites/coin.png"
+        "/assets/backgrounds/parallax/city_layer1.png",
+        "/assets/backgrounds/parallax/city_layer2.png",
+        "/assets/sprites/coin.png",
+        "/assets/sprites/player/platformer_run.png"
       ],
       "audio": [
         "/assets/audio/hit.wav",
@@ -646,7 +665,10 @@ export const games = [
     },
     "firstFrame": {
       "sprites": [
-        "/assets/sprites/coin.png"
+        "/assets/backgrounds/parallax/city_layer1.png",
+        "/assets/backgrounds/parallax/city_layer2.png",
+        "/assets/sprites/coin.png",
+        "/assets/sprites/player/platformer_run.png"
       ],
       "audio": [
         "/assets/audio/hit.wav",
@@ -655,21 +677,25 @@ export const games = [
       ]
     },
     "featureFlags": [
+      "Diagnostics",
+      "Keyboard",
+      "Leaderboards",
       "Offline",
-      "Touch",
-      "Leaderboards"
+      "Touch"
     ],
     "minDevice": {
       "width": 360,
       "height": 240
     },
     "help": {
-      "objective": "Sprint through the city streets, dodging obstacles to keep your run alive.",
+      "objective": "Campaign: dodge obstacles as the city scrolls by, with a full mission and combo HUD. Night Rush (from the in-game link): an endless one-button sprint -- run as far as you can and build a clean streak between hits.",
       "controls": "Space or ↑ jumps, ↓ slides. On mobile, tap right to jump and left to slide.",
       "tips": [
         "Stay near the middle lane so you can quickly jump or slide as obstacles appear.",
         "Slide under low signs instead of jumping to recover faster afterward.",
-        "Watch the pattern of upcoming hazards to keep your rhythm as speed increases."
+        "Watch the pattern of upcoming hazards to keep your rhythm as speed increases.",
+        "Night Rush: jump late rather than early -- the obstacles are shorter than they look.",
+        "Night Rush: a hit costs your clean streak and slows you down, so a near-perfect run is worth more than a fast reckless one."
       ],
       "steps": [
         "Tap or press jump to hop the first barrier and start the run.",
@@ -682,17 +708,18 @@ export const games = [
     "id": "shooter",
     "slug": "shooter",
     "title": "Alien Shooter",
-    "description": "Blast waves of invaders and survive.",
-    "short": "Blast waves of invaders and survive.",
+    "description": "Hold off waves of invaders in a tight Campaign toward a boss fight, or dodge into the endless, looping Arena mode.",
+    "short": "Blast waves of invaders. Campaign to a boss, or endless Arena.",
     "controls": "WASD or Arrow keys move, Space/Enter shoot. Keep moving to avoid hits.",
     "tags": [
-      "2D"
+      "2D",
+      "arcade"
     ],
     "engineType": "canvas-2d",
     "difficulty": "hard",
     "released": "2025-08-27",
     "playUrl": "/games/shooter/",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "thumbnailPath": "/games/shooter/thumb.svg",
     "thumbnail": "/games/shooter/thumb.svg",
     "assets": {
@@ -715,20 +742,25 @@ export const games = [
       ]
     },
     "featureFlags": [
+      "Diagnostics",
+      "Keyboard",
+      "Mouse",
       "Offline",
-      "Keyboard"
+      "Touch"
     ],
     "minDevice": {
       "width": 360,
       "height": 240
     },
     "help": {
-      "objective": "Hold off waves of aliens by dodging fire and blasting every intruder.",
+      "objective": "Campaign: clear waves toward the Gatekeeper boss. Arena (from the in-game link): survive an endless, looping arena and see how many loops you can complete.",
       "controls": "WASD or Arrow keys move, Space/Enter shoot. Keep moving to avoid hits.",
       "tips": [
         "Strafe horizontally to herd enemies into your bullet stream.",
         "Watch your firing cadence—the blaster has a short cooldown.",
-        "Keep distance from enemy clusters to buy time for dodges."
+        "Keep distance from enemy clusters to buy time for dodges.",
+        "Arena mode: keep moving -- standing still lets scouts and strikers converge on you from several edges at once.",
+        "Arena mode: save the pulse bomb for when enemies close in from more than one side."
       ],
       "steps": [
         "Move into open space as the first wave approaches.",
@@ -738,166 +770,185 @@ export const games = [
     }
   },
   {
-    "id": "alien-shooter",
-    "slug": "alien-shooter",
-    "title": "Alien Shooter: Arena",
-    "description": "Hold an open arena against escalating waves of alien craft, with a pulse bomb for when they close in.",
-    "short": "Survive escalating waves of alien craft in an open arena.",
-    "controls": "WASD or the arrow keys to move. Aim with the mouse and hold click or Space to fire. E launches a pulse bomb. Esc pauses.",
+    "id": "solitaire",
+    "slug": "solitaire",
+    "title": "Solitaire",
+    "description": "Classic Klondike solitaire. Clear the tableau onto four foundations, one suit at a time.",
+    "short": "Classic Klondike. Clear the tableau onto the foundations.",
+    "controls": "Click a face-up card to pick it up, then click a destination pile. Click the stock to draw. N starts a new deal.",
     "tags": [
-      "arcade",
-      "2D"
+      "classic",
+      "card",
+      "puzzle"
     ],
     "engineType": "canvas-2d",
-    "difficulty": "hard",
-    "released": "2025-10-20",
-    "playUrl": "/games/alien-shooter/",
+    "difficulty": "easy",
+    "released": "2026-09-08",
+    "playUrl": "/games/solitaire/",
     "version": "1.0.0",
-    "thumbnailPath": "/games/alien-shooter/thumb.svg",
-    "thumbnail": "/games/alien-shooter/thumb.svg",
+    "thumbnailPath": "/games/solitaire/thumb.svg",
+    "thumbnail": "/games/solitaire/thumb.svg",
     "assets": {
-      "sprites": []
+      "sprites": [],
+      "audio": [
+        "/assets/audio/click.wav",
+        "/assets/audio/coin.wav",
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav"
+      ]
     },
     "firstFrame": {
-      "sprites": []
+      "sprites": [],
+      "audio": [
+        "/assets/audio/click.wav",
+        "/assets/audio/coin.wav",
+        "/assets/audio/hit.wav",
+        "/assets/audio/powerup.wav"
+      ]
     },
     "featureFlags": [
-      "Keyboard",
+      "Offline",
       "Mouse",
       "Touch",
-      "Diagnostics"
+      "SFX"
     ],
     "minDevice": {
       "width": 360,
       "height": 240
     },
     "help": {
-      "objective": "Clear each wave of alien craft without losing all of your health, and push your score as deep into the wave count as you can.",
-      "controls": "WASD or the arrow keys to move. Aim with the mouse and hold click or Space to fire. E launches a pulse bomb. Esc pauses.",
+      "objective": "Move every card onto its suit foundation, from Ace to King, to clear the tableau.",
+      "controls": "Click a face-up card to pick it up, then click a destination pile. Click the stock to draw. N starts a new deal.",
       "tips": [
-        "Keep moving -- standing still lets scouts and strikers converge on you from several edges at once.",
-        "Save the pulse bomb for when enemies close in from more than one side rather than firing it on cooldown.",
-        "Strikers and gunners behave differently: read the colour before you commit to a dodge."
+        "Uncover face-down tableau cards as early as possible -- they hide the moves you need.",
+        "Build tableau runs in alternating colours, descending by rank, to free up columns.",
+        "Only send a card to the foundation early if it doesn't block a tableau move you'll need soon."
       ],
       "steps": [
-        "Move with WASD and aim with the mouse to line up your first shots.",
-        "Clear every craft in the wave to advance to the next one.",
-        "Use the pulse bomb to break out when you get surrounded."
+        "Draw from the stock when no tableau move is available.",
+        "Move cards between tableau columns and up to the foundations as they become legal.",
+        "Clear all 52 cards onto the four foundations to win."
       ]
     }
   },
   {
-    "id": "city-runner",
-    "slug": "city-runner",
-    "title": "City Runner: Rush",
-    "description": "An endless rooftop sprint through a parallax city skyline, with one button between you and the obstacles.",
-    "short": "An endless one-button sprint through a parallax city.",
-    "controls": "Space, W or the up arrow to jump. Tap or click anywhere on touch devices.",
+    "id": "word-puzzle",
+    "slug": "word-puzzle",
+    "title": "Daily Word Puzzle",
+    "description": "Guess the five-letter word of the day in six tries. Everyone gets the same word.",
+    "short": "Guess the day's five-letter word in six tries.",
+    "controls": "Type letters, Enter to submit a guess, Backspace to delete. Or click/tap the on-screen keyboard.",
     "tags": [
-      "arcade",
-      "2D"
+      "puzzle",
+      "word",
+      "daily"
     ],
     "engineType": "canvas-2d",
-    "difficulty": "easy",
-    "released": "2025-10-20",
-    "playUrl": "/games/city-runner/",
+    "difficulty": "medium",
+    "released": "2026-09-08",
+    "playUrl": "/games/word-puzzle/",
     "version": "1.0.0",
-    "thumbnailPath": "/games/city-runner/thumb.svg",
-    "thumbnail": "/games/city-runner/thumb.svg",
+    "thumbnailPath": "/games/word-puzzle/thumb.svg",
+    "thumbnail": "/games/word-puzzle/thumb.svg",
     "assets": {
-      "sprites": [
-        "/assets/sprites/player/platformer_run.png",
-        "/assets/backgrounds/parallax/city_layer1.png",
-        "/assets/backgrounds/parallax/city_layer2.png"
+      "sprites": [],
+      "audio": [
+        "/assets/audio/click.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/powerdown.wav"
       ]
     },
     "firstFrame": {
-      "sprites": [
-        "/assets/sprites/player/platformer_run.png",
-        "/assets/backgrounds/parallax/city_layer1.png",
-        "/assets/backgrounds/parallax/city_layer2.png"
+      "sprites": [],
+      "audio": [
+        "/assets/audio/click.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/powerdown.wav"
       ]
     },
     "featureFlags": [
+      "Offline",
       "Keyboard",
       "Touch",
-      "Diagnostics"
+      "Daily",
+      "SFX"
     ],
     "minDevice": {
       "width": 360,
-      "height": 200
+      "height": 240
     },
     "help": {
-      "objective": "Run as far as you can without hitting an obstacle -- your score climbs with the distance you cover.",
-      "controls": "Space, W or the up arrow to jump. Tap or click anywhere on touch devices.",
+      "objective": "Figure out the secret five-letter word within six guesses, using the color of each tile as a clue.",
+      "controls": "Type letters, Enter to submit a guess, Backspace to delete. Or click/tap the on-screen keyboard.",
       "tips": [
-        "Jump late rather than early: the obstacles are shorter than they look and an early hop lands you straight into one.",
-        "The run speeds up the further you get, so leave yourself more reaction room as your score climbs.",
-        "Drop the sprite detail toggle to Low if the frame rate dips on an older device."
+        "A green tile means that letter is in the right spot; yellow means it's in the word but the wrong spot; gray means it's not in the word at all.",
+        "Open with a guess that uses common, varied letters to learn the most from your first try.",
+        "The word changes once a day for everyone, so a streak only survives guessing it correctly day after day."
       ],
       "steps": [
-        "Press Space, W or the up arrow to start running and to jump.",
-        "Clear each obstacle as it scrolls in from the right.",
-        "Keep the run alive as the pace increases to build your score."
+        "Type a five-letter guess and press Enter.",
+        "Read the tile colors to narrow down the letters and their positions.",
+        "Guess the exact word within six tries to solve the day's puzzle."
       ]
     }
   },
   {
-    "id": "pixel-platformer",
-    "slug": "pixel-platformer",
-    "title": "Pixel Platformer: Sandbox",
-    "description": "A chunky pixel-art sandbox of floating blocks and forest parallax, built for practising precise jumps.",
-    "short": "A pixel-art sandbox built for practising precise jumps.",
-    "controls": "Arrow keys or A and D to run. Space, W or the up arrow to jump.",
+    "id": "match3",
+    "slug": "match3",
+    "title": "Gem Match",
+    "description": "Swap adjacent gems to line up three or more. Chain cascades for bonus points before your moves run out.",
+    "short": "Swap gems, match three or more, chain the cascades.",
+    "controls": "Click a gem, then click an adjacent gem to swap. N starts a new game.",
     "tags": [
-      "platformer",
-      "2D"
+      "puzzle",
+      "match-3",
+      "casual"
     ],
     "engineType": "canvas-2d",
     "difficulty": "easy",
-    "released": "2025-10-20",
-    "playUrl": "/games/pixel-platformer/",
+    "released": "2026-09-08",
+    "playUrl": "/games/match3/",
     "version": "1.0.0",
-    "thumbnailPath": "/games/pixel-platformer/thumb.svg",
-    "thumbnail": "/games/pixel-platformer/thumb.svg",
+    "thumbnailPath": "/games/match3/thumb.svg",
+    "thumbnail": "/games/match3/thumb.svg",
     "assets": {
-      "sprites": [
-        "/assets/sprites/player/platformer_idle.png",
-        "/assets/sprites/player/platformer_run.png",
-        "/assets/sprites/player/platformer_jump.png",
-        "/assets/backgrounds/parallax/forest_layer1.png",
-        "/assets/backgrounds/parallax/forest_layer2.png"
+      "sprites": [],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/coin.wav",
+        "/assets/audio/powerup.wav"
       ]
     },
     "firstFrame": {
-      "sprites": [
-        "/assets/sprites/player/platformer_idle.png",
-        "/assets/sprites/player/platformer_run.png",
-        "/assets/sprites/player/platformer_jump.png",
-        "/assets/backgrounds/parallax/forest_layer1.png",
-        "/assets/backgrounds/parallax/forest_layer2.png"
+      "sprites": [],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/coin.wav",
+        "/assets/audio/powerup.wav"
       ]
     },
     "featureFlags": [
-      "Keyboard",
-      "Diagnostics"
+      "Offline",
+      "Mouse",
+      "Touch",
+      "SFX"
     ],
     "minDevice": {
       "width": 360,
-      "height": 200
+      "height": 240
     },
     "help": {
-      "objective": "Explore the level and get comfortable with the jump arc -- this is a sandbox to practise movement in, not a race.",
-      "controls": "Arrow keys or A and D to run. Space, W or the up arrow to jump.",
+      "objective": "Swap adjacent gems to line up three or more of a kind before your move budget runs out.",
+      "controls": "Click a gem, then click an adjacent gem to swap. N starts a new game.",
       "tips": [
-        "The jump height is fixed, so line up your run-up rather than trying to jump harder.",
-        "Let go of the direction key at the apex to drop cleanly onto a narrow block.",
-        "The camera trails you slightly -- look ahead of the character, not at it."
+        "Look for a swap that sets off more than one match at once -- cascades from gravity refills are worth extra.",
+        "An invalid swap costs nothing, so it's safe to test a move before committing to a better one.",
+        "If the board runs out of legal moves it reshuffles automatically, so play through rather than restarting."
       ],
       "steps": [
-        "Run left and right with the arrow keys or A and D.",
-        "Jump with Space, W or the up arrow to reach the floating blocks.",
-        "Chain jumps across the blocks to cross the level."
+        "Click a gem, then click a gem next to it to attempt a swap.",
+        "A swap that lines up three or more gems clears them and scores points.",
+        "Keep matching before your moves run out to reach the highest level you can."
       ]
     }
   }

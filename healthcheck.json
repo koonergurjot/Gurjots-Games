@@ -60,17 +60,17 @@
     "reason": ""
   },
   {
-    "id": "alien-shooter",
+    "id": "solitaire",
     "status": "ok",
     "reason": ""
   },
   {
-    "id": "city-runner",
+    "id": "word-puzzle",
     "status": "ok",
     "reason": ""
   },
   {
-    "id": "pixel-platformer",
+    "id": "match3",
     "status": "ok",
     "reason": ""
   }

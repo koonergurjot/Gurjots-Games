@@ -30,12 +30,18 @@ const INPUTS = {
   2048: ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft'],
   asteroids: ['ArrowUp', 'ArrowLeft', ' ', 'ArrowRight', ' '],
   maze3d: ['w', 'a', 'w', 'd', 'w'],
+  // Campaign mode (index.html). Practice mode lives at practice.html, reached
+  // via an in-game link, and is not part of the games.json-driven sweep this runs.
   platformer: ['ArrowRight', ' ', 'ArrowRight', 'ArrowLeft', ' '],
+  // Campaign mode (index.html). Night Rush lives at night.html, reached via an
+  // in-game link, and is not part of the games.json-driven sweep this runs.
   runner: [' ', ' ', 'ArrowDown', ' '],
+  // Campaign mode (index.html). Arena mode lives at arena.html, reached via an
+  // in-game link, and is not part of the games.json-driven sweep this runs.
   shooter: ['ArrowLeft', ' ', 'ArrowRight', ' ', ' '],
-  'alien-shooter': ['a', ' ', 'd', ' ', ' '],
-  'city-runner': [' ', ' ', 'ArrowDown', ' '],
-  'pixel-platformer': ['ArrowRight', ' ', 'ArrowRight', 'ArrowLeft', ' '],
+  // Types a guess and submits it -- exercises the tile grid, the on-screen
+  // keyboard's color feedback, and the localStorage day-state write.
+  'word-puzzle': ['a', 'b', 'o', 'u', 't', 'Enter'],
 };
 
 // Hash a screenshot of each on-screen canvas. Reading pixels through
@@ -47,13 +53,37 @@ const INPUTS = {
 // get a sequence of clicks across the board so a move can actually be made --
 // chess3d falls back to a DOM board under headless software rendering, where
 // key presses do nothing at all.
-const TURN_BASED = new Set(['chess', 'chess3d']);
+const TURN_BASED = new Set(['chess', 'chess3d', 'solitaire', 'match3']);
+
+// Turn-based games default to an 8x8 board grid (see below). Solitaire's board
+// is a fixed 900x760 layout of piles rather than a grid, so it gets its own
+// sequence of clicks expressed as fractions of the canvas box: draw from the
+// stock a few times, then try to send the drawn card up to a foundation.
+// Match-3's grid does line up with the 8x8 default, but its cells don't fill
+// the whole canvas the way a chessboard does, so it gets its own fractions
+// too: select a gem, then click its neighbour to attempt a swap.
+const CLICK_SEQUENCES = {
+  solitaire: [
+    [70 / 900, 90 / 760], // stock
+    [70 / 900, 90 / 760], // stock
+    [190 / 900, 90 / 760], // waste: select the drawn card
+    [455 / 900, 90 / 760], // foundation slot: attempt the move
+    [70 / 900, 90 / 760], // stock
+    [190 / 900, 90 / 760], // waste: select again
+    [580 / 900, 90 / 760], // a different foundation slot
+  ],
+  match3: [
+    [64 / 520, 48 / 500], // select gem at row0,col0
+    [120 / 520, 48 / 500], // swap with its neighbour at row0,col1
+    [176 / 520, 104 / 500], // select gem at row1,col2
+    [232 / 520, 104 / 500], // swap with its neighbour at row1,col3
+  ],
+};
 
 // Games the player steers by holding a key rather than tapping one.
 const HOLD_KEYS = {
   maze3d: 'KeyW',
   platformer: 'ArrowRight',
-  'pixel-platformer': 'ArrowRight',
 };
 
 async function sampleCanvases(page) {
@@ -136,12 +166,21 @@ export async function playtest(browser, port, slug) {
       const board = await page.$('canvas, .fallback-board');
       const box = board && await board.boundingBox();
       if (box) {
-        // Walk a few squares: select, then try a target a couple of ranks away.
-        const cell = box.width / 8;
-        for (const [file, rank] of [[4, 1], [4, 3], [1, 0], [2, 2]]) {
-          await page.mouse.click(box.x + (file + 0.5) * cell, box.y + (7 - rank + 0.5) * (box.height / 8)).catch(() => {});
-          await page.waitForTimeout(400);
-          await sample(page, rec);
+        const seq = CLICK_SEQUENCES[slug];
+        if (seq) {
+          for (const [fx, fy] of seq) {
+            await page.mouse.click(box.x + fx * box.width, box.y + fy * box.height).catch(() => {});
+            await page.waitForTimeout(300);
+            await sample(page, rec);
+          }
+        } else {
+          // Walk a few squares: select, then try a target a couple of ranks away.
+          const cell = box.width / 8;
+          for (const [file, rank] of [[4, 1], [4, 3], [1, 0], [2, 2]]) {
+            await page.mouse.click(box.x + (file + 0.5) * cell, box.y + (7 - rank + 0.5) * (box.height / 8)).catch(() => {});
+            await page.waitForTimeout(400);
+            await sample(page, rec);
+          }
         }
       }
     }

@@ -108,44 +108,47 @@ Every thumbnail below is a live link. Click one and you are playing in about a s
         <img src="https://raw.githubusercontent.com/koonergurjot/Gurjots-Games/main/games/platformer/thumb.svg" width="260" alt="Pixel Platformer"><br>
         <b>Pixel Platformer</b>
       </a><br>
-      <sub>🟡 Medium · 2D</sub>
+      <sub>🟡 Medium · 2D · platformer</sub><br>
+      <sub><a href="https://gurjotsgames.koonergurjot.workers.dev/games/platformer/practice.html">+ Practice mode</a></sub>
     </td>
     <td align="center" width="33%">
       <a href="https://gurjotsgames.koonergurjot.workers.dev/games/runner/">
         <img src="https://raw.githubusercontent.com/koonergurjot/Gurjots-Games/main/games/runner/thumb.svg" width="260" alt="City Runner"><br>
         <b>City Runner</b>
       </a><br>
-      <sub>🟡 Medium · 2D</sub>
+      <sub>🟡 Medium · 2D · arcade</sub><br>
+      <sub><a href="https://gurjotsgames.koonergurjot.workers.dev/games/runner/night.html">+ Night Rush mode</a></sub>
     </td>
     <td align="center" width="33%">
       <a href="https://gurjotsgames.koonergurjot.workers.dev/games/shooter/">
         <img src="https://raw.githubusercontent.com/koonergurjot/Gurjots-Games/main/games/shooter/thumb.svg" width="260" alt="Alien Shooter"><br>
         <b>Alien Shooter</b>
       </a><br>
-      <sub>🔴 Hard · 2D</sub>
+      <sub>🔴 Hard · 2D · arcade</sub><br>
+      <sub><a href="https://gurjotsgames.koonergurjot.workers.dev/games/shooter/arena.html">+ Arena mode</a></sub>
     </td>
   </tr>
   <tr>
     <td align="center" width="33%">
-      <a href="https://gurjotsgames.koonergurjot.workers.dev/games/alien-shooter/">
-        <img src="https://raw.githubusercontent.com/koonergurjot/Gurjots-Games/main/games/alien-shooter/thumb.svg" width="260" alt="Alien Shooter: Arena"><br>
-        <b>Alien Shooter: Arena</b>
+      <a href="https://gurjotsgames.koonergurjot.workers.dev/games/solitaire/">
+        <img src="https://raw.githubusercontent.com/koonergurjot/Gurjots-Games/main/games/solitaire/thumb.svg" width="260" alt="Solitaire"><br>
+        <b>Solitaire</b>
       </a><br>
-      <sub>🔴 Hard · arcade · 2D</sub>
+      <sub>🟢 Easy · classic · card · puzzle</sub>
     </td>
     <td align="center" width="33%">
-      <a href="https://gurjotsgames.koonergurjot.workers.dev/games/city-runner/">
-        <img src="https://raw.githubusercontent.com/koonergurjot/Gurjots-Games/main/games/city-runner/thumb.svg" width="260" alt="City Runner: Rush"><br>
-        <b>City Runner: Rush</b>
+      <a href="https://gurjotsgames.koonergurjot.workers.dev/games/word-puzzle/">
+        <img src="https://raw.githubusercontent.com/koonergurjot/Gurjots-Games/main/games/word-puzzle/thumb.svg" width="260" alt="Daily Word Puzzle"><br>
+        <b>Daily Word Puzzle</b>
       </a><br>
-      <sub>🟢 Easy · arcade · 2D</sub>
+      <sub>🟡 Medium · puzzle · word · daily</sub>
     </td>
     <td align="center" width="33%">
-      <a href="https://gurjotsgames.koonergurjot.workers.dev/games/pixel-platformer/">
-        <img src="https://raw.githubusercontent.com/koonergurjot/Gurjots-Games/main/games/pixel-platformer/thumb.svg" width="260" alt="Pixel Platformer: Sandbox"><br>
-        <b>Pixel Platformer: Sandbox</b>
+      <a href="https://gurjotsgames.koonergurjot.workers.dev/games/match3/">
+        <img src="https://raw.githubusercontent.com/koonergurjot/Gurjots-Games/main/games/match3/thumb.svg" width="260" alt="Gem Match"><br>
+        <b>Gem Match</b>
       </a><br>
-      <sub>🟢 Easy · platformer · 2D</sub>
+      <sub>🟢 Easy · puzzle · match-3 · casual</sub>
     </td>
   </tr>
 </table>
@@ -164,7 +167,7 @@ Every thumbnail below is a live link. Click one and you are playing in about a s
 | 📴 **Offline** | A service worker caches the shell and assets, so the arcade keeps working on a plane or a dead connection. |
 | 🎮 **Your controls** | Keyboard, mouse, touch and on-screen controls, with rebindable keys on the games that support them. |
 | ♿ **Reachable** | Semantic markup, ARIA labels, visible focus, and pause-on-hidden so nothing runs away while you are in another tab. |
-| 🧪 **Actually tested** | 145 unit tests, plus a smoke test that boots all 15 games in a real browser on every pull request. |
+| 🧪 **Actually tested** | 250+ unit tests, plus a smoke test that boots all 15 games in a real browser on every pull request. |
 | 🔓 **Yours** | MIT licensed. Fork it, reskin it, add your own game. |
 
 ---

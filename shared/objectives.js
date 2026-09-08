@@ -105,59 +105,71 @@ export const BRIEFINGS = {
       { id: 'maze_career', kind: 'career', event: 'win', goal: 5, label: 'Escape 5 mazes in all' },
     ],
   },
+  // Practice used to be its own catalog entry (pixel-platformer). It is now a
+  // mode reached from a link inside this game, and both modes report through
+  // the 'platformer' slug. pp_high represents Practice's no-fail-state
+  // sandbox; the other two are Campaign's coin-and-goal loop.
   platformer: {
     title: 'Retro Platformer',
-    premise: 'Every coin in the level is a piece of the gate key. Collect them all and the way out opens.',
+    premise: 'Every coin in the level is a piece of the gate key. Collect them all and the way out opens. Or warm up first in Practice mode: no timer, no enemies, no fail state, just a forest built for learning exactly how far this character can jump.',
     objectives: [
       { id: 'plat_coins', kind: 'run_event', event: 'coin_collected', goal: 2, label: 'Collect every coin in a level' },
       // The platformer reports a completed level as a win, not a level_up.
       { id: 'plat_clear', kind: 'run_event', event: 'win', goal: 1, label: 'Reach the goal' },
-      { id: 'plat_career', kind: 'career', event: 'win', goal: 5, label: 'Clear 5 levels in all' },
+      { id: 'pp_high', kind: 'run_event', event: 'high_ground', goal: 1, label: 'Stand on the highest platform in Practice' },
     ],
   },
+  // Night Rush used to be its own catalog entry (city-runner). It is now a
+  // mode reached from a link inside this game, and both modes report through
+  // the 'runner' slug. cr_clean represents Night Rush; the other two apply to
+  // whichever mode is played, since both report level_up on distance.
   runner: {
     title: 'City Runner',
-    premise: 'The street scrolls whether you are ready or not. Every near miss is worth more than a safe jump.',
+    premise: 'The street scrolls whether you are ready or not in Campaign. Every near miss is worth more than a safe jump. Or drop into Night Rush, where there is no finish line -- only the distance you are willing to hold your nerve for.',
     objectives: [
       { id: 'run_1k', kind: 'run_event_max', event: 'level_up', goal: 1, label: 'Travel 1,000 metres' },
-      { id: 'run_score', kind: 'run_score', goal: 500, label: 'Score 500 in one run' },
-      { id: 'run_career', kind: 'career', event: 'game_over', goal: 20, label: 'Complete 20 runs' },
+      { id: 'cr_clean', kind: 'run_event', event: 'clean_streak', goal: 1, label: 'Clear 1km without a hit in Night Rush' },
+      { id: 'run_career', kind: 'career', event: 'game_over', goal: 20, label: 'Complete 20 Campaign runs' },
     ],
   },
+  // Arena used to be its own catalog entry (alien-shooter). It is now a mode
+  // reached from a link inside this game rather than a separate card, so its
+  // premise and one representative objective (as_loop) live here alongside
+  // Campaign's. Both modes report through the 'shooter' slug.
   shooter: {
     title: 'Alien Shooter',
-    premise: 'Five waves stand between you and the Gatekeeper. Nothing behind you is holding the line.',
+    premise: 'Five waves stand between you and the Gatekeeper in Campaign. Or skip the ending entirely and hold a closed Arena that loops forever, harder each time around.',
     objectives: [
-      { id: 'sh_wave', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Reach wave 3' },
+      { id: 'sh_wave', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Reach wave 3 in Campaign' },
       { id: 'sh_boss', kind: 'run_event', event: 'boss_down', goal: 1, label: 'Bring down the Gatekeeper' },
-      { id: 'sh_score', kind: 'run_score', goal: 2500, label: 'Score 2,500 in one run' },
+      { id: 'as_loop', kind: 'run_event', event: 'loop_complete', goal: 1, label: 'Complete a full loop in Arena' },
     ],
   },
-  'alien-shooter': {
-    title: 'Alien Shooter: Arena',
-    premise: 'A closed arena that loops forever, harder each time around. See how deep the loop goes.',
+  solitaire: {
+    title: 'Solitaire',
+    premise: 'Fifty-two cards, seven columns, one deal. Nothing stands between you and a clear table but the order they fell in.',
     objectives: [
-      { id: 'as_wave', kind: 'run_event_max', event: 'level_up', goal: 4, label: 'Clear 4 waves in one life' },
-      { id: 'as_loop', kind: 'run_event', event: 'loop_complete', goal: 1, label: 'Complete a full loop' },
-      { id: 'as_score', kind: 'run_score', goal: 4000, label: 'Score 4,000 in one run' },
+      { id: 'sol_foundation', kind: 'run_event_max', event: 'score_event', name: 'foundation_card', goal: 26, label: 'Build the foundations to 26 cards in one run' },
+      { id: 'sol_win', kind: 'run_event', event: 'win', goal: 1, label: 'Clear the tableau and win a deal' },
+      { id: 'sol_career', kind: 'career', event: 'win', goal: 10, label: 'Win 10 deals in all' },
     ],
   },
-  'city-runner': {
-    title: 'City Runner: Rush',
-    premise: 'A night city on rails. There is no finish line, only the distance you are willing to hold your nerve for.',
+  'word-puzzle': {
+    title: 'Daily Word Puzzle',
+    premise: 'One word, six guesses, and every player on Earth is working the same puzzle today. The tiles tell you what you got right -- the rest is deduction.',
     objectives: [
-      { id: 'cr_1k', kind: 'run_event_max', event: 'level_up', goal: 1, label: 'Reach the 1km marker' },
-      { id: 'cr_5k', kind: 'run_event_max', event: 'level_up', goal: 5, label: 'Reach the 5km marker' },
-      { id: 'cr_clean', kind: 'run_event', event: 'clean_streak', goal: 1, label: 'Clear 1km without a hit' },
+      { id: 'word_win', kind: 'run_event', event: 'win', goal: 1, label: "Solve today's word" },
+      { id: 'word_fast', kind: 'run_event', event: 'fast_solve', goal: 1, label: 'Solve it in 3 guesses or fewer' },
+      { id: 'word_career', kind: 'career', event: 'win', goal: 10, label: 'Solve 10 daily puzzles in all' },
     ],
   },
-  'pixel-platformer': {
-    title: 'Pixel Platformer: Sandbox',
-    premise: 'No timer, no enemies, no fail state. A forest built for learning exactly how far this character can jump.',
+  match3: {
+    title: 'Gem Match',
+    premise: 'A board full of gems and a shrinking budget of moves. Every swap should either score now or set up a bigger one.',
     objectives: [
-      { id: 'pp_explore', kind: 'run_event_max', event: 'level_up', goal: 3, label: 'Explore 60 tiles east' },
-      { id: 'pp_high', kind: 'run_event', event: 'high_ground', goal: 1, label: 'Stand on the highest platform' },
-      { id: 'pp_career', kind: 'career', event: 'level_up', goal: 15, label: 'Explore 300 tiles in all' },
+      { id: 'match3_score', kind: 'run_score', goal: 3000, label: 'Score 3,000 in one run' },
+      { id: 'match3_level', kind: 'run_event_max', event: 'level_up', goal: 5, label: 'Reach level 5 in one run' },
+      { id: 'match3_career', kind: 'career', event: 'game_over', goal: 15, label: 'Complete 15 rounds' },
     ],
   },
 };

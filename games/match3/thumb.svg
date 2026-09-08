@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90" role="img" aria-labelledby="title desc">
+  <title id="title">Gem Match thumbnail</title>
+  <desc id="desc">A grid of colorful gem shapes -- circle, square, triangle, diamond -- with a row of three matching triangles highlighted.</desc>
+  <defs>
+    <linearGradient id="m3-bg" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#151a2e" />
+      <stop offset="100%" stop-color="#0b1020" />
+    </linearGradient>
+  </defs>
+  <rect width="160" height="90" rx="8" fill="url(#m3-bg)" />
+  <rect x="16" y="10" width="128" height="70" rx="6" fill="#161c2e" />
+  <!-- highlighted matching row -->
+  <rect x="18" y="46" width="90" height="18" rx="3" fill="rgba(250,204,21,0.18)" />
+  <circle cx="27" cy="19" r="7" fill="#ef4444" />
+  <rect x="38" y="12" width="14" height="14" rx="2" fill="#3b82f6" />
+  <polygon points="65,12 72,26 58,26" fill="#22c55e" />
+  <polygon points="87,12 94,19 87,26 80,19" fill="#eab308" />
+  <circle cx="109" cy="19" r="7" fill="none" stroke="#a855f7" stroke-width="4" />
+  <polygon points="129,19 133,15 137,19 133,23 129,19" fill="#f97316" />
+
+  <polygon points="27,55 33,64 21,64" fill="#22c55e" />
+  <polygon points="49,55 55,64 43,64" fill="#22c55e" />
+  <polygon points="71,55 77,64 65,64" fill="#22c55e" />
+  <rect x="92" y="48" width="14" height="14" rx="2" fill="#3b82f6" />
+  <circle cx="120" cy="55" r="7" fill="#ef4444" />
+</svg>

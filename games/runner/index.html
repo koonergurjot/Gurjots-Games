@@ -63,6 +63,15 @@
       text-align: center;
       flex: 0 1 auto;
     }
+    .hud .mode-link {
+      color: #8fb9ff;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .hud .mode-link:hover,
+    .hud .mode-link:focus-visible {
+      text-decoration: underline;
+    }
     .hud .hud-metric {
       flex-direction: column;
       align-items: center;
@@ -365,6 +374,7 @@
         <option value="endless">Endless Ramp</option>
       </select>
     </label>
+    <a href="./night.html" class="mode-link">🌃 Try Night Rush →</a>
   </div>
   <div class="editor">
     <div class="palette">
@@ -392,7 +402,15 @@
   <script>
   (function(){
     if (window.__gg_autoSignalInstalled) return; window.__gg_autoSignalInstalled = true;
+    // Set as soon as this shim sends a signal, or when the game sends its own.
+    // postMessage to the parent is never echoed back to this window, so the
+    // message listener below cannot observe our own sends -- without this the
+    // fallback would emit GAME_READY after a GAME_ERROR and the parent shell,
+    // which acts on the last signal it receives, would hide the error overlay
+    // and report a failed boot as healthy.
+    var signalled = false;
     function send(type, payload){
+      if (type === "GAME_READY" || type === "GAME_ERROR") signalled = true;
       try {
         if (window.parent) window.parent.postMessage(Object.assign({ type }, payload || {}), "*");
       } catch(e){ /* noop */ }
@@ -406,7 +424,6 @@
       send("GAME_ERROR", { error: String(reason).slice(0, 500) });
     });
     // If the game hasn't sent a signal by load, emit READY as a fallback
-    var signalled = false;
     window.addEventListener("message", function(ev){
       if (!ev || !ev.data) return;
       if (ev.data.type === "GAME_READY" || ev.data.type === "GAME_ERROR") signalled = true;

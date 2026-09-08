@@ -1,19 +1,21 @@
 {
-  "generatedAt": "2026-09-07T11:55:26.629Z",
+  "generatedAt": "2026-09-08T08:28:53.730Z",
   "summary": {
     "total": 15,
-    "passing": 15,
-    "failing": 0,
+    "passing": 14,
+    "failing": 1,
     "withWarnings": 0,
     "issueCounts": {
-      "total": 0,
+      "total": 1,
       "bySeverity": {
-        "blocker": 0,
+        "blocker": 1,
         "major": 0,
         "minor": 0,
         "info": 0
       },
-      "byCategory": {}
+      "byCategory": {
+        "headless-runtime": 1
+      }
     }
   },
   "manifest": {
@@ -186,8 +188,20 @@
       "index": 2,
       "title": "Tetris",
       "slug": "tetris",
-      "ok": true,
-      "issues": [],
+      "ok": false,
+      "issues": [
+        {
+          "message": "Headless boot timed out",
+          "context": {
+            "slug": "tetris",
+            "shell": "games/tetris/index.html",
+            "waitedMs": 8000
+          },
+          "severity": "error",
+          "severityLevel": "blocker",
+          "category": "headless-runtime"
+        }
+      ],
       "shell": {
         "found": "games/tetris/index.html"
       },
@@ -204,7 +218,7 @@
           "assets/audio/click.wav"
         ],
         "references": {
-          "total": 8,
+          "total": 11,
           "unique": 8,
           "missing": 0
         }
@@ -214,23 +228,13 @@
         "placeholder": false
       },
       "status": {
-        "errors": false,
+        "errors": true,
         "warnings": false
       },
       "runtime": {
         "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
+          "status": "timeout",
+          "waitedMs": 8000
         }
       },
       "requirements": {
@@ -902,15 +906,20 @@
       },
       "assets": {
         "sprites": [
-          "assets/sprites/coin.png"
+          "assets/backgrounds/parallax/forest_layer1.png",
+          "assets/backgrounds/parallax/forest_layer2.png",
+          "assets/sprites/coin.png",
+          "assets/sprites/player/platformer_idle.png",
+          "assets/sprites/player/platformer_jump.png",
+          "assets/sprites/player/platformer_run.png"
         ],
         "audio": [
           "assets/audio/hit.wav",
           "assets/audio/powerup.wav"
         ],
         "references": {
-          "total": 6,
-          "unique": 6,
+          "total": 13,
+          "unique": 10,
           "missing": 0
         }
       },
@@ -994,7 +1003,10 @@
       },
       "assets": {
         "sprites": [
-          "assets/sprites/coin.png"
+          "assets/backgrounds/parallax/city_layer1.png",
+          "assets/backgrounds/parallax/city_layer2.png",
+          "assets/sprites/coin.png",
+          "assets/sprites/player/platformer_run.png"
         ],
         "audio": [
           "assets/audio/hit.wav",
@@ -1002,8 +1014,8 @@
           "assets/audio/click.wav"
         ],
         "references": {
-          "total": 12,
-          "unique": 10,
+          "total": 17,
+          "unique": 13,
           "missing": 0
         }
       },
@@ -1085,8 +1097,8 @@
           "assets/audio/powerup.wav"
         ],
         "references": {
-          "total": 12,
-          "unique": 12,
+          "total": 13,
+          "unique": 13,
           "missing": 0
         }
       },
@@ -1142,24 +1154,24 @@
     },
     {
       "index": 12,
-      "title": "Alien Shooter: Arena",
-      "slug": "alien-shooter",
+      "title": "Solitaire",
+      "slug": "solitaire",
       "ok": true,
       "issues": [],
       "shell": {
-        "found": "games/alien-shooter/index.html"
+        "found": "games/solitaire/index.html"
       },
       "assets": {
         "sprites": [],
-        "audio": [],
-        "references": {
-          "total": 1,
-          "unique": 1,
-          "missing": 0
-        }
+        "audio": [
+          "assets/audio/click.wav",
+          "assets/audio/coin.wav",
+          "assets/audio/hit.wav",
+          "assets/audio/powerup.wav"
+        ]
       },
       "thumbnail": {
-        "found": "games/alien-shooter/thumb.svg",
+        "found": "games/solitaire/thumb.svg",
         "placeholder": false
       },
       "status": {
@@ -1185,28 +1197,23 @@
     },
     {
       "index": 13,
-      "title": "City Runner: Rush",
-      "slug": "city-runner",
+      "title": "Daily Word Puzzle",
+      "slug": "word-puzzle",
       "ok": true,
       "issues": [],
       "shell": {
-        "found": "games/city-runner/index.html"
+        "found": "games/word-puzzle/index.html"
       },
       "assets": {
-        "sprites": [
-          "assets/sprites/player/platformer_run.png",
-          "assets/backgrounds/parallax/city_layer1.png",
-          "assets/backgrounds/parallax/city_layer2.png"
-        ],
-        "audio": [],
-        "references": {
-          "total": 5,
-          "unique": 5,
-          "missing": 0
-        }
+        "sprites": [],
+        "audio": [
+          "assets/audio/click.wav",
+          "assets/audio/powerup.wav",
+          "assets/audio/powerdown.wav"
+        ]
       },
       "thumbnail": {
-        "found": "games/city-runner/thumb.svg",
+        "found": "games/word-puzzle/thumb.svg",
         "placeholder": false
       },
       "status": {
@@ -1232,30 +1239,23 @@
     },
     {
       "index": 14,
-      "title": "Pixel Platformer: Sandbox",
-      "slug": "pixel-platformer",
+      "title": "Gem Match",
+      "slug": "match3",
       "ok": true,
       "issues": [],
       "shell": {
-        "found": "games/pixel-platformer/index.html"
+        "found": "games/match3/index.html"
       },
       "assets": {
-        "sprites": [
-          "assets/sprites/player/platformer_idle.png",
-          "assets/sprites/player/platformer_run.png",
-          "assets/sprites/player/platformer_jump.png",
-          "assets/backgrounds/parallax/forest_layer1.png",
-          "assets/backgrounds/parallax/forest_layer2.png"
-        ],
-        "audio": [],
-        "references": {
-          "total": 7,
-          "unique": 7,
-          "missing": 0
-        }
+        "sprites": [],
+        "audio": [
+          "assets/audio/hit.wav",
+          "assets/audio/coin.wav",
+          "assets/audio/powerup.wav"
+        ]
       },
       "thumbnail": {
-        "found": "games/pixel-platformer/thumb.svg",
+        "found": "games/match3/thumb.svg",
         "placeholder": false
       },
       "status": {

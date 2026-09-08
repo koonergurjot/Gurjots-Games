@@ -7,18 +7,47 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
 
 /**
- * The auto-signal bootstrap embedded in each game's index.html reports
- * GAME_READY / GAME_ERROR to the parent shell. game.html acts on the last
- * signal it receives, so a fallback GAME_READY emitted after a GAME_ERROR
- * makes a failed boot render as "Ready". These tests run the real shipped
- * block, not a copy.
+ * The auto-signal bootstrap embedded in most game pages reports GAME_READY /
+ * GAME_ERROR to the parent shell. game.html acts on the last signal it
+ * receives, so a fallback GAME_READY emitted after a GAME_ERROR makes a
+ * failed boot render as "Ready". These tests run the real shipped block, not
+ * a copy.
+ *
+ * This used to check three games only (the ones written most recently, which
+ * happened to carry a fixed version of the shim). Every other page still
+ * shipped an older shim where the fallback's own "signalled" flag was set by
+ * watching for a message event that a postMessage to window.parent never
+ * actually triggers on the sending window -- so the flag never really
+ * updated, and the fallback fired GAME_READY after a GAME_ERROR on 11 of the
+ * 15 pages that ship this block. tetris/index.html has no shim at all: it
+ * self-reports GAME_READY directly and intentionally has no fallback path.
  */
-const GAMES = ['alien-shooter', 'city-runner', 'pixel-platformer'];
+const PAGES = {
+  '2048': 'games/2048/index.html',
+  asteroids: 'games/asteroids/index.html',
+  breakout: 'games/breakout/index.html',
+  chess: 'games/chess/index.html',
+  chess3d: 'games/chess3d/index.html',
+  match3: 'games/match3/index.html',
+  maze3d: 'games/maze3d/index.html',
+  platformer: 'games/platformer/index.html',
+  'platformer (practice mode)': 'games/platformer/practice.html',
+  pong: 'games/pong/index.html',
+  runner: 'games/runner/index.html',
+  'runner (night rush mode)': 'games/runner/night.html',
+  shooter: 'games/shooter/index.html',
+  'shooter (arena mode)': 'games/shooter/arena.html',
+  snake: 'games/snake/index.html',
+  solitaire: 'games/solitaire/index.html',
+  'tetris (replay lobby)': 'games/tetris/lobby.html',
+  'word-puzzle': 'games/word-puzzle/index.html',
+};
+const GAMES = Object.keys(PAGES);
 
 async function loadBootstrap(slug) {
-  const html = await readFile(path.join(ROOT_DIR, 'games', slug, 'index.html'), 'utf8');
+  const html = await readFile(path.join(ROOT_DIR, PAGES[slug]), 'utf8');
   const match = html.match(/<!-- Auto-signal bootstrap[\s\S]*?<script>([\s\S]*?)<\/script>/);
-  expect(match, `no auto-signal bootstrap in games/${slug}/index.html`).not.toBeNull();
+  expect(match, `no auto-signal bootstrap in ${PAGES[slug]}`).not.toBeNull();
   return match[1];
 }
 

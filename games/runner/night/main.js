@@ -1,6 +1,9 @@
-import { send } from '../common/diag-adapter.js';
-import { drawBootPlaceholder, showErrorOverlay } from '../common/boot-utils.js';
-import { gameEvent } from '../../shared/telemetry.js';
+// This file now lives one directory deeper (games/runner/night/ instead of
+// games/city-runner/), since Night Rush became a mode of City Runner rather
+// than its own catalog entry -- every relative import gained one more '../'.
+import { send } from '../../common/diag-adapter.js';
+import { drawBootPlaceholder, showErrorOverlay } from '../../common/boot-utils.js';
+import { gameEvent } from '../../../shared/telemetry.js';
 
 const ASSET_TIMEOUT_MS = 4000;
 
@@ -108,13 +111,13 @@ function fetchJson(url) {
   const lodToggle = document.getElementById('lodToggle');
 
   if (!canvas || !ctx || !scoreEl || !lodToggle) {
-    console.error('[city-runner] Missing required canvas or UI elements');
+    console.error('[runner:night] Missing required canvas or UI elements');
     send('GAME_ERROR', { reason: 'no-canvas' });
     showErrorOverlay('Canvas rendering is not supported on this device.');
     return;
   }
 
-  drawBootPlaceholder(canvas, ctx, 'Loading City Runner: Rush…');
+  drawBootPlaceholder(canvas, ctx, 'Loading Night Rush…');
 
   const WIDTH = 960;
   const HEIGHT = 320;
@@ -204,7 +207,7 @@ function fetchJson(url) {
         resolve(image);
       };
       const timer = setTimeout(() => {
-        console.warn('[city-runner] Image load timed out', url);
+        console.warn('[runner:night] Image load timed out', url);
         finish(createFallbackImage());
       }, ASSET_TIMEOUT_MS);
       img.onload = () => {
@@ -213,7 +216,7 @@ function fetchJson(url) {
       };
       img.onerror = (error) => {
         clearTimeout(timer);
-        console.warn('[city-runner] Failed to load image', url, error);
+        console.warn('[runner:night] Failed to load image', url, error);
         finish(createFallbackImage());
       };
       img.src = url;
@@ -601,7 +604,7 @@ function fetchJson(url) {
       cleanDistance -= CLEAN_STREAK_DISTANCE;
       cleanStreaks += 1;
       streakBonus += 250 * cleanStreaks;
-      gameEvent('clean_streak', { slug: 'city-runner', level: cleanStreaks, value: cleanStreaks });
+      gameEvent('clean_streak', { slug: 'runner', level: cleanStreaks, value: cleanStreaks, meta: { mode: 'night' } });
     }
 
     const baseScore = Math.floor(state.distance / 10) + streakBonus;
@@ -611,7 +614,7 @@ function fetchJson(url) {
     const milestone = Math.floor(state.distance / SCORE_MILESTONE_DISTANCE);
     if (milestone > lastMilestone) {
       lastMilestone = milestone;
-      gameEvent('level_up', { slug: 'city-runner', level: milestone, value: milestone });
+      gameEvent('level_up', { slug: 'runner', level: milestone, value: milestone, meta: { mode: 'night' } });
     }
     scoreEl.textContent = state.score.toString();
     if (cleanEl) {
@@ -704,7 +707,7 @@ function fetchJson(url) {
     setLod(state.lod);
     resetGame();
     state.running = true;
-    gameEvent('play', { slug: 'city-runner' });
+    gameEvent('play', { slug: 'runner', meta: { mode: 'night' } });
     lastTime = performance.now();
     draw(0);
     send('GAME_READY');
@@ -722,7 +725,7 @@ function fetchJson(url) {
         }
       })
       .catch((error) => {
-        console.warn('[city-runner] Using fallback parallax config', error);
+        console.warn('[runner:night] Using fallback parallax config', error);
       });
 
     withTimeout(fetchJson('/assets/city-runner/atlas.json'), ASSET_TIMEOUT_MS)
@@ -734,14 +737,14 @@ function fetchJson(url) {
         }
       })
       .catch((error) => {
-        console.warn('[city-runner] Using fallback sprite atlas', error);
+        console.warn('[runner:night] Using fallback sprite atlas', error);
       });
   }
 
   init().catch((error) => {
-    console.error('[city-runner] Failed to start', error);
+    console.error('[runner:night] Failed to start', error);
     send('GAME_ERROR', { reason: 'init-failed', message: error?.message });
-    showErrorOverlay('We could not start City Runner: Rush.');
+    showErrorOverlay('We could not start City Runner: Night Rush mode.');
   });
 
   window.addEventListener('visibilitychange', () => {

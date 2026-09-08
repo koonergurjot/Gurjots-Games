@@ -1,12 +1,14 @@
 # Game Doctor Report
 
-Generated: 2026-09-07T11:55:26.629Z
+Generated: 2026-09-08T08:28:53.730Z
 
 - Total games: 15
-- Passing: 15
-- Failing: 0
+- Passing: 14
+- Failing: 1
 - With warnings: 0
-- Issues found: 0
+- Issues found: 1
+- Issues by severity: 🚨 Blockers: 1
+- Issues by category: headless-runtime: 1
 - Manifest version: 1
 - Manifest source: tools/reporters/game-doctor-manifest.json
 
@@ -40,15 +42,20 @@ Generated: 2026-09-07T11:55:26.629Z
 ## Tetris
 
 - Slug: tetris
-- Status: ✅ Healthy
+- Status: ❌ Needs attention
 - Shell: games/tetris/index.html
-- Headless boot: ✅ GAME_READY received
+- Headless boot: ❌ Timed out after 8000ms
 - Thumbnail: games/tetris/thumb.svg
 - Sprites checked: 4
 - Audio checked: 3
-- Asset references scanned: 8
+- Asset references scanned: 11
 - Manifest paths: all required paths found
-- Issues: none
+- **Severity:** 🚨 Blockers: 1
+- Issues:
+  - ❌ Blocker [headless-runtime]: Headless boot timed out
+    - slug: "tetris"
+    - shell: "games/tetris/index.html"
+    - waitedMs: 8000
 
 ## Breakout
 
@@ -137,9 +144,9 @@ Generated: 2026-09-07T11:55:26.629Z
 - Shell: games/platformer/index.html
 - Headless boot: ✅ GAME_READY received
 - Thumbnail: games/platformer/thumb.svg
-- Sprites checked: 1
+- Sprites checked: 6
 - Audio checked: 2
-- Asset references scanned: 6
+- Asset references scanned: 13
 - Manifest paths: all required paths found
 - Manifest globs: all patterns matched files
 - Issues: none
@@ -151,9 +158,9 @@ Generated: 2026-09-07T11:55:26.629Z
 - Shell: games/runner/index.html
 - Headless boot: ✅ GAME_READY received
 - Thumbnail: games/runner/thumb.svg
-- Sprites checked: 1
+- Sprites checked: 4
 - Audio checked: 3
-- Asset references scanned: 12
+- Asset references scanned: 17
 - Manifest paths: all required paths found
 - Issues: none
 
@@ -166,39 +173,37 @@ Generated: 2026-09-07T11:55:26.629Z
 - Thumbnail: games/shooter/thumb.svg
 - Sprites checked: 1
 - Audio checked: 2
-- Asset references scanned: 12
+- Asset references scanned: 13
 - Manifest paths: all required paths found
 - Issues: none
 
-## Alien Shooter: Arena
+## Solitaire
 
-- Slug: alien-shooter
+- Slug: solitaire
 - Status: ✅ Healthy
-- Shell: games/alien-shooter/index.html
+- Shell: games/solitaire/index.html
 - Headless boot: ✅ GAME_READY received
-- Thumbnail: games/alien-shooter/thumb.svg
-- Asset references scanned: 1
+- Thumbnail: games/solitaire/thumb.svg
+- Audio checked: 4
 - Issues: none
 
-## City Runner: Rush
+## Daily Word Puzzle
 
-- Slug: city-runner
+- Slug: word-puzzle
 - Status: ✅ Healthy
-- Shell: games/city-runner/index.html
+- Shell: games/word-puzzle/index.html
 - Headless boot: ✅ GAME_READY received
-- Thumbnail: games/city-runner/thumb.svg
-- Sprites checked: 3
-- Asset references scanned: 5
+- Thumbnail: games/word-puzzle/thumb.svg
+- Audio checked: 3
 - Issues: none
 
-## Pixel Platformer: Sandbox
+## Gem Match
 
-- Slug: pixel-platformer
+- Slug: match3
 - Status: ✅ Healthy
-- Shell: games/pixel-platformer/index.html
+- Shell: games/match3/index.html
 - Headless boot: ✅ GAME_READY received
-- Thumbnail: games/pixel-platformer/thumb.svg
-- Sprites checked: 5
-- Asset references scanned: 7
+- Thumbnail: games/match3/thumb.svg
+- Audio checked: 3
 - Issues: none
 
