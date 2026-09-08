@@ -1191,6 +1191,7 @@ const highlightVarMap={
   hintFrom:'--chess-highlight-hint-from',
   hintTo:'--chess-highlight-hint-to',
   check:'--chess-highlight-check',
+  capture:'--chess-highlight-capture',
   boardBackdrop:'--chess-board-backdrop',
 };
 const highlightFallbacks={
@@ -1200,6 +1201,7 @@ const highlightFallbacks={
   hintFrom:'rgba(125,211,252,0.35)',
   hintTo:'rgba(56,189,248,0.25)',
   check:'rgba(248,113,113,0.32)',
+  capture:'rgba(251,146,60,0.38)',
   boardBackdrop:'#0f172a',
 };
 let highlightPalette={ ...highlightFallbacks };
@@ -1685,6 +1687,19 @@ function enqueueNetMove(moveStr){
   else processNetMove(moveStr);
 }
 function highlightSquare(x,y,color){ drawGlow(fxCtx, ORIGIN+x*S+S/2, ORIGIN+y*S+S/2, S*0.6, color); }
+// Captures ring the square instead of glowing over it: the point is to see which
+// piece you are about to take, so the marker must not cover it.
+function ringSquare(x,y,color){
+  const cx=ORIGIN+x*S+S/2;
+  const cy=ORIGIN+y*S+S/2;
+  fxCtx.save();
+  fxCtx.strokeStyle=color;
+  fxCtx.lineWidth=Math.max(2,S*0.07);
+  fxCtx.beginPath();
+  fxCtx.arc(cx,cy,S*0.42,0,Math.PI*2);
+  fxCtx.stroke();
+  fxCtx.restore();
+}
 // Re-fit the board when the layout changes so the squares the player clicks
 // stay the squares that were drawn.
 window.addEventListener('resize', () => { if(sizeBoard()) draw(); });
@@ -1706,7 +1721,13 @@ function draw(){
   }
   if(sel){
     highlightSquare(sel.x, sel.y, getHighlightColor('selection'));
-    moves.forEach(m=> highlightSquare(m.x, m.y, getHighlightColor('target')));
+    // A quiet move and a capture were drawn identically, so the board never told
+    // you which of your options wins material.
+    moves.forEach(m=>{
+      const occupied=pieceAt(m.x, m.y)!==EMPTY;
+      if(occupied) ringSquare(m.x, m.y, getHighlightColor('capture'));
+      else highlightSquare(m.x, m.y, getHighlightColor('target'));
+    });
   }
   if(lastMove){
     highlightSquare(lastMove.from.x, lastMove.from.y, getHighlightColor('lastMove'));

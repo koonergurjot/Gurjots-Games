@@ -708,6 +708,8 @@ primeImages();
 function playSound(name){
   try{playSfx(name);}catch(err){console.warn('[breakout] sfx failed',err);}
 }
+// Smallest share of the ball's speed that must be vertical.
+const MIN_VERTICAL_RATIO=0.22;
 const MIN_BALL_SPEED=300;
 const MAX_BALL_SPEED=860;
 const BALL_PADDLE_MAX_ANGLE=Math.PI*0.35;
@@ -960,6 +962,12 @@ let paddle={w:paddleBaseW,h:14,x:LOGICAL_WIDTH/2-paddleBaseW/2,y:LOGICAL_HEIGHT-
 let paddlePrevX=paddle.x;
 let paddleVelocity=0;
 let ball={x:LOGICAL_WIDTH/2,y:LOGICAL_HEIGHT-60,vx:240,vy:-360,r:8,stuck:true,speed:420};
+// The ball gets faster every level, but a plain white dot looks identical at 300
+// and at 860. Trail length and colour follow the speed so the ramp is visible.
+// Declared with the ball itself: resetBall() clears it during module init, well
+// before the rendering helpers further down are evaluated.
+const ballTrail=[];
+const BALL_TRAIL_MAX=14;
 let bricks=[];let score=0,lives=3,level=1;let bestLevel=parseInt(localStorage.getItem('gg:bestlvl:breakout')||'1');
 let telemetryGameOverSent=false;
 let currentLevelData=null;let levelDropChance=0.2;let levelDropWeights=null;
@@ -1099,6 +1107,8 @@ function loadLevel(){
 }
 
 function resetBall(){
+  // Otherwise the previous life's trail whips across the field on respawn.
+  ballTrail.length=0;
   ball={
     x:paddle.x+paddle.w/2,
     y:paddle.y-20,
@@ -1546,14 +1556,42 @@ function clamp(value,min,max){
   return Math.max(min,Math.min(max,value));
 }
 
+function recordBallTrail(){
+  ballTrail.push({x:ball.x,y:ball.y});
+  while(ballTrail.length>BALL_TRAIL_MAX) ballTrail.shift();
+}
+
+function drawBallTrail(ctx){
+  if(ballTrail.length<2) return;
+  const speed=clamp(ball.speed||MIN_BALL_SPEED,MIN_BALL_SPEED,MAX_BALL_SPEED);
+  const heat=(speed-MIN_BALL_SPEED)/(MAX_BALL_SPEED-MIN_BALL_SPEED||1);
+  const visible=Math.max(3,Math.round(ballTrail.length*(0.4+heat*0.6)));
+  const start=ballTrail.length-visible;
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  for(let i=Math.max(0,start);i<ballTrail.length;i++){
+    const point=ballTrail[i];
+    const t=(i-start)/(visible||1);
+    ctx.globalAlpha=0.05+t*0.4;
+    ctx.fillStyle=heat>0.5?'#fbbf24':'#60a5fa';
+    ctx.beginPath();
+    ctx.arc(point.x,point.y,(ball.r||8)*(0.35+t*0.65),0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function normaliseBallVelocity(entity){
   const speed=Math.hypot(entity.vx||0,entity.vy||0)||1;
   let target=entity.speed||speed;
   target=clamp(target,MIN_BALL_SPEED,MAX_BALL_SPEED);
   let nx=(entity.vx||0)/speed;
   let ny=(entity.vy||0)/speed;
-  if(Math.abs(ny)<0.1){
-    ny=Math.sign(ny||-1)*0.1;
+  // Keep a real vertical component. At 0.1 the ball crossed the field at about
+  // 40px/s and the player could only watch; there is exactly one ball here, so a
+  // near-horizontal drift is a dead run rather than a hazard.
+  if(Math.abs(ny)<MIN_VERTICAL_RATIO){
+    ny=Math.sign(ny||-1)*MIN_VERTICAL_RATIO;
     const scale=Math.sqrt(Math.max(0,1-ny*ny));
     nx=Math.sign(nx||1)*scale;
   }
@@ -1705,6 +1743,8 @@ function handleCollision(entity,collision){
 
 function advanceBall(entity,dt){
   if(!entity||entity.stuck)return;
+  // Only the primary ball leaves a trail; multiballs would smear the field.
+  if(entity===ball) recordBallTrail();
   normaliseBallVelocity(entity);
   let remaining=dt;
   let safety=0;
@@ -1928,6 +1968,7 @@ function draw(){
     ctx.fillStyle='#e6e7ea';ctx.fillRect(paddle.x,paddle.y,paddle.w,paddle.h);
   }
   drawPaddleSheen(ctx,paddle);
+  drawBallTrail(ctx);
   const ballSprite=requestImage(spriteImages,'ball',SPRITE_SOURCES.ball);
   const ballSize=ball.r*2;
   if(ballSprite&&ballSprite.complete&&ballSprite.naturalWidth){

@@ -13,6 +13,10 @@
 //                   length) -- games report "level 4", not four separate
 //                   events, so counting them would measure the wrong thing
 //   career          accumulate N across every run, forever
+//
+// An objective may also pin a `name`, for games that report several distinct
+// things through one event type -- chess sends every milestone as a score_event
+// and distinguishes them by name.
 
 const STORAGE_KEY = 'gg:objectives';
 export const OBJECTIVE_EVENT = 'gg:objective';
@@ -59,7 +63,7 @@ export const BRIEFINGS = {
     premise: 'A full game against an engine that plays five strengths. Beat it once, then beat it faster.',
     objectives: [
       { id: 'chess_win', kind: 'run_event', event: 'win', goal: 1, label: 'Win a game' },
-      { id: 'chess_puzzle', kind: 'career', event: 'puzzle_solved', goal: 5, label: 'Solve 5 daily puzzles' },
+      { id: 'chess_puzzle', kind: 'career', event: 'score_event', name: 'puzzle_solved', goal: 5, label: 'Solve 5 daily puzzles' },
       { id: 'chess_career', kind: 'career', event: 'win', goal: 10, label: 'Win 10 games in all' },
     ],
   },
@@ -250,11 +254,12 @@ export function getProgress(rawSlug) {
   const career = getCareer(slug);
   const live = runSlug === slug;
   return briefing.objectives.map((objective) => {
+    const key = objective.name ? `${objective.event}:${objective.name}` : objective.event;
     let have = 0;
-    if (objective.kind === 'career') have = career[objective.event] || 0;
+    if (objective.kind === 'career') have = career[key] || 0;
     else if (objective.kind === 'run_score') have = live ? runScore : 0;
-    else if (objective.kind === 'run_event_max') have = live ? (runEventMax[objective.event] || 0) : 0;
-    else have = live ? (runEvents[objective.event] || 0) : 0;
+    else if (objective.kind === 'run_event_max') have = live ? (runEventMax[key] || 0) : 0;
+    else have = live ? (runEvents[key] || 0) : 0;
     return {
       ...objective,
       have: Math.min(have, objective.goal),
@@ -274,8 +279,12 @@ export function recordGameEvent(event = {}) {
 
   if (type === 'play' || runSlug !== slug) resetRun(slug);
 
-  runEvents[type] = (runEvents[type] || 0) + 1;
-  runEventMax[type] = Math.max(runEventMax[type] || 0, eventMagnitude(event));
+  const keys = [type];
+  if (typeof event.name === 'string' && event.name) keys.push(`${type}:${event.name}`);
+  for (const key of keys) {
+    runEvents[key] = (runEvents[key] || 0) + 1;
+    runEventMax[key] = Math.max(runEventMax[key] || 0, eventMagnitude(event));
+  }
   const value = Number(event.value);
   if (Number.isFinite(value)) runScore = Math.max(runScore, value);
 
@@ -283,7 +292,7 @@ export function recordGameEvent(event = {}) {
   const state = readState();
   const entry = state[slug] || (state[slug] = {});
   const career = entry.career || (entry.career = {});
-  career[type] = (career[type] || 0) + 1;
+  for (const key of keys) career[key] = (career[key] || 0) + 1;
   writeState(state);
 
   const newlyDone = [];
