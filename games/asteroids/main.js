@@ -2088,7 +2088,23 @@ class AsteroidsGame {
           this.specialWave.boss = null;
           this.enemyProjectiles.length = 0;
           this.addScore(this.specialWave.score || Math.round(1500 * (this.tuning?.scoreScale ?? 1)));
+          // The biggest moment in a run deserves more than one puff: a chain of
+          // blasts across the hull, and a report so it can be recognised.
           this.spawnExplosion(boss.x, boss.y, 4);
+          for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI * 2 * i) / 6 + Math.random();
+            const dist = boss.radius * (0.35 + Math.random() * 0.6);
+            this.spawnExplosion(
+              boss.x + Math.cos(angle) * dist,
+              boss.y + Math.sin(angle) * dist,
+              1.2 + Math.random() * 1.4,
+            );
+          }
+          gameEvent('boss_down', {
+            slug: SLUG,
+            value: this.wave ?? 0,
+            meta: { label: this.specialWave.label || 'boss' },
+          });
         }
         this.refreshObjectiveHud();
         return true;

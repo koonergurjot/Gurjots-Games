@@ -1938,6 +1938,11 @@ let wallBoxes = [];
 let exitBox = null;
 let floor = null;
 let exitMesh = null;
+// A beacon standing well above the wall line. The exit itself is a box exactly
+// as tall as the walls, so it is invisible until you are already in its
+// corridor -- which makes the maze blind trial and error rather than
+// navigation. This gives you something to steer towards.
+let exitBeacon = null;
 const wallHeight = 4;
 const wallNoiseAmplitude = 0.08;
 const BASE_CELLS = 8;
@@ -2236,6 +2241,11 @@ function buildMaze(seed) {
     disposeMesh(exitMesh);
     exitMesh = null;
   }
+  if (exitBeacon) {
+    scene.remove(exitBeacon);
+    disposeMesh(exitBeacon);
+    exitBeacon = null;
+  }
   if (wallMesh) {
     scene.remove(wallMesh);
     disposeMesh(wallMesh);
@@ -2376,6 +2386,20 @@ function buildMaze(seed) {
   exitMesh.receiveShadow = true;
   scene.add(exitMesh);
   exitBox = new THREE.Box3().setFromCenterAndSize(exitMesh.position.clone(), new THREE.Vector3(cellSize, wallHeight, cellSize));
+
+  const beaconHeight = wallHeight * 6;
+  exitBeacon = new THREE.Mesh(
+    new THREE.CylinderGeometry(cellSize * 0.16, cellSize * 0.16, beaconHeight, 12, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: 0x35ffa8,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+  );
+  exitBeacon.position.set(ex, beaconHeight / 2, ez);
+  scene.add(exitBeacon);
 
   const open = [];
   for (let y = 0; y < rows; y++) {
@@ -2600,6 +2624,15 @@ function finish(time) {
       },
     });
   }
+  // A time trial should recognise a fast run, not only a finished one.
+  if (outcome === 'win' && Number.isFinite(finalTime) && finalTime > 0 && finalTime <= 60) {
+    gameEvent('fast_escape', {
+      slug: 'maze3d',
+      value: Math.round(finalTime),
+      durationMs,
+      meta,
+    });
+  }
   if (currentSeedIsDaily && finalTime <= 150) {
     gameEvent('score_event', {
       slug: 'maze3d',
@@ -2756,6 +2789,11 @@ function loop() {
   }
   const dt = 0.016; // fixed timestep
   const frameNow = performance.now();
+  if (exitBeacon) {
+    // A slow pulse so the beacon reads as a marker rather than scenery.
+    exitBeacon.material.opacity = 0.22 + Math.sin(frameNow / 420) * 0.12;
+    exitBeacon.rotation.y = frameNow / 2600;
+  }
   if (timerStarted) {
     updateTimerDisplay(getTimerSeconds(frameNow));
   }
