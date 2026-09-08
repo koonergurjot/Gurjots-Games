@@ -39,6 +39,7 @@ const PAGES = {
   snake: 'games/snake/index.html',
   solitaire: 'games/solitaire/index.html',
   'tetris (replay lobby)': 'games/tetris/lobby.html',
+  'word-puzzle': 'games/word-puzzle/index.html',
 };
 const GAMES = Object.keys(PAGES);
 

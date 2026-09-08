@@ -154,6 +154,15 @@ export const BRIEFINGS = {
       { id: 'sol_career', kind: 'career', event: 'win', goal: 10, label: 'Win 10 deals in all' },
     ],
   },
+  'word-puzzle': {
+    title: 'Daily Word Puzzle',
+    premise: 'One word, six guesses, and every player on Earth is working the same puzzle today. The tiles tell you what you got right -- the rest is deduction.',
+    objectives: [
+      { id: 'word_win', kind: 'run_event', event: 'win', goal: 1, label: "Solve today's word" },
+      { id: 'word_fast', kind: 'run_event', event: 'fast_solve', goal: 1, label: 'Solve it in 3 guesses or fewer' },
+      { id: 'word_career', kind: 'career', event: 'win', goal: 10, label: 'Solve 10 daily puzzles in all' },
+    ],
+  },
 };
 
 // game.html and the shells disagree on one name: the catalog slug is 2048 while

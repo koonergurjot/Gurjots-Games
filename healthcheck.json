@@ -63,5 +63,10 @@
     "id": "solitaire",
     "status": "ok",
     "reason": ""
+  },
+  {
+    "id": "word-puzzle",
+    "status": "ok",
+    "reason": ""
   }
 ]

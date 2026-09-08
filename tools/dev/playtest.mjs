@@ -39,6 +39,9 @@ const INPUTS = {
   // Campaign mode (index.html). Arena mode lives at arena.html, reached via an
   // in-game link, and is not part of the games.json-driven sweep this runs.
   shooter: ['ArrowLeft', ' ', 'ArrowRight', ' ', ' '],
+  // Types a guess and submits it -- exercises the tile grid, the on-screen
+  // keyboard's color feedback, and the localStorage day-state write.
+  'word-puzzle': ['a', 'b', 'o', 'u', 't', 'Enter'],
 };
 
 // Hash a screenshot of each on-screen canvas. Reading pixels through

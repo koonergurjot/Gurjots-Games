@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-08T08:15:26.603Z",
+  "generatedAt": "2026-09-08T08:21:50.700Z",
   "summary": {
-    "total": 13,
-    "passing": 12,
+    "total": 14,
+    "passing": 13,
     "failing": 1,
     "withWarnings": 0,
     "issueCounts": {
@@ -1172,6 +1172,48 @@
       },
       "thumbnail": {
         "found": "games/solitaire/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "index": 13,
+      "title": "Daily Word Puzzle",
+      "slug": "word-puzzle",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/word-puzzle/index.html"
+      },
+      "assets": {
+        "sprites": [],
+        "audio": [
+          "assets/audio/click.wav",
+          "assets/audio/powerup.wav",
+          "assets/audio/powerdown.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "games/word-puzzle/thumb.svg",
         "placeholder": false
       },
       "status": {

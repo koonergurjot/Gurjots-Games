@@ -829,5 +829,66 @@
         "Clear all 52 cards onto the four foundations to win."
       ]
     }
+  },
+  {
+    "id": "word-puzzle",
+    "slug": "word-puzzle",
+    "title": "Daily Word Puzzle",
+    "description": "Guess the five-letter word of the day in six tries. Everyone gets the same word.",
+    "short": "Guess the day's five-letter word in six tries.",
+    "controls": "Type letters, Enter to submit a guess, Backspace to delete. Or click/tap the on-screen keyboard.",
+    "tags": [
+      "puzzle",
+      "word",
+      "daily"
+    ],
+    "engineType": "canvas-2d",
+    "difficulty": "medium",
+    "released": "2026-09-08",
+    "playUrl": "/games/word-puzzle/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/word-puzzle/thumb.svg",
+    "thumbnail": "/games/word-puzzle/thumb.svg",
+    "assets": {
+      "sprites": [],
+      "audio": [
+        "/assets/audio/click.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/powerdown.wav"
+      ]
+    },
+    "firstFrame": {
+      "sprites": [],
+      "audio": [
+        "/assets/audio/click.wav",
+        "/assets/audio/powerup.wav",
+        "/assets/audio/powerdown.wav"
+      ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Keyboard",
+      "Touch",
+      "Daily",
+      "SFX"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 240
+    },
+    "help": {
+      "objective": "Figure out the secret five-letter word within six guesses, using the color of each tile as a clue.",
+      "controls": "Type letters, Enter to submit a guess, Backspace to delete. Or click/tap the on-screen keyboard.",
+      "tips": [
+        "A green tile means that letter is in the right spot; yellow means it's in the word but the wrong spot; gray means it's not in the word at all.",
+        "Open with a guess that uses common, varied letters to learn the most from your first try.",
+        "The word changes once a day for everyone, so a streak only survives guessing it correctly day after day."
+      ],
+      "steps": [
+        "Type a five-letter guess and press Enter.",
+        "Read the tile colors to narrow down the letters and their positions.",
+        "Guess the exact word within six tries to solve the day's puzzle."
+      ]
+    }
   }
 ]
