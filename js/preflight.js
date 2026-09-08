@@ -21,6 +21,10 @@
   var pinged = false;
   try {
     window.addEventListener('message', function(e){
+      // SECURITY: Validate message origin
+      if (e.origin !== window.location.origin && e.origin !== '*') {
+        return;
+      }
       if (!e || !e.data || typeof e.data !== 'object') return;
       if (e.data.type === 'GAME_READY' || e.data.type === 'GAME_ERROR') pinged = true;
     });

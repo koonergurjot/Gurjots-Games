@@ -9,6 +9,11 @@ export function error(message){
 // Optional listeners for pause/mute/restart sent from shell
 export function attachShellControls({ onPause, onResume, onRestart, onMute } = {}){
   window.addEventListener('message', (ev)=>{
+    // SECURITY: Validate message origin
+    if (ev.origin !== window.location.origin && ev.origin !== '*') {
+      console.warn('[hiscore] Ignoring message from untrusted origin:', ev.origin);
+      return;
+    }
     const d = ev.data||{};
     if (d.type==='GG_PAUSE' || d.type==='GAME_PAUSE') onPause && onPause();
     if (d.type==='GG_RESUME' || d.type==='GAME_RESUME') onResume && onResume();

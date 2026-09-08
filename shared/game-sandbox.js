@@ -102,6 +102,11 @@ async function boot(){
   }
 }
 window.addEventListener('message', (event) => {
+  // SECURITY: Validate message origin
+  if (event.origin !== window.location.origin && event.origin !== '*') {
+    console.warn('[sandbox] Ignoring message from untrusted origin:', event.origin);
+    return;
+  }
   const data = event && event.data;
   if (!data || (data.slug && data.slug !== slug)) return;
   const type = data.type;
@@ -256,6 +261,11 @@ export function createGameSandbox(options = {}) {
     state.readyPromise = ready;
 
     state.messageHandler = function handleMessage(event) {
+      // SECURITY: Validate message origin - only accept from same origin or iframe source
+      if (event.origin !== window.location.origin && event.origin !== '*') {
+        console.warn('[sandbox] Ignoring message from untrusted origin:', event.origin);
+        return;
+      }
       if (!state.frame || event.source !== state.frame.contentWindow) return;
       const data = event && event.data;
       if (!data || typeof data !== 'object') return;

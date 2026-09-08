@@ -2537,6 +2537,11 @@ const onShellPause=()=>pauseForShell();
 const onShellResume=()=>resumeFromShell();
 const onVisibility=()=>{ if(document.hidden) pauseForShell(); else resumeFromShell(); };
 const onShellMessage=(event)=>{
+  // SECURITY: Validate message origin
+  if (event.origin !== window.location.origin && event.origin !== '*') {
+    console.warn('[tetris] Ignoring message from untrusted origin:', event.origin);
+    return;
+  }
   const data=event && typeof event.data==='object' ? event.data : null;
   const type=data?.type;
   if(type==='GAME_PAUSE' || type==='GG_PAUSE') pauseForShell();

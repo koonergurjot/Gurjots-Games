@@ -617,6 +617,11 @@ function renderError(msg, e){
 }
 
 window.addEventListener('message', function(ev){
+  // SECURITY: Validate message origin
+  if (ev.origin !== window.location.origin && ev.origin !== '*') {
+    console.warn('[game-shell] Ignoring message from untrusted origin:', ev.origin);
+    return;
+  }
   var data = ev.data || {};
   if(data.type === 'GAME_READY'){
     clearBootTimers();
@@ -652,6 +657,10 @@ function appendDiag(text) {
 function ensureDiagListeners() {
   if (!diagState.listenerBound) {
     window.addEventListener('message', function(e){
+      // SECURITY: Validate message origin for diagnostic listener
+      if (e.origin !== window.location.origin && e.origin !== '*') {
+        return;
+      }
       if (!diagState.sink) return;
       var d = e && e.data;
       if (d && d.type === 'DIAG_LOG' && d.entry) {

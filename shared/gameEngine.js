@@ -21,6 +21,11 @@ export class GameEngine {
         }
       };
       this._handleMessage = (event) => {
+        // SECURITY: Validate message origin
+        if (event.origin !== window.location.origin && event.origin !== '*') {
+          console.warn('[gameEngine] Ignoring message from untrusted origin:', event.origin);
+          return;
+        }
         const data = event && typeof event.data === 'object' ? event.data : null;
         const type = data?.type;
         if (type === 'GAME_PAUSE' || type === 'GG_PAUSE') {

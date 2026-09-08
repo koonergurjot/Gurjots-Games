@@ -55,6 +55,10 @@
   hbTimer = setInterval(()=>push('info', 'hb#'+Math.round((performance.now()-start)/1000)), 1000);
 
   window.addEventListener('message', (ev)=>{
+    // SECURITY: Validate message origin
+    if (ev.origin !== window.location.origin && ev.origin !== '*') {
+      return;
+    }
     if (ev?.data?.type === 'GAME_READY'){ stopHB(); push('info','GAME_READY heard'); }
   });
 
