@@ -28,6 +28,7 @@ const PAGES = {
   breakout: 'games/breakout/index.html',
   chess: 'games/chess/index.html',
   chess3d: 'games/chess3d/index.html',
+  match3: 'games/match3/index.html',
   maze3d: 'games/maze3d/index.html',
   platformer: 'games/platformer/index.html',
   'platformer (practice mode)': 'games/platformer/practice.html',

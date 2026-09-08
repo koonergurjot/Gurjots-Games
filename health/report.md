@@ -1,9 +1,9 @@
 # Game Doctor Report
 
-Generated: 2026-09-08T08:21:50.700Z
+Generated: 2026-09-08T08:28:53.730Z
 
-- Total games: 14
-- Passing: 13
+- Total games: 15
+- Passing: 14
 - Failing: 1
 - With warnings: 0
 - Issues found: 1
@@ -194,6 +194,16 @@ Generated: 2026-09-08T08:21:50.700Z
 - Shell: games/word-puzzle/index.html
 - Headless boot: ✅ GAME_READY received
 - Thumbnail: games/word-puzzle/thumb.svg
+- Audio checked: 3
+- Issues: none
+
+## Gem Match
+
+- Slug: match3
+- Status: ✅ Healthy
+- Shell: games/match3/index.html
+- Headless boot: ✅ GAME_READY received
+- Thumbnail: games/match3/thumb.svg
 - Audio checked: 3
 - Issues: none
 

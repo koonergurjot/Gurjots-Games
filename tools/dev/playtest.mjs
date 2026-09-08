@@ -53,12 +53,15 @@ const INPUTS = {
 // get a sequence of clicks across the board so a move can actually be made --
 // chess3d falls back to a DOM board under headless software rendering, where
 // key presses do nothing at all.
-const TURN_BASED = new Set(['chess', 'chess3d', 'solitaire']);
+const TURN_BASED = new Set(['chess', 'chess3d', 'solitaire', 'match3']);
 
 // Turn-based games default to an 8x8 board grid (see below). Solitaire's board
 // is a fixed 900x760 layout of piles rather than a grid, so it gets its own
 // sequence of clicks expressed as fractions of the canvas box: draw from the
 // stock a few times, then try to send the drawn card up to a foundation.
+// Match-3's grid does line up with the 8x8 default, but its cells don't fill
+// the whole canvas the way a chessboard does, so it gets its own fractions
+// too: select a gem, then click its neighbour to attempt a swap.
 const CLICK_SEQUENCES = {
   solitaire: [
     [70 / 900, 90 / 760], // stock
@@ -68,6 +71,12 @@ const CLICK_SEQUENCES = {
     [70 / 900, 90 / 760], // stock
     [190 / 900, 90 / 760], // waste: select again
     [580 / 900, 90 / 760], // a different foundation slot
+  ],
+  match3: [
+    [64 / 520, 48 / 500], // select gem at row0,col0
+    [120 / 520, 48 / 500], // swap with its neighbour at row0,col1
+    [176 / 520, 104 / 500], // select gem at row1,col2
+    [232 / 520, 104 / 500], // swap with its neighbour at row1,col3
   ],
 };
 

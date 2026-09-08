@@ -163,6 +163,15 @@ export const BRIEFINGS = {
       { id: 'word_career', kind: 'career', event: 'win', goal: 10, label: 'Solve 10 daily puzzles in all' },
     ],
   },
+  match3: {
+    title: 'Gem Match',
+    premise: 'A board full of gems and a shrinking budget of moves. Every swap should either score now or set up a bigger one.',
+    objectives: [
+      { id: 'match3_score', kind: 'run_score', goal: 3000, label: 'Score 3,000 in one run' },
+      { id: 'match3_level', kind: 'run_event_max', event: 'level_up', goal: 5, label: 'Reach level 5 in one run' },
+      { id: 'match3_career', kind: 'career', event: 'game_over', goal: 15, label: 'Complete 15 rounds' },
+    ],
+  },
 };
 
 // game.html and the shells disagree on one name: the catalog slug is 2048 while

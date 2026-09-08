@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-09-08T08:21:50.700Z",
+  "generatedAt": "2026-09-08T08:28:53.730Z",
   "summary": {
-    "total": 14,
-    "passing": 13,
+    "total": 15,
+    "passing": 14,
     "failing": 1,
     "withWarnings": 0,
     "issueCounts": {
@@ -1214,6 +1214,48 @@
       },
       "thumbnail": {
         "found": "games/word-puzzle/thumb.svg",
+        "placeholder": false
+      },
+      "status": {
+        "errors": false,
+        "warnings": false
+      },
+      "runtime": {
+        "headless": {
+          "status": "ready",
+          "message": {
+            "type": "GAME_READY"
+          },
+          "signals": [
+            {
+              "type": "postMessage",
+              "data": {
+                "type": "GAME_READY"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "index": 14,
+      "title": "Gem Match",
+      "slug": "match3",
+      "ok": true,
+      "issues": [],
+      "shell": {
+        "found": "games/match3/index.html"
+      },
+      "assets": {
+        "sprites": [],
+        "audio": [
+          "assets/audio/hit.wav",
+          "assets/audio/coin.wav",
+          "assets/audio/powerup.wav"
+        ]
+      },
+      "thumbnail": {
+        "found": "games/match3/thumb.svg",
         "placeholder": false
       },
       "status": {

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gem Match</title>
+  <link rel="stylesheet" href="../common/game-shell.css" />
+  <style>
+    body {
+      background: #0b1020;
+      color: #e6e7ea;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    .wrap {
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      width: min(100%, 600px);
+      margin: 0 auto;
+    }
+    canvas {
+      background: #0b1020;
+      border: 1px solid #1f2431;
+      border-radius: 12px;
+      box-shadow: 0 6px 22px rgba(0, 0, 0, .35);
+      display: block;
+      width: min(100%, 520px);
+      height: auto;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .hud {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      background: #1b1e24c0;
+      border: 1px solid #27314b;
+      border-radius: 10px;
+      padding: 8px 10px;
+      /* The shell pins a fixed Back button in this corner. */
+      padding-left: 122px;
+      font-size: 14px;
+      max-width: calc(100vw - 24px);
+      box-sizing: border-box;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 12px;
+      z-index: 5;
+    }
+    .hud button {
+      background: #27314b;
+      border: 1px solid #3b4766;
+      color: #e6e7ea;
+      border-radius: 8px;
+      padding: 4px 10px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .hud button:hover {
+      background: #3b4766;
+    }
+    #status {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1b1e24c0;
+      border: 1px solid #27314b;
+      border-radius: 10px;
+      padding: 6px 14px;
+      font-size: 14px;
+      max-width: calc(100vw - 24px);
+      text-align: center;
+      z-index: 5;
+    }
+    kbd {
+      padding: 1px 6px;
+      border-radius: 6px;
+      border: 1px solid #2f3542;
+      background: #111319;
+      color: #d3d7de;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    @media (max-width: 640px) {
+      .hud {
+        top: auto;
+        bottom: 56px;
+        left: 12px;
+        right: 12px;
+        padding-left: 10px;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body class="game-shell">
+  <div class="hud">
+    Moves: <span id="moves">0</span> • Score: <span id="score">0</span> • Level: <span id="level">1</span> •
+    <button id="newGameBtn" type="button">New Game (<kbd>N</kbd>)</button>
+  </div>
+  <main class="game-shell__main">
+    <div class="game-shell__surface">
+      <div class="wrap">
+        <canvas id="game" width="520" height="500" data-basew="520" data-baseh="500" role="img" aria-label="Match-3 gem board"></canvas>
+      </div>
+    </div>
+  </main>
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <script type="module" src="./main.js"></script>
+  <script type="module" src="../../shared/juice/overlay.js" data-game="match3"></script>
+  <script type="module" src="../common/game-shell.js" data-back-href="../../index.html" data-game="match3"></script>
+
+  <!-- Auto-signal bootstrap: emits GAME_READY / GAME_ERROR to parent shell if the game doesn't -->
+  <script>
+  (function(){
+    if (window.__gg_autoSignalInstalled) return; window.__gg_autoSignalInstalled = true;
+    // Set as soon as this shim sends a signal, or when the game sends its own.
+    // postMessage to the parent is never echoed back to this window, so the
+    // message listener below cannot observe our own sends -- without this the
+    // fallback would emit GAME_READY after a GAME_ERROR and the parent shell,
+    // which acts on the last signal it receives, would hide the error overlay
+    // and report a failed boot as healthy.
+    var signalled = false;
+    function send(type, payload){
+      if (type === "GAME_READY" || type === "GAME_ERROR") signalled = true;
+      try {
+        if (window.parent) window.parent.postMessage(Object.assign({ type }, payload || {}), "*");
+      } catch(e){ /* noop */ }
+    }
+    window.addEventListener("error", function(e){
+      send("GAME_ERROR", { error: (e.message || String(e.error || e)).slice(0, 500) });
+    });
+    window.addEventListener("unhandledrejection", function(e){
+      var reason = e && e.reason ? (e.reason.message || String(e.reason)) : "unhandled rejection";
+      send("GAME_ERROR", { error: String(reason).slice(0, 500) });
+    });
+    window.addEventListener("message", function(ev){
+      if (!ev || !ev.data) return;
+      if (ev.data.type === "GAME_READY" || ev.data.type === "GAME_ERROR") signalled = true;
+    });
+    function emitReadyOnce(){ if (!signalled) { send("GAME_READY"); signalled = true; } }
+    if (document.readyState === "complete") { setTimeout(emitReadyOnce, 0); }
+    else { window.addEventListener("load", function(){ setTimeout(emitReadyOnce, 0); }); }
+  })();
+  </script>
+  <link rel="stylesheet" href="/games/common/diag-modal.css">
+  <script src="/games/common/diagnostics/report-store.js" defer></script>
+  <script src="/games/common/diag-core.js" defer></script>
+  <script src="/games/common/diag-capture.js" defer></script>
+</body>
+</html>

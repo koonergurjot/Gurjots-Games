@@ -68,5 +68,10 @@
     "id": "word-puzzle",
     "status": "ok",
     "reason": ""
+  },
+  {
+    "id": "match3",
+    "status": "ok",
+    "reason": ""
   }
 ]

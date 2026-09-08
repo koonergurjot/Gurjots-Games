@@ -891,6 +891,66 @@ export const games = [
         "Guess the exact word within six tries to solve the day's puzzle."
       ]
     }
+  },
+  {
+    "id": "match3",
+    "slug": "match3",
+    "title": "Gem Match",
+    "description": "Swap adjacent gems to line up three or more. Chain cascades for bonus points before your moves run out.",
+    "short": "Swap gems, match three or more, chain the cascades.",
+    "controls": "Click a gem, then click an adjacent gem to swap. N starts a new game.",
+    "tags": [
+      "puzzle",
+      "match-3",
+      "casual"
+    ],
+    "engineType": "canvas-2d",
+    "difficulty": "easy",
+    "released": "2026-09-08",
+    "playUrl": "/games/match3/",
+    "version": "1.0.0",
+    "thumbnailPath": "/games/match3/thumb.svg",
+    "thumbnail": "/games/match3/thumb.svg",
+    "assets": {
+      "sprites": [],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/coin.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    },
+    "firstFrame": {
+      "sprites": [],
+      "audio": [
+        "/assets/audio/hit.wav",
+        "/assets/audio/coin.wav",
+        "/assets/audio/powerup.wav"
+      ]
+    },
+    "featureFlags": [
+      "Offline",
+      "Mouse",
+      "Touch",
+      "SFX"
+    ],
+    "minDevice": {
+      "width": 360,
+      "height": 240
+    },
+    "help": {
+      "objective": "Swap adjacent gems to line up three or more of a kind before your move budget runs out.",
+      "controls": "Click a gem, then click an adjacent gem to swap. N starts a new game.",
+      "tips": [
+        "Look for a swap that sets off more than one match at once -- cascades from gravity refills are worth extra.",
+        "An invalid swap costs nothing, so it's safe to test a move before committing to a better one.",
+        "If the board runs out of legal moves it reshuffles automatically, so play through rather than restarting."
+      ],
+      "steps": [
+        "Click a gem, then click a gem next to it to attempt a swap.",
+        "A swap that lines up three or more gems clears them and scores points.",
+        "Keep matching before your moves run out to reach the highest level you can."
+      ]
+    }
   }
 ];
 export default games;
