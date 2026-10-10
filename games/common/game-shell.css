@@ -46,6 +46,7 @@ body.game-shell::after {
 .game-shell__main {
   flex: 1;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   align-items: safe center;
   justify-items: safe center;
@@ -61,6 +62,7 @@ body.game-shell::after {
   place-items: center;
   gap: 24px;
   width: min(100%, 960px);
+  min-width: 0;
 }
 
 .game-shell__controls {
@@ -109,6 +111,18 @@ body.game-shell::after {
   gap: 12px;
   box-shadow: 0 20px 48px rgba(2, 6, 23, 0.5);
   color: #e8ecff;
+}
+
+/* Pages that are just a full-viewport canvas have no .game-shell__surface to
+   host the missions card, so it was prepended to <body> in normal flow and
+   pushed the playfield down past the bottom of the screen. Float it instead. */
+body > .game-shell__missions {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  width: min(320px, calc(100vw - 24px));
+  z-index: 6;
+  pointer-events: none;
 }
 
 .game-shell__missions[data-loading='true']::after {
@@ -204,7 +218,8 @@ body.game-shell::after {
 .game-shell__surface > .game-shell__canvas,
 .game-shell__surface > .game-shell__frame {
   display: block;
-  max-width: min(100vw, 960px);
+  /* 100vw minus the surface's side padding, or the board overflows on phones */
+  max-width: min(100%, calc(100vw - 2 * clamp(16px, 4vw, 64px)), 960px);
   max-height: min(100vh, calc(100svh - 160px));
   background: #0f1320;
   border-radius: 16px;
