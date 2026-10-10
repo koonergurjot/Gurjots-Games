@@ -11,6 +11,7 @@
     "health": "node tools/healthcheck.mjs",
     "check:journeys": "node tools/dev/journey-check.mjs",
     "check:play": "node tools/dev/play-check.mjs",
+    "check:home": "node tools/dev/home-check.mjs",
     "doctor": "node tools/game-doctor.mjs --strict --baseline=health/baseline.json",
     "doctor:changed": "node tools/game-doctor.mjs --strict --baseline=health/baseline.json --changed",
     "sync:games": "node tools/sync-game-catalog.mjs",
