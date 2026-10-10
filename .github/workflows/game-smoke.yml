@@ -36,3 +36,8 @@ jobs:
 
       - name: Boot every catalogued game
         run: node tools/dev/boot-check.mjs
+
+      # Opens each game through game.html (what the homepage links to) on a phone
+      # and a desktop viewport and fails on load errors or a clipped playfield.
+      - name: Launch every game through the player journey
+        run: node tools/dev/journey-check.mjs

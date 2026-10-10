@@ -332,6 +332,11 @@ function boot() {
   }
 
   function render() {
+    // The shell resizes this canvas (backing store = CSS size x DPR) and its
+    // context transform only accounts for DPR. Map our fixed BASE_W x BASE_H
+    // drawing space onto whatever the backing store is now, so what is drawn
+    // lines up with toLogicalPoint() below.
+    ctx.setTransform(canvas.width / BASE_W, 0, 0, canvas.height / BASE_H, 0, 0);
     ctx.clearRect(0, 0, BASE_W, BASE_H);
     ctx.fillStyle = '#0b1020';
     ctx.fillRect(0, 0, BASE_W, BASE_H);

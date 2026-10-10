@@ -291,6 +291,9 @@ function boot() {
   }
 
   function render() {
+    // Shell resizes the backing store (CSS x DPR); map our fixed BASE_W x BASE_H
+    // drawing space onto it so drawing lines up with the pointer mapping.
+    ctx.setTransform(canvas.width / BASE_W, 0, 0, canvas.height / BASE_H, 0, 0);
     ctx.clearRect(0, 0, BASE_W, BASE_H);
     ctx.fillStyle = '#0b1020';
     ctx.fillRect(0, 0, BASE_W, BASE_H);

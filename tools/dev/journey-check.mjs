@@ -44,7 +44,7 @@ export async function journey(browser, port, slug, viewport) {
   page.on('console', m => { if (m.type() === 'error' && !IGNORE.some(r => r.test(m.text()))) problems.push(`console: ${m.text().slice(0, 200)}`); });
   page.on('response', r => { if (r.status() >= 400) problems.push(`${r.status()} ${r.url().replace(origin, '')}`); });
   try {
-    await page.goto(`${origin}/game.html?slug=${encodeURIComponent(slug)}&id=${encodeURIComponent(slug)}`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.goto(`${origin}/game.html?slug=${encodeURIComponent(slug)}&id=${encodeURIComponent(slug)}${process.env.JOURNEY_QUERY || ''}`, { waitUntil: 'domcontentloaded', timeout: 20000 });
     await page.waitForTimeout(SETTLE_MS);
     const frame = page.frames().find(f => f !== page.mainFrame() && /\/(gameshells|games)\//.test(f.url()));
     if (!frame) { problems.push('no game frame loaded'); }
@@ -52,7 +52,9 @@ export async function journey(browser, port, slug, viewport) {
       const frameBox = await (await page.locator('iframe#game-frame').boundingBox());
       const stats = await frame.evaluate(() => {
         const visible = [...document.querySelectorAll('canvas')].map(c => c.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0);
-        const biggest = visible.sort((a, b) => b.width * b.height - a.width * a.height)[0];
+        // Judge the playfield, not full-bleed backdrop/effect canvases.
+        const named = ['game', 'game-canvas', 'b', 'c'].map(id => document.getElementById(id)).find(el => el && el.getBoundingClientRect().width > 0);
+        const biggest = named ? named.getBoundingClientRect() : visible.sort((a, b) => b.width * b.height - a.width * a.height)[0];
         return { hasContent: visible.length > 0 || document.body.innerText.trim().length > 0,
           clippedX: biggest ? Math.max(0, Math.round(biggest.right - innerWidth)) : 0,
           clippedY: biggest ? Math.max(0, Math.round(biggest.bottom - innerHeight)) : 0 };
