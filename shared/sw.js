@@ -13,6 +13,12 @@ function isServiceWorkerUsable() {
   if (!('serviceWorker' in navigator)) {
     return false;
   }
+  // Sandboxed iframes (no allow-same-origin) throw a SecurityError on access.
+  try {
+    if (!navigator.serviceWorker) return false;
+  } catch {
+    return false;
+  }
   const { protocol, hostname } = window.location || {};
   if (protocol && protocol !== 'https:' && protocol !== 'http:') {
     return false;

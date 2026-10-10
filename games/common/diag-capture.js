@@ -337,7 +337,9 @@
   }
 
   function reportServiceWorker(){
-    if (!navigator.serviceWorker) {
+    let swContainer = null;
+    try { swContainer = navigator.serviceWorker; } catch (_) { swContainer = null; }
+    if (!swContainer) {
       emit({ category: "service-worker", level: "warn", message: "Service workers unsupported", timestamp: Date.now() });
       return;
     }
