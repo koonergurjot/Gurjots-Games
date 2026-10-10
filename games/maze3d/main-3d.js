@@ -320,6 +320,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio ?? 1, 2));
+renderer.domElement.style.cssText += ';position:fixed;inset:0;z-index:0';
 document.body.appendChild(renderer.domElement);
 
 const floorTexture = await loadTextureWithFallback(resolveAsset('/assets/sprites/maze3d/floor.png'), {
