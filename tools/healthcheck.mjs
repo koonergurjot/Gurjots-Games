@@ -1,6 +1,6 @@
 import { readFile, access, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 
 async function exists(p){
@@ -105,7 +105,7 @@ async function checkGame(root, game){
   return result;
 }
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export async function runHealthcheck(){
   const raw = JSON.parse(await readFile(path.join(root, 'games.json'), 'utf8'));

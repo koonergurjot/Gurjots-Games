@@ -105,8 +105,8 @@ fileInput?.addEventListener('change',e=>{
 
 const community=document.getElementById('communitySelect');
 if(community){
-  fetch('./levels.json').then(r=>r.json()).then(list=>{
-    list.forEach(l=>{const opt=document.createElement('option');opt.value=l.url;opt.textContent=l.name;community.appendChild(opt);});
+  fetch(new URL('./levels.json', import.meta.url)).then(r=>r.json()).then(list=>{
+    list.forEach(l=>{const opt=document.createElement('option');opt.value=new URL(l.url,new URL('./levels.json',import.meta.url)).href;opt.textContent=l.name;community.appendChild(opt);});
   }).catch(()=>{});
   community.addEventListener('change',()=>{
     const url=community.value; if(!url) return;

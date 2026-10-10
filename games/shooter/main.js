@@ -67,7 +67,7 @@ export function boot() {
     LOOT: 1 << 4,
   };
 
-  const DATA_PATH = './data/game-data.json';
+  const DATA_PATH = new URL('./data/game-data.json', import.meta.url).href;
 
   const defaultGameData = {
     armorTypes: {

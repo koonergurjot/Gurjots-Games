@@ -2,7 +2,8 @@
 (function(){
   const DAILY_PUZZLE_EVENT='chess:puzzles-state';
   const CACHE_BUST=`v=${Date.now().toString(36)}`;
-  const PUZZLE_URL=`puzzles.json?${CACHE_BUST}`;
+  const SCRIPT_SRC=(document.currentScript&&document.currentScript.src)||'';
+  const PUZZLE_URL=`${SCRIPT_SRC?new URL('puzzles.json',SCRIPT_SRC).href:'puzzles.json'}?${CACHE_BUST}`;
 
   const state={ status:'loading', puzzles:[], dateKey:null, error:null };
   window.puzzles = [];

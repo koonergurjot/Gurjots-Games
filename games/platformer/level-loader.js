@@ -305,7 +305,7 @@ export async function loadLevelByIndex(index = 0) {
   if (!relativePath || typeof relativePath !== 'string') {
     throw new Error('Invalid level manifest entry');
   }
-  const response = await fetch(relativePath);
+  const response = await fetch(new URL(relativePath, import.meta.url));
   if (!response.ok) {
     throw new Error(`Failed to load level at ${relativePath}`);
   }

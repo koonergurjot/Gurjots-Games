@@ -3225,12 +3225,12 @@ async function maybeLoadExternalLevel(game) {
   if (!game || communityLevelLoaded) return;
   if (typeof fetch !== 'function') return;
   try {
-    const res = await fetch('./levels.json');
+    const res = await fetch(new URL('./levels.json', import.meta.url));
     const list = await res.json();
     const entries = Array.isArray(list) ? list : Array.isArray(list.levels) ? list.levels : [];
     const first = entries.find(item => item && item.url);
     if (!first) return;
-    const levelRes = await fetch(first.url);
+    const levelRes = await fetch(new URL(first.url, new URL('./levels.json', import.meta.url)));
     const levelData = await levelRes.json();
     if (!levelData || typeof levelData !== 'object' || !Array.isArray(levelData.obstacles)) return;
     communityLevelLoaded = true;

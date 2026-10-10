@@ -42,8 +42,8 @@
       gap: 8px;
       grid-template-areas:
         "header"
-        "quest"
         "main"
+        "quest"
         "footer";
     }
     body.legacy-shell {
@@ -103,7 +103,7 @@
     .btn-ghost:active {
       background-color: rgba(67, 97, 238, 0.12);
     }
-    main { display:grid; place-items:stretch; padding: 0; grid-area: main; }
+    main { display:grid; place-items:stretch; padding: 0; grid-area: main; min-height: clamp(360px, 72dvh, 860px); }
     .game-card {
       width: 100%; height: 100%; aspect-ratio: auto; background: var(--card); border: 1px solid var(--border-strong);
       border-radius: 14px; overflow: clip; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.45);
@@ -561,7 +561,18 @@
 
       const DEFAULT_SANDBOX = "allow-scripts allow-pointer-lock";
       const TRUSTED_SANDBOX = `${DEFAULT_SANDBOX} allow-same-origin`;
+      // Games that ship a gameshells/ wrapper. Anything else is launched from
+      // games/<slug>/ directly, so no HEAD probe (and no console 404) is needed.
+      const WRAPPED_SHELL_SLUGS = new Set([
+        "asteroids", "breakout", "chess", "chess3d", "g2048", "maze3d",
+        "platformer", "pong", "runner", "shooter", "snake", "tetris",
+      ]);
+      // First-party games: they load ES modules from sibling folders, which a
+      // sandboxed (opaque-origin) frame cannot do, so they need allow-same-origin.
       const TRUSTED_SAME_ORIGIN_SLUGS = new Set([
+        "match3",
+        "solitaire",
+        "word-puzzle",
         "asteroids",
         "breakout",
         "chess",
@@ -927,7 +938,7 @@
 
       function setFrameSrc(src, note, options = {}) {
         const { legacy = false, trustedSameOrigin: allowSameOrigin = false } = options;
-        applySandbox(!legacy && allowSameOrigin);
+        applySandbox(allowSameOrigin);
         frame.src = src;
         isLegacyShell = legacy;
         if (legacy) {
@@ -940,17 +951,18 @@
       }
 
       if (!catalogSlug) {
-        setFrameSrc("./404.html", "missing slug", { legacy: true });
+        location.replace("./#games");
       } else {
         const modernSrc = `./gameshells/${shellSlug}/index.html`;
         const legacySrc = `./games/${catalogSlug}/index.html`;
 
         write(`checking modern wrapper → ${modernSrc}`);
 
-        const forceLegacy = qs.has('legacy') || qs.get('shell') === 'legacy';
+        const hasWrapper = WRAPPED_SHELL_SLUGS.has(shellSlug);
+        const forceLegacy = qs.has('legacy') || qs.get('shell') === 'legacy' || !hasWrapper;
         const forceModern = qs.has('modern') || qs.get('shell') === 'modern';
         if (forceLegacy) {
-          setFrameSrc(legacySrc, "forced legacy", { legacy: true });
+          setFrameSrc(legacySrc, hasWrapper ? "forced legacy" : "no wrapper", { legacy: true, trustedSameOrigin });
         } else if (forceModern) {
           setFrameSrc(modernSrc, "forced modern", { trustedSameOrigin });
         } else {
@@ -959,11 +971,11 @@
               if (resp.ok) {
                 setFrameSrc(modernSrc, "modern wrapper", { trustedSameOrigin });
               } else {
-                setFrameSrc(legacySrc, `legacy fallback (status ${resp.status})`, { legacy: true });
+                setFrameSrc(legacySrc, `legacy fallback (status ${resp.status})`, { legacy: true, trustedSameOrigin });
               }
             })
             .catch((err) => {
-              setFrameSrc(legacySrc, `legacy fallback (${err && err.message ? err.message : err})`, { legacy: true });
+              setFrameSrc(legacySrc, `legacy fallback (${err && err.message ? err.message : err})`, { legacy: true, trustedSameOrigin });
             });
         }
       }
