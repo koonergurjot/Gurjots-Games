@@ -309,23 +309,8 @@ function card(game){
         ${Array.isArray(tags) ? tags.slice(0,3).map(t=>`<span>${esc(prettyTag(t))}</span>`).join('') : ''}
       </div>
       ${short ? `<div class="bolt-card-desc">${esc(short)}</div>` : ''}
-      <div class="bolt-card-insight">
-        <div class="bolt-card-ach">
-          <div class="bolt-card-progress-head">
-            <span class="bolt-card-progress-label">${esc(achLabelText)}</span>
-            <span class="bolt-card-progress-count">${esc(achSummary)}</span>
-          </div>
-          <div class="bolt-card-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${achPct}" aria-label="${esc(title)} achievement progress">
-            <span class="bolt-card-progress-fill" style="width:${achPct}%"></span>
-          </div>
-        </div>
-        <div class="bolt-card-missions" role="group" aria-label="${esc(title)} mission progress">
-          ${missionMarkup}
-        </div>
-      </div>
       <div class="bolt-card-actions">
-        <a class="bolt-btn bolt-primary" href="${href}" aria-label="Play ${esc(title)} now">▶ Play</a>
-        <a class="bolt-btn" href="${href}#about" aria-label="Open ${esc(title)} details">ℹ Details</a>
+        <a class="bolt-btn bolt-primary" href="${href}" aria-label="Play ${esc(title)} now"><span aria-hidden="true">▶</span> Play</a>
       </div>
     </div>
   </article>`;
@@ -341,7 +326,7 @@ function render(list){
   }
   const countText = `${list.length} game${list.length === 1 ? '' : 's'} available`;
   if (STATUS) STATUS.textContent = countText;
-  if (GAME_COUNT) GAME_COUNT.textContent = list.length + '+';
+  if (GAME_COUNT) GAME_COUNT.textContent = String(allGames.length || list.length);
   updateCountdownDisplays();
   if (typeof window !== 'undefined') ensureCountdownTimer();
 }
@@ -500,11 +485,13 @@ async function boot(){
 
     const tags = allGames.flatMap(g => g.tags).map(t => t && (t[0].toUpperCase()+t.slice(1)));
     buildFilterChips(tags);
+    window.__boltGames = allGames;
+    window.dispatchEvent(new CustomEvent('bolt:games', { detail: allGames }));
 
     render(allGames);
     renderHistory(lastPlayedSlugs);
     STATUS?.setAttribute('tabindex', '-1');
-    STATUS.focus?.();
+    STATUS.focus?.({ preventScroll: true });
     gamesReady = true;
     if (missionProgressBySlug.size) refreshCards();
   } catch(err) {

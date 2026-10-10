@@ -41,3 +41,6 @@ jobs:
       # and a desktop viewport and fails on load errors or a clipped playfield.
       - name: Launch every game through the player journey
         run: node tools/dev/journey-check.mjs
+
+      - name: Check the home page (cards, search, filters, Surprise me)
+        run: node tools/dev/home-check.mjs
