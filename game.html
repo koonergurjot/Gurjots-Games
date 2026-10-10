@@ -567,6 +567,12 @@
         "asteroids", "breakout", "chess", "chess3d", "g2048", "maze3d",
         "platformer", "pong", "runner", "shooter", "snake", "tetris",
       ]);
+      // These have a gameshells/ wrapper, but the full page in games/<slug>/ is
+      // the finished experience (styled briefing, full-bleed play area). The
+      // wrapper is a thin shell: its 2048 board never draws, and Runner,
+      // Platformer, Snake and Breakout show unstyled or overlapping panels.
+      // Add ?shell=modern to open the wrapper anyway.
+      const PREFER_FULL_PAGE_SLUGS = new Set(["g2048", "runner", "platformer", "snake", "breakout"]);
       // First-party games: they load ES modules from sibling folders, which a
       // sandboxed (opaque-origin) frame cannot do, so they need allow-same-origin.
       const TRUSTED_SAME_ORIGIN_SLUGS = new Set([
@@ -959,10 +965,11 @@
         write(`checking modern wrapper → ${modernSrc}`);
 
         const hasWrapper = WRAPPED_SHELL_SLUGS.has(shellSlug);
-        const forceLegacy = qs.has('legacy') || qs.get('shell') === 'legacy' || !hasWrapper;
-        const forceModern = qs.has('modern') || qs.get('shell') === 'modern';
+        const forceModern = hasWrapper && (qs.has('modern') || qs.get('shell') === 'modern');
+        const forceLegacy = qs.has('legacy') || qs.get('shell') === 'legacy'
+          || (!forceModern && (!hasWrapper || PREFER_FULL_PAGE_SLUGS.has(shellSlug)));
         if (forceLegacy) {
-          setFrameSrc(legacySrc, hasWrapper ? "forced legacy" : "no wrapper", { legacy: true, trustedSameOrigin });
+          setFrameSrc(legacySrc, hasWrapper ? (PREFER_FULL_PAGE_SLUGS.has(shellSlug) ? "full page preferred" : "forced legacy") : "no wrapper", { legacy: true, trustedSameOrigin });
         } else if (forceModern) {
           setFrameSrc(modernSrc, "forced modern", { trustedSameOrigin });
         } else {
