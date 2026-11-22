@@ -132,25 +132,30 @@ export async function handleApi(req: Request, env: ApiEnv): Promise<Response> {
       }
     }
 
-    if (path === "/api/score" && method === "POST") {
+    // /api/score is this site's client; POST /api/leaderboard is the older shared/leaderboard.js client.
+    if ((path === "/api/score" || path === "/api/leaderboard") && method === "POST") {
       const u = await currentUser(req, env);
-      if (!u) return fail(401, "Sign in first.");
       const b = await body(req);
       const game = String(b?.game ?? "");
       const score = Number(b?.score);
       if (!GAME_RE.test(game) || !Number.isFinite(score) || score < 0 || score > 1e9) return fail(400, "Invalid score.");
+      // Guests keep their score on the device; only signed-in players reach the shared boards.
+      if (!u) return path === "/api/leaderboard" ? json({ ok: true, saved: false }) : fail(401, "Sign in first.");
       await env.DB.prepare("INSERT INTO scores (user_id, game, best, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, game) DO UPDATE SET best = MAX(best, excluded.best), updated_at = CASE WHEN excluded.best > best THEN excluded.updated_at ELSE updated_at END")
         .bind(u.id, game, score, Date.now()).run();
-      return json({ ok: true });
+      return json({ ok: true, saved: true });
     }
 
     if (path === "/api/leaderboard" && method === "GET") {
       const game = url.searchParams.get("game") || "";
       if (!GAME_RE.test(game)) return fail(400, "Unknown game.");
+      const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") || "25", 10) || 25, 1), 100);
       const rows = await env.DB.prepare(
-        "SELECT u.username, s.best FROM scores s JOIN users u ON u.id = s.user_id WHERE s.game = ? ORDER BY s.best DESC, s.updated_at ASC LIMIT 25"
-      ).bind(game).all<{ username: string; best: number }>();
-      return json({ game, entries: rows.results }, 200, { "cache-control": "public, max-age=30" });
+        "SELECT u.username, s.best, s.updated_at FROM scores s JOIN users u ON u.id = s.user_id WHERE s.game = ? ORDER BY s.best DESC, s.updated_at ASC LIMIT ?"
+      ).bind(game, limit).all<{ username: string; best: number; updated_at: number }>();
+      const entries = rows.results;
+      const scores = entries.map(r => ({ score: r.best, handle: r.username, at: r.updated_at }));
+      return json({ game, entries, scores }, 200, { "cache-control": "public, max-age=30" });
     }
 
     return fail(404, "Not found.");

@@ -1,0 +1,23 @@
+{
+  "name": "Gurjot's Games",
+  "short_name": "Gurjot's Games",
+  "description": "Free browser games. No installs, no ads.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#15123b",
+  "theme_color": "#15123b",
+  "icons": [
+    {
+      "src": "/assets/favicon.png",
+      "sizes": "any",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/gurjots-games-banner.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

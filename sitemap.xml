@@ -1,21 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>/</loc></url>
-  <url><loc>/stats.html</loc></url>
-  <url><loc>/cabinet.html</loc></url>
-  <url><loc>/games/pong/</loc></url>
-  <url><loc>/games/snake/</loc></url>
-  <url><loc>/games/tetris/</loc></url>
-  <url><loc>/games/breakout/</loc></url>
-  <url><loc>/games/chess/</loc></url>
-  <url><loc>/games/chess3d/</loc></url>
-  <url><loc>/games/2048/</loc></url>
-  <url><loc>/games/asteroids/</loc></url>
-  <url><loc>/games/maze3d/</loc></url>
-  <url><loc>/games/platformer/</loc></url>
-  <url><loc>/games/runner/</loc></url>
-  <url><loc>/games/shooter/</loc></url>
-  <url><loc>/games/solitaire/</loc></url>
-  <url><loc>/games/word-puzzle/</loc></url>
-  <url><loc>/games/match3/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/pong/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/snake/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/tetris/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/breakout/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/chess/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/chess3d/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/2048/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/asteroids/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/maze3d/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/platformer/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/runner/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/shooter/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/solitaire/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/word-puzzle/</loc></url>
+  <url><loc>https://gurjotsgames.koonergurjot.workers.dev/games/match3/</loc></url>
 </urlset>
