@@ -3,8 +3,8 @@
 export const CLOUD_EVENT = 'gg:cloud';
 
 // Keys that make up a player's progress. Settings are device-specific and stay local.
-const SYNC_KEYS = ['gg:bests', 'lastPlayed', 'skin:unlocks'];
-const SYNC_PREFIXES = ['gg:xp', 'gg:progress', 'gg:ach', 'achievements:', 'achstats:', 'plays:', 'missions'];
+const SYNC_KEYS = ['gg:bests', 'gg:unlocks', 'gg:xp', 'lastPlayed', 'skin:unlocks'];
+const SYNC_PREFIXES = ['gg:xp:', 'gg:missions:', 'achievements:', 'achstats:', 'plays:'];
 
 let user = null;
 
@@ -37,6 +37,24 @@ function syncedKeys() {
 
 function parse(v) { try { return JSON.parse(v); } catch { return null; } }
 
+/**
+ * Merge two parsed values so progress only ever moves forward: numbers keep the higher value,
+ * booleans are OR-ed, objects merge key by key, and anything else keeps the local value.
+ */
+export function mergeValue(local, cloud) {
+  if (local === undefined || local === null) return cloud;
+  if (cloud === undefined || cloud === null) return local;
+  if (typeof local === 'number' && typeof cloud === 'number') return Math.max(local, cloud);
+  if (typeof local === 'boolean' && typeof cloud === 'boolean') return local || cloud;
+  if (Array.isArray(local) && Array.isArray(cloud)) return cloud.length > local.length ? cloud : local;
+  if (local && cloud && typeof local === 'object' && typeof cloud === 'object' && !Array.isArray(local) && !Array.isArray(cloud)) {
+    const out = { ...local };
+    for (const k of Object.keys(cloud)) out[k] = mergeValue(local[k], cloud[k]);
+    return out;
+  }
+  return local;
+}
+
 /** Merge a cloud snapshot into local storage without ever lowering a score or losing local progress. */
 export function mergeSnapshot(cloud) {
   if (!cloud || typeof cloud !== 'object') return;
@@ -45,11 +63,10 @@ export function mergeSnapshot(cloud) {
     let local = null;
     try { local = localStorage.getItem(key); } catch { return; }
     if (local === null) { localStorage.setItem(key, value); continue; }
-    if (key === 'gg:bests') {
-      const a = parse(local) || {};
-      const b = parse(value) || {};
-      for (const [g, n] of Object.entries(b)) if (!(Number(a[g]) >= Number(n))) a[g] = n;
-      localStorage.setItem(key, JSON.stringify(a));
+    const a = parse(local);
+    const b = parse(value);
+    if (a && b && typeof a === 'object' && typeof b === 'object') {
+      localStorage.setItem(key, JSON.stringify(mergeValue(a, b)));
     }
   }
 }
@@ -112,12 +129,20 @@ export async function leaderboard(game) {
   return (await call(`/api/leaderboard?game=${encodeURIComponent(game)}`)).entries;
 }
 
-// Keep the cloud copy fresh when scores change, at most once every few seconds.
+// Keep the cloud copy fresh when progress changes, at most once every few seconds. Games run in their
+// own document, so besides this page's own event we also listen for localStorage writes made there.
 let timer = null;
+let autoSyncOn = false;
+const schedulePush = () => {
+  if (!user) return;
+  clearTimeout(timer);
+  timer = setTimeout(() => { pushSave().catch(() => {}); }, 4000);
+};
 export function autoSync() {
-  window.addEventListener('gg:progression', () => {
-    if (!user) return;
-    clearTimeout(timer);
-    timer = setTimeout(() => { pushSave().catch(() => {}); }, 4000);
+  if (autoSyncOn) return;
+  autoSyncOn = true;
+  window.addEventListener('gg:progression', schedulePush);
+  window.addEventListener('storage', e => {
+    if (!e.key || SYNC_KEYS.includes(e.key) || SYNC_PREFIXES.some(p => e.key.startsWith(p))) schedulePush();
   });
 }

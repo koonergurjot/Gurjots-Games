@@ -440,6 +440,11 @@
 
   <script src="./js/auto-diag-inject.js"></script>
   <script type="module" src="./js/profile-overlay.js"></script>
+  <script type="module">
+    // Signed-in players: the game runs in this page's iframe, so watch its saves from here and sync them.
+    import { refresh, autoSync } from "./shared/cloud.js";
+    refresh().then(autoSync).catch(() => {});
+  </script>
 
   <script type="module">
     import { mountQuestWidget } from './shared/quest-widget.js';
