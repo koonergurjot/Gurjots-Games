@@ -9,3 +9,9 @@ assets = { directory = ".", exclude = [
   "tools/**",
   ".git/**"
 ] }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gurjots-games"
+database_id = "fd672e84-1c38-44e2-a4b6-6c1819c245f1"
+migrations_dir = "migrations"
