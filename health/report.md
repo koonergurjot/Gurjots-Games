@@ -1,14 +1,12 @@
 # Game Doctor Report
 
-Generated: 2026-09-08T08:28:53.730Z
+Generated: 2026-11-22T12:11:03.584Z
 
 - Total games: 15
-- Passing: 14
-- Failing: 1
+- Passing: 15
+- Failing: 0
 - With warnings: 0
-- Issues found: 1
-- Issues by severity: 🚨 Blockers: 1
-- Issues by category: headless-runtime: 1
+- Issues found: 0
 - Manifest version: 1
 - Manifest source: tools/reporters/game-doctor-manifest.json
 
@@ -17,7 +15,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: pong
 - Status: ✅ Healthy
 - Shell: games/pong/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/pong/thumb.svg
 - Sprites checked: 2
 - Audio checked: 3
@@ -31,7 +28,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: snake
 - Status: ✅ Healthy
 - Shell: games/snake/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/snake/thumb.svg
 - Sprites checked: 1
 - Audio checked: 3
@@ -42,27 +38,20 @@ Generated: 2026-09-08T08:28:53.730Z
 ## Tetris
 
 - Slug: tetris
-- Status: ❌ Needs attention
+- Status: ✅ Healthy
 - Shell: games/tetris/index.html
-- Headless boot: ❌ Timed out after 8000ms
 - Thumbnail: games/tetris/thumb.svg
 - Sprites checked: 4
 - Audio checked: 3
 - Asset references scanned: 11
 - Manifest paths: all required paths found
-- **Severity:** 🚨 Blockers: 1
-- Issues:
-  - ❌ Blocker [headless-runtime]: Headless boot timed out
-    - slug: "tetris"
-    - shell: "games/tetris/index.html"
-    - waitedMs: 8000
+- Issues: none
 
 ## Breakout
 
 - Slug: breakout
 - Status: ✅ Healthy
 - Shell: games/breakout/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/breakout/thumb.svg
 - Sprites checked: 3
 - Audio checked: 3
@@ -76,7 +65,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: chess
 - Status: ✅ Healthy
 - Shell: games/chess/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/chess/thumb.svg
 - Sprites checked: 2
 - Audio checked: 1
@@ -89,7 +77,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: chess3d
 - Status: ✅ Healthy
 - Shell: games/chess3d/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/chess3d/thumb.svg
 - Sprites checked: 2
 - Audio checked: 1
@@ -103,7 +90,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: 2048
 - Status: ✅ Healthy
 - Shell: games/2048/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/2048/thumb.svg
 - Sprites checked: 1
 - Audio checked: 1
@@ -116,7 +102,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: asteroids
 - Status: ✅ Healthy
 - Shell: games/asteroids/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/asteroids/thumb.svg
 - Sprites checked: 1
 - Audio checked: 3
@@ -129,7 +114,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: maze3d
 - Status: ✅ Healthy
 - Shell: games/maze3d/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/maze3d/thumb.svg
 - Sprites checked: 2
 - Audio checked: 1
@@ -142,7 +126,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: platformer
 - Status: ✅ Healthy
 - Shell: games/platformer/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/platformer/thumb.svg
 - Sprites checked: 6
 - Audio checked: 2
@@ -156,7 +139,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: runner
 - Status: ✅ Healthy
 - Shell: games/runner/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/runner/thumb.svg
 - Sprites checked: 4
 - Audio checked: 3
@@ -169,7 +151,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: shooter
 - Status: ✅ Healthy
 - Shell: games/shooter/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/shooter/thumb.svg
 - Sprites checked: 1
 - Audio checked: 2
@@ -182,7 +163,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: solitaire
 - Status: ✅ Healthy
 - Shell: games/solitaire/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/solitaire/thumb.svg
 - Audio checked: 4
 - Issues: none
@@ -192,7 +172,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: word-puzzle
 - Status: ✅ Healthy
 - Shell: games/word-puzzle/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/word-puzzle/thumb.svg
 - Audio checked: 3
 - Issues: none
@@ -202,7 +181,6 @@ Generated: 2026-09-08T08:28:53.730Z
 - Slug: match3
 - Status: ✅ Healthy
 - Shell: games/match3/index.html
-- Headless boot: ✅ GAME_READY received
 - Thumbnail: games/match3/thumb.svg
 - Audio checked: 3
 - Issues: none

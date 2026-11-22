@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Settings: Gurjot's Games</title>
+  <meta name="description" content="Sound, motion, contrast and text size for Gurjot's Games, plus export or reset the data saved on this device." />
+  <meta name="theme-color" content="#15123b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Figtree:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/arcade.css">
+  <link rel="stylesheet" href="css/arcade-pages.css">
+  <link rel="stylesheet" href="styles/profile-overlay.css">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="robots" content="noindex">
+</head>
+<body class="arcade">
+  <a class="skip-link" href="#main-content">Skip to settings</a>
+  <div data-chrome="nav"></div>
+
+  <main id="main-content" class="page">
+    <div class="wrap page__wrap">
+      <header class="page__head">
+        <h1>Settings</h1>
+        <p class="measure">Changes save on this device and apply to every game right away.</p>
+      </header>
+
+      <section class="panel" aria-labelledby="sound-h">
+        <h2 id="sound-h">Sound</h2>
+        <div class="field">
+          <label class="switch" for="pref-sound">
+            <input type="checkbox" id="pref-sound" role="switch">
+            <span class="switch__track" aria-hidden="true"></span>
+            <span class="switch__text">Game sound effects</span>
+          </label>
+        </div>
+        <div class="field">
+          <label for="pref-volume">Volume <output id="pref-volume-out" for="pref-volume">80%</output></label>
+          <input type="range" id="pref-volume" min="0" max="100" step="5">
+          <button type="button" class="btn btn--ghost btn--small" id="test-sound">Play a test sound</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="look-h">
+        <h2 id="look-h">Comfort</h2>
+        <fieldset class="field">
+          <legend>Animation</legend>
+          <div class="choice" role="radiogroup" aria-label="Animation">
+            <label><input type="radio" name="motion" value="system"> Follow my device</label>
+            <label><input type="radio" name="motion" value="reduce"> Reduce motion</label>
+            <label><input type="radio" name="motion" value="full"> Full motion</label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Contrast</legend>
+          <div class="choice" role="radiogroup" aria-label="Contrast">
+            <label><input type="radio" name="contrast" value="normal"> Standard</label>
+            <label><input type="radio" name="contrast" value="high"> High contrast</label>
+          </div>
+        </fieldset>
+        <fieldset class="field">
+          <legend>Text size</legend>
+          <div class="choice" role="radiogroup" aria-label="Text size">
+            <label><input type="radio" name="textSize" value="normal"> Standard</label>
+            <label><input type="radio" name="textSize" value="large"> Large</label>
+            <label><input type="radio" name="textSize" value="xlarge"> Extra large</label>
+          </div>
+        </fieldset>
+      </section>
+
+      <section class="panel" aria-labelledby="data-h">
+        <h2 id="data-h">Your data</h2>
+        <p class="measure">Scores, XP, achievements and settings are stored in this browser only. Export a copy to back them up, or erase them to start fresh.</p>
+        <div class="field field--row">
+          <button type="button" class="btn" id="export-data">Download my data</button>
+          <button type="button" class="btn btn--ghost" id="reset-prefs">Restore default settings</button>
+        </div>
+        <div class="danger">
+          <h3>Erase progress</h3>
+          <p>Deletes XP, levels, achievements, missions, personal bests and recent games from this device. This cannot be undone.</p>
+          <button type="button" class="btn btn--danger" id="erase-start">Erase all progress</button>
+          <div id="erase-confirm" hidden>
+            <p><strong>Erase everything saved on this device?</strong></p>
+            <button type="button" class="btn btn--danger" id="erase-yes">Yes, erase it</button>
+            <button type="button" class="btn btn--ghost" id="erase-no">Keep my progress</button>
+          </div>
+        </div>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+      </section>
+    </div>
+  </main>
+
+  <div data-chrome="footer"></div>
+  <script type="module" src="js/settings-page.js"></script>
+</body>
+</html>

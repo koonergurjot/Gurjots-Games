@@ -1,4 +1,6 @@
-export interface Env {
+import { handleApi, type ApiEnv } from "./api";
+
+export interface Env extends ApiEnv {
   ASSETS: {
     fetch(request: Request): Promise<Response>;
   };
@@ -35,6 +37,8 @@ function applySecurityHeaders(response: Response): Response {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/api/")) return handleApi(request, env);
 
     let response = await env.ASSETS.fetch(request);
 

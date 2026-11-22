@@ -1,0 +1,44 @@
+/* Arcade skin for game.html. Loaded after the shell's inline styles so it wins at equal specificity. */
+:root {
+  --shell-gradient: linear-gradient(180deg, #0d0b27 0%, #15123b 45%, #0d0b27 100%);
+  --header-bg: rgba(13, 11, 39, 0.85);
+  --surface-border-strong: rgba(185, 180, 224, 0.28);
+  --brand-accent: #19c6b7;
+  --card-gradient: #0d0b27;
+  --card-solid: #0d0b27;
+  --text-muted: #b9b4e0;
+  --fg: #f4f1ff;
+  --font-brand: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+body { font-size: 15px; }
+header .title h1 { font-family: "Bowlby One", "Figtree", system-ui, sans-serif; font-weight: 400; font-size: clamp(1.05rem, 2.6vw, 1.5rem); color: #fff8ea; text-shadow: 0 2px 0 #e5339d; }
+a.btn, button.btn { font-weight: 800; min-height: 2.5rem; border-radius: 999px; padding: 0.4rem 1.1rem; }
+.btn-primary { --button-bg: #ffd23f; --button-border: #c99a00; --button-fg: #15123b; box-shadow: 0 4px 0 #c99a00; }
+.btn-primary:hover { box-shadow: 0 5px 0 #c99a00; }
+.btn-primary:active { box-shadow: 0 1px 0 #c99a00; transform: translateY(3px); }
+.btn:focus-visible, .bolt-profile-trigger:focus-visible { outline: 3px solid #19c6b7; outline-offset: 2px; }
+.game-card { border-radius: 18px; border: 2px solid rgba(185, 180, 224, 0.28); box-shadow: 0 0 0 4px #15123b, 0 18px 50px rgba(0, 0, 0, 0.55); }
+/* Diagnostics are for developers; keep them off the player's screen unless ?debug is in the URL. */
+html:not([data-debug]) #btnDiag { display: none; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* The mission card used to sit on top of each game's own HUD. Keep it as a small, click-through chip. */
+.mission-banner {
+  top: auto; bottom: 12px; left: 12px; max-width: min(240px, 60%); padding: 6px 12px; gap: 4px;
+  pointer-events: none; background: rgba(13, 11, 39, 0.78); border-radius: 999px; backdrop-filter: blur(4px);
+}
+.mission-banner__kind, .mission-banner__desc, .mission-banner__status { display: none; }
+.mission-banner__title { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mission-banner:not(:has(.mission-banner__title)) { display: none; }
+
+/* Phones: keep the header on one line and never let a game widen the page. */
+.shell-frame { overflow-x: clip; }
+main, .game-card, .shell-frame > * { min-width: 0; }
+@media (max-width: 560px) {
+  .shell-frame { padding: 0 8px; }
+  header { padding: 8px 8px; gap: 6px; }
+  header .title { min-width: 0; }
+  header .title h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header .bolt-nav-actions { display: flex; gap: 6px; flex: none; }
+  [data-profile-name] { display: none; }
+}

@@ -2,10 +2,18 @@ name = "gurjotsgames"
 main = "cloudflare/worker.ts"
 compatibility_date = "2024-06-20"
 
-assets = { directory = ".", exclude = [
+assets = { directory = ".", binding = "ASSETS", exclude = [
   "node_modules/**",
   "scripts/**",
   "tests/**",
   "tools/**",
+  ".wrangler/**",
+  "migrations/**",
   ".git/**"
 ] }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "gurjots-games"
+database_id = "fd672e84-1c38-44e2-a4b6-6c1819c245f1"
+migrations_dir = "migrations"

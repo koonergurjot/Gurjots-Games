@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trophies: Gurjot's Games</title>
+  <meta name="description" content="Your level, achievements and personal bests in Gurjot's Games." />
+  <meta name="theme-color" content="#15123b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Figtree:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/arcade.css">
+  <link rel="stylesheet" href="css/arcade-pages.css">
+  <link rel="stylesheet" href="styles/profile-overlay.css">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="robots" content="noindex">
+</head>
+<body class="arcade">
+  <a class="skip-link" href="#main-content">Skip to trophies</a>
+  <div data-chrome="nav"></div>
+
+  <main id="main-content" class="page">
+    <div class="wrap page__wrap page__wrap--wide">
+      <header class="page__head">
+        <h1>Trophies</h1>
+        <p class="measure">Everything you have earned on this device. Play games to fill the case.</p>
+      </header>
+
+      <section class="summary" aria-label="Summary">
+        <div class="summary__cell"><p class="summary__big" id="sum-level">1</p><p>Current level</p></div>
+        <div class="summary__cell"><p class="summary__big" id="sum-xp">0</p><p id="sum-xp-note">Total XP</p></div>
+        <div class="summary__cell"><p class="summary__big" id="sum-ach">0/0</p><p>Achievements unlocked</p></div>
+        <div class="summary__cell"><p class="summary__big" id="sum-plays">0</p><p>Games played</p></div>
+      </section>
+
+      <section class="panel" aria-labelledby="ach-h">
+        <h2 id="ach-h">Achievements</h2>
+        <div class="case-grid" id="achievements"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="lvl-h">
+        <h2 id="lvl-h">Level rewards</h2>
+        <ol class="ladder" id="ladder"></ol>
+      </section>
+
+      <section class="panel" aria-labelledby="best-h">
+        <h2 id="best-h">Personal bests</h2>
+        <div id="bests-host"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="lb-h">
+        <h2 id="lb-h">Leaderboards</h2>
+        <div class="field">
+          <label for="lb-game">Game</label>
+          <select id="lb-game"></select>
+        </div>
+        <div id="lb-host" aria-live="polite"></div>
+        <p id="lb-note">Scores come from players with accounts. <a href="account.html">Sign in</a> to add yours.</p>
+      </section>
+    </div>
+  </main>
+
+  <div data-chrome="footer"></div>
+  <script type="module" src="js/trophies-page.js"></script>
+</body>
+</html>

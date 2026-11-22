@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Play — Gurjot’s Games</title>
   <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Figtree:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/profile-overlay.css">
   <style>
     :root {
@@ -380,6 +383,9 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="css/game-shell-skin.css">
+  <script type="module" src="shared/prefs.js"></script>
+  <script>if (/[?&]debug\b/.test(location.search)) document.documentElement.dataset.debug = "1";</script>
 </head>
 <body>
   <div class="shell-frame">
@@ -434,6 +440,11 @@
 
   <script src="./js/auto-diag-inject.js"></script>
   <script type="module" src="./js/profile-overlay.js"></script>
+  <script type="module">
+    // Signed-in players: the game runs in this page's iframe, so watch its saves from here and sync them.
+    import { refresh, autoSync } from "./shared/cloud.js";
+    refresh().then(autoSync).catch(() => {});
+  </script>
 
   <script type="module">
     import { mountQuestWidget } from './shared/quest-widget.js';
@@ -564,8 +575,10 @@
       // Games that ship a gameshells/ wrapper. Anything else is launched from
       // games/<slug>/ directly, so no HEAD probe (and no console 404) is needed.
       const WRAPPED_SHELL_SLUGS = new Set([
-        "asteroids", "breakout", "chess", "chess3d", "g2048", "maze3d",
-        "platformer", "pong", "runner", "shooter", "snake", "tetris",
+        // "g2048" and "snake" are intentionally absent: their wrappers render a blank canvas / overlapping panels,
+        // while the full pages in games/2048 and games/snake work.
+        "asteroids", "breakout", "chess", "chess3d", "maze3d",
+        "platformer", "pong", "runner", "shooter", "tetris",
       ]);
       // First-party games: they load ES modules from sibling folders, which a
       // sandboxed (opaque-origin) frame cannot do, so they need allow-same-origin.

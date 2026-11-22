@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
-Sitemap: /sitemap.xml
+Disallow: /api/
+Sitemap: https://gurjotsgames.koonergurjot.workers.dev/sitemap.xml

@@ -1,21 +1,19 @@
 {
-  "generatedAt": "2026-09-08T08:28:53.730Z",
+  "generatedAt": "2026-11-22T12:11:03.584Z",
   "summary": {
     "total": 15,
-    "passing": 14,
-    "failing": 1,
+    "passing": 15,
+    "failing": 0,
     "withWarnings": 0,
     "issueCounts": {
-      "total": 1,
+      "total": 0,
       "bySeverity": {
-        "blocker": 1,
+        "blocker": 0,
         "major": 0,
         "minor": 0,
         "info": 0
       },
-      "byCategory": {
-        "headless-runtime": 1
-      }
+      "byCategory": {}
     }
   },
   "manifest": {
@@ -55,29 +53,6 @@
       "status": {
         "errors": false,
         "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "IFRAME_LOADED",
-                "slug": "pong"
-              }
-            },
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
       },
       "requirements": {
         "paths": [
@@ -157,22 +132,6 @@
         "errors": false,
         "warnings": false
       },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
-      },
       "requirements": {
         "paths": [
           {
@@ -188,20 +147,8 @@
       "index": 2,
       "title": "Tetris",
       "slug": "tetris",
-      "ok": false,
-      "issues": [
-        {
-          "message": "Headless boot timed out",
-          "context": {
-            "slug": "tetris",
-            "shell": "games/tetris/index.html",
-            "waitedMs": 8000
-          },
-          "severity": "error",
-          "severityLevel": "blocker",
-          "category": "headless-runtime"
-        }
-      ],
+      "ok": true,
+      "issues": [],
       "shell": {
         "found": "games/tetris/index.html"
       },
@@ -228,14 +175,8 @@
         "placeholder": false
       },
       "status": {
-        "errors": true,
+        "errors": false,
         "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "timeout",
-          "waitedMs": 8000
-        }
       },
       "requirements": {
         "paths": [
@@ -306,22 +247,6 @@
       "status": {
         "errors": false,
         "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
       },
       "requirements": {
         "paths": [
@@ -403,22 +328,6 @@
         "errors": false,
         "warnings": false
       },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
-      },
       "requirements": {
         "paths": [
           {
@@ -490,22 +399,6 @@
       "status": {
         "errors": false,
         "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
       },
       "requirements": {
         "paths": [
@@ -686,22 +579,6 @@
         "errors": false,
         "warnings": false
       },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
-      },
       "requirements": {
         "paths": [
           {
@@ -770,22 +647,6 @@
         "errors": false,
         "warnings": false
       },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
-      },
       "requirements": {
         "paths": [
           {
@@ -847,22 +708,6 @@
       "status": {
         "errors": false,
         "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
       },
       "requirements": {
         "paths": [
@@ -930,22 +775,6 @@
       "status": {
         "errors": false,
         "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
       },
       "requirements": {
         "paths": [
@@ -1027,22 +856,6 @@
         "errors": false,
         "warnings": false
       },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
-      },
       "requirements": {
         "paths": [
           {
@@ -1110,22 +923,6 @@
         "errors": false,
         "warnings": false
       },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
-      },
       "requirements": {
         "paths": [
           {
@@ -1177,22 +974,6 @@
       "status": {
         "errors": false,
         "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
       }
     },
     {
@@ -1219,22 +1000,6 @@
       "status": {
         "errors": false,
         "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
       }
     },
     {
@@ -1261,22 +1026,6 @@
       "status": {
         "errors": false,
         "warnings": false
-      },
-      "runtime": {
-        "headless": {
-          "status": "ready",
-          "message": {
-            "type": "GAME_READY"
-          },
-          "signals": [
-            {
-              "type": "postMessage",
-              "data": {
-                "type": "GAME_READY"
-              }
-            }
-          ]
-        }
       }
     }
   ]

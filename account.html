@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Account: Gurjot's Games</title>
+  <meta name="description" content="Sign in to keep your progress on every device and join the leaderboards." />
+  <meta name="theme-color" content="#15123b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Figtree:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/arcade.css">
+  <link rel="stylesheet" href="css/arcade-pages.css">
+  <link rel="stylesheet" href="styles/profile-overlay.css">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="robots" content="noindex">
+</head>
+<body class="arcade">
+  <a class="skip-link" href="#main-content">Skip to account</a>
+  <div data-chrome="nav"></div>
+
+  <main id="main-content" class="page">
+    <div class="wrap page__wrap">
+      <header class="page__head">
+        <h1>Account</h1>
+        <p class="measure">Sign in to keep your scores and progress on every device and appear on the leaderboards. Playing without an account always works.</p>
+      </header>
+
+      <section class="panel" id="signed-out" aria-labelledby="in-h" hidden>
+        <h2 id="in-h">Sign in or create an account</h2>
+        <form id="auth-form" class="panel__form" novalidate>
+          <div class="field">
+            <label for="username">Username</label>
+            <input id="username" name="username" autocomplete="username" required minlength="3" maxlength="20" pattern="[A-Za-z0-9_]+">
+            <small>3 to 20 letters, numbers or underscores. Shown on leaderboards.</small>
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8">
+            <small>At least 8 characters.</small>
+          </div>
+          <div class="field field--row">
+            <button class="btn" type="submit" data-mode="login">Sign in</button>
+            <button class="btn btn--small" type="submit" data-mode="signup">Create account</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" id="signed-in" aria-labelledby="me-h" hidden>
+        <h2 id="me-h">Signed in as <span id="who"></span></h2>
+        <p>Your best scores and progress sync to your account whenever you play.</p>
+        <div class="field field--row">
+          <button class="btn" id="sync-now" type="button">Sync now</button>
+          <button class="btn btn--small" id="sign-out" type="button">Sign out</button>
+        </div>
+        <div class="danger">
+          <h3>Delete account</h3>
+          <p>Removes your account, cloud save and leaderboard entries. Progress on this device stays.</p>
+          <button class="btn btn--danger btn--small" id="delete-start" type="button">Delete my account</button>
+          <div id="delete-confirm" hidden>
+            <span>This cannot be undone.</span>
+            <button class="btn btn--danger btn--small" id="delete-yes" type="button">Yes, delete it</button>
+            <button class="btn btn--small" id="delete-no" type="button">Keep it</button>
+          </div>
+        </div>
+      </section>
+
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </div>
+  </main>
+
+  <div data-chrome="footer"></div>
+  <script type="module" src="js/account-page.js"></script>
+</body>
+</html>
