@@ -4,6 +4,7 @@ import { getLastPlayed } from '../shared/ui.js';
 import { getState } from '../shared/progression.js';
 import { whenReady as missionsReady, subscribe as subscribeMissions } from '../shared/missions.js';
 import { registerSW } from '../shared/sw.js';
+import { prefersReducedMotion } from '../shared/prefs.js';
 import { mountChrome } from './site-chrome.js';
 
 mountChrome('games');
@@ -12,7 +13,7 @@ try { registerSW(); } catch { /* offline support is a bonus */ }
 const $ = sel => document.querySelector(sel);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pretty = t => (t ? t.charAt(0).toUpperCase() + t.slice(1) : '');
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduceMotion = prefersReducedMotion();
 
 function hueFor(slug) {
   let h = 0;

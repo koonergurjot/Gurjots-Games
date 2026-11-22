@@ -2,12 +2,14 @@
 // <div data-chrome="footer"> and import this module; links live in one place so a
 // new page only has to be added to NAV below.
 import { getState, PROGRESSION_EVENT } from '../shared/progression.js';
+import '../shared/prefs.js'; // applies saved motion, contrast and text-size choices on every page
 
 const NAV = [
   { href: 'index.html#games', label: 'Games', id: 'games' },
   { href: 'index.html#missions', label: 'Missions', id: 'missions' },
   { href: 'index.html#rules', label: 'About', id: 'about' },
-  { href: 'stats.html', label: 'Stats', id: 'stats' },
+  { href: 'trophies.html', label: 'Trophies', id: 'trophies' },
+  { href: 'settings.html', label: 'Settings', id: 'settings' },
 ];
 
 const MARK = `

@@ -334,3 +334,17 @@ p { margin: 0; }
   .section__head h2 { font-size: var(--step-3); }
   .hero__title { font-size: clamp(2.2rem, 11vw, 3rem); }
 }
+
+/* ---------- Player preferences (shared/prefs.js sets these on <html>) ---------- */
+html[data-text-size="large"] { font-size: 112.5%; }
+html[data-text-size="xlarge"] { font-size: 125%; }
+html[data-motion="reduce"] *, html[data-motion="reduce"] *::before, html[data-motion="reduce"] *::after {
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+html[data-contrast="high"] {
+  --line: rgba(255, 255, 255, 0.6);
+  --ink-dim: #e4e0ff;
+  --carpet: #0a0820;
+}
+html[data-contrast="high"] body.arcade { background-image: none; }
+html[data-contrast="high"] .cab__desc, html[data-contrast="high"] .today__sub { color: var(--ink); }

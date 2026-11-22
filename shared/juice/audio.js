@@ -14,9 +14,25 @@ const AUDIO_SOURCES = {
 const cache = Object.create(null);
 const pendingPlays = [];
 
-let muted = false;
+// Start from the player's saved Settings (shared/prefs.js) so sound choices stick across games.
+function readSavedAudioPrefs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('gg:prefs') || 'null');
+    if (!saved || typeof saved !== 'object') return {};
+    const vol = Number(saved.volume);
+    return {
+      muted: saved.sound === false,
+      volume: Number.isFinite(vol) ? Math.min(1, Math.max(0, vol)) : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+const savedAudio = readSavedAudioPrefs();
+
+let muted = !!savedAudio.muted;
 let paused = false;
-let masterVolume = 1;
+let masterVolume = typeof savedAudio.volume === 'number' ? savedAudio.volume : 1;
 
 const audioUnsupportedByEnv = (() => {
   if (!AudioCtor) return true;
@@ -213,6 +229,12 @@ if (typeof window !== 'undefined') {
   }, { passive: true });
   window.addEventListener('ggshell:pause', () => setPaused(true));
   window.addEventListener('ggshell:resume', () => setPaused(false));
+  window.addEventListener('gg:prefs', event => {
+    const d = event && event.detail;
+    if (!d) return;
+    setMuted(d.sound === false);
+    if (typeof d.volume === 'number') setVolume(d.volume);
+  });
   window.addEventListener('ggshell:mute', () => setMuted(true));
   window.addEventListener('ggshell:unmute', () => setMuted(false));
 }
