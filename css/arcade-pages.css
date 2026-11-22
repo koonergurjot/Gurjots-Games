@@ -79,3 +79,14 @@
 .bests th { color: var(--ink-dim); font-size: var(--step--1); font-weight: 700; }
 .bests td:last-child, .bests th:last-child { text-align: right; }
 .bests a { font-weight: 800; }
+
+/* Text inputs and forms */
+.panel__form { display: grid; gap: 1.1rem; max-width: 26rem; }
+.field input:where([type="text"], [type="password"], :not([type])) {
+  min-height: 2.75rem; padding: 0.5rem 0.9rem; border-radius: var(--radius-s, 0.6rem);
+  border: 2px solid var(--line); background: rgba(255, 255, 255, 0.06); color: var(--ink); font: inherit;
+}
+.field input:focus-visible { outline: none; box-shadow: var(--focus); border-color: var(--teal); }
+.field small { color: var(--ink-dim); font-size: var(--step--1); }
+[hidden].panel, .panel[hidden] { display: none; }
+.field select { min-height: 2.75rem; padding: 0.5rem 0.9rem; border-radius: 0.6rem; border: 2px solid var(--line); background: var(--carpet-deep, #0d0b27); color: var(--ink); font: inherit; max-width: 22rem; }

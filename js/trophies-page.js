@@ -2,6 +2,7 @@
 import { getState, getBest, UNLOCKS, PROGRESSION_EVENT } from '../shared/progression.js';
 import { getAchievements } from '../shared/achievements.js';
 import { loadGameCatalog } from '../shared/game-catalog.js';
+import { leaderboard } from '../shared/cloud.js';
 import { mountChrome } from './site-chrome.js';
 
 mountChrome('trophies');
@@ -59,9 +60,25 @@ function paintBests() {
   }</tbody></table>`;
 }
 
+async function paintBoard() {
+  const sel = $('#lb-game');
+  const host = $('#lb-host');
+  if (!sel.options.length && games.length) {
+    sel.innerHTML = games.map(g => `<option value="${esc(g.slug || g.id)}">${esc(g.title)}</option>`).join('');
+    sel.addEventListener('change', paintBoard);
+  }
+  if (!sel.value) return;
+  try {
+    const rows = await leaderboard(sel.value);
+    host.innerHTML = rows.length
+      ? `<table class="bests"><thead><tr><th scope="col">Player</th><th scope="col">Best score</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}. ${esc(r.username)}</td><td>${Number(r.best).toLocaleString()}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="shelf__empty">No scores here yet. Be the first.</p>';
+  } catch { host.innerHTML = '<p class="shelf__empty">Leaderboards could not load. Try again in a moment.</p>'; }
+}
+
 function paintAll() { paintSummary(); paintAchievements(); paintLadder(); paintBests(); }
 
 paintAll();
-loadGameCatalog().then(c => { games = c.games || []; paintBests(); }).catch(() => paintBests());
+loadGameCatalog().then(c => { games = c.games || []; paintBests(); paintBoard(); }).catch(() => paintBests());
 window.addEventListener(PROGRESSION_EVENT, paintAll);
 window.addEventListener('storage', paintAll);
