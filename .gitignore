@@ -1,1 +1,3 @@
-(empty).wrangler/
+.wrangler/
+node_modules/.mf/
+node_modules/.vite/
