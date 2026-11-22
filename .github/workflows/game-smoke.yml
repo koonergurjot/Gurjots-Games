@@ -12,7 +12,7 @@ permissions:
 jobs:
   boot:
     name: Boot every game
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright 1.56 cannot install Chromium on the newer ubuntu-latest image
     timeout-minutes: 20
 
     steps:
